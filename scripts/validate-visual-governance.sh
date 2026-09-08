@@ -22,19 +22,77 @@ require_fixed() {
 require_file "$CONTRACT"
 require_file "$MANIFEST"
 
-# C-001: five owner-closed decisions must remain exact in both rule authority and manifest.
-for file in "$CONTRACT" "$MANIFEST"; do
-  require_fixed "$file" 'mobile_horizontal_padding:' 'owner decision missing: mobile_horizontal_padding'
-  require_fixed "$file" '16px' 'owner decision mutated: mobile_horizontal_padding must remain 16px'
-  require_fixed "$file" 'help_text_placement:' 'owner decision missing: help_text_placement'
-  require_fixed "$file" 'below_input' 'owner decision mutated: below_input placement missing'
-  require_fixed "$file" 'validation_message_placement:' 'owner decision missing: validation_message_placement'
-  require_fixed "$file" 'control_border:' 'owner decision missing: control_border'
-  require_fixed "$file" '"#8690A1"' 'owner decision mutated: control_border must remain #8690A1'
-  require_fixed "$file" 'desktop_outer_surface:' 'owner decision missing: desktop_outer_surface'
-done
-require_fixed "$CONTRACT" 'value: white_card' 'owner decision mutated: desktop_outer_surface must remain white_card'
-require_fixed "$MANIFEST" 'desktop_outer_surface: white_card' 'owner decision mutated in manifest: desktop_outer_surface must remain white_card'
+# C-001 / PRI-FND-003: bind each owner key to its exact value inside the
+# authoritative owner-decision block. Correct values elsewhere do not count.
+awk '
+function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+function die(msg) { print "owner decision binding failure in contract: " msg > "/dev/stderr"; exit 31 }
+BEGIN {
+  expected["mobile_horizontal_padding"]="16px"
+  expected["help_text_placement"]="below_input"
+  expected["validation_message_placement"]="below_input"
+  expected["control_border"]="\"#8690A1\""
+  expected["desktop_outer_surface"]="white_card"
+}
+$0 == "canonicalization_correction_bundle:" {
+  block_count++
+  if (block_count > 1) die("authoritative block duplicated")
+  in_block=1
+  current=""
+  next
+}
+in_block && /^```[[:space:]]*$/ { in_block=0; current=""; next }
+in_block && /^  [A-Za-z0-9_]+:[[:space:]]*$/ {
+  line=trim($0); sub(/:[[:space:]]*$/, "", line); current=line
+  if (current in expected) key_count[current]++
+  next
+}
+in_block && current != "" && /^    value:[[:space:]]*/ {
+  line=$0; sub(/^    value:[[:space:]]*/, "", line); line=trim(line)
+  if (current in expected) { value_count[current]++; actual[current]=line }
+  next
+}
+END {
+  if (block_count != 1) die("canonicalization_correction_bundle must appear exactly once")
+  for (key in expected) {
+    if (key_count[key] != 1) die(key " must appear exactly once in authoritative block")
+    if (value_count[key] != 1) die(key " must have exactly one value in authoritative block")
+    if (actual[key] != expected[key]) die(key " expected " expected[key] " but found " actual[key])
+  }
+}
+' "$CONTRACT" || fail 'owner decision key/value invariant failed in contract'
+
+awk '
+function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+function die(msg) { print "owner decision binding failure in manifest: " msg > "/dev/stderr"; exit 32 }
+BEGIN {
+  expected["mobile_horizontal_padding"]="16px"
+  expected["help_text_placement"]="below_input"
+  expected["validation_message_placement"]="below_input"
+  expected["control_border"]="\"#8690A1\""
+  expected["desktop_outer_surface"]="white_card"
+}
+/^  canonical_owner_decisions:[[:space:]]*$/ {
+  block_count++
+  if (block_count > 1) die("authoritative block duplicated")
+  in_block=1
+  next
+}
+in_block && /^  [^[:space:]][^:]*:/ { in_block=0 }
+in_block && /^    [A-Za-z0-9_]+:[[:space:]]*/ {
+  line=trim($0)
+  key=line; sub(/:.*/, "", key)
+  value=line; sub(/^[^:]+:[[:space:]]*/, "", value); value=trim(value)
+  if (key in expected) { key_count[key]++; actual[key]=value }
+}
+END {
+  if (block_count != 1) die("canonical_owner_decisions must appear exactly once")
+  for (key in expected) {
+    if (key_count[key] != 1) die(key " must appear exactly once in authoritative block")
+    if (actual[key] != expected[key]) die(key " expected " expected[key] " but found " actual[key])
+  }
+}
+' "$MANIFEST" || fail 'owner decision key/value invariant failed in manifest'
 
 resolution_expected=(
   'form_title_font_size: NON_NORMATIVE_REFERENCE'
@@ -73,49 +131,90 @@ if grep -Eq '^[[:space:]]*status:[[:space:]]*APPROVED([[:space:]]|$)' "$MANIFEST
   fail 'gallery/reference approval is forbidden before runtime validation'
 fi
 
+# PRI-FND-003 provenance enforcement. The currently admitted source state is
+# UNBOUND_EXTERNAL. BOUND_REPLAYABLE is accepted only when a future/fixture
+# reference supplies the complete replayable semantics required by policy.
 awk '
+function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+function value_after_colon(line) { sub(/^[^:]*:[[:space:]]*/, "", line); return trim(line) }
+function die(msg, code) { print msg > "/dev/stderr"; exit code }
+function reset_ref() {
+  have_provenance=provenance_count=0
+  have_pstate=have_replayable=have_repo=have_identity=have_locator=have_sha=have_role=0
+  pstate=replayable=repo=identity=locator=sha=role=""
+  in_prov=0
+}
 function validate_ref() {
   if (!in_ref) return
-  if (!have_provenance) { print "missing provenance for " ref > "/dev/stderr"; exit 41 }
-  if (!have_pstate) { print "missing provenance state for " ref > "/dev/stderr"; exit 42 }
-  if (!have_replayable) { print "missing replayable flag for " ref > "/dev/stderr"; exit 43 }
-  if (!have_sha) { print "missing sha256 state for " ref > "/dev/stderr"; exit 44 }
-  if (!have_role) { print "missing claim_role for " ref > "/dev/stderr"; exit 45 }
+  if (provenance_count != 1) die("provenance block count invalid for " ref, 40)
+  if (have_pstate != 1) die("missing or duplicate provenance state for " ref, 41)
+  if (have_replayable != 1) die("missing or duplicate replayable flag for " ref, 42)
+  if (have_repo != 1) die("missing or duplicate repository_path for " ref, 43)
+  if (have_identity != 1) die("missing or duplicate immutable_identity for " ref, 44)
+  if (have_sha != 1) die("missing or duplicate sha256 state for " ref, 45)
+  if (have_role != 1) die("missing or duplicate claim_role for " ref, 46)
+
   if (pstate == "UNBOUND_EXTERNAL") {
-    if (replayable != "false") { print "unbound source marked replayable for " ref > "/dev/stderr"; exit 46 }
-    if (sha != "UNCOMPUTED") { print "unbound source has fabricated/non-uncomputed digest for " ref > "/dev/stderr"; exit 47 }
-    if (role != "SUPPORTING_ONLY") { print "unsupported canonical source for " ref ": claim_role=" role > "/dev/stderr"; exit 48 }
+    if (replayable != "false") die("unbound provenance contradiction for " ref ": replayable must be false", 47)
+    if (repo != "null") die("unbound provenance contradiction for " ref ": repository_path must be null", 48)
+    if (identity != "null") die("unbound provenance contradiction for " ref ": immutable_identity must be null", 49)
+    if (have_locator == 1 && locator != "null") die("unbound provenance contradiction for " ref ": immutable_locator must be null", 50)
+    if (sha != "UNCOMPUTED") die("unbound provenance contradiction for " ref ": sha256 must be UNCOMPUTED", 51)
+    if (role != "SUPPORTING_ONLY") die("unsupported canonical source for " ref ": claim_role=" role, 52)
+    return
   }
+
+  if (pstate != "BOUND_REPLAYABLE") die("unsupported provenance state for " ref ": " pstate, 53)
+  if (replayable != "true") die("bound provenance contradiction for " ref ": replayable must be true", 54)
+  if (repo == "null" && (have_locator != 1 || locator == "null")) die("bound provenance missing durable locator for " ref, 55)
+  if (identity == "null") die("bound provenance missing immutable identity for " ref, 56)
+  if (length(sha) != 64 || sha !~ /^[0-9A-Fa-f]+$/) die("bound provenance invalid sha256 for " ref, 57)
+  if (role != "SUPPORTING_ONLY") die("bound provenance disallowed claim_role for " ref ": " role, 58)
 }
 /^[[:space:]]*- reference_id:/ {
   validate_ref()
   in_ref=1
-  ref=$0; sub(/^.*reference_id:[[:space:]]*/, "", ref)
-  have_provenance=have_pstate=have_replayable=have_sha=have_role=0
-  pstate=replayable=sha=role=""
+  ref=$0; sub(/^.*reference_id:[[:space:]]*/, "", ref); ref=trim(ref)
+  reset_ref()
+  in_ref=1
   next
 }
-in_ref && /^[[:space:]]+provenance:[[:space:]]*$/ { have_provenance=1; next }
-in_ref && have_provenance && /^      state:[[:space:]]*/ && !have_pstate {
-  line=$0; sub(/^.*state:[[:space:]]*/, "", line); pstate=line; have_pstate=1; next
+in_ref && /^    provenance:[[:space:]]*$/ {
+  provenance_count++
+  have_provenance=1
+  in_prov=1
+  next
 }
-in_ref && have_provenance && /^      replayable:[[:space:]]*/ {
-  line=$0; sub(/^.*replayable:[[:space:]]*/, "", line); replayable=line; have_replayable=1; next
+in_ref && in_prov && /^    [^[:space:]][^:]*:/ { in_prov=0 }
+in_ref && in_prov && /^      state:[[:space:]]*/ {
+  have_pstate++; pstate=value_after_colon($0); next
 }
-in_ref && have_provenance && /^      sha256:[[:space:]]*/ {
-  line=$0; sub(/^.*sha256:[[:space:]]*/, "", line); sha=line; have_sha=1; next
+in_ref && in_prov && /^      replayable:[[:space:]]*/ {
+  have_replayable++; replayable=value_after_colon($0); next
 }
-in_ref && have_provenance && /^      claim_role:[[:space:]]*/ {
-  line=$0; sub(/^.*claim_role:[[:space:]]*/, "", line); role=line; have_role=1; next
+in_ref && in_prov && /^      repository_path:[[:space:]]*/ {
+  have_repo++; repo=value_after_colon($0); next
+}
+in_ref && in_prov && /^      immutable_identity:[[:space:]]*/ {
+  have_identity++; identity=value_after_colon($0); next
+}
+in_ref && in_prov && /^      immutable_locator:[[:space:]]*/ {
+  have_locator++; locator=value_after_colon($0); next
+}
+in_ref && in_prov && /^      sha256:[[:space:]]*/ {
+  have_sha++; sha=value_after_colon($0); next
+}
+in_ref && in_prov && /^      claim_role:[[:space:]]*/ {
+  have_role++; role=value_after_colon($0); next
 }
 END { validate_ref() }
 ' "$MANIFEST" || fail 'visual-reference provenance invariant failed'
 
 if grep -Eq '^[[:space:]]+canonical_for:' "$MANIFEST"; then
-  fail 'unsupported canonical source: unbound reference contains canonical_for'
+  fail 'unsupported canonical source: visual reference contains canonical_for'
 fi
 if grep -Eq 'claim_role:[[:space:]]*CANONICAL' "$MANIFEST"; then
-  fail 'unsupported canonical source: unbound visual reference claims canonical authority'
+  fail 'unsupported canonical source: visual reference claims canonical authority'
 fi
 
 printf 'VISUAL_GOVERNANCE_PASS\n'
