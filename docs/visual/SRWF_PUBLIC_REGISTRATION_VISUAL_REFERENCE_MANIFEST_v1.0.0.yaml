@@ -1,0 +1,295 @@
+gallery:
+  id: SRWF-PUBLIC-REGISTRATION-VISUAL-GALLERY
+  version: 1.0.0
+  status: RUNTIME_VALIDATION_REQUIRED
+  surface: public-registration
+  presentation_product: Gravity Presentation Profiles
+  profile_family: SRWF
+  profile: Registration
+
+  authority:
+    architecture: docs/architecture/MOTHER_ARCHITECTURE.md
+    external_baseline: docs/visual/SRWF_PUBLIC_FORM_EXTERNAL_UX_BASELINE_v1.0.0.md
+    visual_rules: docs/visual/SRWF_PUBLIC_REGISTRATION_VISUAL_UX_CONTRACT_v1.0.0.md
+    references_are: visual_acceptance_evidence_not_rule_authority
+
+  canonical_owner_decisions:
+    mobile_horizontal_padding: 16px
+    help_text_placement: below_input
+    validation_message_placement: below_input
+    control_border: "#8690A1"
+    desktop_outer_surface: white_card
+
+references:
+  - reference_id: VR-PUBLIC-360-DEFAULT-01
+    source_artifact: new 7.html
+    viewport:
+      width: 360
+      height: unknown
+    state: default
+    status: CANDIDATE
+    host:
+      component: Gravity Forms
+      state_owner: Gravity Forms
+    ownership:
+      behavior: Gravity Forms
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    contract_scope:
+      - form-level-layout
+      - typography
+      - controls
+      - sections
+      - uploads
+    canonical_corrections:
+      - mobile_horizontal_padding_is_16px
+      - help_text_is_below_input
+      - control_border_is_#8690A1
+    exclusions:
+      - phone_frame
+      - phone_status_bar
+      - sample_business_values
+      - mockup_conditional_logic
+      - placeholder_as_material_instruction
+    runtime_validation:
+      required: true
+      reason: native_host_markup_and_accessibility_not_proven
+
+  - reference_id: VR-PUBLIC-320-VALIDATION-01
+    source_artifact: new 7.html
+    viewport:
+      width: 320
+      height: unknown
+    state: validation-error
+    status: CONFLICTING_REFERENCE
+    host:
+      component: Gravity Forms
+      state_owner: Gravity Forms
+    ownership:
+      behavior: Gravity Forms
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    usable_visual_evidence:
+      - error_color_language
+      - error_summary_composition
+      - preserved_entered_values
+      - 320px_density
+    canonical_corrections:
+      - validation_message_remains_below_input_by_owner_decision
+      - control_border_is_#8690A1
+      - semantic_association_and_reading_order_require_runtime_validation
+    noncanonical_as_shown:
+      - old_control_border_if_#8993A4_is_rendered
+      - any_placeholder_used_as_material_instruction
+    runtime_validation:
+      required: true
+      reason: owner-canonical placement must still satisfy real accessibility outcomes
+
+  - reference_id: VR-PUBLIC-360-SCHOOL-STATES-01
+    source_artifact: new 7.html
+    viewport:
+      width: 360
+      height: unknown
+    state: school-selector-states
+    status: CANDIDATE
+    host:
+      component: GP Advanced Select
+      state_owner: GP Advanced Select
+    ownership:
+      behavior: GP Advanced Select
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    visual_states:
+      - resting
+      - focused_open
+      - results
+      - no_results
+      - selected
+      - selected_other
+      - error
+    exclusions:
+      - search_algorithm
+      - lazy_loading
+      - infinite_scroll
+      - mock_school_dataset
+      - mockup_javascript_behavior
+    runtime_validation:
+      required: true
+      reason: actual_GPAS_DOM_and_configuration_required
+
+  - reference_id: VR-PUBLIC-360-PHOTO-INITIAL-01
+    source_artifact: new 7.html
+    viewport:
+      width: 360
+      height: unknown
+    state: photo-upload-initial
+    status: CANDIDATE
+    host:
+      component: GP File Upload Pro
+      state_owner: GP File Upload Pro
+    ownership:
+      behavior: GP File Upload Pro
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    exclusions:
+      - file_constraints_not_proven_by_mockup
+      - phone_frame
+    runtime_validation:
+      required: true
+      reason: actual_upload_widget_markup_required
+
+  - reference_id: VR-PUBLIC-360-PHOTO-UPLOADED-CROP-01
+    source_artifact: new 7.html
+    viewport:
+      width: 360
+      height: unknown
+    state: photo-uploaded-and-crop
+    status: CANDIDATE
+    host:
+      component: GP File Upload Pro
+      state_owner: GP File Upload Pro
+    ownership:
+      behavior: GP File Upload Pro
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    exclusions:
+      - crop_engine
+      - crop_ratio
+      - crop_dimensions
+      - recrop_lifecycle
+    runtime_validation:
+      required: true
+      reason: GPFUP_configuration_must_define_actual_crop_constraints
+
+  - reference_id: VR-PUBLIC-DESKTOP-840-01
+    source_artifact: new 7.html
+    viewport:
+      width: desktop
+      form_content_width: 840
+    state: default-desktop-enhancement
+    status: CANDIDATE_WITH_OWNER_CORRECTION
+    host:
+      component: Gravity Forms
+      state_owner: Gravity Forms
+    ownership:
+      behavior: Gravity Forms
+      presentation: Gravity Presentation Profiles / SRWF Registration
+    canonical_for:
+      - two_column_short_field_pairing
+      - full_width_school
+      - full_width_upload
+      - max_form_width_840px
+      - white_outer_form_card
+    owner_correction:
+      page_background: "#F6F8FB"
+      surface: "#FFFFFF"
+      radius: 16px
+      shadow: none_or_very_subtle
+    exclusions:
+      - browser_chrome
+      - fake_url_bar
+    runtime_validation:
+      required: true
+      reason: responsive_transition_and_outer_surface_need_browser_validation
+
+  - reference_id: VR-PUBLIC-COMPONENT-STATES-01
+    source_artifact: new 7.html
+    viewport:
+      width: composite
+      height: unknown
+    state: component-reference-board
+    status: ILLUSTRATIVE_ONLY
+    contract_scope:
+      - resting
+      - focus
+      - error
+      - success
+      - school_selected
+      - upload_states
+    exclusions:
+      - whole_form_layout
+      - component_behavior
+      - exact_runtime_markup
+    runtime_validation:
+      required: true
+      reason: component_board_is_not_real_host_runtime
+
+  - reference_id: VR-PUBLIC-V1-360-DEFAULT-LEGACY-01
+    source_artifact: SRWF Registration Form v1 (standalone).html
+    viewport:
+      width: 360
+      height: unknown
+    state: default
+    status: STALE_CANDIDATE
+    retained_for:
+      - cross_artifact_token_evidence
+      - spacing_history
+      - upload_state_evidence
+    noncanonical:
+      - 18px_mobile_padding
+      - earlier_content_assumptions
+      - Jalali_three_select_presentation_as_behavior_authority
+
+  - reference_id: VR-PUBLIC-V1-DESKTOP-840-LEGACY-01
+    source_artifact: SRWF Registration Form v1 (standalone).html
+    viewport:
+      width: desktop
+      form_content_width: 840
+    state: desktop
+    status: STALE_CANDIDATE
+    retained_for:
+      - 840px_width
+      - short_field_pairing
+    superseded_visual_choice:
+      - unresolved_outer_surface
+    canonical_owner_choice:
+      - white_card
+
+  - reference_id: VR-PUBLIC-390-INTERACTIVE-01
+    source_artifact: SRWF Form (standalone).html
+    viewport:
+      width: 390
+      height: 900
+    state: interactive-mockup
+    status: ILLUSTRATIVE_ONLY
+    exclusions:
+      - all_sc_camel_behavior
+      - validation_engine
+      - search_filter_logic
+      - submit_logic
+      - conditional_logic
+      - Jalali_calculations
+    runtime_validation:
+      required: true
+      reason: MOCKUP_ONLY_SIMULATION
+
+  - reference_id: VR-PUBLIC-COMPOSITE-GALLERY-01
+    source_artifact: attached_composite_screenshot
+    viewport:
+      width: composite
+      height: composite
+    state: gallery-overview
+    status: REJECTED_AS_REDUNDANT
+    reason: exact_HTML_sources_exist_and_are_more_authoritative_for_numeric_visual_values
+    useful_for:
+      - gallery_structure
+      - visual_overview
+
+gaps:
+  owner_visual_choices:
+    status: CLOSED
+  runtime_evidence:
+    - actual_PersianGravity_Jalali_runtime_not_inspected
+    - actual_GPAS_runtime_markup_and_configuration_not_inspected
+    - actual_GPFUP_runtime_markup_and_crop_configuration_not_inspected
+    - actual_Gravity_Forms_accessibility_relationships_not_validated
+    - exact_production_breakpoint_not_proven
+    - browser_runtime_contrast_not_validated
+    - keyboard_focus_screen_reader_behavior_not_validated
+  gallery_coverage:
+    - dedicated_430px_reference_not_required_for_contract_but_not_supplied
+
+approval_gate:
+  gallery_can_be_marked_approved_only_when:
+    - runtime_sensitive_states_are_rendered_in_real_host_environment
+    - contract_corrections_are_reflected_in_runtime
+    - 320px_reflow_passes
+    - keyboard_and_focus_behavior_are_acceptable
+    - descriptions_and_errors_below_inputs_preserve_required_semantics_and_reading_order
+    - actual_control_contrast_passes
+    - candidate_references_are_reconciled_with_real_host_markup
