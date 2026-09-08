@@ -63,6 +63,16 @@ jobs:
         shell: bash
         run: bash tests/visual-governance-guardrail.sh
 
+      - name: Lint production and test PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run GPP core tests
+        run: php tests/run.php
+
       - name: Reject committed release archives
         shell: bash
         run: |
