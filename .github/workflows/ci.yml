@@ -55,6 +55,14 @@ jobs:
           grep -q "canonical_plugin_repository: rezahh107/Gravity-Presentation-Profiles" docs/architecture/MOTHER_ARCHITECTURE.md
           grep -q "first_major_profile_family: SRWF" docs/architecture/MOTHER_ARCHITECTURE.md
 
+      - name: Validate visual governance
+        shell: bash
+        run: bash scripts/validate-visual-governance.sh .
+
+      - name: Run visual governance falsification controls
+        shell: bash
+        run: bash tests/visual-governance-guardrail.sh
+
       - name: Reject committed release archives
         shell: bash
         run: |
