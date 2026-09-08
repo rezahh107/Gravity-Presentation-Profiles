@@ -4,8 +4,9 @@
 document_id: SRWF_PUBLIC_REGISTRATION_VISUAL_UX_CONTRACT
 version: 1.0.0
 surface: public-registration
-status: OWNER_APPROVED_VISUAL_AUTHORITY__RUNTIME_VALIDATION_REQUIRED
+status: OWNER_APPROVED_VISUAL_AUTHORITY__EXPLICIT_RESOLUTION_STATES__RUNTIME_VALIDATION_REQUIRED
 source_work_unit: WU-SRWF-PUBLIC-VISUAL-CONTRACT-02
+repair_work_unit: WU-GPP-PR1-COORDINATED-DOC-REPAIR-01
 presentation_product: Gravity Presentation Profiles
 profile_family: SRWF
 profile: Registration
@@ -15,9 +16,11 @@ gallery_runtime_approval: false
 
 ## 1. Purpose
 
-This contract defines the deterministic visual and responsive rules for the SRWF Public Registration profile of Gravity Presentation Profiles.
+This contract defines the visual and responsive rule authority for the SRWF Public Registration profile of Gravity Presentation Profiles.
 
 It does not define data, validation logic, conditional logic, workflow, upload rules, search algorithms, crop behavior, or other host-owned behavior.
+
+A rule is implementation-driving only when this contract gives it an exact canonical value/rule or a separately identified higher-authority basis. Approximate visual observations remain reference-only until explicitly resolved.
 
 ## 2. Authority order
 
@@ -58,15 +61,13 @@ Host plugins create behavior/state; Gravity Presentation Profiles styles that st
 
 ## 4. External baseline
 
-This contract incorporates the constraints recorded in:
-
-`SRWF_PUBLIC_FORM_EXTERNAL_UX_BASELINE_v1.0.0.md`
+This contract incorporates the constraints recorded in `SRWF_PUBLIC_FORM_EXTERNAL_UX_BASELINE_v1.0.0.md`.
 
 General accessibility/host requirements are not re-invented from screenshots.
 
 ## 5. Owner-closed canonicalization bundle
 
-The following owner decisions are closed and canonical for v1.0.0:
+The following five owner decisions are closed and canonical for v1.0.0:
 
 ```yaml
 canonicalization_correction_bundle:
@@ -87,19 +88,15 @@ canonicalization_correction_bundle:
   control_border:
     value: "#8690A1"
     status: OWNER_APPROVED
-    reason: replaces context-sensitive low-contrast candidate #8993A4
 
   desktop_outer_surface:
     value: white_card
-    page_background: "#F6F8FB"
-    surface: "#FFFFFF"
-    radius: 16px
-    max_width: 840px
-    shadow: none_or_very_subtle
     status: OWNER_APPROVED
 ```
 
-Historical 18px mobile padding and unresolved direct-surface desktop treatment are no longer canonical alternatives.
+The white-card decision is independently owner-authorized. Existing supporting values `page-bg: #F6F8FB`, `surface: #FFFFFF`, `radius-card: 16px`, and `desktop-content-max-width: 840px` remain separately canonical where listed in the token table below.
+
+Historical `18px` mobile padding and direct-page-surface treatment are no longer canonical alternatives.
 
 ## 6. SRWF visual principles
 
@@ -109,13 +106,55 @@ Use a calm, light, low-chrome visual language with a blue primary action and red
 `SRWF-VIS-002 — CONFIRMED`  
 Use a mobile-first single-column form with minimal card-in-card decoration.
 
-`SRWF-VIS-003 — CONFIRMED`  
-Desktop may enhance selected short field pairs into two columns; school selectors, uploads, and complex states remain full width where needed.
+`SRWF-VIS-003 — BOUNDED`  
+Desktop two-column enhancement is permitted only for an exact pairing set admitted by this contract. The exact pairing set is currently `NOT_PROVEN`; therefore no implementation may infer pairings from screenshots or labels.
 
 `SRWF-VIS-004 — CONFIRMED`  
 Custom presentation must reveal/style authentic host state rather than create a shadow implementation of host behavior.
 
-## 7. Canonical design tokens
+## 7. Deterministic implementation resolution states
+
+This block is the deterministically inspectable resolution register inside the existing Visual/UX Contract. It is not a second visual SSOT.
+
+<!-- GPP_RESOLUTION_STATE_BEGIN -->
+```yaml
+implementation_resolution_states:
+  form_title_font_size: NON_NORMATIVE_REFERENCE
+  form_title_line_height: NON_NORMATIVE_REFERENCE
+  helper_text_font_size: NON_NORMATIVE_REFERENCE
+  field_error_font_size: NON_NORMATIVE_REFERENCE
+  desktop_title_enhancement: NON_NORMATIVE_REFERENCE
+  focus_ring_exact_geometry: NOT_PROVEN
+  focus_ring_exact_alpha: NOT_PROVEN
+  field_vertical_rhythm: NON_NORMATIVE_REFERENCE
+  major_section_rhythm: NON_NORMATIVE_REFERENCE
+  desktop_short_field_pairings: NOT_PROVEN
+  desktop_shadow_exact_value: NOT_PROVEN
+```
+<!-- GPP_RESOLUTION_STATE_END -->
+
+Interpretation:
+
+- `NON_NORMATIVE_REFERENCE`: useful visual observation, but not an implementation value.
+- `NOT_PROVEN`: no exact value/rule may be chosen without new evidence or owner authority.
+- exact canonical values live in explicit canonical tables/rules in this document.
+
+Reference-only observations retained for provenance/context, not for implementation:
+
+```text
+form title size observed around 24px
+form title line-height observed around 1.5
+helper text observed around 13.5px
+field error observed around 14px
+desktop title enhancement observed around 26px
+field rhythm observed around 24px
+major-section rhythm observed around 32px
+owner visual intent for desktop shadow: none or very subtle
+```
+
+No consumer may round, normalize, or guess these observations into production values.
+
+## 8. Canonical design tokens
 
 | Token | Canonical value | Status |
 |---|---:|---|
@@ -129,48 +168,54 @@ Custom presentation must reveal/style authentic host state rather than create a 
 | `error` | `#B42318` | confirmed |
 | `success` | `#18794E` | confirmed |
 | `divider` | `#E4E7EC` | confirmed as decorative divider |
-| `control-border` | `#8690A1` | owner-approved replacement |
-| `focus` | primary blue border + translucent ring | visual intent confirmed; runtime test required |
+| `control-border` | `#8690A1` | owner-approved |
 | `radius-control` | `10px` | confirmed |
 | `radius-upload` | `12px` | confirmed |
-| `radius-card` | `16px` | confirmed and owner-approved for desktop outer surface |
+| `radius-card` | `16px` | confirmed |
 | `control-min-height` | `52px` | confirmed |
 | `primary-button-min-height` | `56px` | confirmed |
 | `mobile-horizontal-padding` | `16px` | owner-approved |
 | `desktop-content-max-width` | `840px` | confirmed |
 
+Focus presentation has an exact canonical color basis (`primary: #1D4ED8`) but the ring geometry and alpha remain `NOT_PROVEN`; the earlier phrase “translucent ring” is visual intent only, not a CSS value.
+
 ### Placeholder rule
 
-`#9CA3AF` from the mockups is **not** a canonical color for meaningful instructional text because its contrast on white is too low for normal text.
+`#9CA3AF` from the mockups is not a canonical color for meaningful instructional text because its contrast on white is too low for normal text.
 
 Placeholder text may remain visually subtle only when redundant/non-material. Required instructions must remain persistent outside placeholder-only presentation and must satisfy applicable text-contrast requirements.
 
-## 8. Typography hierarchy
+## 9. Typography hierarchy
 
-Current SRWF visual evidence supports:
+Exact canonical typography values currently supported by admitted evidence are:
 
-```text
-font family target: Vazirmatn (font delivery external to this plugin)
-form title: ~24px / 700 / ~1.5 line-height
-section heading: 18px / 700
-field label: 15px / 600
-control value: 16px / 400
-helper text: ~13.5px / 400
-field error: ~14px / medium-to-semibold
-primary action: 16px / 700
+```yaml
+section_heading:
+  font_size: 18px
+  font_weight: 700
+field_label:
+  font_size: 15px
+  font_weight: 600
+control_value:
+  font_size: 16px
+  font_weight: 400
+primary_action:
+  font_size: 16px
+  font_weight: 700
+font_family_target:
+  value: Vazirmatn
+  delivery_owner: Vazir
 ```
 
-A desktop title enhancement around 26px is allowed where the final profile CSS preserves the same hierarchy.
+Form-title size/line-height, helper-text size, field-error size, and desktop-title enhancement are reference-only until resolved in Section 7. Their observed approximate values must not drive CSS.
 
-## 9. RTL and directionality
+## 10. RTL and directionality
 
-The SRWF profile is Persian/RTL in composition.
-
-Use direction-safe/logical CSS where practical.
+The SRWF profile is Persian/RTL in composition. Use direction-safe/logical CSS where practical.
 
 Values that are inherently numeric/Latin, such as phone or National ID entry, may render LTR while preserving correct labels, reading order, and host semantics.
 
-## 10. Responsive contract
+## 11. Responsive contract
 
 ### 320px
 
@@ -181,9 +226,9 @@ At 320 CSS px:
 - ordinary fields are one column;
 - no ordinary form content requires horizontal scrolling;
 - labels, controls, helper text, and field errors remain readable;
-- desktop field pairs must collapse;
+- any future admitted desktop field pairs must collapse;
 - school/upload/photo states must fit available width;
-- horizontal content padding is `16px`.
+- horizontal content padding is exactly `16px`.
 
 ### 360px
 
@@ -191,16 +236,20 @@ Primary mobile visual reference width.
 
 ### 390px / 430px
 
-Use the same semantic mobile composition. A dedicated 430px approved reference is not yet required to define a different layout.
+Use the same semantic mobile composition. A dedicated 430px approved reference is not required to define a different layout.
 
 ### Desktop
 
-- form card max width: `840px`;
-- outer surface: white card on `#F6F8FB` page background;
-- card radius: `16px`;
-- shadow: none or extremely subtle;
-- selected short fields may pair in two columns;
+- outer surface is `white_card`;
+- page background is canonical token `#F6F8FB`;
+- form surface is canonical token `#FFFFFF`;
+- form max width is canonical token `840px`;
+- outer radius is canonical token `16px`;
+- exact shadow CSS value is `NOT_PROVEN`;
+- exact two-column short-field pairing set is `NOT_PROVEN`;
 - school selector and file/photo upload states remain full width where needed.
+
+Until the pairing set is admitted, implementation must fail closed to no inferred two-column pairing.
 
 ### Production breakpoint
 
@@ -208,21 +257,21 @@ Use the same semantic mobile composition. A dedicated 430px approved reference i
 exact_production_breakpoint: NOT_PROVEN
 ```
 
-Do not copy a mockup/gallery media-query value merely because it appears in a prototype. Choose the implementation breakpoint only when it reproduces the semantic contract and passes browser/runtime validation.
+Do not copy a mockup/gallery media-query value merely because it appears in a prototype.
 
-## 11. Form and section composition
+## 12. Form and section composition
 
 - Keep the form visually continuous and restrained.
 - Use section headings plus subtle dividers for grouping.
-- Preserve a roughly 24px field rhythm and approximately 32px major-section rhythm where supported by the approved references.
+- Field and major-section rhythm observations remain `NON_NORMATIVE_REFERENCE` in Section 7 and must not be implemented as guessed exact spacing.
 - Decorative dividers must not be the sole means of conveying grouping/meaning.
 - Avoid unnecessary nested cards around ordinary fields.
 
-## 12. Component contract matrix
+## 13. Component contract matrix
 
 | Component | Behavior owner | Gravity Presentation Profiles visual responsibility | Runtime-sensitive |
 |---|---|---|---|
-| Text/numeric input | Gravity Forms / PersianGravity where applicable | 52px min height, 10px radius, white fill, `#8690A1` border, SRWF focus/error language | actual host markup/semantics |
+| Text/numeric input | Gravity Forms / PersianGravity where applicable | 52px min height, 10px radius, white fill, `#8690A1` border, SRWF focus/error language | actual host markup/semantics; exact focus ring geometry |
 | National ID / phone | Host | same control family, clear persistent format instruction, LTR value where appropriate | validation behavior |
 | Jalali date | PersianGravity / Gravity Forms | visually integrate real runtime control into SRWF control language | exact widget/picker UI not proven |
 | Radio / choice | Gravity Forms | clear selected state with shape/text + color, not color only | fieldset/keyboard semantics |
@@ -233,31 +282,19 @@ Do not copy a mockup/gallery media-query value merely because it appears in a pr
 | Student photo | GP File Upload Pro | upload/preview/crop/re-crop state styling | crop ratio/dimensions/config |
 | Primary action | Gravity Forms | primary blue, 56px min height, responsive width | submit lifecycle |
 | Validation summary | Gravity Forms | SRWF red semantic surface | focus/ARIA runtime |
-| Field error | Gravity Forms | textual red error + border/icon where appropriate; below input | accessible association/runtime order |
-| Helper text | Gravity Forms | muted persistent text; below input | accessible association/runtime order |
+| Field error | Gravity Forms | textual red error + border/icon where appropriate; below input | accessible association/runtime order; exact font size unresolved |
+| Helper text | Gravity Forms | muted persistent text; below input | accessible association/runtime order; exact font size unresolved |
 | Required indicator | Gravity Forms | visible red semantic styling | underlying required semantics |
 
-## 13. Help/instruction presentation
+## 14. Help/instruction presentation
 
-Owner decision:
+Owner decision: `help_text_placement: below_input`.
 
-```yaml
-help_text_placement: below_input
-```
+This is canonical for the SRWF visual profile. Material format instructions must remain persistent and not placeholder-only; host semantic association must remain intact; runtime screen-reader/reading-order validation is mandatory because this differs from current Gravity Forms recommended placement.
 
-This is canonical for the SRWF visual profile.
+## 15. Validation/error presentation
 
-However:
-
-- material format instructions must remain persistent and not placeholder-only;
-- host semantic association must remain intact;
-- runtime screen-reader/reading-order validation is mandatory because this differs from current Gravity Forms recommended placement.
-
-## 14. Validation/error presentation
-
-The host detects and exposes validation state.
-
-Gravity Presentation Profiles maps that state visually to:
+The host detects and exposes validation state. Gravity Presentation Profiles maps that state visually to:
 
 ```text
 textual field error below the affected input
@@ -267,81 +304,45 @@ textual field error below the affected input
 + preservation of user-entered values
 ```
 
-Owner decision:
+Owner decision: `validation_message_placement: below_input`.
+
+This visual placement must not break programmatic error association or focus/reading behavior. The plugin must not implement its own validation engine.
+
+## 16. Control border / contrast rule
+
+Canonical resting border is `#8690A1`, replacing the earlier `#8993A4` candidate.
+
+Final implementation must still verify actual contrast against the rendered adjacent background after Gravity Forms/theme composition. Runtime contrast remains `NOT_PROVEN` until executed.
+
+## 17. Desktop outer surface
+
+Owner-selected canonical surface type is `white_card`.
+
+The supporting exact tokens are:
 
 ```yaml
-validation_message_placement: below_input
+page_background: "#F6F8FB"
+surface: "#FFFFFF"
+max_width: 840px
+outer_radius: 16px
+shadow_exact_value: NOT_PROVEN
 ```
 
-This visual placement must not break programmatic error association or focus/reading behavior.
+The non-normative visual intent is a distinct but quiet white form card, with no heavy dashboard-style panel. The exact shadow must not be guessed from “none or very subtle.”
 
-The plugin must not implement its own validation engine.
+## 18. School selector presentation
 
-## 15. Control border / contrast rule
+Allowed visual states include resting, focused/open, searching/results, no results, selected, selected-other, and error.
 
-Canonical resting border:
+GP Advanced Select owns the actual search/filter/keyboard lifecycle. Do not contract lazy loading, a specific query threshold, infinite scrolling, or Populate Anything behavior unless the real field configuration proves it.
 
-```css
-#8690A1
-```
+## 19. Upload and student-photo presentation
 
-This replaces the earlier `#8993A4` candidate.
+Allowed visual states may include initial, uploading, uploaded, preview, invalid file, remove/replace, and crop/re-crop where the host provides it.
 
-Final implementation must still verify actual contrast against the rendered adjacent background after Gravity Forms/theme composition.
+GP File Upload Pro owns upload/crop/re-crop/zoom behavior. Exact crop ratio/dimensions remain runtime/configuration evidence, not mockup authority.
 
-If runtime composition causes the necessary component boundary to fall below applicable contrast requirements, the implementation value must be minimally corrected and the contract version updated rather than silently shipping a known failure.
-
-## 16. Desktop outer surface
-
-Owner-selected canonical composition:
-
-```text
-page background: #F6F8FB
-form surface: #FFFFFF
-form max width: 840px
-outer radius: 16px
-shadow: none or very subtle
-```
-
-The intent is a distinct but quiet white form card, not a heavy dashboard-style panel.
-
-## 17. School selector presentation
-
-Allowed visual states include:
-
-```text
-resting
-focused/open
-searching/results
-no results
-selected
-selected: other
-error
-```
-
-GP Advanced Select owns the actual search/filter/keyboard lifecycle.
-
-Do not contract lazy loading, a specific query threshold, infinite scrolling, or Populate Anything behavior unless the real field configuration proves it.
-
-## 18. Upload and student-photo presentation
-
-Allowed visual states may include:
-
-```text
-initial
-uploading
-uploaded
-preview
-invalid file
-remove/replace
-crop / re-crop where host provides it
-```
-
-GP File Upload Pro owns upload/crop/re-crop/zoom behavior.
-
-Exact crop ratio/dimensions remain runtime/configuration evidence, not mockup authority.
-
-## 19. Accessibility design requirements
+## 20. Accessibility design requirements
 
 The profile must preserve at least these outcomes:
 
@@ -360,7 +361,7 @@ native host semantics and keyboard behavior
 
 The contract supports accessibility; it does not itself prove WCAG conformance.
 
-## 20. Host-owned behavior firewall
+## 21. Host-owned behavior firewall
 
 The following prototype behavior is not implementation authority:
 
@@ -379,8 +380,9 @@ success transition logic
 
 Interactive mockup scripts remain `MOCKUP_ONLY_SIMULATION` unless independently supported by the real host/runtime contract.
 
-## 21. Runtime-sensitive items
+## 22. Runtime-sensitive items
 
+<!-- GPP_RUNTIME_GAPS_BEGIN -->
 ```yaml
 actual_gravity_forms_markup: NOT_PROVEN
 actual_persiangravity_date_widget: NOT_PROVEN
@@ -393,32 +395,21 @@ screen_reader_output: NOT_PROVEN
 exact_production_breakpoint: NOT_PROVEN
 runtime_contrast_after_host_css: NOT_PROVEN
 ```
+<!-- GPP_RUNTIME_GAPS_END -->
 
 These are validation gaps, not open owner visual choices.
 
-## 22. Non-goals
+## 23. Non-goals
 
-This contract does not authorize:
+This contract does not authorize field/ID changes, business validation changes, conditional-logic changes, stored-value changes, Gravity Flow changes, upload constraint changes, Officer/Accountant UI, multiple visual themes, a visual editor, production JavaScript by default, PDF presentation, or production plugin implementation.
 
-- field/ID changes;
-- business validation changes;
-- conditional-logic changes;
-- stored-value changes;
-- Gravity Flow changes;
-- upload constraint changes;
-- Officer/Accountant UI;
-- multiple visual themes;
-- visual editor;
-- production JavaScript by default;
-- PDF presentation;
-- implementation of the plugin itself.
-
-## 23. Visual acceptance
+## 24. Visual acceptance
 
 A future implementation is visually conformant only when all of the following are true:
 
 ```text
-canonical contract tokens/rules applied
+exact canonical contract tokens/rules applied
++ unresolved items remain fail-closed rather than guessed
 + correct mobile/desktop composition
 + authentic host states styled rather than reimplemented
 + approved reference-gallery match where applicable
@@ -426,44 +417,33 @@ canonical contract tokens/rules applied
 + real browser/runtime validation completed
 ```
 
-## 24. Change control
+## 25. Change control
 
 - Gallery references cannot override this contract.
 - Screenshot-only differences do not silently change canonical tokens/rules.
 - A design-rule change requires an explicit contract revision.
+- A `NOT_PROVEN` or `NON_NORMATIVE_REFERENCE` item may become canonical only after exact authority/evidence is recorded in this contract.
 - A runtime accessibility correction that materially changes the approved appearance must be recorded as a contract revision, not hidden in CSS.
 
-## 25. Evidence map
+## 26. Evidence map and closure state
 
 ```text
-EXTERNAL_BASELINE
-→ W3C / WAI / empirical evidence
-
-HOST_CONSTRAINT
-→ Gravity Forms / Gravity Wiz official documentation
-
-SRWF_PROJECT_SPECIFIC
-→ approved HTML/CSS/screenshots + explicit owner decisions
-
-DERIVED_INTEGRATION_RULE
-→ combinations of the above
+EXTERNAL_BASELINE → W3C / WAI / empirical evidence
+HOST_CONSTRAINT → Gravity Forms / Gravity Wiz official documentation
+SRWF_PROJECT_SPECIFIC → explicit owner decisions + replayable admitted evidence where available
+VISUAL_REFERENCE_ONLY → non-replayable/unbound mockups; supporting evidence only
+DERIVED_INTEGRATION_RULE → combinations of the above
 ```
-
-## 26. Closure state
 
 ```yaml
 owner_visual_choices:
   state: CLOSED
-
 visual_contract:
-  state: OWNER_APPROVED
-
+  state: OWNER_APPROVED_WITH_EXPLICIT_RESOLUTION_STATES
 canonical_gallery:
   state: NOT_APPROVED_UNTIL_RUNTIME_VALIDATION
-
 runtime_accessibility_conformance:
   state: NOT_PROVEN
-
 implementation:
   state: NOT_STARTED
 ```

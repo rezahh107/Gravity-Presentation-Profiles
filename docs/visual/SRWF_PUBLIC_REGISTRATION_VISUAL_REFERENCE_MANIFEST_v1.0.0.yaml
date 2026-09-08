@@ -11,7 +11,18 @@ gallery:
     architecture: docs/architecture/MOTHER_ARCHITECTURE.md
     external_baseline: docs/visual/SRWF_PUBLIC_FORM_EXTERNAL_UX_BASELINE_v1.0.0.md
     visual_rules: docs/visual/SRWF_PUBLIC_REGISTRATION_VISUAL_UX_CONTRACT_v1.0.0.md
-    references_are: visual_acceptance_evidence_not_rule_authority
+    provenance_ssot: this_manifest
+    references_are: supporting_visual_evidence_not_rule_authority
+
+  provenance_policy:
+    replayable_source_requires:
+      - repository_path_or_immutable_locator
+      - immutable_identity
+      - sha256_from_exact_inspected_bytes
+    unavailable_source_state: UNBOUND_EXTERNAL
+    unavailable_digest_state: UNCOMPUTED
+    unbound_source_may_independently_establish_canonical_numeric_rule: false
+    independent_higher_authority_rule_may_remain_canonical: true
 
   canonical_owner_decisions:
     mobile_horizontal_padding: 16px
@@ -23,6 +34,13 @@ gallery:
 references:
   - reference_id: VR-PUBLIC-360-DEFAULT-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 360
       height: unknown
@@ -36,14 +54,16 @@ references:
       presentation: Gravity Presentation Profiles / SRWF Registration
     contract_scope:
       - form-level-layout
-      - typography
+      - typography_reference_only_where_resolution_is_noncanonical
       - controls
       - sections
       - uploads
-    canonical_corrections:
-      - mobile_horizontal_padding_is_16px
-      - help_text_is_below_input
-      - control_border_is_#8690A1
+    contract_overrides:
+      authority_basis: OWNER_APPROVED_VISUAL_UX_CONTRACT
+      rules:
+        - mobile_horizontal_padding_is_16px
+        - help_text_is_below_input
+        - control_border_is_#8690A1
     exclusions:
       - phone_frame
       - phone_status_bar
@@ -56,6 +76,13 @@ references:
 
   - reference_id: VR-PUBLIC-320-VALIDATION-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 320
       height: unknown
@@ -72,19 +99,28 @@ references:
       - error_summary_composition
       - preserved_entered_values
       - 320px_density
-    canonical_corrections:
-      - validation_message_remains_below_input_by_owner_decision
-      - control_border_is_#8690A1
-      - semantic_association_and_reading_order_require_runtime_validation
+    contract_overrides:
+      authority_basis: OWNER_APPROVED_VISUAL_UX_CONTRACT
+      rules:
+        - validation_message_remains_below_input_by_owner_decision
+        - control_border_is_#8690A1
+        - semantic_association_and_reading_order_require_runtime_validation
     noncanonical_as_shown:
       - old_control_border_if_#8993A4_is_rendered
       - any_placeholder_used_as_material_instruction
     runtime_validation:
       required: true
-      reason: owner-canonical placement must still satisfy real accessibility outcomes
+      reason: owner-canonical_placement_must_still_satisfy_real_accessibility_outcomes
 
   - reference_id: VR-PUBLIC-360-SCHOOL-STATES-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 360
       height: unknown
@@ -116,6 +152,13 @@ references:
 
   - reference_id: VR-PUBLIC-360-PHOTO-INITIAL-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 360
       height: unknown
@@ -136,6 +179,13 @@ references:
 
   - reference_id: VR-PUBLIC-360-PHOTO-UPLOADED-CROP-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 360
       height: unknown
@@ -158,6 +208,13 @@ references:
 
   - reference_id: VR-PUBLIC-DESKTOP-840-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: desktop
       form_content_width: 840
@@ -169,17 +226,25 @@ references:
     ownership:
       behavior: Gravity Forms
       presentation: Gravity Presentation Profiles / SRWF Registration
-    canonical_for:
-      - two_column_short_field_pairing
+    supports_reference_for:
+      - approximate_desktop_composition
       - full_width_school
       - full_width_upload
-      - max_form_width_840px
-      - white_outer_form_card
-    owner_correction:
-      page_background: "#F6F8FB"
-      surface: "#FFFFFF"
-      radius: 16px
-      shadow: none_or_very_subtle
+      - width_observation
+    explicitly_not_authoritative_for:
+      - exact_short_field_pairing_set
+      - exact_shadow_value
+      - canonical_numeric_values_without_independent_contract_basis
+    contract_overrides:
+      authority_basis: OWNER_APPROVED_VISUAL_UX_CONTRACT
+      rules:
+        - desktop_outer_surface_is_white_card
+        - page_background_uses_canonical_token
+        - surface_uses_canonical_token
+        - radius_uses_canonical_token
+        - max_width_uses_canonical_token
+        - desktop_short_field_pairings_are_NOT_PROVEN
+        - desktop_shadow_exact_value_is_NOT_PROVEN
     exclusions:
       - browser_chrome
       - fake_url_bar
@@ -189,6 +254,13 @@ references:
 
   - reference_id: VR-PUBLIC-COMPONENT-STATES-01
     source_artifact: new 7.html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: composite
       height: unknown
@@ -196,7 +268,7 @@ references:
     status: ILLUSTRATIVE_ONLY
     contract_scope:
       - resting
-      - focus
+      - focus_reference_only_for_unresolved_geometry
       - error
       - success
       - school_selected
@@ -205,21 +277,29 @@ references:
       - whole_form_layout
       - component_behavior
       - exact_runtime_markup
+      - exact_focus_ring_geometry
     runtime_validation:
       required: true
       reason: component_board_is_not_real_host_runtime
 
   - reference_id: VR-PUBLIC-V1-360-DEFAULT-LEGACY-01
     source_artifact: SRWF Registration Form v1 (standalone).html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 360
       height: unknown
     state: default
     status: STALE_CANDIDATE
     retained_for:
-      - cross_artifact_token_evidence
-      - spacing_history
-      - upload_state_evidence
+      - cross_artifact_reference_only
+      - spacing_history_reference_only
+      - upload_state_reference_only
     noncanonical:
       - 18px_mobile_padding
       - earlier_content_assumptions
@@ -227,21 +307,37 @@ references:
 
   - reference_id: VR-PUBLIC-V1-DESKTOP-840-LEGACY-01
     source_artifact: SRWF Registration Form v1 (standalone).html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: desktop
       form_content_width: 840
     state: desktop
     status: STALE_CANDIDATE
     retained_for:
-      - 840px_width
-      - short_field_pairing
-    superseded_visual_choice:
-      - unresolved_outer_surface
-    canonical_owner_choice:
-      - white_card
+      - width_observation_reference_only
+      - historical_pairing_reference_only
+    explicitly_not_authoritative_for:
+      - exact_short_field_pairing_set
+      - exact_outer_surface
+    contract_override:
+      authority_basis: OWNER_APPROVED_VISUAL_UX_CONTRACT
+      rule: desktop_outer_surface_is_white_card
 
   - reference_id: VR-PUBLIC-390-INTERACTIVE-01
     source_artifact: SRWF Form (standalone).html
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: 390
       height: 900
@@ -260,12 +356,19 @@ references:
 
   - reference_id: VR-PUBLIC-COMPOSITE-GALLERY-01
     source_artifact: attached_composite_screenshot
+    provenance:
+      state: UNBOUND_EXTERNAL
+      replayable: false
+      repository_path: null
+      immutable_identity: null
+      sha256: UNCOMPUTED
+      claim_role: SUPPORTING_ONLY
     viewport:
       width: composite
       height: composite
     state: gallery-overview
     status: REJECTED_AS_REDUNDANT
-    reason: exact_HTML_sources_exist_and_are_more_authoritative_for_numeric_visual_values
+    reason: exact_source_artifacts_are_not_repository_bound_and_this_composite_is_not_numeric_authority
     useful_for:
       - gallery_structure
       - visual_overview
@@ -281,8 +384,11 @@ gaps:
     - exact_production_breakpoint_not_proven
     - browser_runtime_contrast_not_validated
     - keyboard_focus_screen_reader_behavior_not_validated
-  gallery_coverage:
-    - dedicated_430px_reference_not_required_for_contract_but_not_supplied
+  implementation_resolution:
+    - exact_short_field_pairing_set_not_proven
+    - exact_shadow_value_not_proven
+    - exact_focus_ring_geometry_not_proven
+    - approximate_typography_and_spacing_remain_non_normative
 
 approval_gate:
   gallery_can_be_marked_approved_only_when:

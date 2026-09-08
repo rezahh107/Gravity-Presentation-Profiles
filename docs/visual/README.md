@@ -22,8 +22,6 @@ A visual reference illustrates the contract; it does not override it.
 
 ## Current SRWF Registration state
 
-The first profile family is SRWF and the first visual contract is Public Registration.
-
 Current files:
 
 ```text
@@ -37,9 +35,9 @@ Current status:
 
 ```yaml
 external_baseline: ADMITTED_SUPPORTING_EVIDENCE__RUNTIME_CONFORMANCE_NOT_PROVEN
-visual_ux_contract: OWNER_APPROVED_VISUAL_AUTHORITY__RUNTIME_VALIDATION_REQUIRED
+visual_ux_contract: OWNER_APPROVED_WITH_EXPLICIT_RESOLUTION_STATES
 owner_visual_choices: CLOSED
-visual_reference_manifest: RUNTIME_VALIDATION_REQUIRED
+visual_reference_manifest: MATERIALIZED_WITH_EXPLICIT_PROVENANCE__RUNTIME_VALIDATION_REQUIRED
 canonical_gallery_approved: false
 production_implementation: NOT_STARTED
 ```
@@ -54,6 +52,27 @@ control_border: "#8690A1"
 desktop_outer_surface: white_card
 ```
 
+## Determinism rule
+
+Every implementation-driving visual item must have an explicit truth state inside the Visual/UX Contract.
+
+- exact canonical values/rules may drive implementation;
+- `NON_NORMATIVE_REFERENCE` is context only;
+- `NOT_PROVEN` must fail closed and must not be guessed;
+- approximate prose never silently becomes a production value.
+
+The Visual/UX Contract remains the single visual-rule authority; do not create a parallel token/rule registry.
+
+## Visual provenance rule
+
+The visual-reference manifest is the provenance SSOT for Gallery references.
+
+Every reference must declare provenance state. A replayable source requires a durable locator/identity plus a SHA-256 computed from the exact inspected bytes. When exact bytes are not durably available, use an explicit unbound state and keep the digest uncomputed.
+
+A non-replayable/unbound visual source may not independently establish a canonical or confirmed numeric rule. An owner-approved or higher-authority rule may remain canonical when its independent authority basis is explicitly stated.
+
+Do not fabricate hashes, locators, repository paths, or approval state. Do not commit raw visual artifacts merely to make provenance look complete.
+
 ## Important accessibility note
 
 The owner intentionally selected below-input placement for help text and field validation messages even though current Gravity Forms accessibility guidance recommends above-input placement.
@@ -62,40 +81,11 @@ This is a valid project-specific visual decision only if real runtime validation
 
 Do not convert this owner decision into a generic Base rule.
 
-## Admission rule
-
-Do not treat generated text, screenshots, filenames, or mockup labels such as `FINAL`, `APPROVED`, or `CLOSED` as authority by themselves.
-
-Before a visual contract/gallery artifact is admitted, review:
-
-- source quality and provenance;
-- separation of external baseline, host constraints, and project-specific choices;
-- cross-artifact conflicts;
-- mockup-only behavior leakage;
-- accessibility conflicts;
-- host ownership boundaries;
-- runtime-sensitive `NOT_PROVEN` items;
-- exact owner decisions still required.
-
 ## Canonical gallery rule
 
 A screenshot or HTML mockup does not become a canonical reference automatically.
 
-The current SRWF Registration manifest is materialized but not yet an approved canonical runtime gallery.
-
-A reference may be marked `APPROVED` only after applicable real-host validation and reconciliation with the governing Visual/UX Contract.
-
-Each approved reference should carry traceable metadata including:
-
-- reference ID;
-- surface/profile;
-- viewport;
-- state;
-- governing contract/version;
-- host state owner;
-- presentation owner;
-- exclusions such as browser chrome/device frames;
-- runtime validation requirements.
+The current SRWF Registration manifest is materialized but not an approved canonical runtime gallery. A reference may be marked `APPROVED` only after applicable real-host validation and reconciliation with the governing Visual/UX Contract.
 
 ## Behavior firewall
 
