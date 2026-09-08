@@ -78,6 +78,7 @@ BEGIN {
   in_block=1
   next
 }
+in_block && /^[^[:space:]]/ { in_block=0 }
 in_block && /^  [^[:space:]][^:]*:/ { in_block=0 }
 in_block && /^    [A-Za-z0-9_]+:[[:space:]]*/ {
   line=trim($0)
@@ -139,7 +140,7 @@ function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); ret
 function value_after_colon(line) { sub(/^[^:]*:[[:space:]]*/, "", line); return trim(line) }
 function die(msg, code) { print msg > "/dev/stderr"; exit code }
 function reset_ref() {
-  have_provenance=provenance_count=0
+  provenance_count=0
   have_pstate=have_replayable=have_repo=have_identity=have_locator=have_sha=have_role=0
   pstate=replayable=repo=identity=locator=sha=role=""
   in_prov=0
@@ -149,27 +150,28 @@ function validate_ref() {
   if (provenance_count != 1) die("provenance block count invalid for " ref, 40)
   if (have_pstate != 1) die("missing or duplicate provenance state for " ref, 41)
   if (have_replayable != 1) die("missing or duplicate replayable flag for " ref, 42)
-  if (have_repo != 1) die("missing or duplicate repository_path for " ref, 43)
-  if (have_identity != 1) die("missing or duplicate immutable_identity for " ref, 44)
-  if (have_sha != 1) die("missing or duplicate sha256 state for " ref, 45)
-  if (have_role != 1) die("missing or duplicate claim_role for " ref, 46)
+  if (have_identity != 1) die("missing or duplicate immutable_identity for " ref, 43)
+  if (have_sha != 1) die("missing or duplicate sha256 state for " ref, 44)
+  if (have_role != 1) die("missing or duplicate claim_role for " ref, 45)
+  if (have_repo > 1) die("duplicate repository_path for " ref, 46)
+  if (have_locator > 1) die("duplicate immutable_locator for " ref, 47)
 
   if (pstate == "UNBOUND_EXTERNAL") {
-    if (replayable != "false") die("unbound provenance contradiction for " ref ": replayable must be false", 47)
-    if (repo != "null") die("unbound provenance contradiction for " ref ": repository_path must be null", 48)
-    if (identity != "null") die("unbound provenance contradiction for " ref ": immutable_identity must be null", 49)
-    if (have_locator == 1 && locator != "null") die("unbound provenance contradiction for " ref ": immutable_locator must be null", 50)
-    if (sha != "UNCOMPUTED") die("unbound provenance contradiction for " ref ": sha256 must be UNCOMPUTED", 51)
-    if (role != "SUPPORTING_ONLY") die("unsupported canonical source for " ref ": claim_role=" role, 52)
+    if (replayable != "false") die("unbound provenance contradiction for " ref ": replayable must be false", 48)
+    if (have_repo != 1 || repo != "null") die("unbound provenance contradiction for " ref ": repository_path must be null", 49)
+    if (identity != "null") die("unbound provenance contradiction for " ref ": immutable_identity must be null", 50)
+    if (have_locator == 1 && locator != "null") die("unbound provenance contradiction for " ref ": immutable_locator must be null", 51)
+    if (sha != "UNCOMPUTED") die("unbound provenance contradiction for " ref ": sha256 must be UNCOMPUTED", 52)
+    if (role != "SUPPORTING_ONLY") die("unsupported canonical source for " ref ": claim_role=" role, 53)
     return
   }
 
-  if (pstate != "BOUND_REPLAYABLE") die("unsupported provenance state for " ref ": " pstate, 53)
-  if (replayable != "true") die("bound provenance contradiction for " ref ": replayable must be true", 54)
-  if (repo == "null" && (have_locator != 1 || locator == "null")) die("bound provenance missing durable locator for " ref, 55)
-  if (identity == "null") die("bound provenance missing immutable identity for " ref, 56)
-  if (length(sha) != 64 || sha !~ /^[0-9A-Fa-f]+$/) die("bound provenance invalid sha256 for " ref, 57)
-  if (role != "SUPPORTING_ONLY") die("bound provenance disallowed claim_role for " ref ": " role, 58)
+  if (pstate != "BOUND_REPLAYABLE") die("unsupported provenance state for " ref ": " pstate, 54)
+  if (replayable != "true") die("bound provenance contradiction for " ref ": replayable must be true", 55)
+  if (!((have_repo == 1 && repo != "null") || (have_locator == 1 && locator != "null"))) die("bound provenance missing durable locator for " ref, 56)
+  if (identity == "null") die("bound provenance missing immutable identity for " ref, 57)
+  if (length(sha) != 64 || sha !~ /^[0-9A-Fa-f]+$/) die("bound provenance invalid sha256 for " ref, 58)
+  if (role != "SUPPORTING_ONLY") die("bound provenance disallowed claim_role for " ref ": " role, 59)
 }
 /^[[:space:]]*- reference_id:/ {
   validate_ref()
@@ -181,7 +183,6 @@ function validate_ref() {
 }
 in_ref && /^    provenance:[[:space:]]*$/ {
   provenance_count++
-  have_provenance=1
   in_prov=1
   next
 }
