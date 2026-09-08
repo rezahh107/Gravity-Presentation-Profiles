@@ -1,0 +1,34 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Composer
+/vendor/
+composer.lock
+
+# Node tooling (if introduced later)
+/node_modules/
+
+# Test / analysis output
+/.phpunit.cache/
+/.phpunit.result.cache
+/coverage/
+/build/
+/dist/
+*.log
+
+# Local WordPress/runtime artifacts
+/wp-env.json
+/.wp-env/
+
+# Generated release archives
+*.zip
