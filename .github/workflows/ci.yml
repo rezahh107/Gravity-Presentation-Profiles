@@ -1,0 +1,66 @@
+name: Repository CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Verify required governance files
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            "README.md"
+            "AGENTS.md"
+            "SECURITY.md"
+            "CHANGELOG.md"
+            "docs/architecture/MOTHER_ARCHITECTURE.md"
+            "docs/visual/README.md"
+            "profiles/README.md"
+            ".distignore"
+          )
+
+          for file in "${required[@]}"; do
+            test -f "$file" || {
+              echo "Missing required repository file: $file" >&2
+              exit 1
+            }
+          done
+
+      - name: Verify architecture identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "document_id: GPP-MOTHER-ARCHITECTURE" docs/architecture/MOTHER_ARCHITECTURE.md
+          grep -q "canonical_plugin_repository: rezahh107/Gravity-Presentation-Profiles" docs/architecture/MOTHER_ARCHITECTURE.md
+          grep -q "first_major_profile_family: SRWF" docs/architecture/MOTHER_ARCHITECTURE.md
+
+      - name: Reject committed release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files '*.zip' | grep -q .; then
+            echo "Committed ZIP archives are not allowed in the source repository." >&2
+            git ls-files '*.zip'
+            exit 1
+          fi
