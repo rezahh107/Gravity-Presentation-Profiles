@@ -1,0 +1,17 @@
+{
+  "name": "rezahh107/gravity-presentation-profiles",
+  "description": "A reusable WordPress presentation layer for applying opt-in visual profiles to Gravity Forms and Gravity Flow surfaces while preserving native behavior, data, and workflow ownership.",
+  "type": "wordpress-plugin",
+  "autoload": {
+    "psr-4": {
+      "GravityPresentationProfiles\\": "src/"
+    }
+  },
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true
+  },
+  "scripts": {
+    "validate:repository": "composer validate --no-check-publish"
+  }
+}
