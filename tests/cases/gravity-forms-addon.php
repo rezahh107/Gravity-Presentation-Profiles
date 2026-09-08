@@ -74,9 +74,11 @@ gpp_assert_same( true, GFForms::$framework_included, 'Bootstrap should ask Gravi
 gpp_assert_same( array( 'GravityPresentationProfiles\\GravityForms\\AddOn' ), GFAddOn::$registered, 'Exactly the GPP add-on class should register.' );
 
 $addon_class = GFAddOn::$registered[0];
-$addon       = new $addon_class();
-$sections    = $addon->form_settings_fields( array( 'id' => 17 ) );
-$fields      = $sections[0]['fields'];
+gpp_assert_true( method_exists( $addon_class, 'get_instance' ), 'Registered GFAddOn must expose the documented singleton accessor.' );
+$addon = $addon_class::get_instance();
+gpp_assert_same( $addon, $addon_class::get_instance(), 'GFAddOn singleton accessor must return the same instance.' );
+$sections = $addon->form_settings_fields( array( 'id' => 17 ) );
+$fields   = $sections[0]['fields'];
 
 gpp_assert_same( 'enabled', $fields[0]['name'], 'Form settings must expose the canonical enable setting.' );
 gpp_assert_same( 'checkbox', $fields[0]['type'], 'Enable setting must use a Gravity Forms checkbox field.' );

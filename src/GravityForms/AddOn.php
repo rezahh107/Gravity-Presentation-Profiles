@@ -8,12 +8,22 @@ use GravityPresentationProfiles\Core\PresentationResolver;
 use GravityPresentationProfiles\ProfileCatalog;
 
 final class AddOn extends \GFAddOn {
+    private static $_instance = null;
+
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
     protected $_path        = 'gravity-presentation-profiles/gravity-presentation-profiles.php';
     protected $_full_path   = __FILE__;
     protected $_title       = 'Gravity Presentation Profiles';
     protected $_short_title = 'Presentation Profiles';
+
+    public static function get_instance() {
+        if ( null === self::$_instance ) {
+            self::$_instance = new self();
+        }
+
+        return self::$_instance;
+    }
 
     public function form_settings_fields( $form ) {
         $profile_choices = array(
