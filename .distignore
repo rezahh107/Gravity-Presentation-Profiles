@@ -1,0 +1,31 @@
+# Source-control / CI
+.git
+.gitignore
+.gitattributes
+.github
+.editorconfig
+
+# Development / governance docs
+AGENTS.md
+CHANGELOG.md
+SECURITY.md
+README.md
+docs
+
+# Development tooling
+composer.json
+composer.lock
+phpcs.xml.dist
+phpunit.xml.dist
+node_modules
+vendor
+
+# Tests / local output
+tests
+coverage
+build
+dist
+*.log
+
+# Repository-only profile documentation can be excluded once runtime profile files exist.
+# Do not exclude production profile code/assets by directory name without inspecting the built artifact.
