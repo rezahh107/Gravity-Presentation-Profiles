@@ -10,10 +10,109 @@ permissions:
 
 jobs:
   repository-guardrails:
+    name: Merge-result / push validation
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout merge result or pushed commit
         uses: actions/checkout@v4
+
+      - name: Assert merge-result or pushed-commit identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.sha }}"
+          echo "observed_checkout=$actual"
+          echo "expected_checkout=$expected"
+          test "$actual" = "$expected"
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Verify required governance files
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            "README.md"
+            "AGENTS.md"
+            "SECURITY.md"
+            "CHANGELOG.md"
+            "docs/architecture/MOTHER_ARCHITECTURE.md"
+            "docs/visual/README.md"
+            "profiles/README.md"
+            ".distignore"
+          )
+
+          for file in "${required[@]}"; do
+            test -f "$file" || {
+              echo "Missing required repository file: $file" >&2
+              exit 1
+            }
+          done
+
+      - name: Verify architecture identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "document_id: GPP-MOTHER-ARCHITECTURE" docs/architecture/MOTHER_ARCHITECTURE.md
+          grep -q "canonical_plugin_repository: rezahh107/Gravity-Presentation-Profiles" docs/architecture/MOTHER_ARCHITECTURE.md
+          grep -q "first_major_profile_family: SRWF" docs/architecture/MOTHER_ARCHITECTURE.md
+
+      - name: Validate visual governance
+        shell: bash
+        run: bash scripts/validate-visual-governance.sh .
+
+      - name: Run visual governance falsification controls
+        shell: bash
+        run: bash tests/visual-governance-guardrail.sh
+
+      - name: Lint production and test PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run GPP core tests
+        run: php tests/run.php
+
+      - name: Reject committed release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files '*.zip' | grep -q .; then
+            echo "Committed ZIP archives are not allowed in the source repository." >&2
+            git ls-files '*.zip'
+            exit 1
+          fi
+
+  pr-exact-head-guardrails:
+    name: PR exact-Head validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR Head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert exact PR Head identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event.pull_request.head.sha }}"
+          echo "observed_checkout=$actual"
+          echo "expected_checkout=$expected"
+          test "$actual" = "$expected"
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
