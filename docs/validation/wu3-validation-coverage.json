@@ -1,0 +1,261 @@
+{
+  "schema_version": "1.0.0",
+  "project_id": "GPP-SRWF-REGISTRATION-IMPLEMENTATION-V1",
+  "work_unit_id": "WU-GPP-RUNTIME-INTEGRATION-03",
+  "claim_scope_rule": "CI fixture PASS is repository-controlled synthetic evidence only; it is not authentic Gravity ecosystem runtime PASS.",
+  "supersession": {
+    "historical_canonical_criteria": [
+      "AC-WU3-001",
+      "AC-WU3-002",
+      "AC-WU3-003",
+      "AC-WU3-004",
+      "AC-WU3-005",
+      "AC-WU3-006",
+      "AC-WU3-007"
+    ],
+    "active_replacement_criteria": [
+      "AC-WU3R-001",
+      "AC-WU3R-002",
+      "AC-WU3R-003",
+      "AC-WU3R-004",
+      "AC-WU3R-005",
+      "AC-WU3R-006",
+      "AC-WU3R-007",
+      "AC-WU3R-008",
+      "AC-WU3R-009",
+      "AC-WU3R-010"
+    ],
+    "numbering_equivalence": null,
+    "note": "The revised AC-WU3R set supersedes the historical WU3 validation design as a set. No one-to-one numbering equivalence is asserted."
+  },
+  "claims": [
+    {
+      "claim_id": "ci-automatic-validation-lanes",
+      "criterion": "AC-WU3R-001",
+      "classification": "CI_BLOCKING",
+      "subject": "repository-controlled WU3 validation in exact-Head and merge-result/push CI lanes",
+      "proof_method": "repository CI invokes scripts/run-wu3-validation.sh in both existing CI identities",
+      "evidence_provenance": "repository-controlled CI configuration and deterministic local scripts; no private Gravity packages or secrets",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        ".github/workflows/ci.yml",
+        "scripts/run-wu3-validation.sh"
+      ]
+    },
+    {
+      "claim_id": "ci-fixture-320-reflow",
+      "criterion": "AC-WU3R-002",
+      "classification": "CI_BLOCKING",
+      "subject": "320 CSS px controlled SRWF fixture reflow and canonical form padding",
+      "proof_method": "headless Chromium computed layout and overflow assertions",
+      "evidence_provenance": "synthetic fixture + production GPP assets",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "tests/wu3/fixtures/synthetic-registration.html",
+        "tests/wu3/run-browser-validation.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-fixture-focus-aria-preservation",
+      "criterion": "AC-WU3R-003",
+      "classification": "CI_BLOCKING",
+      "subject": "keyboard traversal visible focus and preservation of predeclared controlled-fixture label/ARIA relations",
+      "proof_method": "headless Chromium keyboard Tab traversal, computed focus cue inspection, DOM relation assertions",
+      "evidence_provenance": "synthetic fixture + production GPP assets; not host-generated ARIA proof",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "tests/wu3/fixtures/synthetic-registration.html",
+        "tests/wu3/run-browser-validation.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-fixture-contrast",
+      "criterion": "AC-WU3R-004",
+      "classification": "CI_BLOCKING",
+      "subject": "enumerated canonical GPP color pairs deterministically composed by the controlled fixture",
+      "proof_method": "headless Chromium computed styles plus WCAG contrast-ratio calculation",
+      "evidence_provenance": "synthetic fixture consumes production CSS custom properties; host-composed contrast excluded",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "profiles/srwf/registration/profile.css",
+        "tests/wu3/run-browser-validation.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-fixture-same-page-isolation",
+      "criterion": "AC-WU3R-005",
+      "classification": "CI_BLOCKING",
+      "subject": "selected form presentation does not leak to same-page disabled form or outside sentinel",
+      "proof_method": "headless Chromium computed-style and custom-property isolation assertions",
+      "evidence_provenance": "synthetic same-page fixture + production GPP assets",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "tests/wu3/fixtures/synthetic-registration.html",
+        "tests/wu3/run-browser-validation.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-ledger-integrity",
+      "criterion": "AC-WU3R-006",
+      "classification": "CI_BLOCKING",
+      "subject": "required WU3 runtime subjects remain explicitly represented without false PASS",
+      "proof_method": "machine-readable ledger validation",
+      "evidence_provenance": "repository-controlled ledger and validator",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "docs/validation/wu3-validation-coverage.json",
+        "scripts/validate-wu3-evidence.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-adapter-admission-guard",
+      "criterion": "AC-WU3R-007",
+      "classification": "CI_BLOCKING",
+      "subject": "runtime-specific adapter evidence admission fails closed",
+      "proof_method": "registry validation, production adapter marker/path scan, positive structural test, negative falsification tests",
+      "evidence_provenance": "repository-controlled guard; synthetic fixture evidence explicitly rejected as admission authority",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "docs/validation/runtime-adapter-evidence.json",
+        "scripts/validate-wu3-evidence.mjs",
+        "tests/wu3/evidence-guard-falsification.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-no-speculative-component-adapters",
+      "criterion": "AC-WU3R-008",
+      "classification": "CI_BLOCKING",
+      "subject": "no speculative GP Advanced Select, GP File Upload Pro, or PersianGravity production adapter is admitted",
+      "proof_method": "empty admitted-adapter registry plus guarded production adapter locations/markers",
+      "evidence_provenance": "repository-controlled production source and adapter registry",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "docs/validation/runtime-adapter-evidence.json",
+        "scripts/validate-wu3-evidence.mjs"
+      ]
+    },
+    {
+      "claim_id": "ci-claim-boundary",
+      "criterion": "AC-WU3R-010",
+      "classification": "CI_BLOCKING",
+      "subject": "WU3 fixture evidence is not promoted to Gallery approval, full WCAG, authentic runtime validation, or release readiness",
+      "proof_method": "ledger/documentation claim-boundary validation",
+      "evidence_provenance": "repository-controlled WU3 validation documentation",
+      "state": "CI_PROVEN",
+      "evidence_refs": [
+        "docs/validation/WU3_REVISED_VALIDATION_MODEL.md",
+        "docs/validation/wu3-validation-coverage.json"
+      ]
+    },
+    {
+      "claim_id": "runtime-authentic-gravity-forms-markup-lifecycle",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "authentic_gravity_forms_markup_lifecycle",
+      "proof_method": "qualifying authentic host evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-host-generated-aria-screen-reader",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "host_generated_aria_screen_reader",
+      "proof_method": "qualifying authentic host DOM/assistive-technology evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-authentic-submission-lifecycle",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "authentic_submission_lifecycle",
+      "proof_method": "qualifying authentic Gravity Forms runtime evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-gp-advanced-select",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "gp_advanced_select_behavior_configuration",
+      "proof_method": "qualifying first-party exact-contract documentation or sanitized authentic runtime evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-gp-file-upload-pro",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "gp_file_upload_pro_behavior_configuration",
+      "proof_method": "qualifying first-party exact-contract documentation or sanitized authentic runtime evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-persiangravity-date",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "persiangravity_jalali_date_runtime",
+      "proof_method": "qualifying first-party exact-contract documentation or sanitized authentic runtime evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-gravity-forms-help-error-validation-relations",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "authentic_gravity_forms_help_error_validation_relations",
+      "proof_method": "qualifying authentic Gravity Forms DOM/accessibility evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-host-focus-reading-order",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "authentic_host_focus_management_reading_order",
+      "proof_method": "qualifying authentic host keyboard/focus/reading-order evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-host-composed-contrast",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "host_composed_contrast",
+      "proof_method": "qualifying authentic host/theme/plugin composed browser evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    },
+    {
+      "claim_id": "runtime-host-composed-reflow",
+      "criterion": "AC-WU3R-009",
+      "classification": "RUNTIME_EVIDENCE",
+      "subject": "host_composed_reflow",
+      "proof_method": "qualifying authentic host/theme/plugin composed browser evidence required",
+      "evidence_provenance": "unavailable in repository-controlled WU3 lane",
+      "state": "NOT_PROVEN",
+      "evidence_refs": [],
+      "qualifying_evidence": []
+    }
+  ]
+}

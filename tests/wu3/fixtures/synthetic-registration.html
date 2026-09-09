@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WU3 synthetic controlled fixture</title>
+<link rel="stylesheet" href="../../../assets/css/base.css">
+<link rel="stylesheet" href="../../../profiles/srwf/registration/profile.css">
+<style data-fixture-control-style>
+  /* Synthetic control consumer only. This is not Gravity Forms markup/CSS evidence. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; inline-size: 100%; max-inline-size: 100%; }
+  body { font-family: system-ui, sans-serif; color: rgb(32, 32, 32); background: rgb(255, 255, 255); }
+  main { inline-size: 100%; max-inline-size: 100%; }
+  .fixture-note, .outside-sentinel { padding: 8px; }
+  .synthetic-form { inline-size: auto; margin-block: 8px; }
+  .gform_fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .gfield { min-inline-size: 0; }
+  .synthetic-label { display: block; margin-block-end: 4px; color: var(--gf-ctrl-label-color-primary, rgb(32, 32, 32)); }
+  .synthetic-control {
+    display: block;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--gf-ctrl-size, 40px);
+    color: var(--gf-ctrl-color, rgb(32, 32, 32));
+    background: var(--gf-ctrl-bg-color, rgb(255, 255, 255));
+    border: 1px solid var(--gf-ctrl-border-color, rgb(110, 110, 110));
+    border-radius: var(--gf-ctrl-radius, 0px);
+    padding: 8px;
+    font: inherit;
+  }
+  .synthetic-control:focus-visible,
+  .synthetic-action:focus-visible {
+    outline: 2px solid var(--gf-ctrl-border-color-focus, currentColor);
+    outline-offset: 2px;
+  }
+  .synthetic-help { color: var(--gf-ctrl-desc-color, rgb(80, 80, 80)); }
+  .synthetic-error { color: var(--gf-ctrl-desc-color-error, rgb(160, 0, 0)); }
+  .synthetic-success { color: var(--gf-color-success, rgb(0, 100, 60)); }
+  .synthetic-action {
+    inline-size: 100%;
+    min-block-size: var(--gf-ctrl-btn-size, 44px);
+    border: 1px solid transparent;
+    background: var(--gf-ctrl-btn-bg-color-primary, rgb(70, 70, 70));
+    color: rgb(255, 255, 255);
+    font: inherit;
+  }
+  .contrast-border-probe {
+    inline-size: 24px;
+    block-size: 24px;
+    border: 2px solid var(--gf-ctrl-border-color, rgb(110, 110, 110));
+    background: var(--gf-ctrl-bg-color, rgb(255, 255, 255));
+  }
+  .contrast-probes { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  #disabled-form { padding-inline: 0; border-radius: 0; direction: ltr; font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+  <p class="fixture-note" data-evidence-class="SYNTHETIC_CONTROL_FIXTURE">Synthetic/control fixture only — not authentic Gravity ecosystem runtime evidence.</p>
+
+  <form id="selected-form" class="synthetic-form gpp-enabled gpp-profile-srwf-registration" data-fixture-role="selected-srwf-registration" novalidate>
+    <div class="gform_fields">
+      <div class="gfield">
+        <label class="synthetic-label" for="fixture-name">Synthetic label</label>
+        <input id="fixture-name" class="synthetic-control" data-required-control data-expected-describedby="fixture-name-help" aria-describedby="fixture-name-help" value="controlled-value">
+        <div id="fixture-name-help" class="synthetic-help">Persistent synthetic help text.</div>
+      </div>
+
+      <div class="gfield">
+        <label class="synthetic-label" for="fixture-select">Synthetic select</label>
+        <select id="fixture-select" class="synthetic-control" data-required-control>
+          <option>Controlled option A</option>
+          <option>Controlled option B</option>
+        </select>
+      </div>
+
+      <div class="gfield">
+        <label class="synthetic-label" for="fixture-error">Synthetic validation state</label>
+        <input id="fixture-error" class="synthetic-control" data-required-control data-expected-describedby="fixture-error-help fixture-error-message" aria-describedby="fixture-error-help fixture-error-message" aria-invalid="true" value="invalid-synthetic-value">
+        <div id="fixture-error-help" class="synthetic-help">Controlled format instruction.</div>
+        <div id="fixture-error-message" class="synthetic-error" role="alert">Controlled validation message.</div>
+      </div>
+
+      <div class="gfield">
+        <label class="synthetic-label" for="fixture-notes">Synthetic textarea</label>
+        <textarea id="fixture-notes" class="synthetic-control" data-required-control rows="2">controlled text</textarea>
+      </div>
+
+      <div class="gfield">
+        <label class="synthetic-label" for="fixture-consent"><input id="fixture-consent" type="checkbox"> Synthetic checkbox</label>
+      </div>
+
+      <div class="gfield gfield--type-section">
+        <h2 class="gsection_title">Synthetic section</h2>
+        <div class="gsection_description">Controlled section description.</div>
+      </div>
+
+      <div class="gfield gfield--type-submit">
+        <button id="fixture-submit" type="submit" class="button gform_button synthetic-action">Synthetic action</button>
+      </div>
+    </div>
+
+    <div class="contrast-probes" aria-hidden="true">
+      <span id="contrast-primary" style="color:var(--gf-ctrl-color);background:var(--gf-ctrl-bg-color)">x</span>
+      <span id="contrast-muted" style="color:var(--gf-ctrl-desc-color);background:var(--gf-ctrl-bg-color)">x</span>
+      <span id="contrast-error" style="color:var(--gf-ctrl-desc-color-error);background:var(--gf-ctrl-bg-color)">x</span>
+      <span id="contrast-success" style="color:var(--gf-color-success);background:var(--gf-ctrl-bg-color)">x</span>
+      <span id="contrast-border" class="contrast-border-probe"></span>
+    </div>
+  </form>
+
+  <div id="outside-sentinel" class="outside-sentinel" data-sentinel="outside">Outside-form sentinel</div>
+
+  <form id="disabled-form" class="synthetic-form" data-fixture-role="disabled-unselected" novalidate>
+    <label class="synthetic-label" for="disabled-input">Disabled/unselected fixture control</label>
+    <input id="disabled-input" class="synthetic-control" value="controlled-disabled-value">
+  </form>
+</main>
+</body>
+</html>

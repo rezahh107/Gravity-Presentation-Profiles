@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "work_unit_id": "WU-GPP-RUNTIME-INTEGRATION-03",
+  "policy": {
+    "default": "DENY",
+    "claim_scope_rule": "Synthetic fixtures and mocks may regression-test an already admitted adapter but cannot admit one.",
+    "qualifying_evidence_types": [
+      "FIRST_PARTY_DOCUMENTATION",
+      "AUTHENTIC_RUNTIME"
+    ],
+    "production_adapter_locations": [
+      "src/RuntimeAdapters",
+      "profiles/*/*/runtime-adapters"
+    ],
+    "required_source_marker": "GPP_RUNTIME_ADAPTER_ID:<adapter_id>",
+    "first_party_documentation_hosts": {
+      "Gravity Forms": [
+        "gravityforms.com",
+        "docs.gravityforms.com"
+      ],
+      "GP Advanced Select": [
+        "gravitywiz.com"
+      ],
+      "GP File Upload Pro": [
+        "gravitywiz.com"
+      ],
+      "PersianGravity": []
+    },
+    "persiangravity_note": "No first-party documentation host is admitted by this WU. PersianGravity adapter admission therefore remains fail-closed to AUTHENTIC_RUNTIME evidence until an owner-approved first-party source is recorded.",
+    "evidence_artifact_root": "docs/validation/evidence",
+    "evidence_artifact_requirement": "Every admitted adapter evidence record must bind to a repository-controlled sanitized evidence artifact by exact SHA-256. Metadata-only or URL-only admission is rejected."
+  },
+  "adapters": []
+}
