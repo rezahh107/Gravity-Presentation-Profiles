@@ -5,8 +5,11 @@
 
 .gpp-enabled.gpp-profile-srwf-registration {
     --gf-color-primary: #1D4ED8;
+    --gf-color-primary-rgb: 29, 78, 216;
     --gf-color-danger: #B42318;
+    --gf-color-danger-rgb: 180, 35, 24;
     --gf-color-success: #18794E;
+    --gf-color-success-rgb: 24, 121, 78;
     --gf-ctrl-bg-color: #FFFFFF;
     --gf-ctrl-color: #172033;
     --gf-ctrl-border-color: #8690A1;
