@@ -4,6 +4,7 @@ $cases = array(
     'bootstrap-without-gravity-forms.php',
     'core-resolution.php',
     'gravity-forms-addon.php',
+    'srwf-registration-profile.php',
 );
 
 foreach ( $cases as $case ) {

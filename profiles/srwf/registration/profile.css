@@ -1,4 +1,68 @@
 /*
- * SRWF Registration profile asset scaffold for WU-GPP-CORE-BOOTSTRAP-01.
- * Non-normative: no SRWF visual tokens, selectors, composition, or presentation rules are implemented here.
+ * SRWF Registration exact-contract visual baseline for WU-GPP-SRWF-PROFILE-02.
+ * Host plugins retain behavior/state ownership; this file styles only the selected profile.
  */
+
+.gpp-enabled.gpp-profile-srwf-registration {
+    --gf-color-primary: #1D4ED8;
+    --gf-color-primary-rgb: 29, 78, 216;
+    --gf-color-danger: #B42318;
+    --gf-color-danger-rgb: 180, 35, 24;
+    --gf-color-success: #18794E;
+    --gf-color-success-rgb: 24, 121, 78;
+    --gf-ctrl-bg-color: #FFFFFF;
+    --gf-ctrl-color: #172033;
+    --gf-ctrl-border-color: #8690A1;
+    --gf-ctrl-border-color-focus: #1D4ED8;
+    --gf-ctrl-border-color-error: #B42318;
+    --gf-ctrl-radius: 10px;
+    --gf-ctrl-size: 52px;
+    --gf-ctrl-font-family: "Vazirmatn";
+    --gf-ctrl-font-size: 16px;
+    --gf-ctrl-font-weight: 400;
+    --gf-ctrl-label-color-primary: #172033;
+    --gf-ctrl-label-font-family-primary: "Vazirmatn";
+    --gf-ctrl-label-font-size-primary: 15px;
+    --gf-ctrl-label-font-weight-primary: 600;
+    --gf-ctrl-label-color-req: #B42318;
+    --gf-ctrl-desc-color: #667085;
+    --gf-ctrl-desc-font-family: "Vazirmatn";
+    --gf-ctrl-desc-color-error: #B42318;
+    --gf-field-section-border-color: #E4E7EC;
+    --gf-ctrl-btn-bg-color-primary: #1D4ED8;
+    --gf-ctrl-btn-size: 56px;
+    --gf-ctrl-btn-font-family: "Vazirmatn";
+    --gf-ctrl-btn-font-size: 16px;
+    --gf-ctrl-btn-font-weight: 700;
+    --gf-form-validation-color: #B42318;
+
+    max-inline-size: 840px;
+    margin-inline: auto;
+    padding-inline: 16px;
+    border-radius: 16px;
+    background-color: #FFFFFF;
+    color: #172033;
+    direction: rtl;
+    font-family: "Vazirmatn";
+}
+
+.gpp-enabled.gpp-profile-srwf-registration .gform_fields > .gfield {
+    grid-column: 1 / -1;
+}
+
+.gpp-enabled.gpp-profile-srwf-registration .gfield--type-section .gsection_title {
+    color: #172033;
+    font-family: "Vazirmatn";
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.gpp-enabled.gpp-profile-srwf-registration .gfield--type-section .gsection_description {
+    color: #475467;
+    font-family: "Vazirmatn";
+}
+
+.gpp-enabled.gpp-profile-srwf-registration .gform_button:active,
+.gpp-enabled.gpp-profile-srwf-registration .gfield--type-submit button[type="submit"].button:active {
+    background-color: #1E40AF;
+}
