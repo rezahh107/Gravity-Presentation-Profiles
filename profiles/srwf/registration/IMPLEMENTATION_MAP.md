@@ -23,10 +23,10 @@ No Form ID, Page ID, broad page selector, or unscoped Gravity Forms selector is 
 | primary text `#172033` | form/control/primary-label text; section heading | GF CSS API + documented section-title selector gap |
 | secondary text `#475467` | section description text | documented section-description selector gap |
 | muted text `#667085` | `--gf-ctrl-desc-color` | documented GF CSS API |
-| primary `#1D4ED8` | `--gf-color-primary`, control focus-border color basis, primary-button background | documented GF CSS API |
+| primary `#1D4ED8` | `--gf-color-primary` + exact RGB companion `--gf-color-primary-rgb: 29, 78, 216`; control focus-border color basis; primary-button background | documented GF CSS API |
 | primary pressed `#1E40AF` | authentic submit `:active` background | documented submit selector; no active-state API variable exists |
-| error `#B42318` | GF danger basis, error border, required indicator, field error text, validation-summary text | documented GF CSS API |
-| success `#18794E` | `--gf-color-success` only; authentic host success consumers remain host-owned | documented GF CSS API |
+| error `#B42318` | `--gf-color-danger` + exact RGB companion `--gf-color-danger-rgb: 180, 35, 24`; error border, required indicator, field error text, validation-summary text | documented GF CSS API |
+| success `#18794E` | `--gf-color-success` + exact RGB companion `--gf-color-success-rgb: 24, 121, 78`; authentic host success consumers remain host-owned | documented GF CSS API |
 | decorative divider `#E4E7EC` | `--gf-field-section-border-color` | documented GF CSS API |
 | resting control border `#8690A1` | `--gf-ctrl-border-color` | documented GF CSS API |
 | control radius `10px` | `--gf-ctrl-radius` | documented GF CSS API |
@@ -42,6 +42,8 @@ No Form ID, Page ID, broad page selector, or unscoped Gravity Forms selector is 
 | font-family target `Vazirmatn` | selected form inheritance plus GF control/label/description/button font-family variables | no font loading/bundling; delivery remains external |
 | RTL composition | `direction: rtl` plus logical sizing/margin/padding properties | selected-profile CSS |
 | single-column composition | every direct child `.gfield` of documented `.gform_fields` spans the full host grid | documented GF selectors; no breakpoint or pairing inference |
+
+The primary, danger/error, and success RGB companions are exact alternate representations of the existing canonical hex color bases, not new visual decisions or a second source of truth. They allow Gravity Forms host-derived states that consume RGB companions to inherit the same SRWF color bases. Gravity Forms continues to own state lifecycle, geometry, alpha, semantics, and rendering behavior; this profile does not directly replace those derived host-state values.
 
 ## Direct-selector gaps and justification
 
@@ -67,6 +69,7 @@ No Form ID, Page ID, broad page selector, or unscoped Gravity Forms selector is 
 ## Official Gravity Forms evidence used
 
 - Gravity Forms CSS API and CSS API Reference: global custom properties are the preferred customization surface and may be overridden at a narrower scope.
+- Global CSS API: Colors: `--gf-color-primary-rgb`, `--gf-color-danger-rgb`, and `--gf-color-success-rgb` are independent RGB companions for their corresponding base colors; host-derived consumers remain Gravity Forms-owned.
 - CSS API: Controls - Base, Button, Description, Label; Fields - Section; Form - Validation.
 - Form Body CSS Selectors: `.gform_fields` and `.gfield` are documented Orbital selectors.
 - Section Break CSS Selectors: `.gsection_title` and `.gsection_description` are documented; the title has no CSS API variable.
