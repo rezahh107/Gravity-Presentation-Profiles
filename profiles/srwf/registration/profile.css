@@ -33,8 +33,6 @@
     --gf-ctrl-btn-font-weight: 700;
     --gf-form-validation-color: #B42318;
 
-    box-sizing: border-box;
-    inline-size: 100%;
     max-inline-size: 840px;
     margin-inline: auto;
     padding-inline: 16px;
