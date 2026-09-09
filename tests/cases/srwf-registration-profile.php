@@ -66,10 +66,28 @@ gpp_assert_true(
     'Reference-only form-title line-height must not be promoted to production CSS.'
 );
 
+foreach ( array(
+    '--gf-form-validation-bg-color:',
+    '--gf-form-validation-border-color:',
+    '--gf-form-validation-heading-icon-bg-color:',
+) as $forbidden_derived_override ) {
+    gpp_assert_true(
+        false === strpos( $css_without_comments, $forbidden_derived_override ),
+        'RGB companion synchronization must not be replaced by a direct validation-summary derived color override: ' . $forbidden_derived_override
+    );
+}
+gpp_assert_true(
+    ! preg_match( '/\.gform_validation_errors\b[^{}]*\{[^{}]*(?:background(?:-color)?|border(?:-color)?|color)\s*:/is', $css_without_comments ),
+    'RGB companion synchronization must not be replaced by direct validation-summary color styling.'
+);
+
 $required_mappings = array(
     '--gf-color-primary: #1D4ED8;',
+    '--gf-color-primary-rgb: 29, 78, 216;',
     '--gf-color-danger: #B42318;',
+    '--gf-color-danger-rgb: 180, 35, 24;',
     '--gf-color-success: #18794E;',
+    '--gf-color-success-rgb: 24, 121, 78;',
     '--gf-ctrl-bg-color: #FFFFFF;',
     '--gf-ctrl-color: #172033;',
     '--gf-ctrl-border-color: #8690A1;',
