@@ -2,7 +2,7 @@
 
 A reusable WordPress presentation layer for applying opt-in visual profiles to Gravity Forms and Gravity Flow surfaces while preserving native behavior, data, and workflow ownership.
 
-> **Status:** Architecture selected · implementation not started.
+> **Status:** Generic core bootstrap implemented for `WU-GPP-CORE-BOOTSTRAP-01`; real-host runtime validation, Canonical Gallery approval, compatibility floors, license selection, distribution, and public release remain pending.
 
 ## Purpose
 
@@ -82,7 +82,7 @@ Gravity Presentation Profiles
 │   └── base presentation rules
 └── Profiles
     └── SRWF
-        └── Registration   # first planned profile
+        └── Registration   # admitted key: srwf-registration
 ```
 
 Officer, Accountant, additional profile families, and alternate visual styles are deferred until a concrete, approved use case exists.
@@ -92,10 +92,14 @@ Officer, Accountant, additional profile families, and alternate visual styles ar
 ```text
 .
 ├── .github/workflows/       # repository CI guardrails
+├── assets/                  # generic presentation assets
 ├── docs/
 │   ├── architecture/        # governing architecture
-│   └── visual/              # visual-contract/gallery admission area
-├── profiles/                # profile-family documentation now; code later
+│   └── visual/              # admitted visual contracts/evidence
+├── profiles/                # profile-scoped assets/packages
+├── src/                     # namespaced production source
+├── tests/                   # automated core + governance tests
+├── gravity-presentation-profiles.php
 ├── AGENTS.md                 # agent operating contract
 ├── CHANGELOG.md
 ├── SECURITY.md
@@ -104,14 +108,14 @@ Officer, Accountant, additional profile families, and alternate visual styles ar
 └── README.md
 ```
 
-Production code directories are intentionally not created until the first implementation work unit is admitted.
+The WU1 asset files are intentionally non-visual scaffolding: they contain no SRWF presentation rules. Profile visual implementation remains a separate authority-bound step.
 
 ## Required reading before implementation
 
 1. [`docs/architecture/MOTHER_ARCHITECTURE.md`](docs/architecture/MOTHER_ARCHITECTURE.md)
 2. [`AGENTS.md`](AGENTS.md)
 3. [`docs/visual/README.md`](docs/visual/README.md)
-4. the approved profile-specific Visual/UX Contract and Canonical Visual Reference Gallery, once admitted
+4. the applicable admitted profile-specific Visual/UX Contract and visual-reference manifest
 
 ## Implementation policy
 
@@ -162,14 +166,18 @@ After this initial repository bootstrap, material changes should use a focused b
 
 ## Current gates
 
-Implementation of the first SRWF Registration presentation profile is waiting for review/admission of:
+The SRWF Public Registration Visual/UX Contract v1.0.0 has been admitted and owner-approved with explicit resolution states. The visual-reference manifest is materialized, but the Canonical Gallery is **not approved** until required real-host runtime validation is completed.
 
-- the external UX/accessibility evidence baseline;
-- the SRWF Public Registration Visual/UX Contract;
-- the Canonical Visual Reference Gallery manifest;
-- any named runtime-sensitive host states that require staging validation.
+Still pending where applicable:
 
-The repository bootstrap itself does not claim those artifacts are approved.
+- real Gravity Forms / relevant host runtime and accessibility validation;
+- runtime-backed Canonical Gallery approval;
+- intentional WordPress/PHP/Gravity compatibility-floor selection;
+- repository/plugin license selection;
+- reproducible distribution implementation and artifact validation;
+- public release.
+
+The current WU1 implementation does not claim runtime validation, gallery approval, release readiness, or production readiness.
 
 ## Security and privacy
 

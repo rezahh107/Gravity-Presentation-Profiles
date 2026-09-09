@@ -7,7 +7,7 @@ This file is the operating contract for coding agents and automated contributors
 - **Repository:** `rezahh107/Gravity-Presentation-Profiles`
 - **Product:** Gravity Presentation Profiles
 - **Type:** WordPress presentation-layer plugin for Gravity ecosystem surfaces
-- **Status:** architecture selected; implementation not started
+- **Status:** architecture selected; bounded generic core bootstrap implemented; visual/runtime/release gates remain pending
 - **Canonical architecture:** `docs/architecture/MOTHER_ARCHITECTURE.md`
 
 The plugin is generic. SRWF is a consumer/profile family, not the identity of the core plugin.

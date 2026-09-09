@@ -18,6 +18,7 @@ The project intends to follow Semantic Versioning once production releases begin
 - SRWF Public Registration visual reference manifest with runtime-validation gates.
 - Evidence-synthesis review and owner canonicalization closure record.
 - Dependency-free visual-governance validator and mutation controls for contract determinism and visual-reference provenance.
+- Bounded generic core bootstrap for `WU-GPP-CORE-BOOTSTRAP-01`, including Gravity Forms Add-On integration, per-form profile state, deterministic resolution, conditional assets, and automated tests.
 
 ### Changed
 
@@ -29,7 +30,6 @@ The project intends to follow Semantic Versioning once production releases begin
 
 - owner-selected repository/plugin license;
 - intentional minimum WordPress/PHP/Gravity compatibility floors;
-- plugin bootstrap and production source;
 - exact resolution of currently `NOT_PROVEN` implementation-driving visual items before they can drive production CSS;
 - real Gravity Forms / GP Advanced Select / GP File Upload Pro / PersianGravity runtime validation for the SRWF Registration profile;
 - approval of runtime-backed Canonical Visual Reference Gallery;
