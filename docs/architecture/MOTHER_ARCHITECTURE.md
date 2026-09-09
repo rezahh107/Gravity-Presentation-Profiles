@@ -3,7 +3,7 @@
 ```yaml
 document_id: GPP-MOTHER-ARCHITECTURE
 document_version: 2.0.0
-status: ARCHITECTURE_SELECTED__IMPLEMENTATION_NOT_STARTED
+status: ARCHITECTURE_SELECTED__GENERIC_CORE_BOOTSTRAP_IMPLEMENTED__RUNTIME_RELEASE_GATES_PENDING
 canonical_plugin_repository: rezahh107/Gravity-Presentation-Profiles
 predecessor:
   document_id: SRWF-PRESENTATION-PLUGIN-MOTHER
@@ -839,7 +839,7 @@ core:
 first_profile_family:
   id: srwf
   registration:
-    status: WAITING_FOR_VISUAL_CONTRACT_ADMISSION
+    status: VISUAL_CONTRACT_ADMITTED__VISUAL_IMPLEMENTATION_NOT_COMPLETE
   officer:
     status: DEFERRED
   accountant:
