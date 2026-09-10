@@ -74,6 +74,34 @@ This contract binds the corrected owner Handoff plus the immutable final HTML/PD
 
 The admitted HTML/PDF remain visual/behavior evidence, not production runtime architecture. WU15 adds no Gravity Flow adapter, print renderer, selector/hook/API claim, field-permission claim, workflow behavior, or production surface implementation.
 
+### WU16 Gravity Flow / data / asset binding evidence
+
+The bounded WU16 evidence artifact is:
+
+- [`SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md`](SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md)
+
+Current WU16 evidence state:
+
+```yaml
+work_unit: WU-GPP-GF-BINDING-MATRIX-16
+evidence_contract: MATERIALIZED
+runtime_implementation: NONE
+target_gravity_forms_version: NOT_PROVEN
+target_gravity_flow_version: NOT_PROVEN
+target_form_field_step_route_bindings: UNBOUND
+school_filter: OMIT_UNTIL_TARGET_INBOX_EXPOSURE_PROVEN
+due_overdue: OMIT_WITHOUT_AUTHORITATIVE_DUE
+inbox_search: NATIVE_HOST_CANDIDATE__TARGET_BINDING_NOT_PROVEN
+approved_razavi_logo_asset: NOT_PROVEN
+approved_kanoon_logo_asset: NOT_PROVEN
+vazir_source_authority: PROVEN
+blocking_acceptance_criteria:
+  - AC-WU16-002
+  - AC-WU16-007
+```
+
+WU16 does not authorize production selectors/hooks, a replacement search/data path, successor UI/runtime work, or fabricated logo/assets. Its `UNBOUND` and `NOT_PROVEN` rows are explicit implementation boundaries, not placeholders to be guessed through.
+
 ## Determinism rule
 
 Every implementation-driving visual item must have an explicit truth state inside the Visual/UX Contract.
