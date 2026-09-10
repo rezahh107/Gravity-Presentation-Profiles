@@ -52,6 +52,28 @@ control_border: "#8690A1"
 desktop_outer_surface: white_card
 ```
 
+## Current SRWF Gravity Flow / A4 operational baseline
+
+The owner-selected six-surface Gravity Flow/A4 presentation authority admitted by `WU-GPP-GF-FINAL-VISUAL-BASELINE-15` is:
+
+- [`SRWF_GRAVITY_FLOW_A4_VISUAL_BASELINE_CONTRACT_v1.0.0.md`](SRWF_GRAVITY_FLOW_A4_VISUAL_BASELINE_CONTRACT_v1.0.0.md)
+
+Current status:
+
+```yaml
+gravity_flow_a4_visual_baseline: OWNER_LOCKED__ADMITTED_BY_WU15
+runtime_implementation: NOT_IMPLEMENTED_BY_WU15
+runtime_selectors_hooks_permissions: NOT_PROVEN_BY_WU15
+canonical_surface_count: 6
+canonical_print_path: DIRECT_BROWSER_HTML_CSS__A4_PORTRAIT__TWO_PAGES
+surface_profile_resolution_v1: SHARED_DEFAULTS_PER_SURFACE
+reserved_extension_seam_v1: INERT
+```
+
+This contract binds the corrected owner Handoff plus the immutable final HTML/PDF evidence identities, records the scoped D-17 print-path supersession, preserves `OD-001..OD-034`, and is the repository source future WU9/WU10/WU16 Executors must read instead of relying on chat context or an unadmitted candidate Handoff.
+
+The admitted HTML/PDF remain visual/behavior evidence, not production runtime architecture. WU15 adds no Gravity Flow adapter, print renderer, selector/hook/API claim, field-permission claim, workflow behavior, or production surface implementation.
+
 ## Determinism rule
 
 Every implementation-driving visual item must have an explicit truth state inside the Visual/UX Contract.
