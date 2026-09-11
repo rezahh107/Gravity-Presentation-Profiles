@@ -42,25 +42,28 @@ final class WordPressOptionStateStore implements StateStore {
             return false;
         }
 
-        $lock_name = $this->advisoryLockName( $wpdb );
-        if ( null === $lock_name ) {
-            return false;
-        }
-
-        $acquire_query = $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock_name );
-        $release_query = $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name );
-        if ( ! is_string( $acquire_query ) || ! is_string( $release_query ) ) {
-            return false;
-        }
-
-        $acquired = $wpdb->get_var( $acquire_query );
-        if ( 1 !== $acquired && '1' !== $acquired ) {
-            return false;
-        }
-
         self::$active_guards[ $guard_key ] = true;
+        $lock_acquired = false;
+        $release_query = null;
 
         try {
+            $lock_name = $this->advisoryLockName( $wpdb );
+            if ( null === $lock_name ) {
+                return false;
+            }
+
+            $acquire_query = $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock_name );
+            $release_query = $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name );
+            if ( ! is_string( $acquire_query ) || ! is_string( $release_query ) ) {
+                return false;
+            }
+
+            $acquired = $wpdb->get_var( $acquire_query );
+            if ( 1 !== $acquired && '1' !== $acquired ) {
+                return false;
+            }
+
+            $lock_acquired   = true;
             $current          = get_option( $this->option_name, null );
             $current_revision = is_array( $current ) && isset( $current['revision'] ) ? $current['revision'] : 0;
 
@@ -73,7 +76,9 @@ final class WordPressOptionStateStore implements StateStore {
             return get_option( $this->option_name, null ) === $next_state;
         } finally {
             try {
-                $wpdb->get_var( $release_query );
+                if ( $lock_acquired && is_string( $release_query ) ) {
+                    $wpdb->get_var( $release_query );
+                }
             } finally {
                 unset( self::$active_guards[ $guard_key ] );
             }
