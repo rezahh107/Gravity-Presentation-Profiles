@@ -6,6 +6,7 @@ $cases = array(
     'gravity-forms-addon.php',
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
+    'package-lifecycle.php',
 );
 
 foreach ( $cases as $case ) {
