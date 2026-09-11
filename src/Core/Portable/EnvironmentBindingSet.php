@@ -317,10 +317,11 @@ final class EnvironmentBindingSet {
     private static function rejectExecutableString( $value, $path ) {
         $patterns = array(
             '/<\?(?:php|=)?/i',
-            '/<\/?(?:script|style|iframe|object|embed)\b/i',
+            '/<\/?[a-z][^>]*>/i',
             '/\bjavascript\s*:/i',
             '/\bdata\s*:\s*text\//i',
             '/\b(?:eval|exec|system|shell_exec|passthru)\s*\(/i',
+            '/[{};]/',
         );
         foreach ( $patterns as $pattern ) {
             if ( 1 === preg_match( $pattern, $value ) ) {

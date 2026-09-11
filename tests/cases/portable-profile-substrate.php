@@ -56,7 +56,6 @@ $binding_b = wu09_fixture( 'wu09-binding-set-b.json' );
 gpp_assert_true( VisualProfilePackage::validate( $package ), 'Visual package fixture must validate.' );
 gpp_assert_same( 'PACKAGE_VALID', VisualProfilePackage::validationReport( $package )['structural_status'], 'Package validity must be structural and explicit.' );
 gpp_assert_same( 'NOT_PROVEN', VisualProfilePackage::validationReport( $package )['target_runtime_evidence'], 'Package validity must not prove target runtime evidence.' );
-
 gpp_assert_true( EnvironmentBindingSet::validate( $binding_a ), 'Binding set A must validate.' );
 gpp_assert_true( EnvironmentBindingSet::validate( $binding_b ), 'Binding set B must validate.' );
 gpp_assert_same( array( 'PROVEN', 'UNBOUND', 'NOT_PROVEN', 'NOT_APPLICABLE' ), EnvironmentBindingSet::bindingStates(), 'Binding-state vocabulary must be exact.' );
@@ -68,7 +67,6 @@ gpp_assert_true( ! in_array( 'school.name:editability', EnvironmentBindingSet::v
 $slot_keys = array_map( static function ( $slot ) { return $slot['semantic_slot_key']; }, $package['semantic_slots'] );
 $visual_resolver = new VisualProfileResolver( $package );
 $binding_resolver = new SemanticBindingResolver( array( $binding_a, $binding_b ), $slot_keys );
-
 $inbox_profile = $visual_resolver->resolve( 'gravity_flow.inbox' );
 $entry_profile = $visual_resolver->resolve( 'gravity_flow.entry_detail' );
 $print_profile = $visual_resolver->resolve( 'print.dossier' );
@@ -99,7 +97,6 @@ $missing = $binding_resolver->resolve( $missing_context, 'student.full_name' );
 gpp_assert_same( false, $missing['resolved'], 'Missing binding set must fail closed.' );
 gpp_assert_same( 'missing_binding_set', $missing['reason'], 'Missing binding set must be explicit.' );
 gpp_assert_same( null, $missing['source_ref'], 'Missing binding set must not cross-form fallback.' );
-
 $override_context = $context_a;
 $override_context['profile_id'] = 'attacker.profile';
 $override_result = $binding_resolver->resolve( $override_context, 'student.full_name' );
@@ -124,6 +121,12 @@ $bad = $package;
 $bad['php'] = '<?php system("id");';
 wu09_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Executable PHP payload must be rejected.' );
 $bad = $package;
+$bad['provenance']['producer'] = '<script>alert(1)</script>';
+wu09_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Executable JS or HTML must be rejected.' );
+$bad = $package;
+$bad['design_tokens']['colors']['primary'] = 'red; background: url(evil)';
+wu09_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Unrestricted CSS payloads must be rejected.' );
+$bad = $package;
 $bad['surface_profiles'][0]['selector'] = '.gform_wrapper';
 wu09_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Raw DOM selector passthrough must be rejected.' );
 $bad = $package;
@@ -139,6 +142,12 @@ $bad = $package;
 $bad['reserved_extension_seam']['form_id'] = 77;
 wu09_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Reserved Extension Seam must remain inert and reject targeting.' );
 
+$bad = $binding_a;
+$bad['provenance']['producer'] = '<div onclick="evil()">payload</div>';
+wu09_expect_violation( static function () use ( $bad ) { EnvironmentBindingSet::validate( $bad ); }, 'Binding HTML payloads must be rejected.' );
+$bad = $binding_a;
+$bad['provenance']['producer'] = 'body{display:none}';
+wu09_expect_violation( static function () use ( $bad ) { EnvironmentBindingSet::validate( $bad ); }, 'Binding CSS payloads must be rejected.' );
 $bad = $binding_a;
 $bad['bindings'][0]['state'] = 'FALLBACK';
 wu09_expect_violation( static function () use ( $bad ) { EnvironmentBindingSet::validate( $bad ); }, 'Unknown binding state must be rejected.' );
