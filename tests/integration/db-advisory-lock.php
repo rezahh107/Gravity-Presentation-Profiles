@@ -22,7 +22,7 @@ function gpp_db_lock_connect( $host, $port, $user, $password, $database ) {
         }
 
         $last_error = $connection->connect_error;
-        $connection->close();
+        unset( $connection );
         usleep( 250000 );
     }
 
