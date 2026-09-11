@@ -70,37 +70,46 @@ surface_profile_resolution_v1: SHARED_DEFAULTS_PER_SURFACE
 reserved_extension_seam_v1: INERT
 ```
 
-This contract binds the corrected owner Handoff plus the immutable final HTML/PDF evidence identities, records the scoped D-17 print-path supersession, preserves `OD-001..OD-034`, and is the repository source future WU9/WU10/WU16 Executors must read instead of relying on chat context or an unadmitted candidate Handoff.
+This contract binds the corrected owner Handoff plus the immutable final HTML/PDF evidence identities, records the scoped D-17 print-path supersession, preserves `OD-001..OD-034`, and remains the locked visual/print authority for later operational-surface work.
 
 The admitted HTML/PDF remain visual/behavior evidence, not production runtime architecture. WU15 adds no Gravity Flow adapter, print renderer, selector/hook/API claim, field-permission claim, workflow behavior, or production surface implementation.
 
-### WU16 Gravity Flow / data / asset binding evidence
+### WU16 semantic-binding / data / asset evidence
 
-The bounded WU16 evidence artifact is:
+The current WU16 evidence artifact is:
 
 - [`SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md`](SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md)
 
-Current WU16 evidence state:
+Run001 remains historical evidence on PR #6. Its old conclusion that missing concrete target IDs and unavailable logo assets blocked WU16 was superseded by the admitted semantic-binding architecture and the Owner-approved logo identities supplied to Run002. History is not rewritten; current authority is explicit.
+
+Current WU16 contract state:
 
 ```yaml
 work_unit: WU-GPP-GF-BINDING-MATRIX-16
-evidence_contract: MATERIALIZED
-runtime_implementation: NONE
+current_run: RUN-GPP-GF-BINDING-MATRIX-16-002
+semantic_binding_architecture: SHARED_DEFAULTS_PER_SURFACE__SEPARATE_ENVIRONMENT_BINDINGS
+portable_semantic_slots: MATERIALIZED
+target_binding_state_vocabulary:
+  - PROVEN
+  - UNBOUND
+  - NOT_PROVEN
+  - NOT_APPLICABLE
+runtime_availability_editability_authorization: SEPARATE_EVIDENCE_DIMENSIONS
+multi_form_inbox_binding_selection: PER_ENTRY_HOST_CONTEXT__NO_PROFILE_SWITCH
 target_gravity_forms_version: NOT_PROVEN
 target_gravity_flow_version: NOT_PROVEN
 target_form_field_step_route_bindings: UNBOUND
 school_filter: OMIT_UNTIL_TARGET_INBOX_EXPOSURE_PROVEN
-due_overdue: OMIT_WITHOUT_AUTHORITATIVE_DUE
-inbox_search: NATIVE_HOST_CANDIDATE__TARGET_BINDING_NOT_PROVEN
-approved_razavi_logo_asset: NOT_PROVEN
-approved_kanoon_logo_asset: NOT_PROVEN
+due_overdue: OMIT_WITHOUT_PROVEN_AUTHORITATIVE_DUE
+inbox_search: NATIVE_GLOBAL_INBOX_SEARCH_ADMITTED__TARGET_CONFIGURATION_NOT_PROVEN
+approved_razavi_logo_asset: PROVEN
+approved_kanoon_logo_asset: PROVEN
 vazir_source_authority: PROVEN
-blocking_acceptance_criteria:
-  - AC-WU16-002
-  - AC-WU16-007
+current_definition_acceptance: AC_WU16_001_THROUGH_011_PASS
+runtime_implementation: NONE
 ```
 
-WU16 does not authorize production selectors/hooks, a replacement search/data path, successor UI/runtime work, or fabricated logo/assets. Its `UNBOUND` and `NOT_PROVEN` rows are explicit implementation boundaries, not placeholders to be guessed through.
+Concrete target Form/Field/Step/Page/route identifiers are environment binding evidence, not portable visual-profile identity. `UNBOUND`/`NOT_PROVEN` values fail closed only for dependent successor behavior and do not authorize guesswork, semantic fallback, cross-form substitution, a replacement search/data path, or a form-specific visual profile.
 
 ## Determinism rule
 
