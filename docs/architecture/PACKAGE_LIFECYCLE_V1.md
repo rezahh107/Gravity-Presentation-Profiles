@@ -12,7 +12,7 @@ Visual-profile packages and environment binding sets use different stores, regis
 - Binding activation is keyed by the canonical admitted environment/context and records exactly `binding_set_id` and `binding_set_version`.
 - Neither registry contains a selector for the other artifact class.
 
-Each class state is replaced as one option value. Lifecycle code computes the complete next state before `StateStore::commit()`. The WordPress store serializes class-specific writers with an option lock and verifies revision/readback. A failed commit leaves the prior state authoritative. The stores are intentionally separate so a visual operation cannot partially commit binding state, or vice versa.
+Each class state is replaced as one option value. Lifecycle code computes the complete next state before `StateStore::commit()`. The WordPress store serializes class-specific writers with a deterministic connection-scoped database advisory lock derived from the current database/site/store identity. It acquires that lock non-blockingly through the existing `$wpdb` connection, holds it across revision read, `update_option()` and `get_option()` readback, and releases it in `finally`; database-session termination also recovers an orphaned lock. No persistent coordination option or parallel state authority is created. A failed commit leaves the prior state authoritative. The stores are intentionally separate so a visual operation cannot partially commit binding state, or vice versa.
 
 ## Import, validation and immutable versions
 

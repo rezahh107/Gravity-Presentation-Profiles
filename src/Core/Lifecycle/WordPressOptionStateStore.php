@@ -4,7 +4,6 @@ namespace GravityPresentationProfiles\Core\Lifecycle;
 
 final class WordPressOptionStateStore implements StateStore {
     private $option_name;
-    private $lock_name;
 
     public function __construct( $option_name ) {
         if ( ! is_string( $option_name ) || '' === $option_name ) {
@@ -12,7 +11,6 @@ final class WordPressOptionStateStore implements StateStore {
         }
 
         $this->option_name = $option_name;
-        $this->lock_name   = $option_name . '_lock';
     }
 
     public function load() {
@@ -24,16 +22,33 @@ final class WordPressOptionStateStore implements StateStore {
     }
 
     public function commit( $expected_revision, $next_state ) {
-        if (
-            ! function_exists( 'get_option' ) ||
-            ! function_exists( 'add_option' ) ||
-            ! function_exists( 'update_option' ) ||
-            ! function_exists( 'delete_option' )
-        ) {
+        global $wpdb;
+
+        if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
             throw new LifecycleException( 'wordpress_option_api_unavailable', 'WordPress option API is unavailable.' );
         }
 
-        if ( ! add_option( $this->lock_name, '1', '', false ) ) {
+        if (
+            ! is_object( $wpdb ) ||
+            ! method_exists( $wpdb, 'prepare' ) ||
+            ! method_exists( $wpdb, 'get_var' )
+        ) {
+            return false;
+        }
+
+        $lock_name = $this->advisoryLockName( $wpdb );
+        if ( null === $lock_name ) {
+            return false;
+        }
+
+        $acquire_query = $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock_name );
+        $release_query = $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name );
+        if ( ! is_string( $acquire_query ) || ! is_string( $release_query ) ) {
+            return false;
+        }
+
+        $acquired = $wpdb->get_var( $acquire_query );
+        if ( 1 !== $acquired && '1' !== $acquired ) {
             return false;
         }
 
@@ -49,7 +64,20 @@ final class WordPressOptionStateStore implements StateStore {
 
             return get_option( $this->option_name, null ) === $next_state;
         } finally {
-            delete_option( $this->lock_name );
+            $wpdb->get_var( $release_query );
         }
+    }
+
+    private function advisoryLockName( $wpdb ) {
+        $database_name = $wpdb->get_var( 'SELECT DATABASE()' );
+        if ( ! is_string( $database_name ) || '' === $database_name ) {
+            return null;
+        }
+
+        $site_prefix = isset( $wpdb->prefix ) && is_string( $wpdb->prefix ) ? $wpdb->prefix : '';
+        $blog_id     = isset( $wpdb->blogid ) && ( is_int( $wpdb->blogid ) || is_string( $wpdb->blogid ) ) ? (string) $wpdb->blogid : '';
+        $identity    = $database_name . "\0" . $site_prefix . "\0" . $blog_id . "\0" . $this->option_name;
+
+        return 'gpp:' . substr( hash( 'sha256', $identity ), 0, 60 );
     }
 }
