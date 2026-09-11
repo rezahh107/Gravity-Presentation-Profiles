@@ -73,6 +73,31 @@ gpp_assert_same(
     'Package validity must not prove target runtime evidence.'
 );
 
+$empty_object_tokens = $package;
+$empty_object_tokens['design_tokens']['radii_px'] = json_decode( '{}', true );
+wu09_expect_violation(
+    static function () use ( $empty_object_tokens ) {
+        VisualProfilePackage::validate( $empty_object_tokens );
+    },
+    'A present token category decoded from an empty JSON object must be rejected.'
+);
+
+$empty_list_tokens = $package;
+$empty_list_tokens['design_tokens']['radii_px'] = json_decode( '[]', true );
+wu09_expect_violation(
+    static function () use ( $empty_list_tokens ) {
+        VisualProfilePackage::validate( $empty_list_tokens );
+    },
+    'A present token category decoded from an empty JSON list must be rejected.'
+);
+
+$omitted_tokens = $package;
+unset( $omitted_tokens['design_tokens']['radii_px'] );
+gpp_assert_true(
+    VisualProfilePackage::validate( $omitted_tokens ),
+    'An optional token category remains valid when omitted entirely.'
+);
+
 gpp_assert_true( EnvironmentBindingSet::validate( $binding_a ), 'Binding set A must validate.' );
 gpp_assert_true( EnvironmentBindingSet::validate( $binding_b ), 'Binding set B must validate.' );
 gpp_assert_same(

@@ -84,6 +84,9 @@ final class VisualProfilePackage {
         $refs = array();
         foreach ( $tokens as $category => $values ) {
             self::requireArray( $values, 'design_tokens.' . $category . ' must be an object.' );
+            if ( array() === $values ) {
+                throw new ContractViolation( 'design_tokens.' . $category . ' must not be empty.' );
+            }
             foreach ( $values as $name => $value ) {
                 self::requireTokenName( $name, 'design_tokens.' . $category );
                 self::validateTokenValue( $category, $value, 'design_tokens.' . $category . '.' . $name );
