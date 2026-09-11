@@ -59,8 +59,9 @@ $password = gpp_db_lock_env( 'GPP_DB_PASSWORD', 'gpp' );
 $database = gpp_db_lock_env( 'GPP_DB_NAME', 'gpp_lock_test' );
 $variant  = gpp_db_lock_env( 'GPP_DB_VARIANT', 'unknown' );
 $lock     = 'gpp-ci:' . substr( hash( 'sha256', $variant . '|' . $database . '|orphan-recovery' ), 0, 56 );
+$recursive_lock = 'gpp-ci:' . substr( hash( 'sha256', $variant . '|' . $database . '|same-session-recursion' ), 0, 56 );
 
-if ( strlen( $lock ) > 64 ) {
+if ( strlen( $lock ) > 64 || strlen( $recursive_lock ) > 64 ) {
     gpp_db_lock_fail( 'Test lock name exceeds 64 characters.' );
 }
 
@@ -73,6 +74,33 @@ if ( $version ) {
     $version->free();
 }
 
+// T-RG-05: the owning DB session can recursively acquire the same named lock.
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_a, 'SELECT GET_LOCK(?, 0)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection A could not acquire the recursive advisory lock initially.' );
+}
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_a, 'SELECT GET_LOCK(?, 0)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection A could not recursively acquire the same advisory lock.' );
+}
+if ( 0 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT GET_LOCK(?, 0)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection B acquired a recursively held lock.' );
+}
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_a, 'SELECT RELEASE_LOCK(?)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection A could not release one recursive lock acquisition.' );
+}
+if ( 0 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT GET_LOCK(?, 0)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection B acquired the lock before all recursive acquisitions were released.' );
+}
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_a, 'SELECT RELEASE_LOCK(?)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection A could not release the final recursive lock acquisition.' );
+}
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT GET_LOCK(?, 0)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection B did not acquire the lock after all recursive acquisitions were released.' );
+}
+if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT RELEASE_LOCK(?)', $recursive_lock ) ) {
+    gpp_db_lock_fail( 'Connection B could not release the recursive-contract lock.' );
+}
+
+// Preserve the PRI-FND-001 orphan-recovery contract.
 if ( 1 !== (int) gpp_db_lock_scalar( $connection_a, 'SELECT GET_LOCK(?, 0)', $lock ) ) {
     gpp_db_lock_fail( 'Connection A could not acquire the advisory lock.' );
 }
@@ -94,4 +122,4 @@ if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT RELEASE_LOCK(?)', $l
 
 $connection_b->close();
 
-echo 'GPP_DB_ADVISORY_LOCK_PASS variant=' . $variant . ' server=' . $server . PHP_EOL;
+echo 'GPP_DB_ADVISORY_LOCK_PASS variant=' . $variant . ' server=' . $server . ' recursive=same-session orphan_recovery=session-termination' . PHP_EOL;

@@ -3,6 +3,7 @@
 namespace GravityPresentationProfiles\Core\Lifecycle;
 
 final class WordPressOptionStateStore implements StateStore {
+    private static $active_guards = array();
     private $option_name;
 
     public function __construct( $option_name ) {
@@ -36,6 +37,11 @@ final class WordPressOptionStateStore implements StateStore {
             return false;
         }
 
+        $guard_key = $this->reentrancyGuardKey( $wpdb );
+        if ( isset( self::$active_guards[ $guard_key ] ) ) {
+            return false;
+        }
+
         $lock_name = $this->advisoryLockName( $wpdb );
         if ( null === $lock_name ) {
             return false;
@@ -52,6 +58,8 @@ final class WordPressOptionStateStore implements StateStore {
             return false;
         }
 
+        self::$active_guards[ $guard_key ] = true;
+
         try {
             $current          = get_option( $this->option_name, null );
             $current_revision = is_array( $current ) && isset( $current['revision'] ) ? $current['revision'] : 0;
@@ -64,8 +72,20 @@ final class WordPressOptionStateStore implements StateStore {
 
             return get_option( $this->option_name, null ) === $next_state;
         } finally {
-            $wpdb->get_var( $release_query );
+            try {
+                $wpdb->get_var( $release_query );
+            } finally {
+                unset( self::$active_guards[ $guard_key ] );
+            }
         }
+    }
+
+    private function reentrancyGuardKey( $wpdb ) {
+        $site_prefix = isset( $wpdb->prefix ) && is_string( $wpdb->prefix ) ? $wpdb->prefix : '';
+        $blog_id     = isset( $wpdb->blogid ) && ( is_int( $wpdb->blogid ) || is_string( $wpdb->blogid ) ) ? (string) $wpdb->blogid : '';
+        $identity    = spl_object_hash( $wpdb ) . "\0" . $site_prefix . "\0" . $blog_id . "\0" . $this->option_name;
+
+        return hash( 'sha256', $identity );
     }
 
     private function advisoryLockName( $wpdb ) {
