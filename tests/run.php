@@ -7,6 +7,7 @@ $cases = array(
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
     'package-lifecycle.php',
+    'package-lifecycle-deactivation.php',
 );
 
 foreach ( $cases as $case ) {
