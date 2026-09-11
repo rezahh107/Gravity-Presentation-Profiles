@@ -1,0 +1,107 @@
+{
+  "artifact_type": "gpp.environment_binding_set",
+  "schema_version": "1.0.0",
+  "binding_set_id": "fixture.bindings.a.v1",
+  "binding_set_version": "1.0.0",
+  "context": {
+    "installation_source_ref": {
+      "type": "wordpress.installation",
+      "installation_id": "fixture-installation"
+    },
+    "form_source_ref": {
+      "type": "gravity_forms.form",
+      "form_id": "fixture-form-a"
+    },
+    "entry_source_ref": null,
+    "surfaces": [
+      "gravity_flow.inbox"
+    ]
+  },
+  "provenance": {
+    "producer": "WU09 sanitized fixture",
+    "evidence_refs": [
+      "fixture:fixture.bindings.a.v1"
+    ]
+  },
+  "bindings": [
+    {
+      "semantic_slot_key": "student.full_name",
+      "state": "PROVEN",
+      "source_ref": {
+        "type": "gravity_forms.field",
+        "field_id": 101
+      },
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:full_name"
+      ]
+    },
+    {
+      "semantic_slot_key": "student.national_id",
+      "state": "PROVEN",
+      "source_ref": {
+        "type": "gravity_forms.field",
+        "field_id": 102
+      },
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:national_id"
+      ]
+    },
+    {
+      "semantic_slot_key": "workflow.current_step",
+      "state": "PROVEN",
+      "source_ref": {
+        "type": "gravity_flow.state",
+        "state_key": "current_step"
+      },
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:current_step"
+      ]
+    },
+    {
+      "semantic_slot_key": "entry.created_at",
+      "state": "PROVEN",
+      "source_ref": {
+        "type": "gravity_forms.entry_meta",
+        "meta_key": "date_created"
+      },
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:created_at"
+      ]
+    },
+    {
+      "semantic_slot_key": "workflow.due_at",
+      "state": "UNBOUND",
+      "source_ref": null,
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:due-unbound"
+      ]
+    },
+    {
+      "semantic_slot_key": "school.name",
+      "state": "PROVEN",
+      "source_ref": {
+        "type": "gravity_forms.field",
+        "field_id": 103
+      },
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:school"
+      ]
+    }
+  ],
+  "runtime_claims": [
+    {
+      "semantic_slot_key": "student.full_name",
+      "claim": "availability",
+      "evidence_state": "PROVEN",
+      "evidence_refs": [
+        "fixture:fixture.bindings.a.v1:availability"
+      ]
+    },
+    {
+      "semantic_slot_key": "school.name",
+      "claim": "editability",
+      "evidence_state": "NOT_PROVEN",
+      "evidence_refs": []
+    }
+  ]
+}
