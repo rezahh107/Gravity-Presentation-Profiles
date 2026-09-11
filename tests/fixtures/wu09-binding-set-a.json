@@ -4,9 +4,15 @@
   "binding_set_id": "fixture.bindings.a.v1",
   "binding_set_version": "1.0.0",
   "context": {
-    "installation_id": "fixture-installation",
-    "form_id": "fixture-form-a",
-    "entry_id": null,
+    "installation_source_ref": {
+      "type": "wordpress.installation",
+      "installation_id": "fixture-installation"
+    },
+    "form_source_ref": {
+      "type": "gravity_forms.form",
+      "form_id": "fixture-form-a"
+    },
+    "entry_source_ref": null,
     "surfaces": [
       "gravity_flow.inbox"
     ]
