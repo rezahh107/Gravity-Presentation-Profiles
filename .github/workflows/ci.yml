@@ -181,3 +181,56 @@ jobs:
             git ls-files '*.zip'
             exit 1
           fi
+
+  db-advisory-lock-contract:
+    name: DB advisory lock (${{ matrix.database }})
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: mysql
+            image: mysql:8.4
+          - database: mariadb
+            image: mariadb:11.4
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: gpp
+          MYSQL_DATABASE: gpp_lock_test
+        ports:
+          - 3306/tcp
+    steps:
+      - name: Checkout exact PR Head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert exact PR Head identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event.pull_request.head.sha }}"
+          echo "observed_checkout=$actual"
+          echo "expected_checkout=$expected"
+          test "$actual" = "$expected"
+
+      - name: Set up PHP with mysqli
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: mysqli
+
+      - name: Run database advisory-lock contract
+        run: php tests/integration/db-advisory-lock.php
+        env:
+          GPP_DB_VARIANT: ${{ matrix.database }}
+          GPP_DB_HOST: 127.0.0.1
+          GPP_DB_PORT: ${{ job.services.database.ports[3306] }}
+          GPP_DB_USER: root
+          GPP_DB_PASSWORD: gpp
+          GPP_DB_NAME: gpp_lock_test
