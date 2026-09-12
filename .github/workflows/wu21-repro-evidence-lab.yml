@@ -1,0 +1,220 @@
+name: WU21 Reproducible Evidence Lab
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/wu21-repro-evidence-lab.yml'
+      - 'tests/repro-evidence-lab/**'
+      - 'docs/evidence/WU21_REPRODUCIBLE_SIMULATION.md'
+      - 'src/**'
+      - 'tests/fixtures/wu09-visual-package.json'
+      - 'gravity-presentation-profiles.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-lab:
+    name: WU21 exact-Head reproducible simulation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-wu21-root
+          MARIADB_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-wu21-root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      WU21_WP_PATH: /tmp/wu21-wordpress
+      WU21_ARTIFACT_DIR: /tmp/wu21-artifacts
+      WU21_PACKAGE_DIR: /tmp/wu21-packages
+      WU21_GF_ZIP: /tmp/wu21-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      WU21_FLOW_ZIP: /tmp/wu21-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+      WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU21_FLOW_SHA256: ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404
+      WU21_GF_SIZE: '5300290'
+      WU21_FLOW_SIZE: '2603034'
+      WU21_WP_CLI: /tmp/wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+
+    steps:
+      - name: Checkout exact authorized PR Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Assert repository and exact checkout identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          echo "GPP_WU21_REPOSITORY_SHA=$actual" >> "$GITHUB_ENV"
+          test "$actual" = "$expected"
+          mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.29'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Run repository-native static and regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(php -r 'echo PHP_VERSION;')" = "8.2.29"
+          composer validate --no-check-publish
+          bash scripts/validate-visual-governance.sh .
+          bash tests/visual-governance-guardrail.sh
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/run.php
+          if git ls-files '*.zip' | grep -q .; then
+            echo "Committed ZIP archives are forbidden." >&2
+            exit 1
+          fi
+
+      - name: Install exact WP-CLI and WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          php "$WU21_WP_CLI" --info
+          mkdir -p "$WU21_WP_PATH"
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force --skip-content
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-wu21-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='WU21 Synthetic Lab' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
+          test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
+
+      - name: Fetch and byte-verify approved Gravity packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 4 -o "$WU21_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
+          test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
+          test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
+          echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
+          echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
+          unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+          echo "WU21_GRAVITYFLOW_SOURCE=$WU21_WP_PATH/wp-content/plugins/gravityflow" >> "$GITHUB_ENV"
+
+      - name: Activate exact plugins and install bounded lab adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          mkdir -p "$WU21_WP_PATH/wp-content/mu-plugins"
+          cp tests/repro-evidence-lab/wu21-lab-plugin.php "$WU21_WP_PATH/wp-content/mu-plugins/wu21-lab-plugin.php"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin status gravityforms --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin status gravityflow --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin status gravity-presentation-profiles --path="$WU21_WP_PATH"
+
+      - name: Create synthetic multi-form workflow fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
+          test -s "$WU21_ARTIFACT_DIR/fixture-manifest.json"
+
+      - name: Capture exact runtime identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/capture-runtime.php
+          test -s "$WU21_ARTIFACT_DIR/runtime.json"
+
+      - name: Execute PHP/native host and semantic-binding tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/php-tests.php
+
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install exact Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1); console.log(p.version)"
+
+      - name: Start ephemeral WordPress HTTP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/wu21-wp-server.log 2>&1 &
+          echo $! >/tmp/wu21-wp-server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wu21-wp-server.log >&2
+          exit 1
+
+      - name: Execute real native Inbox browser tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/browser-tests.mjs
+
+      - name: Build immutable content-addressed evidence from actual results
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/repro-evidence-lab/build-evidence.php | tee "$WU21_ARTIFACT_DIR/build-evidence.log"
+          evidence_file="$(cat "$WU21_ARTIFACT_DIR/evidence-path.txt")"
+          evidence_digest="$(cat "$WU21_ARTIFACT_DIR/evidence-digest.txt")"
+          echo "evidence_file=$evidence_file" >> "$GITHUB_OUTPUT"
+          echo "evidence_digest=$evidence_digest" >> "$GITHUB_OUTPUT"
+          php tests/repro-evidence-lab/validate-evidence.php
+
+      - name: Upload immutable WU21 evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wu21-repro-evidence-${{ steps.evidence.outputs.evidence_digest }}
+          path: |
+            /tmp/wu21-artifacts/${{ steps.evidence.outputs.evidence_file }}
+            /tmp/wu21-artifacts/runtime.json
+            /tmp/wu21-artifacts/fixture-manifest.json
+            /tmp/wu21-artifacts/php-results.json
+            /tmp/wu21-artifacts/browser-results.json
+            /tmp/wu21-artifacts/evidence-digest.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wu21-failure-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/wu21-artifacts
+            /tmp/wu21-wp-server.log
+          if-no-files-found: ignore
+          retention-days: 7

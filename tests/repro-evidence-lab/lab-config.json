@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0.0",
+  "work_unit_id": "WU-GPP-GF-REPRO-EVIDENCE-LAB-21",
+  "run_id": "RUN-GPP-GF-REPRO-EVIDENCE-LAB-21-001",
+  "environment_class": "REPRODUCIBLE_SIMULATION",
+  "repository": {
+    "full_name": "rezahh107/Gravity-Presentation-Profiles",
+    "base_sha": "852684bdb04bee30550a622a53026e490cf5eaf0",
+    "workflow_path": ".github/workflows/wu21-repro-evidence-lab.yml"
+  },
+  "wordpress": {
+    "version": "6.8.3",
+    "source": "https://wordpress.org/wordpress-6.8.3.zip"
+  },
+  "php": {
+    "version": "8.2.29",
+    "setup_action": "shivammathur/setup-php",
+    "setup_action_commit": "f3e473d116dcccaddc5834248c87452386958240"
+  },
+  "database": {
+    "product": "MariaDB",
+    "version": "11.4.8",
+    "image": "mariadb:11.4.8",
+    "image_digest": "sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6"
+  },
+  "wp_cli": {
+    "version": "2.12.0",
+    "url": "https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar",
+    "sha256": "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c"
+  },
+  "plugins": {
+    "gravity_forms": {
+      "version": "3.1.1.1",
+      "drive_file_id": "10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q",
+      "file_name": "gravityforms-3.1.1.1-owner-supplied-source-package.zip",
+      "size_bytes": 5300290,
+      "sha256": "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b",
+      "acquisition": "GOOGLE_DRIVE_PUBLIC_LINK_BY_FILE_ID"
+    },
+    "gravity_flow": {
+      "version": "3.1.0",
+      "drive_file_id": "1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf",
+      "file_name": "gravityflow-3.1.0-owner-supplied-source-package.zip",
+      "size_bytes": 2603034,
+      "sha256": "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404",
+      "acquisition": "GOOGLE_DRIVE_PUBLIC_LINK_BY_FILE_ID"
+    }
+  },
+  "browser": {
+    "node_version": "22.19.0",
+    "playwright_version": "1.55.0",
+    "engine": "chromium"
+  },
+  "fixtures": {
+    "data_class": "SYNTHETIC_NON_PII",
+    "form_count": 2,
+    "base_entry_count": 25,
+    "refresh_entry_count": 1
+  },
+  "source_backed_seams": [
+    {
+      "id": "SEAM-GFLOW-INBOX-COLUMNS",
+      "kind": "filter",
+      "name": "gravityflow_columns_inbox_table",
+      "source_path": "gravityflow/includes/inbox/models/class-task.php"
+    },
+    {
+      "id": "SEAM-GFLOW-INBOX-VALUE",
+      "kind": "filter",
+      "name": "gravityflow_inbox_field_value",
+      "source_path": "gravityflow/includes/inbox/models/class-task.php"
+    },
+    {
+      "id": "SEAM-GFLOW-API-CURRENT-STEP",
+      "kind": "public_api",
+      "name": "Gravity_Flow_API::get_current_step",
+      "source_path": "gravityflow/includes/class-api.php"
+    },
+    {
+      "id": "SEAM-GFLOW-API-INBOX",
+      "kind": "public_api",
+      "name": "Gravity_Flow_API::get_inbox_entries",
+      "source_path": "gravityflow/includes/class-api.php"
+    },
+    {
+      "id": "SEAM-GFLOW-API-INBOX-SEARCH",
+      "kind": "public_api",
+      "name": "Gravity_Flow_API::get_inbox_search_criteria",
+      "source_path": "gravityflow/includes/class-api.php"
+    },
+    {
+      "id": "SEAM-GFLOW-API-INBOX-PAGING",
+      "kind": "public_api",
+      "name": "Gravity_Flow_API::get_inbox_paging",
+      "source_path": "gravityflow/includes/class-api.php"
+    },
+    {
+      "id": "SEAM-GFLOW-API-INBOX-SORTING",
+      "kind": "public_api",
+      "name": "Gravity_Flow_API::get_inbox_sorting",
+      "source_path": "gravityflow/includes/class-api.php"
+    },
+    {
+      "id": "SEAM-GFLOW-NATIVE-INBOX-MARKUP",
+      "kind": "template_runtime",
+      "name": "Gravity_Flow_Inbox::display",
+      "source_path": "gravityflow/includes/pages/class-inbox.php"
+    },
+    {
+      "id": "SEAM-GFLOW-NATIVE-REFRESH",
+      "kind": "rest_endpoint",
+      "name": "inbox/changes",
+      "source_path": "gravityflow/includes/inbox/endpoints/refresh-inbox-items/class-endpoint.php"
+    },
+    {
+      "id": "SEAM-GFLOW-NATIVE-GRID",
+      "kind": "repository_evidenced_javascript",
+      "name": "gflow-inbox-search/setQuickFilter/applyTransaction/native pagination",
+      "source_path": "gravityflow/assets/js/dist/common-inbox.*.js"
+    }
+  ],
+  "claims": {
+    "maximum_positive_evidence_class": "PROVEN_IN_REPRODUCIBLE_SIMULATION",
+    "production_equivalence": {
+      "state": "NOT_PROVEN"
+    }
+  }
+}
