@@ -25,6 +25,19 @@ $runtime = read_json( $artifact_dir . '/runtime.json' );
 $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );
+$expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
+$expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 6 ) );
+function require_exact_test_ids( $suite, $expected, $label ) {
+    if ( ! isset( $suite['results'] ) || ! is_array( $suite['results'] ) ) throw new RuntimeException( $label . ' results missing.' );
+    $ids = array_map( function ( $t ) { return isset( $t['id'] ) ? $t['id'] : null; }, $suite['results'] );
+    $unique = array_values( array_unique( $ids ) );
+    sort( $unique, SORT_STRING );
+    $expected_sorted = $expected;
+    sort( $expected_sorted, SORT_STRING );
+    if ( count( $ids ) !== count( $unique ) || $unique !== $expected_sorted ) throw new RuntimeException( $label . ' test ID set mismatch.' );
+}
+require_exact_test_ids( $php, $expected_php_ids, 'PHP/runtime' );
+require_exact_test_ids( $browser, $expected_browser_ids, 'Browser/runtime' );
 $tests = array_merge( $php['results'], $browser['results'] );
 $map = status_map( $tests );
 $groups = array(

@@ -27,6 +27,15 @@ req( 2 === count( $e['fixture_manifest']['forms'] ), 'Expected exactly two synth
 req( 25 === $e['fixture_manifest']['base_entry_count'], 'Expected 25 base synthetic entries' );
 req( 'SYNTHETIC_NON_PII' === $e['fixture_manifest']['data_class'], 'Fixture data class mismatch' );
 req( 'shared.inbox.v1' === $e['fixture_manifest']['surface_profile_id'], 'Shared Inbox profile mismatch' );
+$expected_ids = array_merge(
+    array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) ),
+    array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 6 ) )
+);
+$actual_ids = array_map( function ( $t ) { return isset( $t['id'] ) ? $t['id'] : null; }, $e['tests'] );
+$unique_ids = array_values( array_unique( $actual_ids ) );
+sort( $unique_ids, SORT_STRING );
+sort( $expected_ids, SORT_STRING );
+req( count( $actual_ids ) === count( $unique_ids ) && $unique_ids === $expected_ids, 'Required test ID set mismatch' );
 req( 'UNBOUND' === $e['fixture_manifest']['optional_capabilities']['school.name'], 'School must remain UNBOUND' );
 req( 'NOT_PROVEN' === $e['fixture_manifest']['optional_capabilities']['workflow.due_at'], 'Due must remain NOT_PROVEN' );
 foreach ( $e['tests'] as $t ) req( 'PASS' === $t['status'], 'Required test failed/not-run: ' . $t['id'] );

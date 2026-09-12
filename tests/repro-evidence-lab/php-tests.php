@@ -7,15 +7,14 @@ $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $flow_source = getenv( 'WU21_GRAVITYFLOW_SOURCE' );
 $repo_root = getenv( 'GITHUB_WORKSPACE' );
 $manifest = get_option( 'gpp_wu21_fixture_manifest' );
-$results = array();
+$GLOBALS['wu21_results'] = array();
 
 function wu21_test( $id, $name, $fn ) {
-    global $results;
     try {
         $details = $fn();
-        $results[] = array( 'id' => $id, 'name' => $name, 'status' => 'PASS', 'details' => $details );
+        $GLOBALS['wu21_results'][] = array( 'id' => $id, 'name' => $name, 'status' => 'PASS', 'details' => $details );
     } catch ( Throwable $e ) {
-        $results[] = array( 'id' => $id, 'name' => $name, 'status' => 'FAIL', 'details' => $e->getMessage() );
+        $GLOBALS['wu21_results'][] = array( 'id' => $id, 'name' => $name, 'status' => 'FAIL', 'details' => $e->getMessage() );
     }
 }
 function wu21_assert( $condition, $message ) {
@@ -228,6 +227,7 @@ wu21_test( 'WU21-PHP-017', 'fixtures are synthetic/non-PII only', function () us
     return array( 'entry_count' => count( $manifest['entry_records'] ), 'email_domain' => 'example.invalid' );
 } );
 
+$results = $GLOBALS['wu21_results'];
 $out = array( 'suite' => 'WU21 PHP/runtime', 'results' => $results );
 file_put_contents( $artifact_dir . '/php-results.json', json_encode( $out, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
 $failed = array_filter( $results, function ( $r ) { return 'PASS' !== $r['status']; } );
