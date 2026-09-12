@@ -4,7 +4,7 @@ This repository contains a bounded GitHub Actions Evidence Lab for `WU-GPP-GF-RE
 
 ## Pinned simulation environment
 
-The machine-readable configuration is `tests/repro-evidence-lab/lab-config.json`. The lab pins WordPress 6.8.3, PHP 8.2.29, MariaDB 11.4.8 (including the declared image digest), WP-CLI 2.12.0 with SHA-256 verification, Node 22.19.0, Playwright 1.55.0/Chromium, Gravity Forms 3.1.1.1 and Gravity Flow 3.1.0. The two proprietary plugin ZIPs are fetched from the owner-approved public Drive file IDs and are rejected before extraction unless their exact byte size and SHA-256 match the configuration.
+The machine-readable configuration is `tests/repro-evidence-lab/lab-config.json`. The lab pins WordPress 6.8.3, PHP 8.2.33, MariaDB 11.4.8 (including the declared image digest), WP-CLI 2.12.0 with SHA-256 verification, Node 22.19.0, Playwright 1.55.0/Chromium, Gravity Forms 3.1.1.1 and Gravity Flow 3.1.0. The two proprietary plugin ZIPs are fetched from the owner-approved public Drive file IDs and are rejected before extraction unless their exact byte size and SHA-256 match the configuration.
 
 The evidence artifact records the checked-out repository commit, workflow path and workflow-definition SHA-256, GitHub run identity, configuration SHA-256, runtime versions, and observed package hashes/sizes.
 
