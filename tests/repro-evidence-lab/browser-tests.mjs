@@ -86,14 +86,16 @@ try {
   if (results[0]?.status === 'PASS') {
     await test(page, 'WU21-BROWSER-002', 'native quick search uses Gravity Flow grid control', async () => {
       const search = page.locator('[data-js="gflow-inbox-search"]');
-      await search.fill('WU21 Alpha Student 00');
-      await page.waitForTimeout(500);
+      await search.click();
+      await search.pressSequentially('WU21 Alpha Student 00');
+      await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 1, null, { timeout: 15000 });
       const rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 1) throw new Error(`Expected one quick-search row, got ${rows}`);
       const text = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().innerText();
       if (!text.includes('WU21 Alpha Student 00')) throw new Error('Quick-search row did not contain expected synthetic name.');
-      await search.fill('');
-      await page.waitForTimeout(500);
+      await search.press('Control+A');
+      await search.press('Backspace');
+      await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 15000 });
       return { matched_rows: rows };
     });
 
@@ -135,8 +137,9 @@ try {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
       await page.waitForSelector('[data-js="gflow-inbox-search"]', { timeout: 30000 });
       const search = page.locator('[data-js="gflow-inbox-search"]');
-      await search.fill('WU21 Refresh Student');
-      await page.waitForTimeout(300);
+      await search.click();
+      await search.pressSequentially('WU21 Refresh Student');
+      await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 0, null, { timeout: 15000 });
       let rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 0) throw new Error(`Refresh negative control expected zero rows before mutation, got ${rows}`);
       const id = wpControl('add');
