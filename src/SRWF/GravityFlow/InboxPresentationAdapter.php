@@ -236,24 +236,12 @@ final class InboxPresentationAdapter {
                 return null;
 
             case 'gravity_flow.state':
-                if ( ! class_exists( 'Gravity_Flow_API' ) ) {
+                if ( ! isset( $source['state_key'] ) || 'current_step' !== $source['state_key'] || ! class_exists( 'Gravity_Flow_API' ) ) {
                     return null;
                 }
                 $api = new \Gravity_Flow_API( (int) $entry['form_id'] );
                 $step = $api->get_current_step( $entry );
-                if ( ! $step ) {
-                    return null;
-                }
-                if ( 'current_step' === $source['state_key'] ) {
-                    return $step->get_name();
-                }
-                if ( 'due_at' === $source['state_key'] && ! empty( $step->due_date ) && method_exists( $step, 'get_due_date_timestamp' ) ) {
-                    return (int) $step->get_due_date_timestamp();
-                }
-                if ( 'status' === $source['state_key'] && method_exists( $step, 'get_status' ) ) {
-                    return $step->get_status();
-                }
-                return null;
+                return $step ? (string) $step->get_name() : null;
         }
 
         return null;
