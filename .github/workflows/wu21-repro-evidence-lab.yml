@@ -101,6 +101,63 @@ jobs:
           php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
           test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
 
+      - name: Normalize and assert native WordPress URL state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+
+          stored_home="$(php "$WU21_WP_CLI" option get home --path="$WU21_WP_PATH")"
+          stored_siteurl="$(php "$WU21_WP_CLI" option get siteurl --path="$WU21_WP_PATH")"
+          test "$stored_home" = "$WU21_BASE_URL"
+          test "$stored_siteurl" = "$WU21_BASE_URL"
+
+          if grep -Eq "^[[:space:]]*define[[:space:]]*\([[:space:]]*['\"]WP_(HOME|SITEURL)['\"]" "$WU21_WP_PATH/wp-config.php"; then
+            echo "Rejected parallel WP_HOME/WP_SITEURL URL authority in wp-config.php." >&2
+            exit 1
+          fi
+
+          test "$WU21_WP_PATH" = "/tmp/wu21-wordpress"
+          test "$WU21_BASE_URL" = "http://127.0.0.1:8080"
+          grep -Fq 'php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080' "$GITHUB_WORKSPACE/.github/workflows/wu21-repro-evidence-lab.yml"
+          if grep -Fq '/wu21-wordpress' "$GITHUB_WORKSPACE/tests/repro-evidence-lab/browser-tests.mjs"; then
+            echo "Rejected hardcoded /wu21-wordpress browser workaround." >&2
+            exit 1
+          fi
+
+          WU21_EXPECTED_URL="$WU21_BASE_URL" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+          $expected = getenv("WU21_EXPECTED_URL");
+          $urls = [
+              "home_url" => home_url(),
+              "site_url" => site_url(),
+              "wp_login_url" => wp_login_url(),
+              "gravityflow_inbox_admin_url" => admin_url("admin.php?page=gravityflow-inbox"),
+          ];
+
+          $fail = static function ($message) use ($urls) {
+              fwrite(STDERR, $message . PHP_EOL);
+              fwrite(STDERR, wp_json_encode($urls, JSON_UNESCAPED_SLASHES) . PHP_EOL);
+              exit(1);
+          };
+
+          if ($urls["home_url"] !== $expected) {
+              $fail("home_url() does not equal WU21_BASE_URL.");
+          }
+          if ($urls["site_url"] !== $expected) {
+              $fail("site_url() does not equal WU21_BASE_URL.");
+          }
+          if (! str_starts_with($urls["wp_login_url"], $expected . "/") || str_contains($urls["wp_login_url"], "/wu21-wordpress")) {
+              $fail("wp_login_url() escaped the root URL contract.");
+          }
+          if (! str_starts_with($urls["gravityflow_inbox_admin_url"], $expected . "/wp-admin/") || str_contains($urls["gravityflow_inbox_admin_url"], "/wu21-wordpress")) {
+              $fail("Gravity Flow Inbox admin_url() escaped the root URL contract.");
+          }
+
+          echo wp_json_encode($urls, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+          '
+
       - name: Fetch and byte-verify approved Gravity packages
         shell: bash
         run: |
