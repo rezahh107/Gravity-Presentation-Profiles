@@ -162,7 +162,7 @@ try {
       const initialRows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (initialRows !== 20) throw new Error(`Expected a fresh first page with 20 rows, got ${initialRows}`);
 
-      const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
+      const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="gpp_case_card"]').first();
       await header.click();
       await page.waitForTimeout(300);
       const sort1 = await header.getAttribute('aria-sort');
@@ -207,7 +207,7 @@ try {
       await search.click();
       await search.pressSequentially('WU21 Refresh Student');
       await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 0, null, { timeout: 15000 });
-      let rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
+      const rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 0) throw new Error(`Refresh negative control expected zero rows before mutation, got ${rows}`);
       const id = wpControl('add');
       pollingPhase = 'browser_005_after_mutation';
