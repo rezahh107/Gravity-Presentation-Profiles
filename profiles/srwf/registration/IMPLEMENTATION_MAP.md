@@ -7,72 +7,85 @@ Supporting references remain non-normative as declared by `docs/visual/SRWF_PUBL
 
 ## Scope boundary
 
-Runtime selection from WU1 adds `gpp-enabled` and `gpp-profile-srwf-registration` to the native Gravity Forms `<form>` tag. Every WU2 production selector starts from the combined selected-profile selector:
+Runtime selection from WU1 adds `gpp-enabled` / `gpp-profile-srwf-registration` to the native Gravity Forms form and derives the corresponding `_wrapper` identity on the authentic Gravity Forms wrapper. Every production selector remains anchored to:
 
 ```css
-.gpp-enabled.gpp-profile-srwf-registration
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper
 ```
 
-No Form ID, Page ID, broad page selector, or unscoped Gravity Forms selector is used.
+No Form ID, Page ID, broad page selector, `body`, `html`, unscoped Gravity Forms selector, or `:has()` selector is used.
 
 ## Implemented exact-contract mappings
 
 | Contract rule/token | Production mapping | Mechanism |
 |---|---|---|
-| surface `#FFFFFF` | form surface and `--gf-ctrl-bg-color` | selected-profile CSS + documented GF CSS API |
-| primary text `#172033` | form/control/primary-label text; section heading | GF CSS API + documented section-title selector gap |
-| secondary text `#475467` | section description text | documented section-description selector gap |
-| muted text `#667085` | `--gf-ctrl-desc-color` | documented GF CSS API |
-| primary `#1D4ED8` | `--gf-color-primary` + exact RGB companion `--gf-color-primary-rgb: 29, 78, 216`; control focus-border color basis; primary-button background | documented GF CSS API |
-| primary pressed `#1E40AF` | authentic submit `:active` background | documented submit selector; no active-state API variable exists |
-| error `#B42318` | `--gf-color-danger` + exact RGB companion `--gf-color-danger-rgb: 180, 35, 24`; error border, required indicator, field error text, validation-summary text | documented GF CSS API |
-| success `#18794E` | `--gf-color-success` + exact RGB companion `--gf-color-success-rgb: 24, 121, 78`; authentic host success consumers remain host-owned | documented GF CSS API |
-| decorative divider `#E4E7EC` | `--gf-field-section-border-color` | documented GF CSS API |
-| resting control border `#8690A1` | `--gf-ctrl-border-color` | documented GF CSS API |
-| control radius `10px` | `--gf-ctrl-radius` | documented GF CSS API |
-| control minimum height `52px` | `--gf-ctrl-size` | documented GF CSS API |
-| primary button minimum height `56px` | `--gf-ctrl-btn-size` | documented GF CSS API |
-| mobile horizontal padding `16px` | `padding-inline` on the selected form | direct selected-profile rule; outer form padding has no applicable descendant CSS API mapping at this scope |
-| desktop content maximum width `840px` | `max-inline-size` on the selected form | direct selected-profile rule |
-| card radius `16px` | `border-radius` on the selected form | direct selected-profile rule |
-| field label `15px / 600` | `--gf-ctrl-label-font-size-primary` / `--gf-ctrl-label-font-weight-primary` | documented GF CSS API |
-| control value `16px / 400` | `--gf-ctrl-font-size` / `--gf-ctrl-font-weight` | documented GF CSS API |
-| primary action `16px / 700` | `--gf-ctrl-btn-font-size` / `--gf-ctrl-btn-font-weight` | documented GF CSS API |
-| section heading `18px / 700` | `.gfield--type-section .gsection_title` | direct CSS because Gravity Forms documents no CSS API variable for the section title |
-| font-family target `Vazirmatn` | selected form inheritance plus GF control/label/description/button font-family variables | no font loading/bundling; delivery remains external |
+| surface `#FFFFFF` | wrapper surface and `--gf-ctrl-bg-color` | selected-profile CSS + GF CSS API |
+| primary text `#172033` | form/control/primary-label text; section heading | GF CSS API + section-title selector gap |
+| secondary text `#475467` | section description text | section-description selector gap |
+| muted text `#667085` | `--gf-ctrl-desc-color` | GF CSS API |
+| primary `#1D4ED8` | global primary + RGB companion; control focus basis; primary-button background | GF CSS API projected to the authentic local control/button scopes; Orbital retains focus transition ownership |
+| primary pressed `#1E40AF` | authentic submit `:active` background | documented submit selector; no active-state API variable |
+| error `#B42318` | danger + RGB companion; error border, required indicator, field error text, validation-summary text | GF CSS API |
+| success `#18794E` | success + RGB companion | GF CSS API |
+| decorative divider `#E4E7EC` | `--gf-field-section-border-color` | GF CSS API |
+| resting control border `#8690A1` | `--gf-ctrl-border-color` | GF CSS API |
+| control radius `10px` | `--gf-ctrl-radius` | GF CSS API |
+| control minimum height `52px` | wrapper source token plus runtime-proven projection of `--gf-ctrl-size` onto authentic text/select/Jalali control scopes | GF CSS API; no direct `height` authored |
+| primary button minimum height `56px` | wrapper source token plus runtime-proven projection of `--gf-ctrl-btn-size` onto the authentic submit surface | GF CSS API; no direct `height` authored |
+| mobile horizontal padding `16px` | `padding-inline` on selected wrapper | direct selected-profile rule |
+| desktop content maximum width `840px` | `max-inline-size` on selected wrapper | direct selected-profile rule |
+| card radius `16px` | `border-radius` on selected wrapper | direct selected-profile rule |
+| field label `15px / 600` | label CSS API values | GF CSS API |
+| control value `16px / 400` | control CSS API values | GF CSS API |
+| primary action `16px / 700` | button CSS API values | GF CSS API |
+| section heading `18px / 700` | `.gfield--type-section .gsection_title` | direct CSS because no section-title CSS API variable exists |
+| font-family target `Vazirmatn` | selected wrapper inheritance plus GF control/label/description/button variables | no font loading/bundling |
 | RTL composition | `direction: rtl` plus logical sizing/margin/padding properties | selected-profile CSS |
-| single-column composition | every direct child `.gfield` of documented `.gform_fields` spans the full host grid | documented GF selectors; no breakpoint or pairing inference |
+| single-column composition | direct `.gfield` children span full host grid | documented GF selectors |
+| Jalali validation message below input | existing host-generated `.gfield_validation_message` visually ordered after the field content for the authentic invalid PersianGravity field | profile-scoped CSS-only flex adapter; DOM/validation/ARIA unchanged |
 
-The primary, danger/error, and success RGB companions are exact alternate representations of the existing canonical hex color bases, not new visual decisions or a second source of truth. They allow Gravity Forms host-derived states that consume RGB companions to inherit the same SRWF color bases. Gravity Forms continues to own state lifecycle, geometry, alpha, semantics, and rendering behavior; this profile does not directly replace those derived host-state values.
+The primary, danger/error, and success RGB companions are alternate representations of the same canonical hex color bases, not a second source of truth. Gravity Forms and PersianGravity continue to own lifecycle, markup, keyboard semantics, validation, ARIA/state, and persistence.
+
+## Runtime-proven closures from PR #10
+
+Authentic Gravity Forms `3.1.1.1` + PersianGravity `4.2.0` evidence established the following facts:
+
+1. Orbital computes `--gf-ctrl-size`, `--gf-ctrl-size-md`, and the consumed local control height as `38px` at the authentic text, select, and PersianGravity Jalali controls even though the SRWF wrapper source declaration is `52px`.
+2. The authentic submit similarly computes `--gf-ctrl-btn-size: 38px`.
+3. During real keyboard focus, `:focus-visible` is true and Orbital changes its local focus-color variable to the SRWF primary basis immediately. The first sampled animation frame still reports the resting border color because Orbital owns a CSS transition; browser evidence therefore records the host transition duration/delay and validates the settled focus state after that declared transition. No direct focus border, outline width/offset, shadow spread/blur, or alpha is authored.
+4. The invalid PersianGravity field is a block-layout `.gfield--type-pgr_jalali_date.gfield_error`. Its existing host-generated validation node is a direct child placed in DOM before the input container, while helper text is already below the input. The admitted adapter keeps the DOM untouched and creates a vertical flex stack only for this selected-profile invalid Jalali field, then visually orders the existing error node after the other field children.
+
+These closures are specific to the authentic runtime surfaces above and do not admit global or form-ID styling.
 
 ## Direct-selector gaps and justification
 
-1. `.gform_fields > .gfield { grid-column: 1 / -1; }` — Gravity Forms documents both selectors, but the CSS API exposes spacing rather than a profile-level variable that forces all editor-configured field widths to one row. This rule enforces the authorized fail-closed single-column composition without choosing pairings or a breakpoint.
-2. `.gfield--type-section .gsection_title` — Gravity Forms explicitly documents that Section Break titles do not receive CSS API variables; direct CSS is the documented mechanism.
-3. `.gfield--type-section .gsection_description` — same documented Section Break API gap; only canonical color/font-family are applied, with no unresolved font size or rhythm.
-4. `.gform_button:active` and `.gfield--type-submit button[type="submit"].button:active` — Gravity Forms documents these submit surfaces and states that direct properties are appropriate when no active-state variable exists. Only the canonical pressed color is applied.
-5. Selected-form card geometry (`max-inline-size`, `padding-inline`, `border-radius`, `background-color`) — WU1 exposes the selected profile on the `<form>` element, not on the Gravity Forms outer wrapper. These direct properties remain anchored to that proven semantic boundary.
+1. `.gform_fields > .gfield { grid-column: 1 / -1; }` — enforces the authorized fail-closed single-column composition.
+2. `.gfield--type-section .gsection_title` / `.gsection_description` — direct CSS remains required where the GF CSS API does not expose the necessary section-title/description mapping.
+3. `.gform_button:active` and the authentic submit-button active selector — only the canonical pressed color is applied.
+4. Authentic text/select/Jalali control descendants — runtime proved wrapper-level control-size authority is insufficient for Orbital `3.1.1.1`; the same canonical `--gf-ctrl-size: 52px` is projected to the actual control scopes.
+5. Authentic submit descendant — runtime proved `--gf-ctrl-btn-size` is locally consumed as `38px`; the same canonical `56px` value is projected to the submit surface.
+6. Focus rendering — no direct production focus selector is required. The canonical Gravity Forms focus-color variables are projected locally, while the authentic browser harness waits only for the duration/delay declared by the focused host control before asserting the final visible state and unchanged border geometry.
+7. PersianGravity invalid-field flex adapter — runtime proved the parent is block layout and the existing error node precedes the input in DOM. A profile-scoped column flex stack plus `order` is the minimum CSS-only adapter that visually places the existing message below the input without DOM or host-validation changes.
 
 ## Deliberately deferred / unapplied
 
-- Page background `#F6F8FB`: not authored because the current profile identity is on the form, not a proven outer page/context container. No `body`, `html`, Page ID, broad ancestor, or `:has()` workaround is used.
-- Upload radius `12px`: deferred until real Gravity Forms / GP File Upload Pro runtime markup identifies the authentic component surface.
-- Help text and field-validation message placement: contract says below input, but placement/semantic association remains host/runtime-owned; WU2 does not reorder markup.
+- Page background `#F6F8FB`: not authored because the current profile identity is not a proven outer page/context container.
+- Upload radius `12px`: deferred until real GP File Upload Pro runtime markup identifies the authentic component surface.
 - Form-title size/line-height, helper-text size, field-error size, desktop title enhancement, field rhythm, major-section rhythm: unresolved/reference-only values are not authored.
-- Desktop short-field pairing and exact production breakpoint: not authored; the baseline is one column at every width.
+- Desktop short-field pairing and exact production breakpoint: not authored; the baseline remains one column at every width.
 - Shadow: no SRWF `box-shadow` declaration is authored.
-- Focus ring: no outline/ring width, offset, spread, blur, alpha, or other geometry is authored. Only the canonical primary color basis is mapped to the documented control focus-border color; host focus rendering remains intact.
-- GP Advanced Select, GP File Upload Pro, PersianGravity date-widget adapters: deferred to runtime evidence/WU3.
-- Numeric/Latin per-value LTR overrides: deferred until the relevant runtime field/component selectors are proven; labels/order remain untouched.
-- Runtime accessibility, 320px browser reflow, composed contrast, keyboard/focus/ARIA/screen-reader behavior, gallery approval, release readiness: not claimed by WU2 static implementation.
+- Focus ring geometry remains deferred: no outline/ring width, offset, spread, blur, alpha, direct focus border, or new shadow geometry is authored. Orbital renders the canonical focus color through its own transition after the profile projects the documented focus-color variables locally.
+- GP Advanced Select and GP File Upload Pro adapters remain deferred until authentic packages/runtime are available.
+- PersianGravity validation-layout adapter: runtime-proven and admitted only for the existing Jalali field/error presentation. PersianGravity behavior, validation, ARIA, markup, and persistence remain host-owned.
+- Numeric/Latin per-value LTR overrides remain deferred until separately proven.
+- Gallery approval and release readiness are not claimed by this implementation map.
 
 ## Official Gravity Forms evidence used
 
-- Gravity Forms CSS API and CSS API Reference: global custom properties are the preferred customization surface and may be overridden at a narrower scope.
-- Global CSS API: Colors: `--gf-color-primary-rgb`, `--gf-color-danger-rgb`, and `--gf-color-success-rgb` are independent RGB companions for their corresponding base colors; host-derived consumers remain Gravity Forms-owned.
-- CSS API: Controls - Base, Button, Description, Label; Fields - Section; Form - Validation.
-- Form Body CSS Selectors: `.gform_fields` and `.gfield` are documented Orbital selectors.
-- Section Break CSS Selectors: `.gsection_title` and `.gsection_description` are documented; the title has no CSS API variable.
-- Submit Button CSS Selectors: primary button variables are preferred; direct `:active` properties are documented when no variable exists.
+- Gravity Forms CSS API: global and local custom properties must be overridden at the scope where they are consumed.
+- Controls - Base: `--gf-ctrl-size` defaults to `--gf-ctrl-size-md` (`38px`), `--gf-ctrl-border-color-focus` is the focus-border color basis, and host border geometry is separate.
+- Controls - Button: `--gf-ctrl-btn-size` defaults to the medium control size and primary-button focus border uses its dedicated focus-color property.
+- Core Concepts: authentic field-type/control/button classes and wrapper theme scopes define bounded targeting surfaces.
+- Validation Errors: `.gfield_validation_message` is the authentic host-produced field-level validation element.
 
-Runtime-sensitive applicability remains subject to `WU-GPP-RUNTIME-INTEGRATION-03`.
+Runtime completion remains gated on the exact-head authentic browser lane and Repository CI.
