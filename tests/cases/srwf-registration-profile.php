@@ -5,7 +5,7 @@ require dirname( __DIR__ ) . '/helpers.php';
 $root     = dirname( __DIR__, 2 );
 $css_path = $root . '/profiles/srwf/registration/profile.css';
 $map_path = $root . '/profiles/srwf/registration/IMPLEMENTATION_MAP.md';
-$scope    = '.gpp-enabled.gpp-profile-srwf-registration';
+$scope    = '.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper';
 
 $css = file_get_contents( $css_path );
 gpp_assert_true( false !== $css, 'SRWF Registration profile CSS must be readable.' );
@@ -24,7 +24,7 @@ foreach ( $rules as $rule ) {
         $selector = trim( $selector );
         gpp_assert_true(
             0 === strpos( $selector, $scope ),
-            'Every SRWF Registration selector must start from the selected-profile scope: ' . $selector
+            'Every SRWF Registration selector must start from the selected-profile wrapper scope: ' . $selector
         );
     }
 }
