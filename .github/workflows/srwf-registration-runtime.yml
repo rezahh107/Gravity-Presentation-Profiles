@@ -112,7 +112,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ln -s "$GITHUB_WORKSPACE" "$SRWF_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          cp -a "$GITHUB_WORKSPACE" "$SRWF_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          rm -rf "$SRWF_WP_PATH/wp-content/plugins/gravity-presentation-profiles/.git"
           theme="$SRWF_WP_PATH/wp-content/themes/gpp-srwf-runtime"
           mkdir -p "$theme"
           cat > "$theme/style.css" <<'CSS'
