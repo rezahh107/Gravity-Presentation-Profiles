@@ -9,6 +9,7 @@ $cases = array(
     'package-lifecycle.php',
     'package-lifecycle-deactivation.php',
     'wordpress-option-state-store.php',
+    'inbox-presentation-model.php',
 );
 
 foreach ( $cases as $case ) {
