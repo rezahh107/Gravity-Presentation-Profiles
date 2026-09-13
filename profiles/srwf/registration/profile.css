@@ -47,13 +47,14 @@
 }
 
 /*
- * Gravity Forms 3.1.1.1 Orbital re-projects medium control/button sizing at
- * its framework wrapper. Keep the contract values above as the profile source
- * of truth and repeat only the same values at the proven host wrapper scope.
+ * Gravity Forms 3.1.1.1 Orbital re-projects medium sizing on the same
+ * framework wrapper with stronger cascade priority. Preserve the canonical
+ * profile declaration above and pin the identical value only on this selected
+ * authentic wrapper so the wrapper evidence and descendant consumers agree.
  */
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper.gform-theme--framework {
-    --gf-ctrl-size: 52px;
-    --gf-ctrl-btn-size: 56px;
+    --gf-ctrl-size: 52px !important;
+    --gf-ctrl-btn-size: 56px !important;
 }
 
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_fields > .gfield {
@@ -74,13 +75,14 @@
 
 /*
  * Runtime evidence proves Orbital changes its local focus-color variable but
- * the rendered border remains unchanged. Reuse the existing 1px solid host
- * border geometry and change only its canonical focus color.
+ * the rendered border still wins from a stronger host cascade declaration.
+ * Reuse the existing 1px solid host border geometry and change only its
+ * canonical focus color; !important is limited to that color conflict.
  */
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-text input[type="text"]:focus-visible,
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-select select:focus-visible,
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-pgr_jalali_date input.pgr_jalali_date:focus-visible {
-    border-color: #1D4ED8;
+    border-color: #1D4ED8 !important;
 }
 
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer input[type="submit"],
@@ -91,7 +93,7 @@
 
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer input[type="submit"]:focus-visible,
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer button[type="submit"]:focus-visible {
-    border-color: #1D4ED8;
+    border-color: #1D4ED8 !important;
 }
 
 /*
