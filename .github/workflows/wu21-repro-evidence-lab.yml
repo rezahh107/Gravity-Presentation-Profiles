@@ -95,11 +95,17 @@ jobs:
           echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
           php "$WU21_WP_CLI" --info
           mkdir -p "$WU21_WP_PATH"
-          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force --skip-content
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force
           php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-wu21-root --dbhost=127.0.0.1:3306 --skip-check
           php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='WU21 Synthetic Lab' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
           php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
           test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
+          template="$(php "$WU21_WP_CLI" option get template --path="$WU21_WP_PATH")"
+          stylesheet="$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")"
+          test -n "$template"
+          test -n "$stylesheet"
+          test -d "$WU21_WP_PATH/wp-content/themes/$template"
+          test -d "$WU21_WP_PATH/wp-content/themes/$stylesheet"
 
       - name: Normalize and assert native WordPress URL state
         shell: bash
