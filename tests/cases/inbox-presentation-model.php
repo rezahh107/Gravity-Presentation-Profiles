@@ -80,6 +80,30 @@ gpp_assert_same( 'NOT_PROVEN', $beta_photo['state'], 'Photo failure preserves NO
 gpp_assert_true( ! $model->resolve( $alpha_entry, 'school.name' )['resolved'], 'UNBOUND School remains absent.' );
 gpp_assert_true( ! $model->resolve( $alpha_entry, 'workflow.due_at' )['resolved'], 'NOT_PROVEN Due remains absent.' );
 
+// A semantic binding alone must never authorize a guessed Gravity Flow API.
+// Even a synthetically PROVEN due_at state binding stays closed until an
+// evidence unit admits a concrete runtime source adapter for it.
+$due_candidate = $alpha;
+foreach ( $due_candidate['bindings'] as &$binding ) {
+    if ( 'workflow.due_at' === $binding['semantic_slot_key'] ) {
+        $binding['state'] = 'PROVEN';
+        $binding['source_ref'] = array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' );
+        $binding['evidence_refs'] = array( 'fixture:wu17:semantic', 'fixture:wu17:runtime' );
+    }
+}
+unset( $binding );
+foreach ( $due_candidate['runtime_claims'] as &$claim ) {
+    if ( 'workflow.due_at' === $claim['semantic_slot_key'] ) {
+        $claim['evidence_state'] = 'PROVEN';
+        $claim['evidence_refs'] = array( 'fixture:wu17:semantic', 'fixture:wu17:runtime' );
+    }
+}
+unset( $claim );
+$due_model = new InboxPresentationModel( $profile, array( $due_candidate ) );
+$due_result = $due_model->resolve( $alpha_entry, 'workflow.due_at' );
+gpp_assert_true( ! $due_result['resolved'], 'Unadmitted Gravity Flow due_at state adapter must fail closed.' );
+gpp_assert_same( 'source_adapter_not_admitted', $due_result['reason'], 'Due state adapter failure must be explicit.' );
+
 $ambiguous = new InboxPresentationModel(
     $profile,
     array( $alpha, wu17_binding( 'wu17.alpha.other-install', 'other-installation', 101, 21, 23, 22, 'PROVEN' ) )
