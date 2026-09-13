@@ -175,6 +175,10 @@ $binding_beta = wu21_binding_set( 'wu21.sim.beta.v1', $form_beta, 7, 9, 11, 'NOT
 EnvironmentBindingSet::validate( $binding_alpha );
 EnvironmentBindingSet::validate( $binding_beta );
 
+// Preserve the original WU21 test adapter's reference option so its existing
+// seam tests remain valid; production WU17 resolves only lifecycle activations.
+update_option( 'gpp_wu21_binding_sets', array( $binding_alpha, $binding_beta ), false );
+
 $visual_path = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/fixtures/wu09-visual-package.json';
 $visual_package = json_decode( file_get_contents( $visual_path ), true );
 VisualProfilePackage::validate( $visual_package );
