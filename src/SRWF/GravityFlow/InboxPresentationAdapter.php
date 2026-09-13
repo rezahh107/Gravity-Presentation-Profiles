@@ -26,11 +26,10 @@ final class InboxPresentationAdapter {
             return;
         }
 
-        // Run after host/extension column discovery so GPP can add one
-        // presentation column without deleting host-owned row data.
+        // These are the two exact Gravity Flow 3.1.0 Inbox extension seams
+        // admitted by WU21. Layout remains CSS-only; no guessed grid API hook.
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
-        add_filter( 'gravityflow_js_config_shared', array( __CLASS__, 'filterJsConfig' ), 100, 1 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
     }
@@ -47,8 +46,7 @@ final class InboxPresentationAdapter {
 
         // Preserve every native/extension column in rowData. Gravity Flow uses
         // the native entry id for AG Grid row identity and native search/sort/
-        // refresh may depend on other host-owned values. Visibility is handled
-        // only in filterJsConfig().
+        // refresh may depend on other host-owned values. CSS changes visibility.
         if ( ! isset( $columns['id'] ) ) {
             $columns = array( 'id' => __( 'Entry ID', 'gravity-presentation-profiles' ) ) + $columns;
         }
@@ -68,47 +66,6 @@ final class InboxPresentationAdapter {
         }
 
         return self::renderCard( $model, $entry );
-    }
-
-    public static function filterJsConfig( $config ) {
-        if ( null === self::model() || ! is_array( $config ) || empty( $config['grids'] ) || ! is_array( $config['grids'] ) ) {
-            return $config;
-        }
-
-        foreach ( $config['grids'] as &$grid ) {
-            if ( empty( $grid['grid_options'] ) || ! is_array( $grid['grid_options'] ) ) {
-                continue;
-            }
-
-            $grid['grid_options']['domLayout'] = 'autoHeight';
-            $grid['grid_options']['ensureDomOrder'] = true;
-            $grid['grid_options']['suppressHorizontalScroll'] = true;
-
-            if ( empty( $grid['grid_options']['columnDefs'] ) || ! is_array( $grid['grid_options']['columnDefs'] ) ) {
-                continue;
-            }
-
-            foreach ( $grid['grid_options']['columnDefs'] as &$definition ) {
-                if ( ! is_array( $definition ) || empty( $definition['field'] ) ) {
-                    continue;
-                }
-
-                if ( self::CARD_COLUMN !== $definition['field'] ) {
-                    $definition['hide'] = true;
-                    continue;
-                }
-
-                $definition['hide'] = false;
-                $definition['flex'] = 1;
-                $definition['minWidth'] = 0;
-                $definition['wrapText'] = true;
-                $definition['autoHeight'] = true;
-            }
-            unset( $definition );
-        }
-        unset( $grid );
-
-        return $config;
     }
 
     public static function enqueueStyles() {
@@ -199,6 +156,9 @@ final class InboxPresentationAdapter {
         $due_timestamp = null === $due ? null : PersianDateFormatter::timestamp( $due );
         $is_overdue = null !== $due_timestamp && $due_timestamp < time();
 
+        // Keep native-searchable raw values in the host-owned row value. The
+        // text is visually hidden, but AG Grid's own quick filter remains the
+        // search authority; GPP does not build a second index.
         $search_values = array_filter(
             array( $name, $national_id, $step, $created, $school, $due ),
             static function ( $item ) { return null !== $item && '' !== (string) $item; }
