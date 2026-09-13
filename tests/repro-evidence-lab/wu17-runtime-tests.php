@@ -73,13 +73,14 @@ wu17_test( 'WU17-RUNTIME-002', 'two form binding sets are independently active w
     return $ids;
 } );
 
-wu17_test( 'WU17-RUNTIME-003', 'production adapter adds one card column while preserving native row data columns', function () {
+wu17_test( 'WU17-RUNTIME-003', 'production adapter keeps the card inside the rendered viewport while preserving native row data columns', function () {
     $input = array( 'id' => 'Entry ID', 'date_created' => 'Date Created', 'workflow_step' => 'Step' );
     $columns = apply_filters( 'gravityflow_columns_inbox_table', $input, array() );
     foreach ( array_keys( $input ) as $key ) {
         wu17_assert( isset( $columns[ $key ] ), 'Host row-data column was removed: ' . $key );
     }
     wu17_assert( isset( $columns[ InboxPresentationAdapter::CARD_COLUMN ] ), 'Production card column was not added.' );
+    wu17_assert( InboxPresentationAdapter::CARD_COLUMN === array_key_first( $columns ), 'Card column must precede support columns so AG Grid column virtualization cannot omit it on narrow viewports.' );
     return array_keys( $columns );
 } );
 
