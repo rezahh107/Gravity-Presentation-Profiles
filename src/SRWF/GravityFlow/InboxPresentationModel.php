@@ -67,10 +67,15 @@ final class InboxPresentationModel {
         }
 
         if ( ! $this->availabilityIsProven( $resolved['binding_set_id'], $slot_key, $entry, $installation_id ) ) {
-            $resolved['resolved']   = false;
-            $resolved['state']      = 'NOT_PROVEN';
-            $resolved['source_ref'] = null;
-            $resolved['reason']     = 'availability_not_proven';
+            return $this->failResolved( $resolved, 'availability_not_proven' );
+        }
+
+        // A PROVEN semantic binding is necessary but not sufficient to call an
+        // arbitrary host API. WU17 only admits source adapters already covered
+        // by the portable contract/WU21 runtime evidence. Unknown state readers
+        // fail closed until a later evidence unit admits them explicitly.
+        if ( ! $this->sourceAdapterIsAdmitted( $resolved['source_ref'] ) ) {
+            return $this->failResolved( $resolved, 'source_adapter_not_admitted' );
         }
 
         return $resolved;
@@ -110,6 +115,20 @@ final class InboxPresentationModel {
         return false;
     }
 
+    private function sourceAdapterIsAdmitted( $source_ref ) {
+        if ( ! is_array( $source_ref ) || empty( $source_ref['type'] ) ) {
+            return false;
+        }
+
+        if ( 'gravity_forms.field' === $source_ref['type'] || 'gravity_forms.entry_meta' === $source_ref['type'] ) {
+            return true;
+        }
+
+        return 'gravity_flow.state' === $source_ref['type']
+            && isset( $source_ref['state_key'] )
+            && 'current_step' === $source_ref['state_key'];
+    }
+
     private function bindingSetMatchesEntry( $binding_set, $entry ) {
         if ( ! is_array( $binding_set ) || empty( $binding_set['context'] ) ) {
             return false;
@@ -125,6 +144,15 @@ final class InboxPresentationModel {
 
         $entry_ref = $context['entry_source_ref'];
         return null === $entry_ref || (string) $entry_ref['entry_id'] === (string) $entry['id'];
+    }
+
+    private function failResolved( $resolved, $reason ) {
+        $resolved['resolved']   = false;
+        $resolved['state']      = 'NOT_PROVEN';
+        $resolved['source_ref'] = null;
+        $resolved['reason']     = $reason;
+
+        return $resolved;
     }
 
     private function unresolved( $slot_key, $reason ) {
