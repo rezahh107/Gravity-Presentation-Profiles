@@ -159,9 +159,8 @@ gpp_assert_true(
     'Authentic Orbital wrapper cascade must retain the canonical sizing values without introducing a second authority.'
 );
 gpp_assert_true(
-    false !== strpos( $css_without_comments, ':focus-visible' )
-    && preg_match( '/:focus-visible\s*\{[^}]*border-color\s*:\s*#1D4ED8\s*!important\s*;/s', $css_without_comments ),
-    'Runtime-proven focus fallback must change only the canonical border color with the bounded cascade priority required by authentic Orbital.'
+    ! preg_match( '/:focus-visible\s*\{[^}]*border-color\s*:/s', $css_without_comments ),
+    'SRWF profile must let Orbital render the runtime-proven focus transition from canonical focus-color API variables without a direct border override.'
 );
 gpp_assert_true(
     preg_match( '/\.gfield--type-pgr_jalali_date\.gfield_error\s*\{[^}]*display\s*:\s*flex\s*;[^}]*flex-direction\s*:\s*column\s*;/s', $css_without_comments ),
