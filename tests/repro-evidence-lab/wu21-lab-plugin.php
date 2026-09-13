@@ -139,13 +139,61 @@ final class GPP_WU21_Lab_Adapter {
 
 final class GPP_WU21_Polling_Diagnostics {
     const ROUTE = '/gravityflow/internal/inbox/changes';
+    const REQUEST_PATH = '/wp-json/gravityflow/internal/inbox/changes';
 
     private static $active = false;
+    private static $wp_die_delegate = null;
 
     public static function boot() {
         add_filter( 'rest_pre_dispatch', array( __CLASS__, 'before_dispatch' ), 10, 3 );
         add_filter( 'rest_request_after_callbacks', array( __CLASS__, 'after_callbacks' ), 10, 3 );
+        add_filter( 'wp_die_handler', array( __CLASS__, 'filter_wp_die_handler' ), 999, 1 );
         register_shutdown_function( array( __CLASS__, 'shutdown' ) );
+    }
+
+    public static function filter_wp_die_handler( $handler ) {
+        if ( ! self::is_polling_request_uri() ) {
+            return $handler;
+        }
+        self::$wp_die_delegate = $handler;
+        return array( __CLASS__, 'handle_wp_die' );
+    }
+
+    public static function handle_wp_die( $message, $title = '', $args = array() ) {
+        $template = get_option( 'template' );
+        $stylesheet = get_option( 'stylesheet' );
+        $template_path = WP_CONTENT_DIR . '/themes/' . $template;
+        $stylesheet_path = WP_CONTENT_DIR . '/themes/' . $stylesheet;
+        $trace = array();
+        foreach ( debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 40 ) as $frame ) {
+            $trace[] = array(
+                'file' => isset( $frame['file'] ) ? $frame['file'] : null,
+                'line' => isset( $frame['line'] ) ? $frame['line'] : null,
+                'function' => isset( $frame['function'] ) ? $frame['function'] : null,
+                'class' => isset( $frame['class'] ) ? $frame['class'] : null,
+                'type' => isset( $frame['type'] ) ? $frame['type'] : null,
+            );
+        }
+
+        self::write_event( array(
+            'event' => 'wp_die_polling_request',
+            'request_uri' => isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null,
+            'message' => self::bounded_value( $message ),
+            'title' => self::bounded_value( $title ),
+            'template_option' => $template,
+            'stylesheet_option' => $stylesheet,
+            'template_path' => $template_path,
+            'template_path_exists' => is_dir( $template_path ),
+            'stylesheet_path' => $stylesheet_path,
+            'stylesheet_path_exists' => is_dir( $stylesheet_path ),
+            'trace' => $trace,
+        ) );
+
+        $delegate = self::$wp_die_delegate;
+        if ( ! is_callable( $delegate ) || array( __CLASS__, 'handle_wp_die' ) === $delegate ) {
+            $delegate = '_default_wp_die_handler';
+        }
+        return call_user_func( $delegate, $message, $title, $args );
     }
 
     public static function before_dispatch( $result, $server, $request ) {
@@ -218,7 +266,17 @@ final class GPP_WU21_Polling_Diagnostics {
         ) );
     }
 
+    private static function is_polling_request_uri() {
+        return isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( $_SERVER['REQUEST_URI'], self::REQUEST_PATH );
+    }
+
     private static function bounded_value( $value ) {
+        if ( is_wp_error( $value ) ) {
+            return array(
+                'codes' => $value->get_error_codes(),
+                'messages' => $value->get_error_messages(),
+            );
+        }
         if ( is_scalar( $value ) || null === $value ) {
             return self::bounded_text( $value, 4000 );
         }
