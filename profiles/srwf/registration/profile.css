@@ -3,7 +3,7 @@
  * Host plugins retain behavior/state ownership; this file styles only the selected profile.
  */
 
-.gpp-enabled.gpp-profile-srwf-registration {
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper {
     --gf-color-primary: #1D4ED8;
     --gf-color-primary-rgb: 29, 78, 216;
     --gf-color-danger: #B42318;
@@ -46,23 +46,23 @@
     font-family: "Vazirmatn";
 }
 
-.gpp-enabled.gpp-profile-srwf-registration .gform_fields > .gfield {
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_fields > .gfield {
     grid-column: 1 / -1;
 }
 
-.gpp-enabled.gpp-profile-srwf-registration .gfield--type-section .gsection_title {
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-section .gsection_title {
     color: #172033;
     font-family: "Vazirmatn";
     font-size: 18px;
     font-weight: 700;
 }
 
-.gpp-enabled.gpp-profile-srwf-registration .gfield--type-section .gsection_description {
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-section .gsection_description {
     color: #475467;
     font-family: "Vazirmatn";
 }
 
-.gpp-enabled.gpp-profile-srwf-registration .gform_button:active,
-.gpp-enabled.gpp-profile-srwf-registration .gfield--type-submit button[type="submit"].button:active {
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_button:active,
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-submit button[type="submit"].button:active {
     background-color: #1E40AF;
 }
