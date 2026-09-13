@@ -141,20 +141,27 @@ try {
     await test(page, 'WU21-BROWSER-002', 'native quick search uses Gravity Flow grid control', async () => {
       const search = page.locator('[data-js="gflow-inbox-search"]');
       await search.click();
-      await search.pressSequentially('WU21 Alpha Student 00');
+      await search.pressSequentially('00:24:00');
       await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 1, null, { timeout: 15000 });
       const rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 1) throw new Error(`Expected one quick-search row, got ${rows}`);
       const text = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().innerText();
-      if (!text.includes('WU21 Alpha Student 00')) throw new Error('Quick-search row did not contain expected synthetic name.');
+      if (!text.includes('WU21 Alpha Student 24') || !text.includes('2026-01-01 00:24:00')) {
+        throw new Error('Quick-search row did not contain the uniquely matched synthetic fixture.');
+      }
       await search.press('Control+A');
       await search.press('Backspace');
       await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 15000 });
-      return { matched_rows: rows };
+      return { query: '00:24:00', matched_rows: rows };
     });
 
     pollingPhase = 'browser_003_pre_mutation';
     await test(page, 'WU21-BROWSER-003', 'native AG Grid sorting and pagination execute', async () => {
+      await page.goto(inboxUrl, { waitUntil: 'networkidle' });
+      await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
+      const initialRows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
+      if (initialRows !== 20) throw new Error(`Expected a fresh first page with 20 rows, got ${initialRows}`);
+
       const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
       await header.click();
       await page.waitForTimeout(300);
@@ -163,14 +170,18 @@ try {
       await page.waitForTimeout(300);
       const sort2 = await header.getAttribute('aria-sort');
       if (!sort1 || !sort2 || sort1 === sort2) throw new Error(`Sorting state did not toggle: ${sort1} -> ${sort2}`);
+
       const next = page.locator('[data-js="gflow-inbox"] [ref="btNext"]');
       if (await next.count() !== 1) throw new Error('Native AG Grid next-page control not found.');
-      const disabled = await next.getAttribute('disabled');
-      if (disabled !== null) throw new Error('Next-page control unexpectedly disabled with 25 tasks / page size 20.');
+      const ariaDisabled = await next.getAttribute('aria-disabled');
+      const disabledClass = await next.evaluate(element => element.classList.contains('ag-disabled'));
+      if (ariaDisabled === 'true' || disabledClass) {
+        throw new Error(`Next-page control unexpectedly disabled with 25 tasks / page size 20: aria-disabled=${ariaDisabled}, class=${disabledClass}`);
+      }
       await next.click();
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 5, null, { timeout: 15000 });
       const visible = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
-      if (visible < 1 || visible > 20) throw new Error(`Unexpected second-page visible row count: ${visible}`);
+      if (visible !== 5) throw new Error(`Expected five rows on the second native page, got ${visible}`);
       return { first_sort: sort1, second_sort: sort2, second_page_rows: visible };
     });
 
