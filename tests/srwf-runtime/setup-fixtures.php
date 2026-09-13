@@ -105,7 +105,8 @@ if ( ! is_array( $selected_form ) || ! is_array( $plain_form ) ) {
 $addon = $addon_class::get_instance();
 $selected_state = $addon->resolve_form_state( $selected_form );
 $plain_state    = $addon->resolve_form_state( $plain_form );
-if ( ! $selected_state->isActive() || 'srwf-registration' !== $selected_state->profileKey() ) {
+$selected_profile = $selected_state->profile();
+if ( ! $selected_state->isActive() || ! $selected_profile || 'srwf-registration' !== $selected_profile->key() ) {
     throw new RuntimeException( 'Authentic Gravity Forms readback did not preserve the selected GPP per-form state.' );
 }
 if ( $plain_state->isActive() ) {
