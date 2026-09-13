@@ -198,6 +198,26 @@ try {
   check(initial.wrapper?.controlRadiusToken === '10px', `Wrapper control-radius token is ${initial.wrapper?.controlRadiusToken}, expected 10px.`);
   check(initial.wrapper?.controlSizeToken === '52px', `Wrapper control-size token is ${initial.wrapper?.controlSizeToken}, expected 52px.`);
 
+  const selectedControls = initial.controlScope.selected;
+  const plainControls = initial.controlScope.plain;
+  for (const [name, control] of Object.entries({
+    text: selectedControls.text,
+    select: selectedControls.select,
+    jalali: selectedControls.jalali,
+  })) {
+    check(control !== null, `Selected ${name} control was not observed.`);
+    check(control?.ctrlSize === '52px', `Selected ${name} consumed --gf-ctrl-size=${control?.ctrlSize}, expected 52px.`);
+    check(control?.localHeight === '52px', `Selected ${name} local height token is ${control?.localHeight}, expected 52px.`);
+    check(parseFloat(control?.height || '0') >= 52, `Selected ${name} rendered below 52px (${control?.height}).`);
+  }
+  check(selectedControls.submit !== null, 'Selected submit control was not observed.');
+  check(selectedControls.submit?.btnSize === '56px', `Selected submit consumed --gf-ctrl-btn-size=${selectedControls.submit?.btnSize}, expected 56px.`);
+  check(parseFloat(selectedControls.submit?.height || '0') >= 56, `Selected submit rendered below 56px (${selectedControls.submit?.height}).`);
+
+  check(plainControls.text?.ctrlSize !== '52px' && plainControls.select?.ctrlSize !== '52px' && plainControls.jalali?.ctrlSize !== '52px',
+    'Unrelated form inherited selected-profile 52px control sizing.');
+  check(plainControls.submit?.btnSize !== '56px', 'Unrelated form inherited selected-profile 56px submit sizing.');
+
   check(initial.pgr !== null, 'Authentic PersianGravity Jalali input did not render.');
   check(initial.pgr?.type === 'text' && initial.pgr?.inputmode === 'numeric' && initial.pgr?.autocomplete === 'off', 'PersianGravity Jalali input behavior attributes changed unexpectedly.');
   check(parseFloat(initial.pgr?.height || '0') >= 52, `SRWF Jalali control rendered below 52px (${initial.pgr?.height}).`);
@@ -307,6 +327,9 @@ try {
         || focused.borderColor !== baseline.borderColor;
       const hasOutline = focused.outlineStyle !== 'none' && parseFloat(focused.outlineWidth) > 0;
       check(focused.focusVisible && (changed || hasOutline), `Keyboard focus on ${expected.key} has no observable focus-visible cue.`);
+      check(focused.borderColor === 'rgb(29, 78, 216)', `Keyboard focus on ${expected.key} rendered border ${focused.borderColor}, expected canonical rgb(29, 78, 216).`);
+      check(focused.borderStyle === baseline.borderStyle && focused.borderWidth === baseline.borderWidth,
+        `Keyboard focus on ${expected.key} changed host border geometry.`);
     }
   }
 
@@ -380,6 +403,13 @@ try {
   check(invalidState.nameValue === 'Runtime Student', 'Gravity Forms did not preserve the entered student name after validation.');
   check(invalidState.helpBelowInput, 'Canonical help placement is not below the authentic PersianGravity input.');
   check(invalidState.errorBelowInput, 'Canonical validation-message placement is not below the authentic PersianGravity input.');
+  const invalidDomOrder = invalidState.structure.domOrder;
+  const errorIndex = invalidDomOrder.findIndex((item) => item.isError);
+  const inputIndex = invalidDomOrder.findIndex((item) => item.isInputContainer);
+  check(errorIndex !== -1 && inputIndex !== -1 && errorIndex < inputIndex,
+    'Authentic PersianGravity DOM order changed; CSS visual placement must not move the host error node.');
+  check(invalidState.structure.fieldDisplay === 'flex',
+    `Authentic invalid PersianGravity field display is ${invalidState.structure.fieldDisplay}, expected bounded flex adapter.`);
 
   await page.setViewportSize({ width: 320, height: 1000 });
   const reflow = await page.evaluate(({ selectedWrapper }) => {
@@ -445,7 +475,7 @@ try {
   }
 
   const results = {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     page_url: pageUrl,
     runtime: manifest.runtime,
     cssResponses: gppCssResponses,
