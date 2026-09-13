@@ -51,9 +51,18 @@ final class InboxPresentationAdapter {
         if ( ! isset( $columns['id'] ) ) {
             $columns = array( 'id' => __( 'Entry ID', 'gravity-presentation-profiles' ) ) + $columns;
         }
-        $columns[ self::CARD_COLUMN ] = __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' );
 
-        return $columns;
+        // Keep the presentation column first. AG Grid virtualizes off-screen
+        // columns; if the card is appended after wide native support columns,
+        // narrow viewports may never create its cell in the DOM. Reordering via
+        // the admitted column filter keeps all host rowData while guaranteeing
+        // the one visible presentation cell stays in the rendered viewport.
+        unset( $columns[ self::CARD_COLUMN ] );
+        $card = array(
+            self::CARD_COLUMN => __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' ),
+        );
+
+        return $card + $columns;
     }
 
     public static function filterValue( $value, $form_id, $field_id, $entry ) {
