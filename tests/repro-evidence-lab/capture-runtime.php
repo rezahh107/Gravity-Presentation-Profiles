@@ -11,7 +11,13 @@ $gf = get_file_data( WP_PLUGIN_DIR . '/gravityforms/gravityforms.php', array( 'V
 $flow = get_file_data( WP_PLUGIN_DIR . '/gravityflow/gravityflow.php', array( 'Version' => 'Version' ) );
 $runtime = array(
     'captured_at_utc' => gmdate( 'c' ),
-    'wordpress' => array( 'version' => get_bloginfo( 'version' ) ),
+    'wordpress' => array(
+        'version' => get_bloginfo( 'version' ),
+        'permalink_structure' => (string) get_option( 'permalink_structure' ),
+        'rest_route_prefix' => rest_get_url_prefix(),
+        'template' => (string) get_option( 'template' ),
+        'stylesheet' => (string) get_option( 'stylesheet' ),
+    ),
     'php' => array( 'version' => PHP_VERSION ),
     'database' => array( 'reported_version' => $wpdb->db_version() ),
     'plugins' => array(
