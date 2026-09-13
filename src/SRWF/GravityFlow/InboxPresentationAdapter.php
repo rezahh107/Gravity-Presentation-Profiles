@@ -26,8 +26,8 @@ final class InboxPresentationAdapter {
             return;
         }
 
-        // Run after host/extension column discovery so the active shared visual
-        // profile is the final presentation shape without replacing host data.
+        // Run after host/extension column discovery so GPP can add one
+        // presentation column without deleting host-owned row data.
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
         add_filter( 'gravityflow_js_config_shared', array( __CLASS__, 'filterJsConfig' ), 100, 1 );
@@ -41,16 +41,20 @@ final class InboxPresentationAdapter {
     }
 
     public static function filterColumns( $columns, $args ) {
-        if ( null === self::model() ) {
+        if ( null === self::model() || ! is_array( $columns ) ) {
             return $columns;
         }
 
-        // Keep the native entry id in rowData so AG Grid's getRowNodeId() and
-        // applyTransaction() continue to reconcile host refreshes correctly.
-        return array(
-            'id' => __( 'Entry ID', 'gravity-presentation-profiles' ),
-            self::CARD_COLUMN => __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' ),
-        );
+        // Preserve every native/extension column in rowData. Gravity Flow uses
+        // the native entry id for AG Grid row identity and native search/sort/
+        // refresh may depend on other host-owned values. Visibility is handled
+        // only in filterJsConfig().
+        if ( ! isset( $columns['id'] ) ) {
+            $columns = array( 'id' => __( 'Entry ID', 'gravity-presentation-profiles' ) ) + $columns;
+        }
+        $columns[ self::CARD_COLUMN ] = __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' );
+
+        return $columns;
     }
 
     public static function filterValue( $value, $form_id, $field_id, $entry ) {
@@ -89,17 +93,16 @@ final class InboxPresentationAdapter {
                     continue;
                 }
 
-                if ( 'id' === $definition['field'] ) {
+                if ( self::CARD_COLUMN !== $definition['field'] ) {
                     $definition['hide'] = true;
                     continue;
                 }
 
-                if ( self::CARD_COLUMN === $definition['field'] ) {
-                    $definition['flex'] = 1;
-                    $definition['minWidth'] = 0;
-                    $definition['wrapText'] = true;
-                    $definition['autoHeight'] = true;
-                }
+                $definition['hide'] = false;
+                $definition['flex'] = 1;
+                $definition['minWidth'] = 0;
+                $definition['wrapText'] = true;
+                $definition['autoHeight'] = true;
             }
             unset( $definition );
         }
