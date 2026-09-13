@@ -50,7 +50,11 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
 const gppCssResponses = [];
 page.on('response', (response) => {
   if (response.url().includes('gravity-presentation-profiles') && response.url().includes('.css')) {
-    gppCssResponses.push({ url: response.url(), status: response.status() });
+    gppCssResponses.push({
+      url: response.url(),
+      status: response.status(),
+      contentType: response.headers()['content-type'] || null,
+    });
   }
 });
 
@@ -65,11 +69,41 @@ try {
     const pw = document.querySelector(plainWrapper);
     const pf = document.querySelector(plainForm);
     const heading = sw?.querySelector('.gform_heading');
+    const read = (element) => element instanceof Element ? getComputedStyle(element) : null;
+    const controlSnapshot = (element) => {
+      if (!(element instanceof Element)) return null;
+      const style = getComputedStyle(element);
+      const field = element.closest('.gfield');
+      return {
+        tag: element.tagName.toLowerCase(),
+        type: element.getAttribute('type'),
+        className: element.className,
+        fieldClass: field?.className ?? null,
+        parentClass: element.parentElement?.className ?? null,
+        height: style.height,
+        minHeight: style.minHeight,
+        borderColor: style.borderColor,
+        borderStyle: style.borderStyle,
+        borderWidth: style.borderWidth,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        ctrlSize: style.getPropertyValue('--gf-ctrl-size').trim(),
+        ctrlSizeMd: style.getPropertyValue('--gf-ctrl-size-md').trim(),
+        localHeight: style.getPropertyValue('--gf-local-height').trim(),
+        ctrlBorderFocus: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
+        localBorderColor: style.getPropertyValue('--gf-local-border-color').trim(),
+        btnSize: style.getPropertyValue('--gf-ctrl-btn-size').trim(),
+        btnBorderFocus: style.getPropertyValue('--gf-ctrl-btn-border-color-focus-primary').trim(),
+      };
+    };
+
     const pgr = sf?.querySelector('input.pgr_jalali_date');
     const plainPgr = pf?.querySelector('input.pgr_jalali_date');
-    const wrapperStyle = sw ? getComputedStyle(sw) : null;
-    const pgrStyle = pgr ? getComputedStyle(pgr) : null;
-    const plainPgrStyle = plainPgr ? getComputedStyle(plainPgr) : null;
+    const wrapperStyle = read(sw);
+    const pgrStyle = read(pgr);
+    const plainPgrStyle = read(plainPgr);
     const readableStyleSheets = [...document.styleSheets]
       .filter((sheet) => sheet.href && sheet.href.includes('gravity-presentation-profiles'))
       .map((sheet) => {
@@ -118,11 +152,26 @@ try {
         borderRadius: plainPgrStyle.borderRadius,
         borderColor: plainPgrStyle.borderColor,
       } : null,
+      controlScope: {
+        selected: {
+          text: controlSnapshot(sf?.querySelector('input[type="text"]:not(.pgr_jalali_date)')),
+          select: controlSnapshot(sf?.querySelector('select')),
+          jalali: controlSnapshot(pgr),
+          submit: controlSnapshot(sf?.querySelector('input[type="submit"], button[type="submit"]')),
+        },
+        plain: {
+          text: controlSnapshot(pf?.querySelector('input[type="text"]:not(.pgr_jalali_date)')),
+          select: controlSnapshot(pf?.querySelector('select')),
+          jalali: controlSnapshot(plainPgr),
+          submit: controlSnapshot(pf?.querySelector('input[type="submit"], button[type="submit"]')),
+        },
+      },
       styleSheets: readableStyleSheets,
     };
   }, { selectedWrapper, selectedForm, plainWrapper, plainForm });
 
   console.log('SRWF_INITIAL_OBSERVATION=' + JSON.stringify(initial));
+  console.log('SRWF_CONTROL_SCOPE=' + JSON.stringify(initial.controlScope));
   console.log('SRWF_CSS_RESPONSES=' + JSON.stringify(gppCssResponses));
 
   check(initial.formClass?.split(/\s+/).includes('gpp-enabled'), 'Selected authentic Gravity Form did not receive gpp-enabled.');
@@ -206,6 +255,14 @@ try {
           outlineWidth: style.outlineWidth,
           boxShadow: style.boxShadow,
           borderColor: style.borderColor,
+          borderStyle: style.borderStyle,
+          borderWidth: style.borderWidth,
+          ctrlSize: style.getPropertyValue('--gf-ctrl-size').trim(),
+          localHeight: style.getPropertyValue('--gf-local-height').trim(),
+          ctrlBorderFocus: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
+          localBorderColor: style.getPropertyValue('--gf-local-border-color').trim(),
+          btnSize: style.getPropertyValue('--gf-ctrl-btn-size').trim(),
+          btnBorderFocus: style.getPropertyValue('--gf-ctrl-btn-border-color-focus-primary').trim(),
         };
       });
   }, selectedForm);
@@ -226,6 +283,14 @@ try {
         outlineWidth: style.outlineWidth,
         boxShadow: style.boxShadow,
         borderColor: style.borderColor,
+        borderStyle: style.borderStyle,
+        borderWidth: style.borderWidth,
+        ctrlSize: style.getPropertyValue('--gf-ctrl-size').trim(),
+        localHeight: style.getPropertyValue('--gf-local-height').trim(),
+        ctrlBorderFocus: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
+        localBorderColor: style.getPropertyValue('--gf-local-border-color').trim(),
+        btnSize: style.getPropertyValue('--gf-ctrl-btn-size').trim(),
+        btnBorderFocus: style.getPropertyValue('--gf-ctrl-btn-border-color-focus-primary').trim(),
       };
     }, selectedForm);
     if (focus) reached.set(focus.key, focus);
@@ -255,14 +320,18 @@ try {
   const invalidState = await page.evaluate(({ selectedWrapper }) => {
     const wrapper = document.querySelector(selectedWrapper);
     const pgr = wrapper?.querySelector('input.pgr_jalali_date');
+    const field = pgr?.closest('.gfield');
     const input = wrapper?.querySelector('input[type="text"]:not(.pgr_jalali_date)');
-    const error = pgr?.closest('.gfield')?.querySelector('.gfield_validation_message');
+    const error = field?.querySelector('.gfield_validation_message');
     const summary = wrapper?.querySelector('.gform_validation_errors');
-    const description = pgr?.closest('.gfield')?.querySelector('.gfield_description:not(.gfield_validation_message)');
+    const description = field?.querySelector('.gfield_description:not(.gfield_validation_message)');
     const pgrRect = pgr?.getBoundingClientRect();
     const descriptionRect = description?.getBoundingClientRect();
     const errorRect = error?.getBoundingClientRect();
     const described = (pgr?.getAttribute('aria-describedby') || '').trim().split(/\s+/).filter(Boolean);
+    const fieldStyle = field instanceof Element ? getComputedStyle(field) : null;
+    const errorParent = error?.parentElement;
+    const errorParentStyle = errorParent instanceof Element ? getComputedStyle(errorParent) : null;
     return {
       wrapperClass: wrapper?.className || '',
       summaryPresent: Boolean(summary),
@@ -274,8 +343,33 @@ try {
       nameValue: input?.value,
       helpBelowInput: Boolean(pgrRect && descriptionRect && descriptionRect.top >= pgrRect.bottom),
       errorBelowInput: Boolean(pgrRect && errorRect && errorRect.top >= pgrRect.bottom),
+      structure: {
+        fieldClass: field?.className ?? null,
+        inputContainerClass: pgr?.parentElement?.className ?? null,
+        errorParentClass: errorParent?.className ?? null,
+        fieldDisplay: fieldStyle?.display ?? null,
+        fieldGridTemplateColumns: fieldStyle?.gridTemplateColumns ?? null,
+        fieldGridTemplateRows: fieldStyle?.gridTemplateRows ?? null,
+        errorParentDisplay: errorParentStyle?.display ?? null,
+        domOrder: field ? [...field.children].map((child) => ({
+          tag: child.tagName.toLowerCase(),
+          className: child.className,
+          id: child.id || null,
+          isInputContainer: child.contains(pgr),
+          isHelp: child === description,
+          isError: child === error,
+        })) : [],
+      },
+      geometry: {
+        input: pgrRect ? { top: pgrRect.top, bottom: pgrRect.bottom, height: pgrRect.height } : null,
+        help: descriptionRect ? { top: descriptionRect.top, bottom: descriptionRect.bottom, height: descriptionRect.height } : null,
+        error: errorRect ? { top: errorRect.top, bottom: errorRect.bottom, height: errorRect.height } : null,
+      },
     };
   }, { selectedWrapper });
+
+  console.log('SRWF_PGR_INVALID_STRUCTURE=' + JSON.stringify(invalidState.structure));
+  console.log('SRWF_PGR_INVALID_GEOMETRY=' + JSON.stringify(invalidState.geometry));
 
   check(invalidState.wrapperClass.split(/\s+/).includes('gpp-enabled_wrapper'), 'GPP wrapper identity was lost after authentic server validation re-render.');
   check(invalidState.summaryPresent, 'Authentic Gravity Forms validation summary did not render.');
@@ -351,7 +445,7 @@ try {
   }
 
   const results = {
-    schema_version: '1.0.0',
+    schema_version: '1.1.0',
     page_url: pageUrl,
     runtime: manifest.runtime,
     cssResponses: gppCssResponses,
