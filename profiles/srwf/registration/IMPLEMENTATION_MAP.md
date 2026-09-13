@@ -23,7 +23,7 @@ No Form ID, Page ID, broad page selector, `body`, `html`, unscoped Gravity Forms
 | primary text `#172033` | form/control/primary-label text; section heading | GF CSS API + section-title selector gap |
 | secondary text `#475467` | section description text | section-description selector gap |
 | muted text `#667085` | `--gf-ctrl-desc-color` | GF CSS API |
-| primary `#1D4ED8` | global primary + RGB companion; control focus basis; primary-button background; runtime-proven focus-visible border fallback | GF CSS API plus bounded direct color fallback using existing host border geometry |
+| primary `#1D4ED8` | global primary + RGB companion; control focus basis; primary-button background | GF CSS API projected to the authentic local control/button scopes; Orbital retains focus transition ownership |
 | primary pressed `#1E40AF` | authentic submit `:active` background | documented submit selector; no active-state API variable |
 | error `#B42318` | danger + RGB companion; error border, required indicator, field error text, validation-summary text | GF CSS API |
 | success `#18794E` | success + RGB companion | GF CSS API |
@@ -52,7 +52,7 @@ Authentic Gravity Forms `3.1.1.1` + PersianGravity `4.2.0` evidence established 
 
 1. Orbital computes `--gf-ctrl-size`, `--gf-ctrl-size-md`, and the consumed local control height as `38px` at the authentic text, select, and PersianGravity Jalali controls even though the SRWF wrapper source declaration is `52px`.
 2. The authentic submit similarly computes `--gf-ctrl-btn-size: 38px`.
-3. During real keyboard focus, `:focus-visible` is true and Orbital changes its local focus-color variable to the SRWF primary basis, but the rendered control border remains unchanged. Existing geometry is already a `1px solid` border, so the admitted fallback changes only `border-color`; no outline width/offset, shadow spread/blur, or alpha is authored.
+3. During real keyboard focus, `:focus-visible` is true and Orbital changes its local focus-color variable to the SRWF primary basis immediately. The first sampled animation frame still reports the resting border color because Orbital owns a CSS transition; browser evidence therefore records the host transition duration/delay and validates the settled focus state after that declared transition. No direct focus border, outline width/offset, shadow spread/blur, or alpha is authored.
 4. The invalid PersianGravity field is a block-layout `.gfield--type-pgr_jalali_date.gfield_error`. Its existing host-generated validation node is a direct child placed in DOM before the input container, while helper text is already below the input. The admitted adapter keeps the DOM untouched and creates a vertical flex stack only for this selected-profile invalid Jalali field, then visually orders the existing error node after the other field children.
 
 These closures are specific to the authentic runtime surfaces above and do not admit global or form-ID styling.
@@ -64,7 +64,7 @@ These closures are specific to the authentic runtime surfaces above and do not a
 3. `.gform_button:active` and the authentic submit-button active selector — only the canonical pressed color is applied.
 4. Authentic text/select/Jalali control descendants — runtime proved wrapper-level control-size authority is insufficient for Orbital `3.1.1.1`; the same canonical `--gf-ctrl-size: 52px` is projected to the actual control scopes.
 5. Authentic submit descendant — runtime proved `--gf-ctrl-btn-size` is locally consumed as `38px`; the same canonical `56px` value is projected to the submit surface.
-6. `:focus-visible` border-color fallback — runtime proved the relevant GF focus variables change but do not alter the rendered border on these authentic surfaces. Existing `1px solid` geometry is retained unchanged; only canonical `#1D4ED8` is authored.
+6. Focus rendering — no direct production focus selector is required. The canonical Gravity Forms focus-color variables are projected locally, while the authentic browser harness waits only for the duration/delay declared by the focused host control before asserting the final visible state and unchanged border geometry.
 7. PersianGravity invalid-field flex adapter — runtime proved the parent is block layout and the existing error node precedes the input in DOM. A profile-scoped column flex stack plus `order` is the minimum CSS-only adapter that visually places the existing message below the input without DOM or host-validation changes.
 
 ## Deliberately deferred / unapplied
@@ -74,7 +74,7 @@ These closures are specific to the authentic runtime surfaces above and do not a
 - Form-title size/line-height, helper-text size, field-error size, desktop title enhancement, field rhythm, major-section rhythm: unresolved/reference-only values are not authored.
 - Desktop short-field pairing and exact production breakpoint: not authored; the baseline remains one column at every width.
 - Shadow: no SRWF `box-shadow` declaration is authored.
-- Focus ring geometry remains deferred: no outline/ring width, offset, spread, blur, alpha, or new shadow geometry is authored. The runtime-proven fallback changes only existing border color.
+- Focus ring geometry remains deferred: no outline/ring width, offset, spread, blur, alpha, direct focus border, or new shadow geometry is authored. Orbital renders the canonical focus color through its own transition after the profile projects the documented focus-color variables locally.
 - GP Advanced Select and GP File Upload Pro adapters remain deferred until authentic packages/runtime are available.
 - PersianGravity validation-layout adapter: runtime-proven and admitted only for the existing Jalali field/error presentation. PersianGravity behavior, validation, ARIA, markup, and persistence remain host-owned.
 - Numeric/Latin per-value LTR overrides remain deferred until separately proven.
