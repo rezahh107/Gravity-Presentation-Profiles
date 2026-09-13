@@ -1,0 +1,21 @@
+/* CSS-only projection over the native Gravity Flow Inbox. Host rowData is unchanged. */
+.gflow-inbox.gflow-grid.gflow-common .ag-header-cell:not([col-id="gpp_case_card"]),
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row > .ag-cell:not([col-id="gpp_case_card"]) {
+    display: none !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-header-container,
+.gflow-inbox.gflow-grid.gflow-common .ag-header-row,
+.gflow-inbox.gflow-grid.gflow-common .ag-header-cell[col-id="gpp_case_card"] {
+    box-sizing: border-box;
+    left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+    left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+}
