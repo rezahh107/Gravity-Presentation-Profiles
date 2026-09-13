@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runWu17BrowserTests } from './wu17-browser-tests.mjs';
 
 const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
@@ -9,6 +10,7 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const repoRoot = process.env.GITHUB_WORKSPACE;
 const results = [];
+let wu17Results = [];
 const browserDiagnostics = { console: [], page_errors: [], request_failures: [] };
 const pollingDiagnostics = { requests: [], responses: [] };
 let pollingPhase = 'pre_browser_005';
@@ -239,6 +241,8 @@ try {
       ['WU21-BROWSER-006', 'reload/re-render retains exactly one native Inbox grid'],
     ]) record(id, name, 'NOT_RUN', 'Blocked by WU21-BROWSER-001 native grid initialization failure.');
   }
+
+  wu17Results = await runWu17BrowserTests({ page, inboxUrl, wpControl, artifactDir });
 } finally {
   const failed = results.filter(r => r.status !== 'PASS');
   if (failed.length) {
@@ -251,4 +255,4 @@ try {
 }
 
 for (const r of results) console.log(`${r.status} ${r.id} ${r.name}`);
-if (results.some(r => r.status !== 'PASS')) process.exit(1);
+if (results.some(r => r.status !== 'PASS') || wu17Results.some(r => r.status !== 'PASS')) process.exit(1);
