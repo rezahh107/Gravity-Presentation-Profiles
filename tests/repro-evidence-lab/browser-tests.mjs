@@ -10,6 +10,8 @@ const wpCli = process.env.WU21_WP_CLI;
 const repoRoot = process.env.GITHUB_WORKSPACE;
 const results = [];
 const browserDiagnostics = { console: [], page_errors: [], request_failures: [] };
+const pollingDiagnostics = { requests: [], responses: [] };
+let pollingPhase = 'pre_browser_005';
 
 function bounded(value, max = 1200) {
   const text = String(value ?? '');
@@ -17,6 +19,33 @@ function bounded(value, max = 1200) {
 }
 function record(id, name, status, details = null) {
   results.push({ id, name, status, details });
+}
+function isPollingUrl(url) {
+  return String(url).includes('/wp-json/gravityflow/internal/inbox/changes');
+}
+function parsePollingFormData(raw) {
+  const text = String(raw ?? '');
+  const scalar = name => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(`name="${escaped}"\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n--|$)`));
+    return match ? match[1] : null;
+  };
+  const currentIds = [];
+  const currentIdRe = /name="current_ids(?:\[(?:\d+)\])?"\r?\n\r?\n([\s\S]*?)(?=\r?\n--|$)/g;
+  let match;
+  while ((match = currentIdRe.exec(text)) !== null) currentIds.push(match[1]);
+  const token = scalar('gflow_access_token');
+  const searchArgsRaw = scalar('search_args');
+  let searchArgs = searchArgsRaw;
+  if (searchArgsRaw) {
+    try { searchArgs = JSON.parse(searchArgsRaw); } catch {}
+  }
+  return {
+    gflow_access_token: token ? 'present/redacted' : null,
+    current_ids: currentIds,
+    search_args: searchArgs,
+    raw_length: text.length,
+  };
 }
 async function pageSnapshot(page) {
   const nativeTarget = page.locator('[data-js="gflow-inbox"]');
@@ -60,6 +89,31 @@ page.on('requestfailed', request => browserDiagnostics.request_failures.push({
   url: bounded(request.url(), 800),
   error: bounded(request.failure()?.errorText || 'unknown'),
 }));
+page.on('request', request => {
+  if (!isPollingUrl(request.url())) return;
+  pollingDiagnostics.requests.push({
+    observed_at_utc: new Date().toISOString(),
+    phase: pollingPhase,
+    url: request.url(),
+    method: request.method(),
+    content_type: request.headers()['content-type'] || null,
+    payload: parsePollingFormData(request.postData()),
+  });
+});
+page.on('response', async response => {
+  if (!isPollingUrl(response.url())) return;
+  let body = null;
+  try { body = bounded(await response.text(), 12000); } catch (error) { body = `UNAVAILABLE: ${bounded(error?.message || error, 1000)}`; }
+  pollingDiagnostics.responses.push({
+    observed_at_utc: new Date().toISOString(),
+    phase: pollingPhase,
+    url: response.url(),
+    status: response.status(),
+    status_text: response.statusText(),
+    content_type: response.headers()['content-type'] || null,
+    body,
+  });
+});
 
 try {
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
@@ -99,6 +153,7 @@ try {
       return { matched_rows: rows };
     });
 
+    pollingPhase = 'browser_003_pre_mutation';
     await test(page, 'WU21-BROWSER-003', 'native AG Grid sorting and pagination execute', async () => {
       const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
       await header.click();
@@ -133,6 +188,7 @@ try {
       return { href };
     });
 
+    pollingPhase = 'browser_005_before_mutation';
     await test(page, 'WU21-BROWSER-005', 'native polling refresh adds and removes a synthetic task', async () => {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
       await page.waitForSelector('[data-js="gflow-inbox-search"]', { timeout: 30000 });
@@ -143,6 +199,7 @@ try {
       let rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 0) throw new Error(`Refresh negative control expected zero rows before mutation, got ${rows}`);
       const id = wpControl('add');
+      pollingPhase = 'browser_005_after_mutation';
       await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 1, null, { timeout: 45000 });
       const addedText = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().innerText();
       if (!addedText.includes('WU21 Refresh Student')) throw new Error('Native refresh did not add the synthetic task.');
@@ -151,6 +208,7 @@ try {
       return { dynamic_entry_id: Number(id), add_observed: true, remove_observed: true };
     });
 
+    pollingPhase = 'browser_006_after_mutation';
     await test(page, 'WU21-BROWSER-006', 'reload/re-render retains exactly one native Inbox grid', async () => {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
       await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
@@ -176,6 +234,7 @@ try {
     await page.screenshot({ path: path.join(artifactDir, 'browser-failure-synthetic.png'), fullPage: true }).catch(() => {});
     fs.writeFileSync(path.join(artifactDir, 'browser-diagnostics.json'), JSON.stringify({ diagnostic: await pageSnapshot(page) }, null, 2) + '\n');
   }
+  fs.writeFileSync(path.join(artifactDir, 'polling-network-diagnostics.json'), JSON.stringify(pollingDiagnostics, null, 2) + '\n');
   fs.writeFileSync(path.join(artifactDir, 'browser-results.json'), JSON.stringify({ suite: 'WU21 browser/runtime', results }, null, 2) + '\n');
   await browser.close();
 }
