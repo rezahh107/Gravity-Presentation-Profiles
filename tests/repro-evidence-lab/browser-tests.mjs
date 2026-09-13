@@ -189,16 +189,17 @@ try {
 
     await test(page, 'WU21-BROWSER-004', 'native Entry Details navigation is preserved', async () => {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.gflow-inbox__entry-cell-link', { timeout: 30000 });
-      const href = await page.locator('.gflow-inbox__entry-cell-link').first().getAttribute('href');
+      const link = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link').first();
+      await link.waitFor({ state: 'visible', timeout: 30000 });
+      const href = await link.getAttribute('href');
       if (!href || !href.includes('admin.php?page=gravityflow-inbox&view=entry') || !href.includes('&id=') || !href.includes('&lid=')) {
         throw new Error(`Unexpected native Entry Details href: ${href}`);
       }
       await Promise.all([
         page.waitForURL(/page=gravityflow-inbox.*view=entry/, { timeout: 30000 }),
-        page.locator('.gflow-inbox__entry-cell-link').first().click(),
+        link.click(),
       ]);
-      return { href };
+      return { href, visible_native_card_link: true };
     });
 
     pollingPhase = 'browser_005_before_mutation';
