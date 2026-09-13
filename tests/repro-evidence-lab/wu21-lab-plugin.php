@@ -119,7 +119,7 @@ final class GPP_WU21_Lab_Adapter {
             'school.name',
             'workflow.due_at',
         );
-        self::$resolver = new \\GravityPresentationProfiles\\Core\\Portable\\SemanticBindingResolver( self::$binding_sets, $slots );
+        self::$resolver = new \GravityPresentationProfiles\Core\Portable\SemanticBindingResolver( self::$binding_sets, $slots );
     }
 
     private static function availability_is_proven( $binding_set_id, $slot ) {
