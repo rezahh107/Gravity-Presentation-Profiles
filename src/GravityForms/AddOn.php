@@ -3,7 +3,6 @@
 namespace GravityPresentationProfiles\GravityForms;
 
 use GravityPresentationProfiles\Core\AssetResolver;
-use GravityPresentationProfiles\Core\FormTagDecorator;
 use GravityPresentationProfiles\Core\PresentationResolver;
 use GravityPresentationProfiles\ProfileCatalog;
 
@@ -70,7 +69,7 @@ final class AddOn extends \GFAddOn {
         parent::init_frontend();
 
         add_action( 'gform_enqueue_scripts', array( $this, 'enqueue_form_assets' ), 10, 2 );
-        add_filter( 'gform_form_tag', array( $this, 'add_form_state_classes' ), 10, 2 );
+        add_filter( 'gform_pre_render', array( $this, 'add_form_state_css_classes' ), 10, 1 );
     }
 
     public function resolve_form_state( $form ) {
@@ -111,13 +110,32 @@ final class AddOn extends \GFAddOn {
         }
     }
 
-    public function add_form_state_classes( $form_tag, $form ) {
+    public function add_form_state_css_classes( $form ) {
+        if ( ! is_array( $form ) ) {
+            return $form;
+        }
+
         $state = $this->resolve_form_state( $form );
 
         if ( ! $state->isActive() ) {
-            return $form_tag;
+            return $form;
         }
 
-        return ( new FormTagDecorator() )->addClasses( $form_tag, $state->semanticClasses() );
+        $class_string = isset( $form['cssClass'] ) && is_string( $form['cssClass'] )
+            ? trim( $form['cssClass'] )
+            : '';
+        $classes = '' === $class_string
+            ? array()
+            : preg_split( '/\s+/', $class_string );
+
+        foreach ( $state->semanticClasses() as $class_name ) {
+            if ( ! in_array( $class_name, $classes, true ) ) {
+                $classes[] = $class_name;
+            }
+        }
+
+        $form['cssClass'] = implode( ' ', $classes );
+
+        return $form;
     }
 }
