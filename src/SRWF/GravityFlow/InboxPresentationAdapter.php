@@ -17,6 +17,7 @@ final class InboxPresentationAdapter {
     const SURFACE = 'gravity_flow.inbox';
     const CARD_COLUMN = 'gpp_case_card';
     const STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox';
+    const NATIVE_STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox-native';
 
     private static $model_loaded = false;
     private static $model = null;
@@ -77,6 +78,12 @@ final class InboxPresentationAdapter {
             self::STYLE_HANDLE,
             plugins_url( 'assets/css/srwf-gravity-flow-inbox.css', GPP_PLUGIN_FILE ),
             array(),
+            '1.0.0'
+        );
+        wp_enqueue_style(
+            self::NATIVE_STYLE_HANDLE,
+            plugins_url( 'assets/css/srwf-gravity-flow-inbox-native.css', GPP_PLUGIN_FILE ),
+            array( self::STYLE_HANDLE ),
             '1.0.0'
         );
     }
