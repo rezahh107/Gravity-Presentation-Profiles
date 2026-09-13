@@ -19,6 +19,21 @@ if ( ! class_exists( 'GFAPI' ) || ! class_exists( 'Gravity_Flow_API' ) ) {
     exit( 1 );
 }
 
+// Gravity Flow 3.1.0 builds its internal Inbox endpoint as site_url() + /wp-json/...
+// rather than rest_url(). A fresh WordPress install uses plain permalinks, where that
+// pretty REST path is not routed. Configure a normal WordPress rewrite baseline so the
+// lab exercises Gravity Flow's real endpoint instead of rewriting or simulating it.
+global $wp_rewrite;
+$wu21_permalink_structure = '/%postname%/';
+if ( ! $wp_rewrite instanceof WP_Rewrite ) {
+    throw new RuntimeException( 'WordPress rewrite service is unavailable.' );
+}
+$wp_rewrite->set_permalink_structure( $wu21_permalink_structure );
+flush_rewrite_rules( false );
+if ( $wu21_permalink_structure !== get_option( 'permalink_structure' ) ) {
+    throw new RuntimeException( 'WU21 could not establish the native WordPress pretty-permalink baseline.' );
+}
+
 $existing = get_option( 'gpp_wu21_fixture_manifest' );
 if ( is_array( $existing ) && ! empty( $existing['entry_ids'] ) ) {
     file_put_contents( $artifact_dir . '/fixture-manifest.json', json_encode( $existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
