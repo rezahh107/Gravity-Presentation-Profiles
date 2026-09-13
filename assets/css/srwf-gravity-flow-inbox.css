@@ -1,0 +1,196 @@
+/* SRWF shared Gravity Flow Inbox presentation. Native AG Grid remains the one Inbox. */
+.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper,
+.gflow-inbox.gflow-grid.gflow-common .ag-root,
+.gflow-inbox.gflow-grid.gflow-common .ag-body-viewport,
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-viewport {
+    overflow-x: hidden !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container {
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    height: auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    padding: 4px;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row {
+    box-sizing: border-box;
+    position: relative !important;
+    inset: auto !important;
+    transform: none !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+    box-sizing: border-box;
+    position: relative !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    line-height: 1.6;
+    white-space: normal !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link {
+    display: block;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__search-key {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas:
+        "photo identity"
+        "details details"
+        "open open";
+    gap: 12px 14px;
+    min-height: 208px;
+    height: 100%;
+    padding: 16px;
+    border: 1px solid #dcdcde;
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    direction: rtl;
+    text-align: right;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:focus .gpp-inbox-card,
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:hover .gpp-inbox-card {
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 1px #1d4ed8;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo {
+    grid-area: photo;
+    align-self: start;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-image,
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-fallback {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f0f6fc;
+    color: #1d4ed8;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__identity {
+    grid-area: identity;
+    min-width: 0;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__name {
+    display: block;
+    margin-bottom: 5px;
+    overflow-wrap: anywhere;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: #50575e;
+    font-size: 13px;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__label::after {
+    content: ":";
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__details {
+    grid-area: details;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    margin: 0;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail {
+    min-width: 0;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dt {
+    margin: 0 0 2px;
+    color: #646970;
+    font-size: 12px;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #1d2327;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__due--overdue dd {
+    color: #b32d2e;
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__open {
+    grid-area: open;
+    align-self: end;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 6px;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+@media (max-width: 782px) {
+    .gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
+        grid-template-columns: 56px minmax(0, 1fr);
+        padding: 14px;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__details {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
