@@ -45,6 +45,7 @@ jobs:
       WU21_FLOW_SIZE: '2603034'
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
+      WU21_PERMALINK_STRUCTURE: '/%postname%/'
 
     steps:
       - name: Checkout exact authorized PR Head
@@ -114,11 +115,14 @@ jobs:
 
           php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" rewrite structure "$WU21_PERMALINK_STRUCTURE"
 
           stored_home="$(php "$WU21_WP_CLI" option get home --path="$WU21_WP_PATH")"
           stored_siteurl="$(php "$WU21_WP_CLI" option get siteurl --path="$WU21_WP_PATH")"
+          stored_permalink="$(php "$WU21_WP_CLI" option get permalink_structure --path="$WU21_WP_PATH")"
           test "$stored_home" = "$WU21_BASE_URL"
           test "$stored_siteurl" = "$WU21_BASE_URL"
+          test "$stored_permalink" = "$WU21_PERMALINK_STRUCTURE"
 
           if grep -Eq "^[[:space:]]*define[[:space:]]*\([[:space:]]*['\"]WP_(HOME|SITEURL)['\"]" "$WU21_WP_PATH/wp-config.php"; then
             echo "Rejected parallel WP_HOME/WP_SITEURL URL authority in wp-config.php." >&2
@@ -139,6 +143,7 @@ jobs:
               "home_url" => home_url(),
               "site_url" => site_url(),
               "wp_login_url" => wp_login_url(),
+              "rest_url" => rest_url(),
               "gravityflow_inbox_admin_url" => admin_url("admin.php?page=gravityflow-inbox"),
           ];
 
@@ -156,6 +161,9 @@ jobs:
           }
           if (! str_starts_with($urls["wp_login_url"], $expected . "/") || str_contains($urls["wp_login_url"], "/wu21-wordpress")) {
               $fail("wp_login_url() escaped the root URL contract.");
+          }
+          if (! str_starts_with($urls["rest_url"], $expected . "/wp-json/")) {
+              $fail("rest_url() does not expose the rewrite-backed wp-json route required by Gravity Flow 3.1.0.");
           }
           if (! str_starts_with($urls["gravityflow_inbox_admin_url"], $expected . "/wp-admin/") || str_contains($urls["gravityflow_inbox_admin_url"], "/wu21-wordpress")) {
               $fail("Gravity Flow Inbox admin_url() escaped the root URL contract.");
@@ -238,6 +246,22 @@ jobs:
           done
           cat /tmp/wu21-wp-server.log >&2
           exit 1
+
+      - name: Assert native Gravity Flow REST route over HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_body="$WU21_ARTIFACT_DIR/rest-route-probe.json"
+          status="$(curl -sS -o "$probe_body" -w '%{http_code}' -X POST "$WU21_BASE_URL/wp-json/gravityflow/internal/inbox/changes")"
+          test "$status" = "400"
+          php -r '
+          $data = json_decode(file_get_contents($argv[1]), true);
+          if (!is_array($data) || ($data["code"] ?? "") !== "rest_missing_callback_param") {
+              fwrite(STDERR, "Native Gravity Flow REST route probe did not reach required-argument validation.\n");
+              fwrite(STDERR, file_get_contents($argv[1]) . "\n");
+              exit(1);
+          }
+          ' "$probe_body"
 
       - name: Execute real native Inbox browser tests
         shell: bash
