@@ -277,6 +277,8 @@ try {
           borderColor: style.borderColor,
           borderStyle: style.borderStyle,
           borderWidth: style.borderWidth,
+          transitionDuration: style.transitionDuration,
+          transitionDelay: style.transitionDelay,
           ctrlSize: style.getPropertyValue('--gf-ctrl-size').trim(),
           localHeight: style.getPropertyValue('--gf-local-height').trim(),
           ctrlBorderFocus: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
@@ -292,6 +294,26 @@ try {
   const reached = new Map();
   for (let i = 0; i < 30 && reached.size < baselineFocus.length; i += 1) {
     await page.keyboard.press('Tab');
+    const focusSettleMs = await page.evaluate((selectedForm) => {
+      const element = document.activeElement;
+      if (!(element instanceof Element) || !element.closest(selectedForm)) return 0;
+      const style = getComputedStyle(element);
+      const parseTime = (value) => {
+        const text = value.trim();
+        if (text.endsWith('ms')) return Number.parseFloat(text) || 0;
+        if (text.endsWith('s')) return (Number.parseFloat(text) || 0) * 1000;
+        return 0;
+      };
+      const durations = style.transitionDuration.split(',').map(parseTime);
+      const delays = style.transitionDelay.split(',').map(parseTime);
+      const count = Math.max(durations.length, delays.length);
+      let maxMs = 0;
+      for (let index = 0; index < count; index += 1) {
+        maxMs = Math.max(maxMs, durations[index % durations.length] + delays[index % delays.length]);
+      }
+      return Math.min(Math.ceil(maxMs) + (maxMs > 0 ? 50 : 0), 1000);
+    }, selectedForm);
+    if (focusSettleMs > 0) await page.waitForTimeout(focusSettleMs);
     const focus = await page.evaluate((selectedForm) => {
       const element = document.activeElement;
       if (!(element instanceof Element) || !element.closest(selectedForm)) return null;
@@ -305,6 +327,8 @@ try {
         borderColor: style.borderColor,
         borderStyle: style.borderStyle,
         borderWidth: style.borderWidth,
+        transitionDuration: style.transitionDuration,
+        transitionDelay: style.transitionDelay,
         ctrlSize: style.getPropertyValue('--gf-ctrl-size').trim(),
         localHeight: style.getPropertyValue('--gf-local-height').trim(),
         ctrlBorderFocus: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
@@ -313,7 +337,7 @@ try {
         btnBorderFocus: style.getPropertyValue('--gf-ctrl-btn-border-color-focus-primary').trim(),
       };
     }, selectedForm);
-    if (focus) reached.set(focus.key, focus);
+    if (focus) reached.set(focus.key, { ...focus, settleMs: focusSettleMs });
   }
 
   for (const expected of baselineFocus) {
