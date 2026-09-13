@@ -93,7 +93,7 @@ $plain_id = gpp_srwf_runtime_add_form(
     'Unrelated Gravity Form',
     'host-unselected-class',
     array( 'enabled' => '0', 'profile' => 'srwf-registration' ),
-    false
+    true
 );
 
 $selected_form = GFAPI::get_form( $selected_id );
@@ -143,8 +143,9 @@ $manifest = array(
         'host_css_class'    => 'host-selected-class',
     ),
     'plain_form'     => array(
-        'id'             => $plain_id,
-        'host_css_class' => 'host-unselected-class',
+        'id'                => $plain_id,
+        'jalali_field_id'   => 3,
+        'host_css_class'    => 'host-unselected-class',
     ),
     'runtime'        => array(
         'gravity_forms_version' => GFForms::$version,
