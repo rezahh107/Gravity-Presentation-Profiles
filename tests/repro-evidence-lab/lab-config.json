@@ -5,12 +5,14 @@
   "environment_class": "REPRODUCIBLE_SIMULATION",
   "repository": {
     "full_name": "rezahh107/Gravity-Presentation-Profiles",
-    "base_sha": "852684bdb04bee30550a622a53026e490cf5eaf0",
+    "base_sha": "60404f518d2a5b23948794bcfd3209960a90608e",
     "workflow_path": ".github/workflows/wu21-repro-evidence-lab.yml"
   },
   "wordpress": {
     "version": "6.8.3",
-    "source": "https://wordpress.org/wordpress-6.8.3.zip"
+    "source": "https://wordpress.org/wordpress-6.8.3.zip",
+    "permalink_structure": "/%postname%/",
+    "rest_route_prefix": "wp-json"
   },
   "php": {
     "version": "8.2.33",
@@ -111,6 +113,12 @@
       "kind": "rest_endpoint",
       "name": "inbox/changes",
       "source_path": "gravityflow/includes/inbox/endpoints/refresh-inbox-items/class-endpoint.php"
+    },
+    {
+      "id": "SEAM-GFLOW-NATIVE-REST-ROUTE",
+      "kind": "rest_endpoint_route",
+      "name": "Endpoint::get_base_route/rest_get_url_prefix",
+      "source_path": "gravityflow/includes/ajax/class-endpoint.php"
     },
     {
       "id": "SEAM-GFLOW-NATIVE-GRID",
