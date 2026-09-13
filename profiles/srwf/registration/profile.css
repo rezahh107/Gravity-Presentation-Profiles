@@ -46,8 +46,69 @@
     font-family: "Vazirmatn";
 }
 
+/*
+ * Gravity Forms 3.1.1.1 Orbital re-projects medium control/button sizing at
+ * its framework wrapper. Keep the contract values above as the profile source
+ * of truth and repeat only the same values at the proven host wrapper scope.
+ */
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper.gform-theme--framework {
+    --gf-ctrl-size: 52px;
+    --gf-ctrl-btn-size: 56px;
+}
+
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_fields > .gfield {
     grid-column: 1 / -1;
+}
+
+/*
+ * Authentic Orbital control scopes consume local height from --gf-ctrl-size.
+ * Project the existing contract token onto only the selected profile's text,
+ * select, and PersianGravity Jalali controls.
+ */
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-text input[type="text"],
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-select select,
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-pgr_jalali_date input.pgr_jalali_date {
+    --gf-ctrl-size: 52px;
+    --gf-ctrl-border-color-focus: #1D4ED8;
+}
+
+/*
+ * Runtime evidence proves Orbital changes its local focus-color variable but
+ * the rendered border remains unchanged. Reuse the existing 1px solid host
+ * border geometry and change only its canonical focus color.
+ */
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-text input[type="text"]:focus-visible,
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-select select:focus-visible,
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-pgr_jalali_date input.pgr_jalali_date:focus-visible {
+    border-color: #1D4ED8;
+}
+
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer input[type="submit"],
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer button[type="submit"] {
+    --gf-ctrl-btn-size: 56px;
+    --gf-ctrl-btn-border-color-focus-primary: #1D4ED8;
+}
+
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer input[type="submit"]:focus-visible,
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gform_footer button[type="submit"]:focus-visible {
+    border-color: #1D4ED8;
+}
+
+/*
+ * PersianGravity emits the native GF field error before the input while the
+ * authentic field parent is block layout. A profile-scoped flex column keeps
+ * the same vertical stack and DOM semantics, then visually places only the
+ * existing host-generated validation node after the input/help content.
+ */
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper
+.gfield--type-pgr_jalali_date.gfield_error {
+    display: flex;
+    flex-direction: column;
+}
+
+.gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper
+.gfield--type-pgr_jalali_date.gfield_error > .gfield_validation_message {
+    order: 1;
 }
 
 .gpp-enabled_wrapper.gpp-profile-srwf-registration_wrapper .gfield--type-section .gsection_title {
