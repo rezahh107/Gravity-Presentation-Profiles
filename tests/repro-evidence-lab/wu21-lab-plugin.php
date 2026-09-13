@@ -237,12 +237,12 @@ final class GPP_WU21_Polling_Diagnostics {
             return $response;
         }
 
-        $normalized = rest_ensure_response( $response );
+        $normalized = is_wp_error( $response ) ? rest_convert_error_to_response( $response ) : rest_ensure_response( $response );
         self::write_event( array(
             'event' => 'rest_request_after_callbacks',
             'route' => $request->get_route(),
-            'status' => $normalized->get_status(),
-            'response_data' => self::bounded_value( $normalized->get_data() ),
+            'status' => $normalized instanceof WP_REST_Response ? $normalized->get_status() : null,
+            'response_data' => self::bounded_value( $normalized instanceof WP_REST_Response ? $normalized->get_data() : $response ),
         ) );
         self::$active = false;
 
