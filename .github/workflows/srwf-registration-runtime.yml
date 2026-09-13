@@ -1,0 +1,227 @@
+name: SRWF Registration Authentic Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/srwf-registration-runtime.yml'
+      - 'gravity-presentation-profiles.php'
+      - 'src/**'
+      - 'profiles/srwf/registration/**'
+      - 'tests/srwf-runtime/**'
+      - 'docs/visual/SRWF_PUBLIC_REGISTRATION_VISUAL_UX_CONTRACT_v1.0.0.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authentic-runtime:
+    name: GF 3.1.1.1 + PersianGravity 4.2.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-srwf-root
+          MARIADB_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-srwf-root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      SRWF_WP_PATH: /tmp/srwf-wordpress
+      SRWF_ARTIFACT_DIR: /tmp/srwf-artifacts
+      SRWF_PACKAGE_DIR: /tmp/srwf-packages
+      SRWF_GF_ZIP: /tmp/srwf-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      SRWF_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      SRWF_GF_SIZE: '5300290'
+      SRWF_PGR_SHA: a92a09cd5ef21456c56d95726e325b545d893592
+      SRWF_WP_CLI: /tmp/wp-cli.phar
+      SRWF_BASE_URL: http://127.0.0.1:8080
+      SRWF_MANIFEST_PATH: /tmp/srwf-artifacts/fixture-manifest.json
+
+    steps:
+      - name: Checkout exact PR Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Assert repository and checkout identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          test "$actual" = "$expected"
+          mkdir -p "$SRWF_ARTIFACT_DIR" "$SRWF_PACKAGE_DIR"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Run repository-native checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(php -r 'echo PHP_VERSION;')" = "8.2.33"
+          composer validate --no-check-publish
+          bash scripts/validate-visual-governance.sh .
+          bash tests/visual-governance-guardrail.sh
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/run.php
+
+      - name: Install exact WP-CLI and WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$SRWF_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $SRWF_WP_CLI" | sha256sum -c -
+          mkdir -p "$SRWF_WP_PATH"
+          php "$SRWF_WP_CLI" core download --path="$SRWF_WP_PATH" --version=6.8.3 --force --skip-content
+          php "$SRWF_WP_CLI" config create --path="$SRWF_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-srwf-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$SRWF_WP_CLI" core install --path="$SRWF_WP_PATH" --url="$SRWF_BASE_URL" --title='GPP SRWF Runtime' --admin_user=runtime_admin --admin_password='gpp-srwf-runtime-2026' --admin_email='runtime@example.invalid' --skip-email
+          test "$(php "$SRWF_WP_CLI" core version --path="$SRWF_WP_PATH")" = "6.8.3"
+
+      - name: Fetch and verify authentic runtime products
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 4 -o "$SRWF_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
+          test "$(stat -c '%s' "$SRWF_GF_ZIP")" = "$SRWF_GF_SIZE"
+          echo "$SRWF_GF_SHA256  $SRWF_GF_ZIP" | sha256sum -c -
+          unzip -q "$SRWF_GF_ZIP" -d "$SRWF_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\.1\.1\.1$' "$SRWF_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+
+          git clone --filter=blob:none --no-tags https://github.com/rezahh107/PersianGravity.git "$SRWF_WP_PATH/wp-content/plugins/persian-gravityforms"
+          git -C "$SRWF_WP_PATH/wp-content/plugins/persian-gravityforms" checkout --detach "$SRWF_PGR_SHA"
+          test "$(git -C "$SRWF_WP_PATH/wp-content/plugins/persian-gravityforms" rev-parse HEAD)" = "$SRWF_PGR_SHA"
+          grep -q '^ \* Version: 4\.2\.0$' "$SRWF_WP_PATH/wp-content/plugins/persian-gravityforms/persian-gravityforms.php"
+
+      - name: Install GPP and deterministic test theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE" "$SRWF_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          theme="$SRWF_WP_PATH/wp-content/themes/gpp-srwf-runtime"
+          mkdir -p "$theme"
+          cat > "$theme/style.css" <<'CSS'
+          /*
+          Theme Name: GPP SRWF Runtime Harness
+          Version: 1.0.0
+          */
+          CSS
+          cat > "$theme/index.php" <<'PHP'
+          <?php
+          ob_start();
+          if ( have_posts() ) {
+              while ( have_posts() ) {
+                  the_post();
+                  the_content();
+              }
+          }
+          $runtime_content = ob_get_clean();
+          ?><!doctype html>
+          <html <?php language_attributes(); ?>>
+          <head>
+              <meta charset="<?php bloginfo( 'charset' ); ?>">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <?php wp_head(); ?>
+          </head>
+          <body <?php body_class(); ?>>
+          <main id="runtime-content"><?php echo $runtime_content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- authentic shortcode output. ?></main>
+          <?php wp_footer(); ?>
+          </body>
+          </html>
+          PHP
+          php "$SRWF_WP_CLI" theme activate gpp-srwf-runtime --path="$SRWF_WP_PATH"
+          php "$SRWF_WP_CLI" plugin activate gravityforms persian-gravityforms gravity-presentation-profiles --path="$SRWF_WP_PATH"
+          test "$(php "$SRWF_WP_CLI" plugin get gravityforms --field=version --path="$SRWF_WP_PATH")" = "3.1.1.1"
+          test "$(php "$SRWF_WP_CLI" plugin get persian-gravityforms --field=version --path="$SRWF_WP_PATH")" = "4.2.0"
+
+      - name: Create authentic Gravity Forms fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$SRWF_WP_CLI" --path="$SRWF_WP_PATH" eval-file tests/srwf-runtime/setup-fixtures.php
+          test -s "$SRWF_MANIFEST_PATH"
+
+      - name: Set up exact browser runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install exact Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1); console.log(p.version)"
+
+      - name: Start ephemeral WordPress server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$SRWF_WP_CLI" server --path="$SRWF_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/srwf-wp-server.log 2>&1 &
+          echo $! >/tmp/srwf-wp-server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "$SRWF_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/srwf-wp-server.log >&2
+          exit 1
+
+      - name: Execute authentic SRWF browser validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/srwf-runtime/browser-tests.mjs
+
+      - name: Verify authentic Jalali submission persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRWF_MANIFEST_PATH="$SRWF_MANIFEST_PATH" php "$SRWF_WP_CLI" --path="$SRWF_WP_PATH" eval '
+          $manifest = json_decode( file_get_contents( getenv( "SRWF_MANIFEST_PATH" ) ), true );
+          $form_id = (int) $manifest["selected_form"]["id"];
+          $entries = GFAPI::get_entries( $form_id );
+          if ( is_wp_error( $entries ) ) {
+              fwrite( STDERR, $entries->get_error_message() . PHP_EOL );
+              exit( 1 );
+          }
+          $matched = false;
+          foreach ( $entries as $entry ) {
+              if ( rgar( $entry, "1" ) === "Runtime Student" && rgar( $entry, "3" ) === "1405-06-22" ) {
+                  $matched = true;
+                  break;
+              }
+          }
+          if ( ! $matched ) {
+              fwrite( STDERR, "No authentic Gravity Forms entry preserved the canonical PersianGravity Jalali value.\n" );
+              exit( 1 );
+          }
+          echo "SRWF_PERSIANGRAVITY_SUBMISSION_PASS\n";
+          '
+
+      - name: Upload authentic runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: srwf-authentic-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/srwf-artifacts
+            /tmp/srwf-wp-server.log
+          if-no-files-found: ignore
+          retention-days: 30
