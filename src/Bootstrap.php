@@ -16,7 +16,6 @@ final class Bootstrap {
 
         if ( function_exists( 'add_action' ) ) {
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
-            InboxPresentationAdapter::register();
         }
     }
 
@@ -38,6 +37,11 @@ final class Bootstrap {
         }
 
         \GFAddOn::register( $addon_class );
+
+        // Preserve the repository's single deferred bootstrap path. Gravity Flow
+        // depends on Gravity Forms, so its presentation adapter is registered
+        // only after Gravity Forms has loaded successfully.
+        InboxPresentationAdapter::register();
 
         return true;
     }
