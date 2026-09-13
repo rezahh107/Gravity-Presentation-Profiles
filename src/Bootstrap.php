@@ -2,6 +2,8 @@
 
 namespace GravityPresentationProfiles;
 
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
+
 final class Bootstrap {
     private static $initialized = false;
 
@@ -14,6 +16,7 @@ final class Bootstrap {
 
         if ( function_exists( 'add_action' ) ) {
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
+            InboxPresentationAdapter::register();
         }
     }
 
