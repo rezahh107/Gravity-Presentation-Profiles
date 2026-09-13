@@ -26,9 +26,11 @@ final class InboxPresentationAdapter {
             return;
         }
 
-        add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 30, 2 );
-        add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 30, 4 );
-        add_filter( 'gravityflow_js_config_shared', array( __CLASS__, 'filterJsConfig' ), 30, 1 );
+        // Run after host/extension column discovery so the active shared visual
+        // profile is the final presentation shape without replacing host data.
+        add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
+        add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
+        add_filter( 'gravityflow_js_config_shared', array( __CLASS__, 'filterJsConfig' ), 100, 1 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
     }
