@@ -18,7 +18,7 @@ gpp_assert_true( ! empty( $rules ), 'Profile CSS must contain production rules.'
 
 foreach ( $rules as $rule ) {
     $selector_list = trim( $rule[1] );
-    gpp_assert_true( 0 !== strpos( $selector_list, '@' ), 'Production at-rules are not expected in the WU2 profile baseline.' );
+    gpp_assert_true( 0 !== strpos( $selector_list, '@' ), 'Production at-rules are not expected in the SRWF profile baseline.' );
 
     foreach ( explode( ',', $selector_list ) as $selector ) {
         $selector = trim( $selector );
@@ -31,23 +31,23 @@ foreach ( $rules as $rule ) {
 
 gpp_assert_true(
     ! preg_match( '/@media[^{}]*(?:min|max)-width\s*:/i', $css_without_comments ),
-    'WU2 must not author a width-based production breakpoint.'
+    'SRWF profile must not author a width-based production breakpoint.'
 );
 gpp_assert_true(
     ! preg_match( '/(?:^|[;\s{])(?:box-shadow|--[\w-]*shadow[\w-]*)\s*:/im', $css_without_comments ),
-    'WU2 must not author an SRWF shadow value.'
+    'SRWF profile must not author a shadow value.'
 );
 gpp_assert_true(
     ! preg_match( '/(?:^|[;\s{])(?:outline|outline-[\w-]+|--[\w-]*outline[\w-]*)\s*:/im', $css_without_comments ),
-    'WU2 must not author focus-ring outline geometry or alpha.'
+    'SRWF profile must not author focus-ring outline geometry or alpha.'
 );
 gpp_assert_true(
     ! preg_match( '/outline\s*:\s*none\b/i', $css_without_comments ),
-    'WU2 must not reset native/host focus outlines.'
+    'SRWF profile must not reset native/host focus outlines.'
 );
 gpp_assert_true(
     ! preg_match( '/\b(?:body|html)\b|#gform_wrapper_|#page[-_\d]|:has\s*\(/i', $css_without_comments ),
-    'WU2 must not use broad page/body, Form-ID, Page-ID, or :has() targeting.'
+    'SRWF profile must not use broad page/body, Form-ID, Page-ID, or :has() targeting.'
 );
 gpp_assert_true(
     false === stripos( $css_without_comments, '#8993A4' ),
@@ -64,6 +64,10 @@ gpp_assert_true(
 gpp_assert_true(
     ! preg_match( '/line-height\s*:\s*1\.5\b/i', $css_without_comments ),
     'Reference-only form-title line-height must not be promoted to production CSS.'
+);
+gpp_assert_true(
+    ! preg_match( '/(?:^|[;\s{])(?:height|min-height|block-size|min-block-size)\s*:\s*(?:52|56)px\b/im', $css_without_comments ),
+    'Canonical control/button sizes must be projected through Gravity Forms CSS API tokens, not hard-coded height properties.'
 );
 
 foreach ( array(
@@ -105,6 +109,7 @@ $required_mappings = array(
     '--gf-ctrl-btn-size: 56px;',
     '--gf-ctrl-btn-font-size: 16px;',
     '--gf-ctrl-btn-font-weight: 700;',
+    '--gf-ctrl-btn-border-color-focus-primary: #1D4ED8;',
     '--gf-form-validation-color: #B42318;',
     'max-inline-size: 840px;',
     'padding-inline: 16px;',
@@ -133,6 +138,34 @@ gpp_assert_true(
 gpp_assert_true(
     false !== strpos( $css_without_comments, '.gform_button:active' ),
     'Canonical pressed color must target an authentic submit active state.'
+);
+
+foreach ( array(
+    '.gfield--type-text input[type="text"]',
+    '.gfield--type-select select',
+    '.gfield--type-pgr_jalali_date input.pgr_jalali_date',
+) as $runtime_control_selector ) {
+    gpp_assert_true(
+        false !== strpos( $css_without_comments, $runtime_control_selector ),
+        'Runtime-proven Orbital control selector must remain profile-scoped: ' . $runtime_control_selector
+    );
+}
+gpp_assert_true(
+    substr_count( $css_without_comments, '--gf-ctrl-size: 52px;' ) >= 2,
+    'Canonical 52px control token must be preserved at the wrapper and projected to the authentic local control scope.'
+);
+gpp_assert_true(
+    false !== strpos( $css_without_comments, ':focus-visible' )
+    && preg_match( '/:focus-visible\s*\{[^}]*border-color\s*:\s*#1D4ED8\s*;/s', $css_without_comments ),
+    'Runtime-proven focus fallback must change only the canonical border color on :focus-visible.'
+);
+gpp_assert_true(
+    preg_match( '/\.gfield--type-pgr_jalali_date\.gfield_error\s*\{[^}]*display\s*:\s*flex\s*;[^}]*flex-direction\s*:\s*column\s*;/s', $css_without_comments ),
+    'Authentic invalid PersianGravity field must use the bounded CSS-only vertical layout adapter.'
+);
+gpp_assert_true(
+    preg_match( '/\.gfield--type-pgr_jalali_date\.gfield_error\s*>\s*\.gfield_validation_message\s*\{[^}]*order\s*:\s*1\s*;/s', $css_without_comments ),
+    'Authentic PersianGravity validation node must be visually placed below the input without DOM mutation.'
 );
 
 $generic_paths = array(
@@ -174,24 +207,25 @@ foreach ( array(
 
     foreach ( $iterator as $item ) {
         if ( $item->isFile() && 'js' === strtolower( $item->getExtension() ) ) {
-            gpp_fail( 'WU2 must not introduce production JavaScript: ' . $item->getPathname() );
+            gpp_fail( 'SRWF profile must not introduce production JavaScript: ' . $item->getPathname() );
         }
     }
 }
 
 $implementation_map = file_get_contents( $map_path );
-gpp_assert_true( false !== $implementation_map, 'WU2 implementation map must be readable.' );
+gpp_assert_true( false !== $implementation_map, 'SRWF implementation map must be readable.' );
 foreach ( array(
     'Page background `#F6F8FB`: not authored',
     'Upload radius `12px`: deferred',
     'Desktop short-field pairing and exact production breakpoint: not authored',
     'Shadow: no SRWF `box-shadow` declaration is authored',
-    'Focus ring: no outline/ring width, offset, spread, blur, alpha',
-    'GP Advanced Select, GP File Upload Pro, PersianGravity date-widget adapters: deferred',
+    'Focus ring geometry remains deferred',
+    'GP Advanced Select and GP File Upload Pro adapters remain deferred',
+    'PersianGravity validation-layout adapter: runtime-proven',
 ) as $required_gap ) {
     gpp_assert_true(
         false !== strpos( $implementation_map, $required_gap ),
-        'Implementation map must retain deferred/runtime-sensitive gap: ' . $required_gap
+        'Implementation map must retain the correct deferred/runtime-proven boundary: ' . $required_gap
     );
 }
 
