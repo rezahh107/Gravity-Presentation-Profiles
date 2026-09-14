@@ -97,7 +97,7 @@ final class PrintDossierPresentationModel {
 
     public function printMappingIsProven( $entry, $slot_key ) {
         $resolved = $this->resolve( $entry, $slot_key );
-        if ( empty( $resolved['resolved'] ) || empty( $resolved['binding_set_id'] ) ) {
+        if ( empty( $resolved['resolved'] ) || empty( $resolved['binding_set_id'] ) || empty( $resolved['binding_set_version'] ) ) {
             return false;
         }
 
@@ -107,7 +107,7 @@ final class PrintDossierPresentationModel {
         }
 
         foreach ( $this->binding_sets as $binding_set ) {
-            if ( $resolved['binding_set_id'] !== $binding_set['binding_set_id'] ) {
+            if ( $resolved['binding_set_id'] !== $binding_set['binding_set_id'] || $resolved['binding_set_version'] !== $binding_set['binding_set_version'] ) {
                 continue;
             }
             if ( ! $this->bindingSetMatchesEntry( $binding_set, $entry ) ) {
