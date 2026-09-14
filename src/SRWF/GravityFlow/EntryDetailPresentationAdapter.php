@@ -61,7 +61,7 @@ final class EntryDetailPresentationAdapter {
         self::renderIdentitySection( $model, $form, $entry );
 
         echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__task" data-gpp-section="current-task">';
-        echo '<h2>' . esc_html__( 'کاری که الان باید انجام دهید', 'gravity-presentation-profiles' ) . '</h2>';
+        echo '<h2 class="gpp-entry-dossier__task-heading">' . esc_html__( 'کاری که الان باید انجام دهید', 'gravity-presentation-profiles' ) . '</h2>';
         $step_name = self::slotText( $model, $form, $entry, 'workflow.current_step' );
         if ( null !== $step_name ) {
             echo '<p class="gpp-entry-dossier__task-step"><span>' . esc_html__( 'مرحله جاری', 'gravity-presentation-profiles' ) . '</span><strong>' . esc_html( $step_name ) . '</strong></p>';

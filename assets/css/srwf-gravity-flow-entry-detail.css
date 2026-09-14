@@ -32,7 +32,8 @@
 }
 .gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 27px; }
 .gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 20px; }
-.gpp-entry-dossier .gpp-entry-dossier__task h2 { font-size: 21px; }
+.gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
+#poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 21px; font-weight: 700; }
 .gpp-entry-dossier__identity { margin-bottom: 0; border-top: 4px solid #1d4ed8; }
 .gpp-entry-dossier__identity-main { display: flex; align-items: flex-start; gap: 20px; }
 .gpp-entry-dossier__identity-text { flex: 1 1 auto; min-width: 0; }
@@ -86,7 +87,8 @@
     .gpp-entry-dossier__section { padding: 16px; }
     .gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 22px; }
     .gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 18px; }
-    .gpp-entry-dossier .gpp-entry-dossier__task h2 { font-size: 19px; }
+    .gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
+    #poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 19px; font-weight: 700; }
     .gpp-entry-dossier__identity-main { flex-direction: column; }
     .gpp-entry-dossier__facts { grid-template-columns: minmax(0, 1fr); }
     .gpp-entry-dossier__student-photo img { width: 88px; height: 104px; }

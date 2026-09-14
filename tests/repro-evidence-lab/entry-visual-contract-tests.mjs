@@ -91,7 +91,10 @@ async function productionEntryMetrics(page) {
       weights.push({ selector: el.tagName.toLowerCase(), weight: getComputedStyle(el).fontWeight });
     }
     const csRoot = getComputedStyle(root); const csSection = getComputedStyle(identity); const csTask = getComputedStyle(task);
-    const h1 = identity.querySelector('h1'); const h2 = task.querySelector('h2');
+    const h1 = identity.querySelector('h1'); const h2 = task.querySelector('.gpp-entry-dossier__task-heading');
+    if (!h2) return { missing: true, reason: 'owned current-task heading missing' };
+    const nativeHeading = task.querySelector('[data-gpp-native-editor] h1, [data-gpp-native-editor] h2, [data-gpp-native-editor] h3, [data-gpp-native-editor] h4, [data-gpp-native-editor] .gsection_title');
+    const nativeAction = task.querySelector('[data-gpp-native-actions] button, [data-gpp-native-actions] input[type="submit"], [data-gpp-native-actions] input[type="button"]');
     const fontSizeCascade = (() => {
       const candidates = [];
       const visit = (rules, href) => {
@@ -117,12 +120,27 @@ async function productionEntryMetrics(page) {
       }
       return { computed_px: parseFloat(getComputedStyle(h2).fontSize), winner, candidates: candidates.map(({href,selector,value,priority}) => ({ href, selector, value, priority: priority || 'normal' })) };
     })();
+    const ownedTypographyIsolation = (() => {
+      const headingMatches = []; const actionMatches = [];
+      const visit = rules => {
+        for (const rule of rules) {
+          if (rule.type === CSSRule.STYLE_RULE && rule.selectorText?.includes('gpp-entry-dossier__task-heading')) {
+            try { if (nativeHeading?.matches(rule.selectorText)) headingMatches.push(rule.selectorText); } catch {}
+            try { if (nativeAction?.matches(rule.selectorText)) actionMatches.push(rule.selectorText); } catch {}
+          }
+          if (rule.cssRules) { try { visit(rule.cssRules); } catch {} }
+        }
+      };
+      for (const sheet of document.styleSheets) { try { visit(sheet.cssRules); } catch {} }
+      return { task_heading_has_owned_class: h2.classList.contains('gpp-entry-dossier__task-heading'), native_heading_present: Boolean(nativeHeading), native_action_present: Boolean(nativeAction), native_heading_owned_rule_matches: headingMatches, native_action_owned_rule_matches: actionMatches };
+    })();
     return {
       missing: false, root: r(root), identity: r(identity), task: r(task), documents: documents ? r(documents) : null, history: history ? r(history) : null, actions: actions ? r(actions) : null,
       sectionOrder: sections.map(el => el.dataset.gppSection), sectionRects: sections.map(el => ({ section: el.dataset.gppSection, ...r(el) })),
       styles: { text: csRoot.color, fontSynthesis: csRoot.fontSynthesis, identityBorderTop: csSection.borderTopColor, identityBackground: csSection.backgroundColor, identityBorder: csSection.borderRightColor, taskBackground: csTask.backgroundColor },
       h1: { size: parseFloat(getComputedStyle(h1).fontSize), weight: getComputedStyle(h1).fontWeight }, h2: { size: parseFloat(getComputedStyle(h2).fontSize), weight: getComputedStyle(h2).fontWeight },
       h2FontSizeCascade: fontSizeCascade,
+      ownedTypographyIsolation,
       weights,
       rootOverflow: root.scrollWidth > root.clientWidth + 1,
       viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -217,6 +235,11 @@ function validateEntryContract(actual, reference, viewport, tolerances) {
   const forbidden = actual.weights.filter(row => Number(row.weight) === 600);
   if (forbidden.length) failures.push(`forbidden synthetic 600 weight (${forbidden.length})`);
   if (actual.styles.fontSynthesis !== 'none') failures.push(`font-synthesis must be none, got ${actual.styles.fontSynthesis}`);
+  if (!actual.ownedTypographyIsolation?.task_heading_has_owned_class) failures.push('current-task H2 is not owned by the GPP task-heading class');
+  if (actual.ownedTypographyIsolation?.native_heading_owned_rule_matches?.length) failures.push('owned task-heading typography selector matches a native editor heading');
+  if (actual.ownedTypographyIsolation?.native_action_owned_rule_matches?.length) failures.push('owned task-heading typography selector matches a native Approval action');
+  if (!actual.h2FontSizeCascade?.winner?.selector?.includes('gpp-entry-dossier__task-heading')) failures.push(`current-task H2 cascade winner is not the owned GPP rule: ${JSON.stringify(actual.h2FontSizeCascade?.winner)}`);
+  if (actual.h2FontSizeCascade?.winner?.priority !== 'normal') failures.push(`owned current-task H2 unexpectedly requires !important: ${actual.h2FontSizeCascade?.winner?.priority}`);
   return { pass: failures.length === 0, failures };
 }
 
@@ -246,7 +269,7 @@ for (const [key, surface, viewport] of [ ['C', 'detail-desktop', { width: 1440, 
     fs.writeFileSync(path.join(artifactDir, `entry-visual-metrics-${key}.json`), JSON.stringify({ surface: key, viewport, tolerance_derivation: tolerances, reference, actual, validation }, null, 2) + '\n');
     if (!validation.pass) throw new Error(`Entry ${key} visual contract failed: ${JSON.stringify(validation.failures)}`);
     entryRuns[key] = { reference, viewport, tolerances };
-    return { tolerance_derivation: tolerances, owner_root_width_px: reference.root.width, owner_stage_width_px: reference.stage.width, major_regions_compared: regionNames, no_overlap: true, no_horizontal_overflow: true, palette_contract: true, typography_reference_conformance: true, forbidden_weight_600: false };
+    return { tolerance_derivation: tolerances, owner_root_width_px: reference.root.width, owner_stage_width_px: reference.stage.width, major_regions_compared: regionNames, no_overlap: true, no_horizontal_overflow: true, palette_contract: true, typography_reference_conformance: true, current_task_h2_px: actual.h2.size, current_task_h2_weight: actual.h2.weight, cascade_winner: actual.h2FontSizeCascade.winner, native_host_typography_rule_isolation: actual.ownedTypographyIsolation, forbidden_weight_600: false };
   });
 }
 
