@@ -52,6 +52,10 @@ function rgbHex(rgb) {
   const nums = rgb.match(/[\d.]+/g)?.slice(0, 3).map(Number);
   return nums?.length === 3 ? `#${nums.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase() : rgb.toUpperCase();
 }
+function rect(el) {
+  const x = el.getBoundingClientRect();
+  return { x: x.x, y: x.y, width: x.width, height: x.height, right: x.right, bottom: x.bottom };
+}
 async function referenceEntryMetrics(page, surface) {
   await page.evaluate(s => window.showSurface(s), surface);
   return page.evaluate(() => {
@@ -99,7 +103,38 @@ async function productionEntryMetrics(page) {
     };
   });
 }
-function validateEntryContract(actual, reference, viewport, tolerancePx) {
+
+const regionNames = ['identity', 'task', 'documents', 'history'];
+function geometryJitter(repeated) {
+  const base = repeated[0];
+  let geometryPx = 0;
+  let typographyPx = 0;
+  const geometryKeys = ['x', 'y', 'width', 'height', 'right', 'bottom'];
+  for (const sample of repeated.slice(1)) {
+    for (const name of ['stage', 'root', ...regionNames]) {
+      if (!base[name] || !sample[name]) continue;
+      for (const key of geometryKeys) geometryPx = Math.max(geometryPx, Math.abs(sample[name][key] - base[name][key]));
+    }
+    typographyPx = Math.max(typographyPx, Math.abs(sample.h1.size - base.h1.size), Math.abs(sample.h2.size - base.h2.size));
+  }
+  return {
+    measured_geometry_px: geometryPx,
+    measured_typography_px: typographyPx,
+    geometry_tolerance_px: Math.max(1, Math.ceil(geometryPx + 1)),
+    typography_tolerance_px: Math.max(0.25, typographyPx + 0.25),
+  };
+}
+function horizontalGeometry(region, root) {
+  return {
+    inset_start_px: region.x - root.x,
+    inset_end_px: root.right - region.right,
+    width_px: region.width,
+  };
+}
+function comparePx(failures, label, actual, expected, tolerance) {
+  if (Math.abs(actual - expected) > tolerance) failures.push(`${label}: actual=${actual.toFixed(2)} reference=${expected.toFixed(2)} tolerance=${tolerance}`);
+}
+function validateLegacyGenericGeometry(actual, reference, viewport, tolerancePx) {
   const failures = [];
   if (actual.missing) return { pass: false, failures: ['production dossier missing'] };
   const required = ['identity', 'current-task', 'facts', 'documents', 'history'];
@@ -112,11 +147,47 @@ function validateEntryContract(actual, reference, viewport, tolerancePx) {
   if (actual.root.width > reference.stage.width + tolerancePx) failures.push(`dossier wider than locked stage: ${actual.root.width} > ${reference.stage.width}`);
   if (actual.root.width > viewport.width + tolerancePx) failures.push('dossier wider than viewport');
   if (actual.rootOverflow || actual.viewportOverflow) failures.push('horizontal overflow');
+  return { pass: failures.length === 0, failures };
+}
+function validateEntryContract(actual, reference, viewport, tolerances) {
+  const failures = [];
+  if (actual.missing) return { pass: false, failures: ['production dossier missing'] };
+  const tolerancePx = tolerances.geometry_tolerance_px;
+  const required = ['identity', 'current-task', 'facts', 'documents', 'history'];
+  const positions = Object.fromEntries(actual.sectionOrder.map((name, index) => [name, index]));
+  for (const name of required) if (!(name in positions)) failures.push(`missing section ${name}`);
+  for (let i = 1; i < required.length; i++) if ((positions[required[i - 1]] ?? 999) >= (positions[required[i]] ?? -1)) failures.push(`section order ${required[i - 1]} -> ${required[i]}`);
+  if (actual.identity.bottom > actual.task.y + tolerancePx) failures.push('identity/task overlap');
+  if (actual.actions && (actual.actions.x < actual.task.x - tolerancePx || actual.actions.right > actual.task.right + tolerancePx || actual.actions.y < actual.task.y - tolerancePx || actual.actions.bottom > actual.task.bottom + tolerancePx)) failures.push('actions escaped current-task region');
+  for (let i = 1; i < actual.sectionRects.length; i++) if (actual.sectionRects[i - 1].bottom > actual.sectionRects[i].y + tolerancePx) failures.push(`section overlap ${actual.sectionRects[i - 1].section}/${actual.sectionRects[i].section}`);
+
+  if (reference.root.width > reference.stage.width + tolerancePx) failures.push('locked reference root exceeds locked stage');
+  comparePx(failures, 'root width vs Owner C/D', actual.root.width, reference.root.width, tolerancePx);
+  for (const name of regionNames) {
+    if (!reference[name] || !actual[name]) {
+      failures.push(`missing comparable geometry for ${name}`);
+      continue;
+    }
+    const expected = horizontalGeometry(reference[name], reference.root);
+    const observed = horizontalGeometry(actual[name], actual.root);
+    comparePx(failures, `${name} inline-start`, observed.inset_start_px, expected.inset_start_px, tolerancePx);
+    comparePx(failures, `${name} inline-end`, observed.inset_end_px, expected.inset_end_px, tolerancePx);
+    comparePx(failures, `${name} width`, observed.width_px, expected.width_px, tolerancePx);
+  }
+  comparePx(failures, 'identity top inset', actual.identity.y - actual.root.y, reference.identity.y - reference.root.y, tolerancePx);
+  comparePx(failures, 'identity/current-task gap', actual.task.y - actual.identity.bottom, reference.task.y - reference.identity.bottom, tolerancePx);
+
+  if (actual.root.width > viewport.width + tolerancePx) failures.push('dossier wider than viewport');
+  if (actual.rootOverflow || actual.viewportOverflow) failures.push('horizontal overflow');
   if (rgbHex(actual.styles.text) !== reference.tokens.text.toUpperCase()) failures.push(`primary text token ${rgbHex(actual.styles.text)}`);
   if (rgbHex(actual.styles.identityBorderTop) !== reference.tokens.primary.toUpperCase()) failures.push(`primary accent token ${rgbHex(actual.styles.identityBorderTop)}`);
   if (rgbHex(actual.styles.identityBackground) !== reference.tokens.surface.toUpperCase()) failures.push(`surface token ${rgbHex(actual.styles.identityBackground)}`);
   if (rgbHex(actual.styles.identityBorder) !== reference.tokens.divider.toUpperCase()) failures.push(`divider token ${rgbHex(actual.styles.identityBorder)}`);
-  if (!(actual.h1.size > actual.h2.size && actual.h2.size >= 18)) failures.push(`typography hierarchy h1=${actual.h1.size} h2=${actual.h2.size}`);
+  comparePx(failures, 'H1 size', actual.h1.size, reference.h1.size, tolerances.typography_tolerance_px);
+  comparePx(failures, 'current-task H2 size', actual.h2.size, reference.h2.size, tolerances.typography_tolerance_px);
+  if (actual.h1.weight !== reference.h1.weight) failures.push(`H1 weight actual=${actual.h1.weight} reference=${reference.h1.weight}`);
+  if (actual.h2.weight !== reference.h2.weight) failures.push(`H2 weight actual=${actual.h2.weight} reference=${reference.h2.weight}`);
+  if (!(actual.h1.size > actual.h2.size)) failures.push(`typography hierarchy h1=${actual.h1.size} h2=${actual.h2.size}`);
   const forbidden = actual.weights.filter(row => Number(row.weight) === 600);
   if (forbidden.length) failures.push(`forbidden synthetic 600 weight (${forbidden.length})`);
   if (actual.styles.fontSynthesis !== 'none') failures.push(`font-synthesis must be none, got ${actual.styles.fontSynthesis}`);
@@ -137,31 +208,43 @@ for (const [key, surface, viewport] of [ ['C', 'detail-desktop', { width: 1440, 
     await referencePage.setViewportSize(viewport);
     const repeated = [];
     for (let i = 0; i < 3; i++) repeated.push(await referenceEntryMetrics(referencePage, surface));
-    const jitter = Math.max(...repeated.slice(1).flatMap(m => [Math.abs(m.stage.width - repeated[0].stage.width), Math.abs(m.identity.y - repeated[0].identity.y), Math.abs(m.task.y - repeated[0].task.y)]));
-    const tolerancePx = Math.max(2, Math.ceil(jitter + 1));
+    const tolerances = geometryJitter(repeated);
     const reference = repeated[0];
     await productionPage.setViewportSize(viewport);
     await productionPage.goto(entryUrl, { waitUntil: 'networkidle' });
     await productionPage.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
     const actual = await productionEntryMetrics(productionPage);
-    const validation = validateEntryContract(actual, reference, viewport, tolerancePx);
+    const validation = validateEntryContract(actual, reference, viewport, tolerances);
     await referencePage.locator('.dossier').screenshot({ path: path.join(artifactDir, `entry-reference-${key}.png`) });
     await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, `entry-actual-${key}.png`) });
-    fs.writeFileSync(path.join(artifactDir, `entry-visual-metrics-${key}.json`), JSON.stringify({ surface: key, viewport, reference_jitter_px: jitter, tolerance_px: tolerancePx, reference, actual, validation }, null, 2) + '\n');
+    fs.writeFileSync(path.join(artifactDir, `entry-visual-metrics-${key}.json`), JSON.stringify({ surface: key, viewport, tolerance_derivation: tolerances, reference, actual, validation }, null, 2) + '\n');
     if (!validation.pass) throw new Error(`Entry ${key} visual contract failed: ${JSON.stringify(validation.failures)}`);
-    entryRuns[key] = { reference, viewport, tolerancePx };
-    return { reference_jitter_px: jitter, tolerance_px: tolerancePx, no_overlap: true, no_horizontal_overflow: true, palette_contract: true, typography_hierarchy: true, forbidden_weight_600: false };
+    entryRuns[key] = { reference, viewport, tolerances };
+    return { tolerance_derivation: tolerances, owner_root_width_px: reference.root.width, owner_stage_width_px: reference.stage.width, major_regions_compared: regionNames, no_overlap: true, no_horizontal_overflow: true, palette_contract: true, typography_reference_conformance: true, forbidden_weight_600: false };
   });
 }
 
-await test('VISUAL-ENTRY-REGRESSION', 'Entry visual gate rejects a representative material task-position regression', async () => {
+await test('VISUAL-ENTRY-REGRESSION', 'Entry visual gate rejects the existing 120px task-position regression control', async () => {
   const run = entryRuns.C; if (!run) throw new Error('Desktop baseline did not pass; deliberate regression proof cannot run.');
   await productionPage.setViewportSize(run.viewport); await productionPage.goto(entryUrl, { waitUntil: 'networkidle' }); await productionPage.waitForSelector('.gpp-entry-dossier--composed');
   await productionPage.addStyleTag({ content: '.gpp-entry-dossier__task{transform:translateY(120px)!important;}' });
-  const mutated = await productionEntryMetrics(productionPage); const validation = validateEntryContract(mutated, run.reference, run.viewport, run.tolerancePx);
+  const mutated = await productionEntryMetrics(productionPage); const validation = validateEntryContract(mutated, run.reference, run.viewport, run.tolerances);
   await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, 'entry-deliberate-regression.png') });
   if (validation.pass) throw new Error('Entry visual gate accepted the deliberate 120px task displacement.');
   return { injected_only_in_test: true, rejected: true, failure_classes: validation.failures };
+});
+
+await test('VISUAL-ENTRY-OLD-GATE-BYPASS', 'Reference comparator rejects material narrowing that legacy generic geometry would accept', async () => {
+  const run = entryRuns.C; if (!run) throw new Error('Desktop baseline did not pass; old-gate-bypass proof cannot run.');
+  await productionPage.setViewportSize(run.viewport); await productionPage.goto(entryUrl, { waitUntil: 'networkidle' }); await productionPage.waitForSelector('.gpp-entry-dossier--composed');
+  await productionPage.addStyleTag({ content: '.gpp-entry-dossier--composed{width:72%!important;max-width:none!important;margin-inline:auto!important;}' });
+  const mutated = await productionEntryMetrics(productionPage);
+  const legacy = validateLegacyGenericGeometry(mutated, run.reference, run.viewport, run.tolerances.geometry_tolerance_px);
+  const repaired = validateEntryContract(mutated, run.reference, run.viewport, run.tolerances);
+  await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, 'entry-old-gate-bypass-regression.png') });
+  if (!legacy.pass) throw new Error(`Regression precondition invalid: legacy generic geometry would already reject mutation: ${JSON.stringify(legacy.failures)}`);
+  if (repaired.pass) throw new Error('Repaired Owner-reference comparator accepted the narrowed dossier that legacy geometry would accept.');
+  return { injected_only_in_test: true, legacy_generic_geometry: 'WOULD_ACCEPT', repaired_reference_comparator: 'REJECTED_AS_EXPECTED', failure_classes: repaired.failures };
 });
 
 await referenceContext.close(); await productionContext.close(); await browser.close();
@@ -174,6 +257,7 @@ const output = {
     entry_mobile_D: results.find(r => r.id === 'VISUAL-ENTRY-D')?.status || 'FAIL',
   },
   deliberate_regression: results.find(r => r.id === 'VISUAL-ENTRY-REGRESSION')?.status === 'PASS' ? 'REJECTED_AS_EXPECTED' : 'NOT_PROVEN',
+  old_gate_bypass_regression: results.find(r => r.id === 'VISUAL-ENTRY-OLD-GATE-BYPASS')?.status === 'PASS' ? 'REJECTED_AS_EXPECTED' : 'NOT_PROVEN',
   results,
 };
 fs.writeFileSync(path.join(artifactDir, 'entry-visual-contract-results.json'), JSON.stringify(output, null, 2) + '\n');

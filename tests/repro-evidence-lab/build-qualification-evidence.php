@@ -46,6 +46,7 @@ $evidence = array(
         'print_front_E' => $print_visual['surfaces']['print_front_E'],
         'print_back_F' => $print_visual['surfaces']['print_back_F'],
         'deliberate_entry_regression' => $entry_visual['deliberate_regression'],
+        'deliberate_entry_old_gate_bypass' => $entry_visual['old_gate_bypass_regression'],
         'deliberate_print_regression' => $print_visual['deliberate_regression'],
     ),
     'owner_reference_sha256' => array(
@@ -69,7 +70,7 @@ $evidence = array(
 
 foreach ( $evidence['core_spine'] as $key => $status ) if ( 'PASS' !== $status ) throw new RuntimeException( 'Core Spine qualification is not fully PASS: ' . $key . '=' . $status );
 foreach ( array( 'entry_desktop_C', 'entry_mobile_D', 'print_front_E', 'print_back_F' ) as $key ) if ( 'PASS' !== $evidence['visual_contract'][ $key ] ) throw new RuntimeException( 'Visual qualification is not fully PASS: ' . $key );
-foreach ( array( 'deliberate_entry_regression', 'deliberate_print_regression' ) as $key ) if ( 'REJECTED_AS_EXPECTED' !== $evidence['visual_contract'][ $key ] ) throw new RuntimeException( 'Deliberate visual regression proof missing: ' . $key );
+foreach ( array( 'deliberate_entry_regression', 'deliberate_entry_old_gate_bypass', 'deliberate_print_regression' ) as $key ) if ( 'REJECTED_AS_EXPECTED' !== $evidence['visual_contract'][ $key ] ) throw new RuntimeException( 'Deliberate visual regression proof missing: ' . $key );
 foreach ( $evidence['focused_runtime_reuse'] as $key => $status ) if ( 'PASS' !== $status ) throw new RuntimeException( 'Focused gate reuse failed: ' . $key );
 
 $json = json_encode( $evidence, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n";

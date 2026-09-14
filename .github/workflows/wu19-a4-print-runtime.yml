@@ -19,6 +19,8 @@ on:
       - 'tests/repro-evidence-lab/entry-visual-contract-tests.mjs'
       - 'tests/repro-evidence-lab/print-visual-contract-tests.mjs'
       - 'tests/repro-evidence-lab/build-qualification-evidence.php'
+      - 'tests/repro-evidence-lab/verify-owner-visual-fixtures.sh'
+      - 'tests/fixtures/owner-visual/**'
       - 'tests/repro-evidence-lab/setup-fixtures.php'
       - 'tests/fixtures/wu09-visual-package.json'
       - 'tests/run.php'
@@ -55,8 +57,8 @@ jobs:
       WU21_FLOW_SIZE: '2603034'
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
-      GPP_OWNER_HTML: /tmp/wu19-packages/PersianGravity-Visual-Reference-Final.html
-      GPP_OWNER_PDF: /tmp/wu19-packages/PersianGravity-Final-Print-Sample.pdf
+      GPP_OWNER_HTML: ${{ github.workspace }}/tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html
+      GPP_OWNER_PDF: ${{ github.workspace }}/tests/fixtures/owner-visual/PersianGravity-Final-Print-Sample.pdf
 
     steps:
       - name: Checkout exact PR Head
@@ -71,6 +73,17 @@ jobs:
           test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
           test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+      - name: Verify immutable Owner visual fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/repro-evidence-lab/verify-owner-visual-fixtures.sh "$GITHUB_WORKSPACE"
+          test "$GPP_OWNER_HTML" = "$GITHUB_WORKSPACE/tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html"
+          test "$GPP_OWNER_PDF" = "$GITHUB_WORKSPACE/tests/fixtures/owner-visual/PersianGravity-Final-Print-Sample.pdf"
+          if grep -Eq '13uGhCEGVCkwS1RUR8OFHC1kOwBpjzS7Y|1yBSgBje68ewUKgzugMCty3LWtwP_-k2j' "$GITHUB_WORKSPACE/.github/workflows/wu19-a4-print-runtime.yml"; then
+            echo 'WU19 qualification must not remotely retrieve locked Owner visual references.' >&2
+            exit 1
+          fi
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
@@ -117,16 +130,6 @@ jobs:
           unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
           grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
           grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
-      - name: Fetch and byte-verify locked Owner visual references
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -L --fail --retry 4 -o "$GPP_OWNER_HTML" "https://drive.usercontent.google.com/download?id=13uGhCEGVCkwS1RUR8OFHC1kOwBpjzS7Y&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$GPP_OWNER_PDF" "https://drive.usercontent.google.com/download?id=1yBSgBje68ewUKgzugMCty3LWtwP_-k2j&export=download&confirm=t"
-          test "$(stat -c '%s' "$GPP_OWNER_HTML")" = '115728'
-          test "$(stat -c '%s' "$GPP_OWNER_PDF")" = '321990'
-          echo "666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81  $GPP_OWNER_HTML" | sha256sum -c -
-          echo "34d9b4e137667ca103d5c6e7752f7148f0c92e36f0f1d182d7d87a890c55fec5  $GPP_OWNER_PDF" | sha256sum -c -
       - name: Activate exact plugins and create WU19 fixtures
         shell: bash
         run: |
