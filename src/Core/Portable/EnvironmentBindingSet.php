@@ -104,6 +104,10 @@ final class EnvironmentBindingSet {
         return self::BINDING_STATES;
     }
 
+    public static function admittedSurfaces() {
+        return self::SURFACES;
+    }
+
     private static function validateContext( $context ) {
         self::requireArray( $context, 'context must be an object.' );
         self::requireExactKeys(

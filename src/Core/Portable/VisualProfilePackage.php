@@ -3,8 +3,11 @@
 namespace GravityPresentationProfiles\Core\Portable;
 
 final class VisualProfilePackage {
-    const ARTIFACT_TYPE  = 'gpp.visual_profile_package';
-    const SCHEMA_VERSION = '1.0.0';
+    const ARTIFACT_TYPE                    = 'gpp.visual_profile_package';
+    const SCHEMA_VERSION                   = '1.0.0';
+    const LATEST_SCHEMA_VERSION            = '1.1.0';
+    const RESERVED_EXTENSION_SEAM_VERSION  = '1.0.0';
+    const RESERVED_EXTENSION_SEAM_STATE    = 'INERT';
 
     private const SURFACES = array(
         'gravity_flow.inbox',
@@ -26,6 +29,19 @@ final class VisualProfilePackage {
 
     public static function validate( $artifact ) {
         self::requireArray( $artifact, 'Visual profile package must be an object.' );
+
+        if ( ! isset( $artifact['schema_version'] ) || ! is_string( $artifact['schema_version'] ) ) {
+            throw new ContractViolation( 'Unsupported visual schema_version.' );
+        }
+
+        if ( VisualProfilePackageV11::SCHEMA_VERSION === $artifact['schema_version'] ) {
+            return VisualProfilePackageV11::validate( $artifact );
+        }
+
+        if ( self::SCHEMA_VERSION !== $artifact['schema_version'] ) {
+            throw new ContractViolation( 'Unsupported visual schema_version.' );
+        }
+
         self::requireExactKeys( $artifact, self::ROOT_KEYS, 'visual package' );
         self::requireSame( self::ARTIFACT_TYPE, $artifact['artifact_type'], 'Unexpected visual artifact_type.' );
         self::requireSame( self::SCHEMA_VERSION, $artifact['schema_version'], 'Unsupported visual schema_version.' );
@@ -60,7 +76,11 @@ final class VisualProfilePackage {
     }
 
     public static function admittedSurfaces() {
-        return self::SURFACES;
+        return array_values(
+            array_unique(
+                array_merge( self::SURFACES, VisualProfilePackageV11::admittedSurfaces() )
+            )
+        );
     }
 
     private static function validateProvenance( $provenance ) {
@@ -215,8 +235,16 @@ final class VisualProfilePackage {
     private static function validateReservedExtensionSeam( $seam ) {
         self::requireArray( $seam, 'reserved_extension_seam must be an object.' );
         self::requireExactKeys( $seam, array( 'version', 'state' ), 'reserved_extension_seam' );
-        self::requireVersion( $seam['version'], 'reserved_extension_seam.version' );
-        self::requireSame( 'INERT', $seam['state'], 'reserved_extension_seam.state must be INERT in V1.' );
+        self::requireSame(
+            self::RESERVED_EXTENSION_SEAM_VERSION,
+            $seam['version'],
+            'reserved_extension_seam.version is not admitted.'
+        );
+        self::requireSame(
+            self::RESERVED_EXTENSION_SEAM_STATE,
+            $seam['state'],
+            'reserved_extension_seam.state must be INERT in V1.'
+        );
     }
 
     private static function requireExactKeys( $value, $expected, $path ) {

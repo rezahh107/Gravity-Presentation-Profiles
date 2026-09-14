@@ -15,9 +15,9 @@ DEFERRED_UNREACHABLE=(
   "src/Core/Portable/VisualProfileResolver.php"
 )
 
-# Post-WU17 invariants. These files must both exist and be reached from the real
+# Production invariants. These files must both exist and be reached from the real
 # plugin entrypoint. Keeping this separate from the general orphan check prevents
-# a required Inbox dependency from disappearing and turning the graph falsely green.
+# a required runtime/contract dependency from disappearing and turning the graph falsely green.
 REQUIRED_REACHABLE=(
   "src/SRWF/GravityFlow/InboxPresentationAdapter.php"
   "src/SRWF/GravityFlow/InboxPresentationModel.php"
@@ -34,6 +34,7 @@ REQUIRED_REACHABLE=(
   "src/Core/Portable/EnvironmentBindingSet.php"
   "src/Core/Portable/SemanticBindingResolver.php"
   "src/Core/Portable/VisualProfilePackage.php"
+  "src/Core/Portable/VisualProfilePackageV11.php"
 )
 
 fail() {
@@ -67,7 +68,7 @@ done
 
 for file in "${REQUIRED_REACHABLE[@]}"; do
   [[ "$file" == src/*.php ]] || fail "required reachable entry must be an exact src/*.php file: $file"
-  [[ -f "$file" ]] || fail "required post-WU17 production file is missing: $file"
+  [[ -f "$file" ]] || fail "required production file is missing: $file"
 done
 
 extract_references() {
@@ -102,7 +103,7 @@ while ((${#queue[@]} > 0)); do
 done
 
 for file in "${REQUIRED_REACHABLE[@]}"; do
-  [[ -n "${reachable[$file]:-}" ]] || fail "required post-WU17 production file is not reachable from $ENTRYPOINT: $file"
+  [[ -n "${reachable[$file]:-}" ]] || fail "required production file is not reachable from $ENTRYPOINT: $file"
 done
 
 declare -a unexplained=()

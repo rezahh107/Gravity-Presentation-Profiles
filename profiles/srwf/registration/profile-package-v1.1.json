@@ -1,0 +1,149 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "srwf.registration.presentation",
+  "package_version": "1.1.0",
+  "provenance": {
+    "producer": "SRWF Registration declarative profile package",
+    "evidence_refs": [
+      "contract:SRWF_PUBLIC_REGISTRATION_VISUAL_UX_CONTRACT_v1.0.0",
+      "implementation:profiles/srwf/registration/IMPLEMENTATION_MAP.md"
+    ]
+  },
+  "selected_surfaces": [
+    "gravity_forms.form"
+  ],
+  "design_tokens": {
+    "colors": {
+      "surface": "#FFFFFF",
+      "text_primary": "#172033",
+      "text_secondary": "#475467",
+      "text_muted": "#667085",
+      "primary": "#1D4ED8",
+      "primary_pressed": "#1E40AF",
+      "error": "#B42318",
+      "success": "#18794E",
+      "divider": "#E4E7EC",
+      "control_border": "#8690A1"
+    },
+    "spacing_px": {
+      "mobile_horizontal_padding": 16
+    },
+    "radii_px": {
+      "control": 10,
+      "surface": 16
+    },
+    "sizes_px": {
+      "control_min_height": 52,
+      "primary_action_min_height": 56,
+      "content_max_width": 840
+    },
+    "font_sizes_px": {
+      "field_label": 15,
+      "control_value": 16,
+      "primary_action": 16,
+      "section_heading": 18
+    },
+    "font_weights": {
+      "regular": 400,
+      "field_label": 600,
+      "strong": 700
+    },
+    "font_families": {
+      "primary": "Vazirmatn"
+    }
+  },
+  "semantic_slots": [],
+  "surface_profiles": [
+    {
+      "surface": "gravity_forms.form",
+      "profile_id": "srwf.registration.v1",
+      "token_refs": [
+        "colors.surface",
+        "colors.text_primary",
+        "colors.text_secondary",
+        "colors.text_muted",
+        "colors.primary",
+        "colors.primary_pressed",
+        "colors.error",
+        "colors.success",
+        "colors.divider",
+        "colors.control_border",
+        "spacing_px.mobile_horizontal_padding",
+        "radii_px.control",
+        "radii_px.surface",
+        "sizes_px.control_min_height",
+        "sizes_px.primary_action_min_height",
+        "sizes_px.content_max_width",
+        "font_sizes_px.field_label",
+        "font_sizes_px.control_value",
+        "font_sizes_px.primary_action",
+        "font_sizes_px.section_heading",
+        "font_weights.regular",
+        "font_weights.field_label",
+        "font_weights.strong",
+        "font_families.primary"
+      ],
+      "semantic_slots": [],
+      "presentation": {
+        "composition": {
+          "direction": "rtl",
+          "max_inline_size": "sizes_px.content_max_width",
+          "inline_padding": "spacing_px.mobile_horizontal_padding",
+          "surface_background": "colors.surface",
+          "surface_radius": "radii_px.surface",
+          "field_layout": "single_column"
+        },
+        "typography": {
+          "font_family": "font_families.primary"
+        },
+        "controls": {
+          "background": "colors.surface",
+          "text": "colors.text_primary",
+          "border": "colors.control_border",
+          "focus_border": "colors.primary",
+          "error_border": "colors.error",
+          "radius": "radii_px.control",
+          "min_height": "sizes_px.control_min_height",
+          "font_size": "font_sizes_px.control_value",
+          "font_weight": "font_weights.regular"
+        },
+        "labels": {
+          "text": "colors.text_primary",
+          "required_color": "colors.error",
+          "font_size": "font_sizes_px.field_label",
+          "font_weight": "font_weights.field_label"
+        },
+        "descriptions": {
+          "text": "colors.text_muted"
+        },
+        "sections": {
+          "divider": "colors.divider",
+          "heading_text": "colors.text_primary",
+          "heading_font_size": "font_sizes_px.section_heading",
+          "heading_font_weight": "font_weights.strong",
+          "description_text": "colors.text_secondary"
+        },
+        "primary_action": {
+          "background": "colors.primary",
+          "pressed_background": "colors.primary_pressed",
+          "focus_border": "colors.primary",
+          "min_height": "sizes_px.primary_action_min_height",
+          "font_size": "font_sizes_px.primary_action",
+          "font_weight": "font_weights.strong"
+        },
+        "validation": {
+          "error_color": "colors.error"
+        },
+        "capabilities": [
+          "gravity_forms.orbital_control_metric_projection",
+          "persian_gravity.jalali_validation_message_after_control"
+        ]
+      }
+    }
+  ],
+  "reserved_extension_seam": {
+    "version": "1.0.0",
+    "state": "INERT"
+  }
+}
