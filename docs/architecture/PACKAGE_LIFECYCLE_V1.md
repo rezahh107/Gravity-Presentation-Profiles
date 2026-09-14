@@ -2,6 +2,12 @@
 
 WU10 adds lifecycle state around the WU09 portable artifact contracts without changing those contracts.
 
+## Current production status
+
+WU17 is now a real production reader of the lifecycle state for the native `gravity_flow.inbox` presentation path. `InboxPresentationAdapter` reads active visual-package state through `VisualPackageLifecycle`, active environment bindings through `BindingSetLifecycle`, evidence gating through `EvidenceReferenceGate`, and both registries through `WordPressOptionStateStore`. If lifecycle/binding/readiness data is absent or invalid, presentation fails closed and Gravity Flow's native Inbox remains authoritative.
+
+`SettingsLifecycleWorkflow` remains an intentionally non-rooted import/settings orchestration helper: it is covered by lifecycle tests and retained for the admitted lifecycle contract, but no current production bootstrap, hook, or settings UI invokes it. This status does not activate Entry Detail or Print and does not change host-owned workflow semantics.
+
 ## Artifact-class separation
 
 Visual-profile packages and environment binding sets use different stores, registries, operations and audit records.

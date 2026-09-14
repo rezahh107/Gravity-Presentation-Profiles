@@ -5,9 +5,15 @@ document_id: GPP-PORTABLE-PROFILE-BINDING-SUBSTRATE-V1
 work_unit_id: WU-GPP-PROFILE-PACKAGE-09
 run_id: RUN-GPP-PROFILE-PACKAGE-09-001
 architecture: SHARED_DEFAULTS_PER_SURFACE__SEPARATE_ENVIRONMENT_BINDINGS
-runtime_activation: NOT_IMPLEMENTED
-persistence_import_lifecycle: OUT_OF_SCOPE_WU10
+runtime_activation: IMPLEMENTED_FOR_GRAVITY_FLOW_INBOX_BY_WU17
+persistence_import_lifecycle: IMPLEMENTED_BY_WU10
 ```
+
+## Current production status
+
+WU09 defined the portable contracts before any production consumer existed. The current post-WU17 runtime now consumes those contracts for the native `gravity_flow.inbox` surface through `Bootstrap` → `InboxPresentationAdapter` → lifecycle state plus `InboxPresentationModel` / `SemanticBindingResolver`. This does not activate Entry Detail or Print.
+
+`VisualProfileResolver` remains an intentionally non-rooted contract/test helper in the current production graph. Production Inbox visual selection is lifecycle-backed through `VisualPackageLifecycle::effectiveProfile()`; keeping the independent resolver does not create a second runtime profile authority.
 
 ## Boundary
 
@@ -16,7 +22,7 @@ V1 has two independent declarative artifact classes:
 1. `gpp.visual_profile_package` — portable presentation identity, shared design tokens, stable semantic slots, and exactly one shared default profile for each admitted operational surface.
 2. `gpp.environment_binding_set` — environment/context-specific semantic-source bindings and runtime evidence claims.
 
-Gravity Forms and Gravity Flow retain ownership of data, workflow, assignment, authorization, actions, availability and editability. These contracts do not create a queue, workflow, permission model, target adapter, persistence/import lifecycle, or runtime Inbox/Entry/Print implementation.
+Gravity Forms and Gravity Flow retain ownership of data, workflow, assignment, authorization, actions, availability and editability. These contracts do not themselves create a queue, workflow, permission model, target adapter, persistence/import lifecycle, or runtime Inbox/Entry/Print implementation; later work units may consume them without changing that ownership boundary.
 
 ## Visual profile package V1
 
@@ -147,4 +153,4 @@ Schema validity never proves a target selector/hook/seam, a concrete source, run
 
 ## WU09 non-goals
 
-This substrate does not persist, import, activate, roll back or migrate artifacts. It does not discover target SRWF identifiers, add host-specific adapters, style the Gravity Flow Inbox/Entry Detail, render A4 output, alter closed Registration history, or activate the Reserved Extension Seam.
+WU09 itself did not persist, import, activate, roll back or migrate artifacts. It did not discover target SRWF identifiers, add host-specific adapters, style the Gravity Flow Inbox/Entry Detail, render A4 output, alter closed Registration history, or activate the Reserved Extension Seam. Later admitted work units may implement selected consumers while preserving this substrate contract.
