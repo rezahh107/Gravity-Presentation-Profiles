@@ -23,12 +23,12 @@ The lifecycle state format is unchanged. The existing lifecycle can store schema
 
 ## Surfaces and selected-surface contract
 
-Schema `1.1.0` admits these generic operational surfaces:
+Schema `1.1.0` admits these generic operational surfaces in canonical order:
 
 ```text
 gravity_forms.form
-gravity_flow.inbox
 gravity_flow.entry_detail
+gravity_flow.inbox
 print.dossier
 ```
 
@@ -49,7 +49,7 @@ Portable visual identity remains independent of a concrete environment.
 
 The visual package has no field for Form ID, Field ID, Step ID, Page ID, Route ID, User ID, Role ID, or binding-set identity. `package_id` and `profile_id` continue to reject those identities when encoded as identifier segments.
 
-`gpp.environment_binding_set` remains a separate artifact. This change does not evolve its schema and does not let it receive or return a visual `profile_id`. A binding set cannot select or override a visual profile.
+`gpp.environment_binding_set` remains a separate artifact. This change does not evolve its schema and does not let it receive or return a visual `profile_id`. A binding set cannot select or override a visual profile. The binding resolver now obtains its admitted surface set from `EnvironmentBindingSet` itself, so expanding the visual package surface vocabulary cannot silently expand binding semantics.
 
 The new `gravity_forms.form` visual surface does not require a binding artifact merely to describe form presentation. Schema `1.1.0` therefore permits an empty `semantic_slots` list. A future need for Gravity Forms semantic-source binding must evolve the binding contract separately rather than smuggling environment identity into this visual package.
 
@@ -123,7 +123,7 @@ Unknown capability names fail closed. GP Advanced Select and GP File Upload Pro 
 
 ## SRWF Registration representation proof
 
-`tests/fixtures/srwf-registration-visual-package-v1.1.json` expresses the currently admitted Registration presentation using only the generic schema vocabulary.
+`profiles/srwf/registration/profile-package-v1.1.json` is the canonical declarative representation of the currently admitted Registration presentation. Tests validate this artifact directly rather than maintaining a second test-only copy.
 
 It selects only `gravity_forms.form` and captures the current implementation-driving values, including:
 
@@ -133,6 +133,7 @@ text #172033 / #475467 / #667085
 primary #1D4ED8
 primary pressed #1E40AF
 error #B42318
+success #18794E
 divider #E4E7EC
 control border #8690A1
 mobile inline padding 16px
@@ -150,11 +151,11 @@ RTL composition
 single-column field layout
 ```
 
-The fixture also requests only the two proven bounded capabilities above.
+The artifact also requests only the two proven bounded capabilities above.
 
 It intentionally does **not** promote unresolved or unproven Registration values into the schema instance: page-background targeting, upload adapter/radius application, exact breakpoint, desktop short-field pairings, shadow, focus-ring geometry/alpha, GP Advanced Select behavior, GP File Upload Pro behavior, and other runtime-sensitive gaps remain outside the package instance until separately admitted.
 
-This fixture is a contract representation and lifecycle test artifact. This change does not replace the current Registration runtime CSS with a generic renderer; doing so would be a separate runtime-consumer change requiring its own host mapping and regression evidence.
+This artifact is a declarative contract representation consumed by validation/lifecycle tests. This change does not replace the current Registration runtime CSS with a generic renderer; doing so would be a separate runtime-consumer change requiring its own host mapping and regression evidence.
 
 ## Compatibility and lifecycle behavior
 
