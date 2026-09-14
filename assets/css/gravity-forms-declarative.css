@@ -1,0 +1,93 @@
+/*
+ * Generic schema-1.1 Gravity Forms presentation adapter.
+ * Package data reaches this stylesheet only through validated, fixed-name CSS custom properties
+ * and fixed semantic capability classes emitted by GPP runtime code.
+ */
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper {
+    --gf-ctrl-bg-color: var(--gpp-control-background);
+    --gf-ctrl-color: var(--gpp-control-text);
+    --gf-ctrl-border-color: var(--gpp-control-border);
+    --gf-ctrl-border-color-focus: var(--gpp-control-focus-border);
+    --gf-ctrl-border-color-error: var(--gpp-control-error-border);
+    --gf-ctrl-radius: var(--gpp-control-radius);
+    --gf-ctrl-size: var(--gpp-control-min-height);
+    --gf-ctrl-font-family: var(--gpp-form-font-family);
+    --gf-ctrl-font-size: var(--gpp-control-font-size);
+    --gf-ctrl-font-weight: var(--gpp-control-font-weight);
+    --gf-ctrl-label-color-primary: var(--gpp-label-text);
+    --gf-ctrl-label-font-family-primary: var(--gpp-form-font-family);
+    --gf-ctrl-label-font-size-primary: var(--gpp-label-font-size);
+    --gf-ctrl-label-font-weight-primary: var(--gpp-label-font-weight);
+    --gf-ctrl-label-color-req: var(--gpp-label-required-color);
+    --gf-ctrl-desc-color: var(--gpp-description-text);
+    --gf-ctrl-desc-font-family: var(--gpp-form-font-family);
+    --gf-ctrl-desc-color-error: var(--gpp-validation-error-color);
+    --gf-field-section-border-color: var(--gpp-section-divider);
+    --gf-ctrl-btn-bg-color-primary: var(--gpp-primary-action-background);
+    --gf-ctrl-btn-size: var(--gpp-primary-action-min-height);
+    --gf-ctrl-btn-font-family: var(--gpp-form-font-family);
+    --gf-ctrl-btn-font-size: var(--gpp-primary-action-font-size);
+    --gf-ctrl-btn-font-weight: var(--gpp-primary-action-font-weight);
+    --gf-form-validation-color: var(--gpp-validation-error-color);
+
+    max-inline-size: var(--gpp-form-max-inline-size);
+    margin-inline: auto;
+    padding-inline: var(--gpp-form-inline-padding);
+    border-radius: var(--gpp-form-surface-radius);
+    background-color: var(--gpp-form-surface-background);
+    direction: var(--gpp-form-direction);
+    font-family: var(--gpp-form-font-family);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-field-layout-single-column_wrapper .gform_fields > .gfield {
+    grid-column: 1 / -1;
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-gf-orbital-control-metric-projection_wrapper.gform-theme--framework {
+    --gf-ctrl-size: var(--gpp-control-min-height) !important;
+    --gf-ctrl-btn-size: var(--gpp-primary-action-min-height) !important;
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-gf-orbital-control-metric-projection_wrapper .gfield--type-text input[type="text"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-gf-orbital-control-metric-projection_wrapper .gfield--type-select select {
+    --gf-ctrl-size: var(--gpp-control-min-height);
+    --gf-ctrl-border-color-focus: var(--gpp-control-focus-border);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-gf-orbital-control-metric-projection_wrapper .gform_footer input[type="submit"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-gf-orbital-control-metric-projection_wrapper .gform_footer button[type="submit"] {
+    --gf-ctrl-btn-size: var(--gpp-primary-action-min-height);
+    --gf-ctrl-btn-border-color-focus-primary: var(--gpp-primary-action-focus-border);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-pgr-jalali-validation-message-after-control_wrapper .gfield--type-pgr_jalali_date input.pgr_jalali_date {
+    --gf-ctrl-size: var(--gpp-control-min-height);
+    --gf-ctrl-border-color-focus: var(--gpp-control-focus-border);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-pgr-jalali-validation-message-after-control_wrapper .gfield--type-pgr_jalali_date.gfield_error {
+    display: flex;
+    flex-direction: column;
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-cap-pgr-jalali-validation-message-after-control_wrapper .gfield--type-pgr_jalali_date.gfield_error > .gfield_validation_message {
+    order: 1;
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper .gfield--type-section .gsection_title {
+    color: var(--gpp-section-heading-text);
+    font-family: var(--gpp-form-font-family);
+    font-size: var(--gpp-section-heading-font-size);
+    font-weight: var(--gpp-section-heading-font-weight);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper .gfield--type-section .gsection_description {
+    color: var(--gpp-section-description-text);
+    font-family: var(--gpp-form-font-family);
+}
+
+.gpp-enabled_wrapper.gpp-declarative_wrapper .gform_button:active,
+.gpp-enabled_wrapper.gpp-declarative_wrapper .gfield--type-submit button[type="submit"].button:active {
+    background-color: var(--gpp-primary-action-pressed-background);
+}
