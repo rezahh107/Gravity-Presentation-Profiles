@@ -283,14 +283,29 @@ final class EntryDetailPresentationAdapter {
 
         $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
         $files = $field->to_array( $raw );
-        if ( ! is_array( $files ) || empty( $files[0] ) ) {
+        if ( ! is_array( $files ) || empty( $files[0] ) || ! is_scalar( $files[0] ) ) {
             return null;
         }
 
-        $stored_url = (string) $files[0];
+        $stored_url = trim( (string) $files[0] );
+        if ( '' === $stored_url ) {
+            return null;
+        }
+
+        // Gravity Forms 3.x owns file-name parsing. The pinned 3.1.1.1
+        // contract returns false or structured metadata with original/sanitized
+        // names; the sanitized host basename is the canonical presentation name.
+        $name_metadata = $field->get_file_name_from_url( $stored_url );
+        if ( ! is_array( $name_metadata ) || ! isset( $name_metadata['sanitized'] ) || ! is_string( $name_metadata['sanitized'] ) ) {
+            return null;
+        }
+        $name = trim( $name_metadata['sanitized'] );
+        if ( '' === $name ) {
+            return null;
+        }
+
         $url = $field->get_download_url( $stored_url, false, (int) $entry['id'] );
-        $name = $field->get_file_name_from_url( $stored_url );
-        if ( ! is_string( $url ) || '' === $url || ! is_string( $name ) || '' === $name ) {
+        if ( ! is_string( $url ) || '' === trim( $url ) ) {
             return null;
         }
 
