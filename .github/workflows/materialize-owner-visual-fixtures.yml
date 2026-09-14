@@ -23,8 +23,8 @@ jobs:
       - name: Materialize exact hash-locked Owner fixtures
         shell: bash
         env:
-          OWNER_HTML_URL: 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-c018-820a-bc66-b07e8976576b/raw?se=2026-09-14T21%3A07%3A05Z&sp=r&sv=2026-02-06&sr=b&scid=af5ecd5f-fa75-5623-b9a2-1c8831914c4d&skoid=40ce4b34-a373-4a62-b0bf-44befe221915&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-14T20%3A05%3A51Z&ske=2026-09-15T20%3A05%3A51Z&sks=b&skv=2026-02-06&sig=1%2BF4JZwOa9aNNiTsGEL2sfufsg25KpU%2BahaGAW9B6/E%3D'
-          OWNER_PDF_URL: 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-38b4-8210-97a7-61bd2f50dd92/raw?se=2026-09-14T21%3A07%3A09Z&sp=r&sv=2026-02-06&sr=b&scid=61dea82a-36f2-5fba-9fa5-a5763b66357d&skoid=40ce4b34-a373-4a62-b0bf-44befe221915&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-14T20%3A10%3A14Z&ske=2026-09-15T20%3A10%3A14Z&sks=b&skv=2026-02-06&sig=mwLoJus/DIIPjlzziX1qYRpYGsiTZecxJfb%2BBDUCBnQ%3D'
+          OWNER_HTML_URL: 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-2d2c-8210-8e3f-8120be8b580c/raw?se=2026-09-14T21%3A15%3A28Z&sp=r&sv=2026-02-06&sr=b&scid=cc82493d-07ad-58ec-9dc6-e1765218092d&skoid=40ce4b34-a373-4a62-b0bf-44befe221915&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-14T20%3A12%3A20Z&ske=2026-09-15T20%3A12%3A20Z&sks=b&skv=2026-02-06&sig=kY6zK8GpOQU/cq9nMaG2XY9LzxwbDkG1SHAUdbQ0o0g%3D'
+          OWNER_PDF_URL: 'https://sdmntprukwest.oaiusercontent.com/files/00000000-09a8-8243-b44c-5f27bf6981c5/raw?se=2026-09-14T21%3A15%3A32Z&sp=r&sv=2026-02-06&sr=b&scid=006975f4-dac5-5283-8fe0-42f0c19c0799&skoid=40ce4b34-a373-4a62-b0bf-44befe221915&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-14T20%3A14%3A44Z&ske=2026-09-15T20%3A14%3A44Z&sks=b&skv=2026-02-06&sig=rcozhvPg87ny6wmp1itIXfvSfmu9PeWtGuarXWEjJOk%3D'
         run: |
           set -euo pipefail
           fixture_dir='tests/fixtures/owner-visual'
