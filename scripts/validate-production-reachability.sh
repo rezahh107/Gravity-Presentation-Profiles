@@ -6,6 +6,7 @@ cd "$ROOT"
 
 ENTRYPOINT="gravity-presentation-profiles.php"
 SOURCE_DIR="src"
+EXTRACTOR="scripts/extract-production-references.php"
 
 # Exact file-level exceptions only. Every entry must name one existing src/*.php file.
 DEFERRED_UNREACHABLE=(
@@ -18,33 +19,21 @@ fail() {
 
 [[ -f "$ENTRYPOINT" ]] || fail "missing production entrypoint: $ENTRYPOINT"
 [[ -d "$SOURCE_DIR" ]] || fail "missing production source directory: $SOURCE_DIR"
+[[ -f "$EXTRACTOR" ]] || fail "missing token-aware dependency extractor: $EXTRACTOR"
+command -v php >/dev/null 2>&1 || fail "PHP CLI is required for token-aware dependency extraction"
 
 declare -a source_files=()
+declare -A source_file_set=()
 while IFS= read -r file; do
   source_files+=("$file")
+  source_file_set["$file"]=1
 done < <(find "$SOURCE_DIR" -type f -name '*.php' -print | LC_ALL=C sort)
 
 ((${#source_files[@]} > 0)) || fail "no production PHP files found under $SOURCE_DIR"
 
-declare -A class_for_file=()
-declare -A namespace_for_file=()
 declare -A reachable=()
 declare -A queued=()
 declare -A deferred=()
-
-for file in "${source_files[@]}"; do
-  relative="${file#src/}"
-  without_ext="${relative%.php}"
-  class="GravityPresentationProfiles\\${without_ext//\//\\}"
-  class_for_file["$file"]="$class"
-
-  class_tail="${class#GravityPresentationProfiles\\}"
-  if [[ "$class_tail" == *\\* ]]; then
-    namespace_for_file["$file"]="${class%\\*}"
-  else
-    namespace_for_file["$file"]="GravityPresentationProfiles"
-  fi
-done
 
 for file in "${DEFERRED_UNREACHABLE[@]}"; do
   [[ "$file" == src/*.php ]] || fail "deferred entry must be an exact src/*.php file: $file"
@@ -52,26 +41,14 @@ for file in "${DEFERRED_UNREACHABLE[@]}"; do
   deferred["$file"]=1
 done
 
-references_class() {
+extract_references() {
   local source_file="$1"
-  local candidate_file="$2"
-  local class="${class_for_file[$candidate_file]}"
-  local doubled="${class//\\/\\\\}"
-
-  if grep -Fq -- "$class" "$source_file" || grep -Fq -- "$doubled" "$source_file"; then
-    return 0
+  local output
+  if ! output="$(php "$EXTRACTOR" . "$source_file" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    fail "token-aware dependency extraction failed for $source_file"
   fi
-
-  [[ "$source_file" == src/*.php ]] || return 1
-
-  local source_namespace="${namespace_for_file[$source_file]}"
-  local candidate_namespace="${namespace_for_file[$candidate_file]}"
-  [[ "$source_namespace" == "$candidate_namespace" ]] || return 1
-
-  local short="${class##*\\}"
-  grep -Fq -- "${short}::" "$source_file" \
-    || grep -Fq -- "new ${short}" "$source_file" \
-    || grep -Fq -- "instanceof ${short}" "$source_file"
+  printf '%s\n' "$output"
 }
 
 declare -a queue=("$ENTRYPOINT")
@@ -85,13 +62,14 @@ while ((${#queue[@]} > 0)); do
     reachable["$current"]=1
   fi
 
-  for candidate in "${source_files[@]}"; do
+  references="$(extract_references "$current")"
+  while IFS= read -r candidate; do
+    [[ -z "$candidate" ]] && continue
+    [[ -n "${source_file_set[$candidate]:-}" ]] || fail "extractor returned non-production target from $current: $candidate"
     [[ -n "${reachable[$candidate]:-}" || -n "${queued[$candidate]:-}" ]] && continue
-    if references_class "$current" "$candidate"; then
-      queue+=("$candidate")
-      queued["$candidate"]=1
-    fi
-  done
+    queue+=("$candidate")
+    queued["$candidate"]=1
+  done <<<"$references"
 done
 
 declare -a unexplained=()
