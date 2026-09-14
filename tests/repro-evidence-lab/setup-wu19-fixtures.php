@@ -202,18 +202,23 @@ if ( ! $bootstrap || ! $viewer ) throw new RuntimeException( 'Pinned WU19 users 
 
 $alpha_api = new Gravity_Flow_API( $alpha_form_id );
 $alpha_step = $alpha_api->get_current_step( GFAPI::get_entry( $alpha_entry_id ) );
-if ( ! $alpha_step || 'approval' !== $alpha_step->get_type() ) throw new RuntimeException( 'WU19 alpha Approval step missing.' );
-
-// Beta is intentionally assigned to the low-privilege viewer. Browser evidence
-// opens Entry Detail while this assignment grants access, then changes the
-// assignment before a fresh Print request to prove host re-authorization.
 $beta_api = new Gravity_Flow_API( $beta_form_id );
 $beta_step = $beta_api->get_current_step( GFAPI::get_entry( $beta_entry_id ) );
-if ( ! $beta_step || 'approval' !== $beta_step->get_type() ) throw new RuntimeException( 'WU19 beta Approval step missing.' );
-$beta_meta = $beta_step->get_feed_meta();
-$beta_meta['assignees'] = array( 'user_id|' . (int) $viewer->ID );
-$beta_meta['assignee_policy'] = 'all';
-gravity_flow()->update_feed_meta( $beta_step->get_id(), $beta_meta );
+if ( ! $alpha_step || 'approval' !== $alpha_step->get_type() || ! $beta_step || 'approval' !== $beta_step->get_type() ) {
+    throw new RuntimeException( 'WU19 Approval step missing.' );
+}
+
+// Keep both evidence Entries assigned to the same user, but remove administrator
+// bypass privileges in this isolated WU19 WordPress only. Permission can then be
+// gained/lost by real Gravity Flow assignment rather than by an admin capability.
+foreach ( array( $alpha_step, $beta_step ) as $assigned_step ) {
+    $meta = $assigned_step->get_feed_meta();
+    $meta['assignees'] = array( 'user_id|' . (int) $bootstrap->ID );
+    $meta['assignee_policy'] = 'all';
+    gravity_flow()->update_feed_meta( $assigned_step->get_id(), $meta );
+}
+$bootstrap->set_role( 'subscriber' );
+clean_user_cache( $bootstrap->ID );
 
 $manifest = array(
     'schema_version' => '1.0.0',
@@ -231,7 +236,6 @@ $manifest = array(
         'form_id' => $beta_form_id,
         'entry_id' => $beta_entry_id,
         'step_id' => (int) $beta_step->get_id(),
-        'assigned_user_id' => (int) $viewer->ID,
         'fields' => array_merge( array(
             'student.full_name' => $beta_base['name_field_id'],
             'student.national_id' => $beta_base['national_id_field_id'],
