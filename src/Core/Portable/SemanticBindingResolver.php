@@ -107,7 +107,7 @@ final class SemanticBindingResolver {
             return false;
         }
 
-        return is_string( $context['surface'] ) && in_array( $context['surface'], VisualProfilePackage::admittedSurfaces(), true );
+        return is_string( $context['surface'] ) && in_array( $context['surface'], EnvironmentBindingSet::admittedSurfaces(), true );
     }
 
     private function contextMatches( $binding_context, $runtime_context ) {
