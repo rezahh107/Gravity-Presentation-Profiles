@@ -49,6 +49,15 @@ function gpp_v11_lifecycle_fixture( $name ) {
     return $data;
 }
 
+function gpp_v11_lifecycle_registration_package() {
+    $path = dirname( __DIR__, 2 ) . '/profiles/srwf/registration/profile-package-v1.1.json';
+    $data = json_decode( file_get_contents( $path ), true );
+    if ( ! is_array( $data ) ) {
+        gpp_fail( 'Invalid SRWF Registration declarative profile package.' );
+    }
+    return $data;
+}
+
 function gpp_v11_lifecycle_throws( $reason, $callback, $message ) {
     try {
         $callback();
@@ -62,7 +71,7 @@ function gpp_v11_lifecycle_throws( $reason, $callback, $message ) {
 $store = new GppV11MemoryStateStore();
 $lifecycle = new VisualPackageLifecycle( $store );
 $v1 = gpp_v11_lifecycle_fixture( 'wu09-visual-package.json' );
-$v11 = gpp_v11_lifecycle_fixture( 'srwf-registration-visual-package-v1.1.json' );
+$v11 = gpp_v11_lifecycle_registration_package();
 
 // Existing schema 1.0.0 package remains installable and active Inbox state is authoritative.
 $v1_import = $lifecycle->import( $v1 );
