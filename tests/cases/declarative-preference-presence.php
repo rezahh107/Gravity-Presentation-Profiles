@@ -32,11 +32,14 @@ function gpp_sparse_definition( $canonical, $package_id, $profile_id, $presentat
 function gpp_css_has_ungated_consumer( $css, $variable, $marker ) {
     preg_match_all( '/([^{}]+)\{([^{}]*)\}/s', $css, $rules, PREG_SET_ORDER );
     foreach ( $rules as $rule ) {
-        if (
-            false !== strpos( $rule[2], 'var(' . $variable . ')' ) &&
-            false === strpos( trim( $rule[1] ), $marker )
-        ) {
-            return true;
+        if ( false === strpos( $rule[2], 'var(' . $variable . ')' ) ) {
+            continue;
+        }
+
+        foreach ( explode( ',', trim( $rule[1] ) ) as $selector ) {
+            if ( false === strpos( trim( $selector ), $marker ) ) {
+                return true;
+            }
         }
     }
 
@@ -163,17 +166,19 @@ $presence_by_variable = array(
 preg_match_all( '/([^{}]+)\{([^{}]*)\}/s', $css_without_comments, $rules, PREG_SET_ORDER );
 $observed_variables = array();
 foreach ( $rules as $rule ) {
-    $selector = trim( $rule[1] );
+    $selector_group = trim( $rule[1] );
     $body = $rule[2];
     foreach ( $presence_by_variable as $variable => $marker ) {
         if ( false === strpos( $body, 'var(' . $variable . ')' ) ) {
             continue;
         }
         $observed_variables[ $variable ] = true;
-        gpp_assert_true(
-            false !== strpos( $selector, $marker ),
-            'Every consumer of ' . $variable . ' must require its exact preference-presence marker. Selector: ' . $selector
-        );
+        foreach ( explode( ',', $selector_group ) as $selector ) {
+            gpp_assert_true(
+                false !== strpos( trim( $selector ), $marker ),
+                'Every selector consuming ' . $variable . ' must require its exact preference-presence marker. Selector: ' . trim( $selector )
+            );
+        }
     }
 }
 
