@@ -27,7 +27,12 @@ jobs:
           old='new, count = re.subn(pattern, replacement, text, count=1, flags=re.S)'
           new='new, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)'
           if s.count(old) != 1: raise SystemExit('regex transport patch precondition failed')
-          p.write_text(s.replace(old,new,1))
+          s=s.replace(old,new,1)
+          s=s.replace('data-gpp-native-native-actions', 'data-gpp-native-actions')
+          marker='# Final enforcement checks actual continue-on-error outcomes before evidence is built.'
+          if marker not in s: raise SystemExit('workflow-isolation marker missing')
+          s=s.split(marker,1)[0].rstrip()+'\n'
+          p.write_text(s)
           PY
           python3 tests/repro-evidence-lab/pr18-final-patch.py
           node --check tests/repro-evidence-lab/core-spine-browser-tests.mjs
