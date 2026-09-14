@@ -222,48 +222,7 @@ final class EntryDetailPresentationAdapter {
     }
 
     private static function readSourceValue( $source, $form, $entry ) {
-        if ( ! is_array( $source ) || empty( $source['type'] ) ) {
-            return null;
-        }
-
-        switch ( $source['type'] ) {
-            case 'gravity_forms.field':
-                $field_id = (string) $source['field_id'];
-                if ( ! array_key_exists( $field_id, $entry ) ) {
-                    return null;
-                }
-                $raw = $entry[ $field_id ];
-                if ( class_exists( 'GFAPI' ) && method_exists( 'GFAPI', 'get_field' ) ) {
-                    $field = \GFAPI::get_field( $form, $source['field_id'] );
-                    if ( is_object( $field ) && method_exists( $field, 'get_value_entry_detail' ) ) {
-                        return $field->get_value_entry_detail( $raw, $entry, true, 'text' );
-                    }
-                }
-                return $raw;
-
-            case 'gravity_forms.entry_meta':
-                $key = $source['meta_key'];
-                if ( isset( $entry[ $key ] ) ) {
-                    return $entry[ $key ];
-                }
-                return function_exists( 'gform_get_meta' ) ? gform_get_meta( (int) $entry['id'], $key ) : null;
-
-            case 'gravity_flow.state':
-                if ( ! class_exists( 'Gravity_Flow_API' ) ) {
-                    return null;
-                }
-                $api = new \Gravity_Flow_API( (int) $entry['form_id'] );
-                $step = $api->get_current_step( $entry );
-                if ( 'current_step' === $source['state_key'] ) {
-                    return $step ? $step->get_name() : null;
-                }
-                if ( 'status' === $source['state_key'] ) {
-                    return $step && method_exists( $step, 'get_status' ) ? $step->get_status() : null;
-                }
-                return null;
-        }
-
-        return null;
+        return ( new BoundHostValueReader() )->read( $source, $form, $entry );
     }
 
     private static function documentForSlot( EntryDetailPresentationModel $model, $form, $entry, $slot ) {

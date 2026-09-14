@@ -4,6 +4,7 @@ namespace GravityPresentationProfiles;
 
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
 
 final class Bootstrap {
     private static $initialized = false;
@@ -44,6 +45,7 @@ final class Bootstrap {
         // registered only after Gravity Forms has loaded successfully.
         InboxPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
+        PrintDossierPresentationAdapter::register();
 
         return true;
     }

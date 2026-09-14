@@ -8,6 +8,7 @@ $cases = array(
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
     'portable-profile-package-v11.php',
+    'semantic-binding-selected-identity.php',
     'reserved-extension-seam-version.php',
     'package-lifecycle.php',
     'package-lifecycle-v11.php',
@@ -16,6 +17,7 @@ $cases = array(
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
     'entry-detail-presentation-model.php',
+    'print-dossier-presentation-model.php',
 );
 
 foreach ( $cases as $case ) {

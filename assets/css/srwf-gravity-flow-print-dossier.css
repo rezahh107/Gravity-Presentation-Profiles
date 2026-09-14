@@ -1,0 +1,194 @@
+/* WU19 canonical dossier print. Loaded only from the post-permission Print footer. */
+#view-container > form,
+#view-container > .gravityflow-timeline,
+#view-container > .print-hr {
+  display: none !important;
+}
+
+.gpp-print-decision-trace { display: none !important; }
+.gpp-print-dossier {
+  --paper-ink: #111;
+  --paper-ink-soft: #222;
+  --paper-ink-muted: #555;
+  --paper-line-dark: #777;
+  --paper-line-strong: #888;
+  --paper-line: #999;
+  --paper-line-soft: #aaa;
+  --paper-line-subtle: #bbb;
+  --paper-fill-header: #ededed;
+  --paper-fill-section: #efefef;
+  --paper-fill-table: #f0f0f0;
+  --paper-fill-table-subtle: #f7f7f7;
+  --font: Tahoma, Arial, sans-serif;
+  direction: rtl;
+  color: var(--paper-ink);
+  background: #fff;
+}
+.gpp-print-dossier *, .gpp-print-dossier *::before, .gpp-print-dossier *::after { box-sizing: border-box; }
+.gpp-print-dossier--failure { width: min(180mm, calc(100% - 32px)); margin: 24px auto; border: 1px solid #b8b8b8; padding: 24px; font-family: var(--font); }
+.gpp-print-dossier--failure h1 { margin: 0 0 12px; font-size: 20px; }
+.gpp-print-dossier--failure p { margin: 0 0 12px; }
+.gpp-print-sheet { width: 100%; max-width: 920px; margin: 0 auto 24px; background: #fff; color: var(--paper-ink); border: 1px solid var(--paper-line); padding: 28px 32px; font-family: var(--font); font-size: 13.5px; line-height: 1.8; display: flex; flex-direction: column; }
+.gpp-print-sheet * { color: inherit; }
+#gpp-print-front .cardboard-header { display: grid; grid-template-columns: minmax(115px, 1fr) minmax(0, 3fr) minmax(115px, 1fr); gap: 16px; align-items: center; padding: 0 0 16px; border-bottom: 1.5px solid var(--paper-line-dark); }
+#gpp-print-front .front-brand-side { display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; }
+#gpp-print-front .front-brand-center { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+#gpp-print-front .front-brand-center h2 { font-size: 25px; font-weight: 700; line-height: 1.6; margin: 0; }
+#gpp-print-front .front-brand-center p { font-size: 16.5px; font-weight: 700; line-height: 1.7; margin: 0; color: var(--paper-ink-soft); }
+#gpp-print-front .front-logo-slot { width: 102px; height: 84px; object-fit: contain; display: block; }
+#gpp-print-front .front-unlabeled { border: 1px solid var(--paper-line); border-radius: 6px; background: #fff; }
+#gpp-print-front .front-header-blank { width: 100%; min-height: 38px; }
+#gpp-print-front .front-identifiers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin: 22px 0 26px; }
+#gpp-print-front .front-id-field { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 700; }
+#gpp-print-front .front-id-blank { flex: 1; min-width: 0; min-height: 52px; border: 1.5px solid var(--paper-line-strong); border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 4px 10px; }
+#gpp-print-front .cardboard-candidate { border: 1.5px solid var(--paper-line-strong); border-radius: 10px; padding: 0 22px 22px; break-inside: avoid; }
+#gpp-print-front .cardboard-candidate > h2 { width: 48%; margin: -16px auto 16px; background: var(--paper-fill-header); border: 1px solid var(--paper-line-soft); border-radius: 4px; padding: 4px 16px; text-align: center; font-size: 18px; font-weight: 700; line-height: 1.8; }
+#gpp-print-front .front-candidate-body { display: grid; gap: 20px; }
+#gpp-print-front .front-name-row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 24px; }
+#gpp-print-front .front-line { display: flex; align-items: baseline; gap: 8px; min-height: 33px; font-size: 13.5px; }
+#gpp-print-front .front-blank { flex: 1; min-width: 30px; min-height: 25px; border-bottom: 1px dotted var(--paper-line-strong); display: flex; align-items: baseline; padding: 0 5px; }
+#gpp-print-front .front-study-admin { display: grid; grid-template-columns: minmax(0, 1fr) 195px; gap: 26px; align-items: start; }
+#gpp-print-front .front-study { display: grid; gap: 20px; }
+#gpp-print-front .front-education-combined { display: flex; align-items: baseline; gap: 8px; min-height: 33px; width: 100%; }
+#gpp-print-front .front-edu-label { flex-shrink: 0; font-weight: 500; }
+#gpp-print-front .front-grade-slot { flex: 1 1 auto; min-width: 80px; }
+#gpp-print-front .front-year-label { font-size: 13px; color: var(--paper-ink-soft); flex-shrink: 0; margin-right: 6px; }
+#gpp-print-front .front-year-blanks { display: flex; direction: ltr; align-items: center; gap: 4px; flex-shrink: 0; }
+#gpp-print-front .front-year-blanks i { display: inline-flex; align-items: center; justify-content: center; border-bottom: 1px dotted var(--paper-line-strong); width: 44px; min-height: 23px; font-style: normal; }
+#gpp-print-front .front-registration-boxes { display: grid; gap: 14px; }
+#gpp-print-front .front-registration-boxes > div { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+#gpp-print-front .front-registration-boxes > div > span { white-space: nowrap; }
+#gpp-print-front .front-manual-box { flex: 1; min-height: 56px; border: 1px solid var(--paper-line); border-radius: 6px; }
+#gpp-print-front .front-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13.5px; }
+#gpp-print-front .front-label { font-weight: 500; }
+.gpp-print-dossier .paper-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.gpp-print-dossier .paper-choice { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.8; }
+.gpp-print-dossier .paper-choice i { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; border: 1px solid var(--paper-line-dark); flex: 0 0 12px; font-style: normal; font-size: 10px; font-weight: 700; }
+#gpp-print-front .front-school-row { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+#gpp-print-front .front-school-row > .front-line { flex: 1; }
+#gpp-print-front .front-office-row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+#gpp-print-front .front-office-row > .front-line { flex: 1 1 220px; }
+#gpp-print-front .front-review-row { display: grid; grid-template-columns: minmax(0, 1fr) 195px; gap: 26px; align-items: stretch; }
+#gpp-print-front .front-review-data { display: grid; gap: 24px; align-content: start; }
+#gpp-print-front .front-stamp-space { min-height: 135px; border: 1px dotted var(--paper-line-subtle); display: flex; align-items: flex-start; justify-content: center; padding: 8px; font-size: 11px; color: var(--paper-ink-muted); }
+#gpp-print-front .front-contact-row { display: grid; grid-template-columns: minmax(0, 1fr) 195px; gap: 24px; align-items: center; }
+#gpp-print-front .front-contact-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+#gpp-print-front .front-contact-fields .front-line { font-size: 13px; }
+#gpp-print-front .front-bottom-blank { min-height: 60px; }
+.gpp-print-dossier .paper-footer { margin-top: auto; border-top: 1.5px solid var(--paper-line-strong); padding-top: 10px; display: flex; justify-content: space-between; gap: 15px; font-size: 11px; color: var(--paper-ink-muted); }
+.gpp-print-dossier .paper-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 14px; border-bottom: 1.5px solid var(--paper-line-dark); }
+.gpp-print-dossier .paper-org span { font-size: 19px; display: block; font-weight: 700; }
+.gpp-print-dossier .paper-org strong { font-size: 14px; font-weight: 400; display: block; margin-top: 3px; }
+.gpp-print-dossier .paper-logo-reserve { width: 90px; height: 70px; object-fit: contain; flex-shrink: 0; }
+.gpp-print-dossier .paper-title-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 8px; gap: 15px; }
+.gpp-print-dossier .paper-title-row h2 { font-size: 23px; font-weight: 700; margin: 0; }
+.gpp-print-dossier .paper-title-row > span { font-size: 11px; color: var(--paper-ink-soft); }
+.gpp-print-dossier .paper-student-identity { display: grid; grid-template-columns: minmax(105px, 1fr) minmax(0, 2.4fr) minmax(120px, 1.2fr); column-gap: 16px; row-gap: 6px; padding: 6px 2px; }
+.gpp-print-dossier .paper-student-identity .print-field.grade-field { grid-column: span 2; }
+.gpp-print-dossier .paper-fields { display: grid; column-gap: 18px; row-gap: 6px; padding: 8px 2px; }
+.gpp-print-dossier .paper-fields.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gpp-print-dossier .print-field { display: flex; gap: 8px; align-items: baseline; min-height: 30px; font-size: 13px; }
+.gpp-print-dossier .print-field .blank { flex: 1; border-bottom: 1px dotted var(--paper-line-strong); min-width: 20px; min-height: 23px; display: flex; align-items: baseline; padding: 0 5px; }
+.gpp-print-dossier .print-field.wide { grid-column: span 2; }
+.gpp-print-dossier .paper-finance { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 14px 0 6px; font-size: 12.5px; border: 1.5px solid var(--paper-line-strong); }
+.gpp-print-dossier .paper-finance col.col-type { width: 13%; }
+.gpp-print-dossier .paper-finance col.col-serial { width: 17%; }
+.gpp-print-dossier .paper-finance col.col-date { width: 14%; }
+.gpp-print-dossier .paper-finance col.col-account { width: 18%; }
+.gpp-print-dossier .paper-finance col.col-bank { width: 20%; }
+.gpp-print-dossier .paper-finance col.col-amount { width: 18%; }
+.gpp-print-dossier .paper-finance th { font-weight: 500; padding: 7px 4px; background: var(--paper-fill-table); border: 1px solid var(--paper-line); line-height: 1.7; text-align: center; }
+.gpp-print-dossier .paper-finance td { height: 34px; border: 1px solid var(--paper-line-soft); padding: 4px 6px; vertical-align: middle; }
+.gpp-print-dossier .paper-finance tbody th { background: var(--paper-fill-table-subtle); font-size: 12px; }
+.gpp-print-dossier .paper-finance tbody tr:nth-child(6) > * { border-top: 2px solid var(--paper-line-strong); }
+.gpp-print-dossier .paper-finance small { display: block; font-size: 10.5px; }
+.gpp-print-dossier .paper-finance tfoot td { height: 60px; font-size: 12px; }
+.gpp-print-dossier .sum-blank { min-height: 24px; border-bottom: 1px dotted var(--paper-line); margin-top: 4px; }
+.gpp-print-dossier .paper-finance-summary { margin: 13px 0 15px; }
+.gpp-print-dossier .paper-help { font-size: 11px; color: var(--paper-ink-muted); margin-top: 4px; }
+.gpp-print-dossier .paper-inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; }
+.gpp-print-dossier .paper-approval-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; margin-top: 16px; }
+.gpp-print-dossier .paper-approval { border: 1.5px solid var(--paper-line-strong); padding: 10px 11px; }
+.gpp-print-dossier .paper-approval h3, .gpp-print-dossier .paper-management h3 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin-bottom: 7px; }
+.gpp-print-dossier .paper-approval h3 b, .gpp-print-dossier .paper-management h3 b { border: 1px solid var(--paper-line); background: #eee; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; font-size: 12px; }
+.gpp-print-dossier .paper-approval p { font-size: 12px; min-height: 44px; line-height: 1.7; }
+.gpp-print-dossier .paper-approval .paper-choices { gap: 5px; font-size: 11px; margin: 8px 0; }
+.gpp-print-dossier .paper-write { border: 1px solid var(--paper-line-soft); padding: 8px 9px; font-size: 11px; background: #fff; min-height: 80px; }
+.gpp-print-dossier .paper-write--management { min-height: 85px !important; }
+.gpp-print-dossier .paper-management { border: 1.5px solid var(--paper-line-strong); padding: 12px 14px; margin-top: 12px; break-inside: avoid; }
+.gpp-print-dossier .paper-management p { font-size: 12px; display: inline-block; margin-left: 15px; }
+.gpp-print-dossier .paper-management > .paper-choices { display: inline-flex; }
+.gpp-print-dossier .paper-section { margin-top: 13px; break-inside: avoid; }
+.gpp-print-dossier .paper-section > h3 { background: var(--paper-fill-section); border-top: 1px solid #8b8b8b; border-bottom: 1px solid #b8b8b8; padding: 4px 10px; font-size: 13.5px; font-weight: 700; }
+.gpp-print-dossier .writing-lines div { height: 27px; border-bottom: 1px dotted var(--paper-line); }
+.gpp-print-dossier .print-value { display: block; max-width: 100%; min-width: 0; color: var(--paper-ink); font-family: var(--font); font-weight: 500; font-size: inherit; line-height: 1.8; white-space: normal; overflow-wrap: anywhere; unicode-bidi: isolate; text-align: right; }
+.gpp-print-dossier .print-value:empty { display: none; }
+.gpp-print-dossier .print-value-digits { direction: ltr; font-variant-numeric: tabular-nums; text-align: left; }
+#gpp-print-front .front-id-blank .print-value { width: 100%; font-size: 18px; font-weight: 700; line-height: 1.7; text-align: center; }
+.screen-reader-text { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+
+@media print {
+  @page { size: A4 portrait; margin: 8mm 10mm; }
+  html { font-size: 10.5pt; scrollbar-gutter: auto; }
+  body { background: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
+  #view-container { margin: 0 !important; padding: 0 !important; }
+  .gpp-print-dossier { margin: 0 !important; padding: 0 !important; }
+  .gpp-print-sheet { display: flex !important; flex-direction: column !important; min-height: 281mm !important; width: 100% !important; max-width: none !important; box-sizing: border-box !important; border: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; color: #000 !important; background: #fff !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+  #gpp-print-front { break-after: page !important; page-break-after: always !important; }
+  #gpp-print-back { page-break-inside: avoid !important; break-inside: avoid !important; }
+  #gpp-print-front .cardboard-header { grid-template-columns: 88px minmax(0, 1fr) 88px; padding-bottom: 16px; gap: 14px; border-bottom: 1.5px solid var(--paper-line-dark); }
+  #gpp-print-front .front-brand-center h2 { font-size: 17pt; line-height: 1.4; }
+  #gpp-print-front .front-brand-center p { font-size: 12pt; line-height: 1.45; }
+  #gpp-print-front .front-logo-slot { width: 88px; height: 76px; object-fit: contain; }
+  #gpp-print-front .front-header-blank { min-height: 38px; }
+  #gpp-print-front .front-identifiers { gap: 26px; margin: 18px 0 22px; }
+  #gpp-print-front .front-id-field { font-size: 11pt; }
+  #gpp-print-front .front-id-blank { min-height: 48px; border: 1.5px solid var(--paper-line-strong); }
+  #gpp-print-front .cardboard-candidate { padding: 0 20px 22px; border: 1.5px solid var(--paper-line-strong); }
+  #gpp-print-front .cardboard-candidate > h2 { font-size: 12.5pt; margin-top: -15px; margin-bottom: 14px; padding: 4px 18px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #gpp-print-front .front-candidate-body { gap: 18px; }
+  #gpp-print-front .front-name-row { gap: 24px; }
+  #gpp-print-front .front-study-admin, #gpp-print-front .front-review-row, #gpp-print-front .front-contact-row { grid-template-columns: minmax(0, 1fr) 190px; gap: 22px; }
+  #gpp-print-front .front-study { gap: 18px; }
+  #gpp-print-front .front-line, #gpp-print-front .front-options, #gpp-print-front .front-registration-boxes > div { font-size: 10pt; }
+  #gpp-print-front .front-line { min-height: 33px; }
+  #gpp-print-front .front-blank { min-height: 22px; }
+  #gpp-print-front .front-manual-box { min-height: 65px; }
+  #gpp-print-front .front-stamp-space { min-height: 145px; font-size: 9pt; padding: 10px; }
+  #gpp-print-front .front-bottom-blank { min-height: 68px; }
+  #gpp-print-front .paper-choice { font-size: 9.5pt; }
+  #gpp-print-front .paper-choice i { width: 13px; height: 13px; flex-basis: 13px; font-size: 11px; }
+  .gpp-print-dossier .paper-header { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1.5px solid var(--paper-line-dark); }
+  .gpp-print-dossier .paper-org span { font-size: 13pt; line-height: 1.25; }
+  .gpp-print-dossier .paper-org strong { font-size: 9.5pt; line-height: 1.25; }
+  .gpp-print-dossier .paper-logo-reserve { height: 48px; width: 70px; object-fit: contain; }
+  .gpp-print-dossier .paper-title-row { padding: 5px 0 3px; }
+  .gpp-print-dossier .paper-title-row h2 { font-size: 14pt; margin: 0; line-height: 1.2; }
+  .gpp-print-dossier .paper-title-row > span { font-size: 8pt; }
+  .gpp-print-dossier .paper-student-identity { grid-template-columns: minmax(95px, .9fr) minmax(0, 2.5fr) minmax(110px, 1.1fr); column-gap: 14px; row-gap: 4px; padding: 3px 0; }
+  .gpp-print-dossier .paper-finance { margin-top: 7px; margin-bottom: 5px; font-size: 8.5pt; border: 1.5px solid var(--paper-line-strong); }
+  .gpp-print-dossier .paper-finance td { height: 20px; padding: 2px 5px; line-height: 1.2; }
+  .gpp-print-dossier .paper-finance th { font-size: 8.5pt; padding: 3px 2px; line-height: 1.3; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .gpp-print-dossier .paper-finance tfoot td { height: 34px; font-size: 8pt; padding: 3px 6px; }
+  .gpp-print-dossier .sum-blank { min-height: 19px; margin-top: 2px; }
+  .gpp-print-dossier .paper-finance-summary { margin: 5px 0 7px; }
+  .gpp-print-dossier .paper-finance-summary .paper-fields { padding: 2px 0; row-gap: 3px; }
+  .gpp-print-dossier .paper-help { font-size: 7pt; margin-top: 2px; }
+  .gpp-print-dossier .paper-inline { margin-top: 3px; font-size: 8pt; gap: 8px; }
+  .gpp-print-dossier .paper-approval-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7px; gap: 7px; }
+  .gpp-print-dossier .paper-approval { padding: 6px 7px; border: 1.5px solid var(--paper-line-strong); }
+  .gpp-print-dossier .paper-approval h3, .gpp-print-dossier .paper-management h3 { font-size: 8.5pt; margin-bottom: 3px; }
+  .gpp-print-dossier .paper-approval h3 b, .gpp-print-dossier .paper-management h3 b { width: 18px; height: 18px; font-size: 8pt; }
+  .gpp-print-dossier .paper-approval p { font-size: 7pt; min-height: 26px; line-height: 1.4; }
+  .gpp-print-dossier .paper-approval .paper-choices { gap: 3px; font-size: 7pt; margin: 3px 0; }
+  .gpp-print-dossier .paper-write { min-height: 48px !important; padding: 3px 5px; font-size: 7pt; }
+  .gpp-print-dossier .paper-management { padding: 7px 9px; margin-top: 7px; border: 1.5px solid var(--paper-line-strong); }
+  .gpp-print-dossier .paper-management p { font-size: 7.5pt; margin: 0 0 3px 8px; }
+  .gpp-print-dossier .paper-management .paper-choices { font-size: 7pt; }
+  .gpp-print-dossier .paper-write--management { min-height: 52px !important; }
+  .gpp-print-dossier .paper-section { margin-top: 7px; }
+  .gpp-print-dossier .paper-section > h3 { padding: 3px 8px; font-size: 8.5pt; margin: 0; }
+  .gpp-print-dossier .writing-lines div { height: 19px; }
+  .gpp-print-dossier .paper-footer { padding-top: 5px; font-size: 7pt; }
+  .gpp-print-dossier--failure { margin: 0; width: 100%; border: none; }
+}
