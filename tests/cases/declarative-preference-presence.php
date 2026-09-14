@@ -29,6 +29,20 @@ function gpp_sparse_definition( $canonical, $package_id, $profile_id, $presentat
     );
 }
 
+function gpp_css_has_ungated_consumer( $css, $variable, $marker ) {
+    preg_match_all( '/([^{}]+)\{([^{}]*)\}/s', $css, $rules, PREG_SET_ORDER );
+    foreach ( $rules as $rule ) {
+        if (
+            false !== strpos( $rule[2], 'var(' . $variable . ')' ) &&
+            false === strpos( trim( $rule[1] ), $marker )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 $canonical_path = dirname( __DIR__, 2 ) . '/profiles/srwf/registration/profile-package-v1.1.json';
 $canonical = json_decode( file_get_contents( $canonical_path ), true );
 gpp_assert_true( is_array( $canonical ), 'Canonical schema-1.1 package fixture must decode.' );
@@ -193,6 +207,43 @@ gpp_assert_true(
 gpp_assert_true(
     1 === preg_match( '/gpp-cap-gf-orbital-control-metric-projection_wrapper\.gpp-has-primary-action-focus-border_wrapper[^{}]*\{[^{}]*var\(--gpp-primary-action-focus-border\)/s', $css_without_comments ),
     'Orbital metric capability must require primary_action.focus_border presence before consuming that value.'
+);
+
+$ungated_mutant = str_replace(
+    '.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-background_wrapper {',
+    '.gpp-enabled_wrapper.gpp-declarative_wrapper {',
+    $css_without_comments,
+    $ungated_mutation_count
+);
+gpp_assert_same( 1, $ungated_mutation_count, 'Ungated-consumer falsification must mutate exactly one controls.background gate.' );
+gpp_assert_true(
+    gpp_css_has_ungated_consumer( $ungated_mutant, '--gpp-control-background', 'gpp-has-controls-background_wrapper' ),
+    'Conformance control must reject an implementation that projects a preference without its presence marker.'
+);
+
+$fallback_mutant = str_replace(
+    'var(--gpp-control-background)',
+    'var(--gpp-control-background, #fff)',
+    $css_without_comments,
+    $fallback_mutation_count
+);
+gpp_assert_same( 1, $fallback_mutation_count, 'Fallback falsification must mutate exactly one controls.background consumer.' );
+gpp_assert_true(
+    1 === preg_match( '/var\(\s*--gpp-[^,)]+\s*,/', $fallback_mutant ),
+    'Conformance control must reject fallback values that impersonate package intent for an absent preference.'
+);
+
+$partial_capability_mutant = preg_replace(
+    '/\.gpp-has-controls-min-height_wrapper(?= \.gfield--type-text)/',
+    '',
+    $css_without_comments,
+    1,
+    $partial_capability_mutation_count
+);
+gpp_assert_same( 1, $partial_capability_mutation_count, 'Partial capability falsification must mutate exactly one control metric adapter selector.' );
+gpp_assert_true(
+    gpp_css_has_ungated_consumer( $partial_capability_mutant, '--gpp-control-min-height', 'gpp-has-controls-min-height_wrapper' ),
+    'Conformance control must reject a one-manifestation repair that leaves a capability value consumer ungated.'
 );
 
 echo "GPP_DECLARATIVE_PREFERENCE_PRESENCE_PASS\n";
