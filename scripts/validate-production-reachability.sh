@@ -10,7 +10,8 @@ EXTRACTOR="scripts/extract-production-references.php"
 
 # Exact file-level exceptions only. These are admitted source contracts/helpers
 # that remain intentionally non-rooted in the current production activation graph.
-DEFERRED_UNREACHABLE=()
+DEFERRED_UNREACHABLE=(
+)
 
 # Production invariants. These files must both exist and be reached from the real
 # plugin entrypoint. Keeping this separate from the general orphan check prevents
