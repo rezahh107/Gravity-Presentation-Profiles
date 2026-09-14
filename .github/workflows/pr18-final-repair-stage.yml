@@ -41,7 +41,7 @@ jobs:
           php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
           php -l tests/repro-evidence-lab/build-qualification-evidence.php
           rm -f tests/fixtures/owner-visual/.pr18-cascade-trigger
-          git rm .github/workflows/pr18-final-repair-stage.yml tests/repro-evidence-lab/pr18-final-patch.py
+          git rm -f .github/workflows/pr18-final-repair-stage.yml tests/repro-evidence-lab/pr18-final-patch.py
           git config user.name 'gpp-qualification-bot'
           git config user.email 'actions@users.noreply.github.com'
           git add -A
