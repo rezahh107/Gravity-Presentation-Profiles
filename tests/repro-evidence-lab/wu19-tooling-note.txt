@@ -1,0 +1,1 @@
+GitHub connector writes are used because the local shell has no GitHub DNS egress.
