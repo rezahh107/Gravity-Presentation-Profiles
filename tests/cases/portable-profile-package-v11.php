@@ -21,6 +21,15 @@ function gpp_v11_fixture( $name ) {
     return $data;
 }
 
+function gpp_v11_registration_package() {
+    $path = dirname( __DIR__, 2 ) . '/profiles/srwf/registration/profile-package-v1.1.json';
+    $data = json_decode( file_get_contents( $path ), true );
+    if ( ! is_array( $data ) ) {
+        gpp_fail( 'Invalid SRWF Registration declarative profile package.' );
+    }
+    return $data;
+}
+
 function gpp_v11_expect_violation( $callback, $message ) {
     try {
         $callback();
@@ -49,7 +58,7 @@ function gpp_v11_reverse_object_keys( $value ) {
 }
 
 $v1  = gpp_v11_fixture( 'wu09-visual-package.json' );
-$v11 = gpp_v11_fixture( 'srwf-registration-visual-package-v1.1.json' );
+$v11 = gpp_v11_registration_package();
 
 // Schema 1.0.0 semantics remain accepted and frozen.
 gpp_assert_true( VisualProfilePackage::validate( $v1 ), 'Existing schema 1.0.0 package must remain valid.' );
@@ -64,11 +73,11 @@ gpp_v11_expect_violation(
 
 // Schema 1.1.0 admits a deliberately selected surface subset and Gravity Forms.
 gpp_assert_same( '1.1.0', VisualProfilePackage::LATEST_SCHEMA_VERSION, 'Latest visual package schema must be explicit.' );
-gpp_assert_true( VisualProfilePackage::validate( $v11 ), 'Schema 1.1.0 SRWF Registration fixture must validate.' );
+gpp_assert_true( VisualProfilePackage::validate( $v11 ), 'Schema 1.1.0 SRWF Registration package must validate.' );
 gpp_assert_same(
     array( 'gravity_forms.form' ),
     $v11['selected_surfaces'],
-    'Registration fixture must target only the generic Gravity Forms form surface.'
+    'Registration package must target only the generic Gravity Forms form surface.'
 );
 gpp_assert_true(
     in_array( 'gravity_forms.form', VisualProfilePackage::admittedSurfaces(), true ),
@@ -98,6 +107,7 @@ gpp_v11_expect_violation(
 $tokens = $v11['design_tokens'];
 $presentation = $v11['surface_profiles'][0]['presentation'];
 gpp_assert_same( '#8690A1', $tokens['colors']['control_border'], 'Owner-approved control border must be preserved.' );
+gpp_assert_same( '#18794E', $tokens['colors']['success'], 'Canonical success color must remain part of the selected surface token set.' );
 gpp_assert_same( 16, $tokens['spacing_px']['mobile_horizontal_padding'], 'Owner-approved mobile horizontal padding must be preserved.' );
 gpp_assert_same( 840, $tokens['sizes_px']['content_max_width'], 'Canonical content max width must be expressible.' );
 gpp_assert_same( 52, $tokens['sizes_px']['control_min_height'], 'Canonical control metric must be expressible.' );
@@ -119,7 +129,7 @@ gpp_assert_same(
         'persian_gravity.jalali_validation_message_after_control',
     ),
     $presentation['capabilities'],
-    'Only the two currently proven host-adapter capabilities may be requested by the Registration fixture.'
+    'Only the two currently proven host-adapter capabilities may be requested by the Registration package.'
 );
 
 $serialized = json_encode( $v11 );
