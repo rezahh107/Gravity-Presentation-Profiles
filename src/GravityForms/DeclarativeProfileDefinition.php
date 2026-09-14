@@ -11,6 +11,57 @@ final class DeclarativeProfileDefinition {
         'persian_gravity.jalali_validation_message_after_control' => 'gpp-cap-pgr-jalali-validation-message-after-control',
     );
 
+    private const PREFERENCE_CLASSES = array(
+        'composition' => array(
+            'direction' => 'gpp-has-composition-direction',
+            'max_inline_size' => 'gpp-has-composition-max-inline-size',
+            'inline_padding' => 'gpp-has-composition-inline-padding',
+            'surface_background' => 'gpp-has-composition-surface-background',
+            'surface_radius' => 'gpp-has-composition-surface-radius',
+        ),
+        'typography' => array(
+            'font_family' => 'gpp-has-typography-font-family',
+        ),
+        'controls' => array(
+            'background' => 'gpp-has-controls-background',
+            'text' => 'gpp-has-controls-text',
+            'border' => 'gpp-has-controls-border',
+            'focus_border' => 'gpp-has-controls-focus-border',
+            'error_border' => 'gpp-has-controls-error-border',
+            'radius' => 'gpp-has-controls-radius',
+            'min_height' => 'gpp-has-controls-min-height',
+            'font_size' => 'gpp-has-controls-font-size',
+            'font_weight' => 'gpp-has-controls-font-weight',
+        ),
+        'labels' => array(
+            'text' => 'gpp-has-labels-text',
+            'required_color' => 'gpp-has-labels-required-color',
+            'font_size' => 'gpp-has-labels-font-size',
+            'font_weight' => 'gpp-has-labels-font-weight',
+        ),
+        'descriptions' => array(
+            'text' => 'gpp-has-descriptions-text',
+        ),
+        'sections' => array(
+            'divider' => 'gpp-has-sections-divider',
+            'heading_text' => 'gpp-has-sections-heading-text',
+            'heading_font_size' => 'gpp-has-sections-heading-font-size',
+            'heading_font_weight' => 'gpp-has-sections-heading-font-weight',
+            'description_text' => 'gpp-has-sections-description-text',
+        ),
+        'primary_action' => array(
+            'background' => 'gpp-has-primary-action-background',
+            'pressed_background' => 'gpp-has-primary-action-pressed-background',
+            'focus_border' => 'gpp-has-primary-action-focus-border',
+            'min_height' => 'gpp-has-primary-action-min-height',
+            'font_size' => 'gpp-has-primary-action-font-size',
+            'font_weight' => 'gpp-has-primary-action-font-weight',
+        ),
+        'validation' => array(
+            'error_color' => 'gpp-has-validation-error-color',
+        ),
+    );
+
     private const TOKEN_PROPERTIES = array(
         'composition' => array(
             'max_inline_size' => '--gpp-form-max-inline-size',
@@ -116,6 +167,18 @@ final class DeclarativeProfileDefinition {
             $classes[] = 'gpp-field-layout-single-column';
         }
 
+        foreach ( self::PREFERENCE_CLASSES as $block_name => $preference_map ) {
+            if ( ! isset( $presentation[ $block_name ] ) || ! is_array( $presentation[ $block_name ] ) ) {
+                continue;
+            }
+
+            foreach ( $preference_map as $preference => $class_name ) {
+                if ( array_key_exists( $preference, $presentation[ $block_name ] ) ) {
+                    $classes[] = $class_name;
+                }
+            }
+        }
+
         $capabilities = isset( $presentation['capabilities'] ) ? $presentation['capabilities'] : array();
         foreach ( $capabilities as $capability ) {
             if ( isset( self::CAPABILITY_CLASSES[ $capability ] ) ) {
@@ -130,7 +193,7 @@ final class DeclarativeProfileDefinition {
         $declarations = array();
         $presentation = $this->profile['presentation'];
 
-        if ( isset( $presentation['composition']['direction'] ) ) {
+        if ( isset( $presentation['composition'] ) && array_key_exists( 'direction', $presentation['composition'] ) ) {
             $declarations['--gpp-form-direction'] = $presentation['composition']['direction'];
         }
 
@@ -140,7 +203,7 @@ final class DeclarativeProfileDefinition {
             }
 
             foreach ( $property_map as $preference => $property_name ) {
-                if ( ! isset( $presentation[ $block_name ][ $preference ] ) ) {
+                if ( ! array_key_exists( $preference, $presentation[ $block_name ] ) ) {
                     continue;
                 }
 
