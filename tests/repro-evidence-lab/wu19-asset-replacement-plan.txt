@@ -1,1 +1,0 @@
-Replace current small runtime image derivatives with the approved byte-verified derivatives before evidence acceptance.

@@ -1,1 +1,0 @@
-Approved asset derivatives are prepared locally for replacement before PR evidence.
