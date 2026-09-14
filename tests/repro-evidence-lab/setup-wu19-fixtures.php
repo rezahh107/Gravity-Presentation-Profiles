@@ -209,8 +209,9 @@ if ( ! $alpha_step || 'approval' !== $alpha_step->get_type() || ! $beta_step || 
 }
 
 // Keep both evidence Entries assigned to the same user, but remove administrator
-// bypass privileges in this isolated WU19 WordPress only. Permission can then be
-// gained/lost by real Gravity Flow assignment rather than by an admin capability.
+// bypass privileges in this isolated WU19 WordPress only. The official Gravity
+// Flow capability `gravityflow_inbox` admits the admin Inbox UI without granting
+// status-view-all or workflow-detail administrative authority.
 foreach ( array( $alpha_step, $beta_step ) as $assigned_step ) {
     $meta = $assigned_step->get_feed_meta();
     $meta['assignees'] = array( 'user_id|' . (int) $bootstrap->ID );
@@ -218,6 +219,7 @@ foreach ( array( $alpha_step, $beta_step ) as $assigned_step ) {
     gravity_flow()->update_feed_meta( $assigned_step->get_id(), $meta );
 }
 $bootstrap->set_role( 'subscriber' );
+$bootstrap->add_cap( 'gravityflow_inbox' );
 clean_user_cache( $bootstrap->ID );
 
 $manifest = array(
