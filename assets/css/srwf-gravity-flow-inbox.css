@@ -1,56 +1,64 @@
 /* SRWF shared Gravity Flow Inbox presentation. Native AG Grid remains the one Inbox. */
-.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper,
-.gflow-inbox.gflow-grid.gflow-common .ag-root,
-.gflow-inbox.gflow-grid.gflow-common .ag-body-viewport,
-.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-viewport {
-    overflow-x: hidden !important;
+
+/*
+ * Structural card projection is progressive. The default state is untouched
+ * native Gravity Flow; only browsers with :has() selector support can enter
+ * card mode, and then only when every currently rendered row is ready.
+ */
+@supports selector(:has(*)) {
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport {
+        overflow-x: hidden !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
+        box-sizing: border-box;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        height: auto !important;
+        min-height: 0 !important;
+        width: 100% !important;
+        padding: 4px;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row {
+        box-sizing: border-box;
+        position: relative !important;
+        inset: auto !important;
+        transform: none !important;
+        display: block !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+        box-sizing: border-box;
+        position: relative !important;
+        inset: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        line-height: 1.6;
+        white-space: normal !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link {
+        display: block;
+        height: 100%;
+        color: inherit;
+        text-decoration: none;
+    }
 }
 
-.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container {
-    box-sizing: border-box;
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    height: auto !important;
-    min-height: 0 !important;
-    width: 100% !important;
-    padding: 4px;
-}
-
-.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row {
-    box-sizing: border-box;
-    position: relative !important;
-    inset: auto !important;
-    transform: none !important;
-    display: block !important;
-    width: auto !important;
-    height: auto !important;
-    min-height: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-}
-
-.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
-    box-sizing: border-box;
-    position: relative !important;
-    inset: auto !important;
-    display: block !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    line-height: 1.6;
-    white-space: normal !important;
-}
-
-.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link {
-    display: block;
-    height: 100%;
-    color: inherit;
-    text-decoration: none;
-}
-
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__readiness,
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__search-key {
     position: absolute !important;
     width: 1px !important;
@@ -84,8 +92,8 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:focus .gpp-inbox-card,
-.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:hover .gpp-inbox-card {
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:focus .gpp-inbox-card,
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:hover .gpp-inbox-card {
     border-color: #1d4ed8;
     box-shadow: 0 0 0 1px #1d4ed8;
 }
@@ -181,8 +189,10 @@
 }
 
 @media (max-width: 782px) {
-    .gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container {
-        grid-template-columns: minmax(0, 1fr);
+    @supports selector(:has(*)) {
+        .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
+            grid-template-columns: minmax(0, 1fr);
+        }
     }
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
