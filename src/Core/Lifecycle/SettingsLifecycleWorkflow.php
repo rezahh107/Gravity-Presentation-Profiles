@@ -126,6 +126,19 @@ final class SettingsLifecycleWorkflow {
         return $result;
     }
 
+    public function visualProfilesForSurface( $surface ) {
+        return ( new InstalledVisualProfileCatalog( $this->visual ) )->listForSurface( $surface );
+    }
+
+    public function resolveInstalledVisualProfile( $surface, $package_id, $package_version, $profile_id ) {
+        return ( new InstalledVisualProfileCatalog( $this->visual ) )->resolveExact(
+            $surface,
+            $package_id,
+            $package_version,
+            $profile_id
+        );
+    }
+
     public function exportVisual( $package_id, $package_version ) {
         return $this->visual->export( $package_id, $package_version );
     }
