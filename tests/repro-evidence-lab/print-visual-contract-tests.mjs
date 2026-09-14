@@ -34,7 +34,7 @@ function parsePgm(file) {
   return { width, height, pixels };
 }
 function renderPdf(pdf, prefix) {
-  const cp = spawnSync('pdftoppm', ['-gray', '-r', '72', '-pgm', pdf, prefix], { encoding: 'utf8' });
+  const cp = spawnSync('pdftoppm', ['-gray', '-r', '72', pdf, prefix], { encoding: 'utf8' });
   if (cp.status !== 0) throw new Error(`pdftoppm failed: ${cp.stderr}`);
   const files = [1, 2].map(n => `${prefix}-${n}.pgm`);
   if (!files.every(fs.existsSync) || fs.existsSync(`${prefix}-3.pgm`)) throw new Error(`Expected exactly two rendered PDF pages for ${pdf}`);

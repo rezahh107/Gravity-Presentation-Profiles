@@ -94,12 +94,12 @@ function gppq_activate_clone( $source, $id, $version, $entry_id = null ) {
     gppq_reset_caches();
     return $artifact;
 }
-function gppq_add_text_field( $form_id, $label, $value, $entry_id ) {
+function gppq_add_text_field( $form_id, $label, $value, $entry_id, $minimum_id = 0 ) {
     $form = GFAPI::get_form( $form_id );
     if ( ! is_array( $form ) ) throw new RuntimeException( 'Synthetic form unavailable.' );
     $max = 0;
     foreach ( $form['fields'] as $field ) $max = max( $max, (int) $field->id );
-    $id = $max + 1;
+    $id = max( $max + 1, (int) $minimum_id + 1 );
     $form['fields'][] = array( 'id' => $id, 'label' => $label, 'type' => 'text', 'isRequired' => false );
     $result = GFAPI::update_form( $form );
     if ( is_wp_error( $result ) ) throw new RuntimeException( $result->get_error_message() );
@@ -139,7 +139,8 @@ if ( 'schema-drift-on' === $action ) {
     if ( is_wp_error( $result ) ) throw new RuntimeException( $result->get_error_message() );
     GFAPI::update_entry_field( $entry_id, $national_id_field, '' );
     $replacement_value = 'SYN-REPLACEMENT-NATIONAL-ID';
-    $replacement_id = gppq_add_text_field( $form_id, 'Synthetic National ID Replacement', $replacement_value, $entry_id );
+    $replacement_id = gppq_add_text_field( $form_id, 'Synthetic National ID Replacement', $replacement_value, $entry_id, $national_id_field );
+    if ( $replacement_id === $national_id_field ) throw new RuntimeException( 'Schema-drift control reused the removed field identifier.' );
     update_option( 'gpp_qualification_schema_drift_replacement', array( 'field_id' => $replacement_id, 'value' => $replacement_value ), false );
     gppq_reset_caches();
     gppq_json( array( 'state' => 'drifted', 'removed_field_id' => $national_id_field, 'replacement_field_id' => $replacement_id, 'replacement_value' => $replacement_value ) ); return;

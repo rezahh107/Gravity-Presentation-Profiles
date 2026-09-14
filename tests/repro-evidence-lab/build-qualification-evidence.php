@@ -12,6 +12,8 @@ function gppq_result_status( $suite, $id ) {
     foreach ( $suite['results'] as $result ) if ( isset( $result['id'] ) && $id === $result['id'] ) return $result['status'];
     return 'MISSING';
 }
+$repository_sha = trim( (string) shell_exec( 'git rev-parse HEAD 2>/dev/null' ) );
+if ( 1 !== preg_match( '/^[0-9a-f]{40}$/', $repository_sha ) ) throw new RuntimeException( 'Exact checkout repository SHA unavailable.' );
 $core = gppq_read_json( $dir, 'core-spine-results.json' );
 $entry_visual = gppq_read_json( $dir, 'entry-visual-contract-results.json' );
 $print_visual = gppq_read_json( $dir, 'print-visual-contract-results.json' );
@@ -22,7 +24,7 @@ $wu19_browser = gppq_read_json( $dir, 'wu19-browser-results.json' );
 
 $evidence = array(
     'schema_version' => '1.0.0',
-    'repository_sha' => getenv( 'GITHUB_SHA' ) ?: null,
+    'repository_sha' => $repository_sha,
     'evidence_class' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
     'data_class' => 'SYNTHETIC_NON_PII',
     'focused_gates' => array(
