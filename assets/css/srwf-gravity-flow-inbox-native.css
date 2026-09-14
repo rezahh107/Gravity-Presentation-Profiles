@@ -1,0 +1,48 @@
+/* Native-first CSS projection over the authoritative Gravity Flow Inbox. */
+
+/*
+ * Baseline/fallback state: native Gravity Flow columns stay visible and the GPP
+ * presentation column stays hidden. This is also the behavior for browsers
+ * without selector(:has()) support and for every unready rendered row set.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-header-cell[col-id="gpp_case_card"],
+.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+    display: none !important;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__readiness {
+    display: none !important;
+}
+
+/*
+ * Progressive card mode: at least one rendered row is ready and no rendered
+ * row is unready. The readiness markers are server-rendered from semantic
+ * resolution, so CSS changes presentation only; no host behavior is replaced.
+ */
+@supports selector(:has(*)) {
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-header-cell:not([col-id="gpp_case_card"]),
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row > .ag-cell:not([col-id="gpp_case_card"]) {
+        display: none !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-header-container,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-header-row,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-header-cell[col-id="gpp_case_card"] {
+        box-sizing: border-box;
+        left: 0 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-header-cell[col-id="gpp_case_card"],
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+        display: block !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"] {
+        left: 0 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+    }
+}

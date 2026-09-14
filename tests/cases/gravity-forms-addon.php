@@ -67,8 +67,16 @@ class GFAddOn {
 
 require dirname( __DIR__, 2 ) . '/gravity-presentation-profiles.php';
 
-gpp_assert_same( 1, count( $GLOBALS['gpp_actions'] ), 'Plugin bootstrap should defer registration through gform_loaded.' );
-$bootstrap_callback = $GLOBALS['gpp_actions'][0][1];
+$gform_loaded_actions = array_values(
+    array_filter(
+        $GLOBALS['gpp_actions'],
+        function ( $item ) {
+            return 'gform_loaded' === $item[0];
+        }
+    )
+);
+gpp_assert_same( 1, count( $gform_loaded_actions ), 'Plugin bootstrap should register exactly one Gravity Forms integration callback through gform_loaded.' );
+$bootstrap_callback = $gform_loaded_actions[0][1];
 gpp_assert_same( true, call_user_func( $bootstrap_callback ), 'Gravity Forms availability should load and register the add-on.' );
 gpp_assert_same( true, GFForms::$framework_included, 'Bootstrap should ask Gravity Forms to include its Add-On Framework.' );
 gpp_assert_same( array( 'GravityPresentationProfiles\\GravityForms\\AddOn' ), GFAddOn::$registered, 'Exactly the GPP add-on class should register.' );

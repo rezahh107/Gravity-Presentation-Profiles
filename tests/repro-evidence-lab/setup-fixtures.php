@@ -3,9 +3,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
 }
 
+use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
+use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
+use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
+use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
 use GravityPresentationProfiles\Core\Portable\VisualProfilePackage;
 use GravityPresentationProfiles\Core\Portable\VisualProfileResolver;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 if ( ! $artifact_dir ) {
@@ -32,24 +37,15 @@ if ( ! $operator || ! $viewer ) {
     throw new RuntimeException( 'Synthetic WU21 operator/viewer accounts must be provisioned by the pinned CI workflow.' );
 }
 
-function wu21_add_form( $title, $name_id, $photo_id ) {
+function wu21_add_form( $title, $name_id, $photo_id, $national_id ) {
     $form = array(
         'title' => $title,
-        'description' => 'Synthetic WU21 evidence form.',
+        'description' => 'Synthetic WU21/WU17 evidence form.',
         'labelPlacement' => 'top_label',
         'fields' => array(
-            array(
-                'id' => $name_id,
-                'label' => 'Student Name',
-                'type' => 'text',
-                'isRequired' => true,
-            ),
-            array(
-                'id' => $photo_id,
-                'label' => 'Student Photo',
-                'type' => 'fileupload',
-                'isRequired' => false,
-            ),
+            array( 'id' => $name_id, 'label' => 'Student Name', 'type' => 'text', 'isRequired' => true ),
+            array( 'id' => $photo_id, 'label' => 'Student Photo', 'type' => 'fileupload', 'isRequired' => false ),
+            array( 'id' => $national_id, 'label' => 'Synthetic National ID', 'type' => 'text', 'isRequired' => true ),
         ),
         'button' => array( 'type' => 'text', 'text' => 'Submit' ),
     );
@@ -60,8 +56,8 @@ function wu21_add_form( $title, $name_id, $photo_id ) {
     return (int) $id;
 }
 
-$form_alpha = wu21_add_form( 'WU21 Alpha Form', 1, 2 );
-$form_beta = wu21_add_form( 'WU21 Beta Form', 7, 9 );
+$form_alpha = wu21_add_form( 'WU21 Alpha Form', 1, 2, 3 );
+$form_beta = wu21_add_form( 'WU21 Beta Form', 7, 9, 11 );
 
 function wu21_add_approval_step( $form_id, $name, $operator_id ) {
     $api = new Gravity_Flow_API( $form_id );
@@ -101,12 +97,15 @@ for ( $i = 0; $i < 25; $i++ ) {
     $form_id = $is_alpha ? $form_alpha : $form_beta;
     $name_field = $is_alpha ? 1 : 7;
     $photo_field = $is_alpha ? 2 : 9;
+    $national_field = $is_alpha ? 3 : 11;
     $prefix = $is_alpha ? 'Alpha' : 'Beta';
+    $national_id = sprintf( 'SYN-%s-%06d', $is_alpha ? 'A' : 'B', $i );
     $entry = array(
         'form_id' => $form_id,
         'created_by' => (int) $operator->ID,
         (string) $name_field => sprintf( 'WU21 %s Student %02d', $prefix, $i ),
         (string) $photo_field => $is_alpha ? $alpha_photo : $beta_photo,
+        (string) $national_field => $national_id,
     );
     $entry_id = GFAPI::add_entry( $entry );
     if ( is_wp_error( $entry_id ) ) {
@@ -125,52 +124,24 @@ for ( $i = 0; $i < 25; $i++ ) {
         'entry_id' => (int) $entry_id,
         'form_id' => $form_id,
         'student_name' => $entry[(string) $name_field],
+        'national_id' => $national_id,
         'date_created' => $created,
         'step_id' => (int) $current->get_id(),
         'step_name' => $current->get_name(),
     );
 }
 
-function wu21_binding_set( $id, $form_id, $name_field, $photo_field, $photo_state ) {
+function wu21_binding_set( $id, $form_id, $name_field, $photo_field, $national_field, $photo_state ) {
     $proven = array( 'wu21:synthetic-fixture', 'wu21:reproducible-simulation' );
     $not_proven = array( 'wu21:fail-closed-negative-control' );
     $bindings = array(
-        array(
-            'semantic_slot_key' => 'student.full_name',
-            'state' => 'PROVEN',
-            'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => $name_field ),
-            'evidence_refs' => $proven,
-        ),
-        array(
-            'semantic_slot_key' => 'student.photo',
-            'state' => $photo_state,
-            'source_ref' => 'PROVEN' === $photo_state ? array( 'type' => 'gravity_forms.field', 'field_id' => $photo_field ) : null,
-            'evidence_refs' => 'PROVEN' === $photo_state ? $proven : $not_proven,
-        ),
-        array(
-            'semantic_slot_key' => 'entry.created_at',
-            'state' => 'PROVEN',
-            'source_ref' => array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ),
-            'evidence_refs' => $proven,
-        ),
-        array(
-            'semantic_slot_key' => 'workflow.current_step',
-            'state' => 'PROVEN',
-            'source_ref' => array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ),
-            'evidence_refs' => $proven,
-        ),
-        array(
-            'semantic_slot_key' => 'school.name',
-            'state' => 'UNBOUND',
-            'source_ref' => null,
-            'evidence_refs' => $not_proven,
-        ),
-        array(
-            'semantic_slot_key' => 'workflow.due_at',
-            'state' => 'NOT_PROVEN',
-            'source_ref' => null,
-            'evidence_refs' => $not_proven,
-        ),
+        array( 'semantic_slot_key' => 'student.full_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => $name_field ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'student.national_id', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => $national_field ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'student.photo', 'state' => $photo_state, 'source_ref' => 'PROVEN' === $photo_state ? array( 'type' => 'gravity_forms.field', 'field_id' => $photo_field ) : null, 'evidence_refs' => 'PROVEN' === $photo_state ? $proven : $not_proven ),
+        array( 'semantic_slot_key' => 'entry.created_at', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'workflow.current_step', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'school.name', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => $not_proven ),
+        array( 'semantic_slot_key' => 'workflow.due_at', 'state' => 'NOT_PROVEN', 'source_ref' => null, 'evidence_refs' => $not_proven ),
     );
     $runtime_claims = array();
     foreach ( $bindings as $binding ) {
@@ -199,10 +170,13 @@ function wu21_binding_set( $id, $form_id, $name_field, $photo_field, $photo_stat
     );
 }
 
-$binding_alpha = wu21_binding_set( 'wu21.sim.alpha.v1', $form_alpha, 1, 2, 'PROVEN' );
-$binding_beta = wu21_binding_set( 'wu21.sim.beta.v1', $form_beta, 7, 9, 'NOT_PROVEN' );
+$binding_alpha = wu21_binding_set( 'wu21.sim.alpha.v1', $form_alpha, 1, 2, 3, 'PROVEN' );
+$binding_beta = wu21_binding_set( 'wu21.sim.beta.v1', $form_beta, 7, 9, 11, 'NOT_PROVEN' );
 EnvironmentBindingSet::validate( $binding_alpha );
 EnvironmentBindingSet::validate( $binding_beta );
+
+// Preserve the original WU21 test adapter's reference option so its existing
+// seam tests remain valid; production WU17 resolves only lifecycle activations.
 update_option( 'gpp_wu21_binding_sets', array( $binding_alpha, $binding_beta ), false );
 
 $visual_path = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/fixtures/wu09-visual-package.json';
@@ -214,26 +188,50 @@ if ( ! is_array( $inbox_profile ) || 'shared.inbox.v1' !== $inbox_profile['profi
     throw new RuntimeException( 'Shared Inbox profile identity changed unexpectedly.' );
 }
 
+$visual_lifecycle = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
+$visual_lifecycle->import( $visual_package );
+$visual_lifecycle->activate(
+    array(
+        'surface' => 'gravity_flow.inbox',
+        'package_id' => $visual_package['package_id'],
+        'package_version' => $visual_package['package_version'],
+        'profile_id' => $inbox_profile['profile_id'],
+    )
+);
+
+$binding_lifecycle = new BindingSetLifecycle(
+    new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
+    new EvidenceReferenceGate( array( 'wu21:synthetic-fixture', 'wu21:reproducible-simulation' ) )
+);
+foreach ( array( $binding_alpha, $binding_beta ) as $binding ) {
+    $binding_lifecycle->import( $binding );
+    $binding_lifecycle->activate(
+        array(
+            'context' => $binding['context'],
+            'binding_set_id' => $binding['binding_set_id'],
+            'binding_set_version' => $binding['binding_set_version'],
+        )
+    );
+}
+InboxPresentationAdapter::resetRuntimeCache();
+
 $manifest = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'installation_id' => 'wu21-sim-installation',
     'operator' => array( 'id' => (int) $operator->ID, 'login' => $operator->user_login, 'email_domain' => 'example.invalid' ),
     'viewer' => array( 'id' => (int) $viewer->ID, 'login' => $viewer->user_login, 'email_domain' => 'example.invalid' ),
     'forms' => array(
-        array( 'key' => 'alpha', 'form_id' => $form_alpha, 'name_field_id' => 1, 'photo_field_id' => 2, 'step_id' => $step_alpha ),
-        array( 'key' => 'beta', 'form_id' => $form_beta, 'name_field_id' => 7, 'photo_field_id' => 9, 'step_id' => $step_beta ),
+        array( 'key' => 'alpha', 'form_id' => $form_alpha, 'name_field_id' => 1, 'photo_field_id' => 2, 'national_id_field_id' => 3, 'step_id' => $step_alpha ),
+        array( 'key' => 'beta', 'form_id' => $form_beta, 'name_field_id' => 7, 'photo_field_id' => 9, 'national_id_field_id' => 11, 'step_id' => $step_beta ),
     ),
     'entry_ids' => $entry_ids,
     'entry_records' => $entry_records,
     'base_entry_count' => count( $entry_ids ),
     'surface_profile_id' => 'shared.inbox.v1',
-    'optional_capabilities' => array(
-        'school.name' => 'UNBOUND',
-        'workflow.due_at' => 'NOT_PROVEN',
-    ),
+    'optional_capabilities' => array( 'school.name' => 'UNBOUND', 'workflow.due_at' => 'NOT_PROVEN' ),
     'binding_set_ids' => array( 'wu21.sim.alpha.v1', 'wu21.sim.beta.v1' ),
 );
 update_option( 'gpp_wu21_fixture_manifest', $manifest, false );
 file_put_contents( $artifact_dir . '/fixture-manifest.json', json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
-echo "WU21 synthetic fixtures created: {$form_alpha}, {$form_beta}; entries=" . count( $entry_ids ) . "\n";
+echo "WU21/WU17 synthetic fixtures created: {$form_alpha}, {$form_beta}; entries=" . count( $entry_ids ) . "\n";

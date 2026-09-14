@@ -2,6 +2,8 @@
 
 namespace GravityPresentationProfiles;
 
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
+
 final class Bootstrap {
     private static $initialized = false;
 
@@ -35,6 +37,11 @@ final class Bootstrap {
         }
 
         \GFAddOn::register( $addon_class );
+
+        // Preserve the repository's single deferred bootstrap path. Gravity Flow
+        // depends on Gravity Forms, so its presentation adapter is registered
+        // only after Gravity Forms has loaded successfully.
+        InboxPresentationAdapter::register();
 
         return true;
     }

@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runWu17BrowserTests } from './wu17-browser-tests.mjs';
 
 const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
@@ -9,6 +10,7 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const repoRoot = process.env.GITHUB_WORKSPACE;
 const results = [];
+let wu17Results = [];
 const browserDiagnostics = { console: [], page_errors: [], request_failures: [] };
 const pollingDiagnostics = { requests: [], responses: [] };
 let pollingPhase = 'pre_browser_005';
@@ -162,7 +164,7 @@ try {
       const initialRows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (initialRows !== 20) throw new Error(`Expected a fresh first page with 20 rows, got ${initialRows}`);
 
-      const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
+      const header = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="gpp_case_card"]').first();
       await header.click();
       await page.waitForTimeout(300);
       const sort1 = await header.getAttribute('aria-sort');
@@ -187,16 +189,17 @@ try {
 
     await test(page, 'WU21-BROWSER-004', 'native Entry Details navigation is preserved', async () => {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.gflow-inbox__entry-cell-link', { timeout: 30000 });
-      const href = await page.locator('.gflow-inbox__entry-cell-link').first().getAttribute('href');
+      const link = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link').first();
+      await link.waitFor({ state: 'visible', timeout: 30000 });
+      const href = await link.getAttribute('href');
       if (!href || !href.includes('admin.php?page=gravityflow-inbox&view=entry') || !href.includes('&id=') || !href.includes('&lid=')) {
         throw new Error(`Unexpected native Entry Details href: ${href}`);
       }
       await Promise.all([
         page.waitForURL(/page=gravityflow-inbox.*view=entry/, { timeout: 30000 }),
-        page.locator('.gflow-inbox__entry-cell-link').first().click(),
+        link.click(),
       ]);
-      return { href };
+      return { href, visible_native_card_link: true };
     });
 
     pollingPhase = 'browser_005_before_mutation';
@@ -207,7 +210,7 @@ try {
       await search.click();
       await search.pressSequentially('WU21 Refresh Student');
       await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 0, null, { timeout: 15000 });
-      let rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
+      const rows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
       if (rows !== 0) throw new Error(`Refresh negative control expected zero rows before mutation, got ${rows}`);
       const id = wpControl('add');
       pollingPhase = 'browser_005_after_mutation';
@@ -239,6 +242,8 @@ try {
       ['WU21-BROWSER-006', 'reload/re-render retains exactly one native Inbox grid'],
     ]) record(id, name, 'NOT_RUN', 'Blocked by WU21-BROWSER-001 native grid initialization failure.');
   }
+
+  wu17Results = await runWu17BrowserTests({ page, inboxUrl, wpControl, artifactDir });
 } finally {
   const failed = results.filter(r => r.status !== 'PASS');
   if (failed.length) {
@@ -251,4 +256,4 @@ try {
 }
 
 for (const r of results) console.log(`${r.status} ${r.id} ${r.name}`);
-if (results.some(r => r.status !== 'PASS')) process.exit(1);
+if (results.some(r => r.status !== 'PASS') || wu17Results.some(r => r.status !== 'PASS')) process.exit(1);
