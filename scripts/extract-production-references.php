@@ -345,7 +345,6 @@ $scope_meta = array(
         'global'   => array(),
     ),
 );
-$scope_open_depth = array( 'top' => 0 );
 $scope_by_index = array();
 $scope_stack = array(
     array(
@@ -382,7 +381,6 @@ for ( $i = 0; $i < $count; $i++ ) {
                     'captured' => $pending_function_scope['captured'],
                     'global' => array(),
                 );
-                $scope_open_depth[$current_scope] = $brace_depth;
                 $pending_function_scope = null;
             }
         } elseif ( '}' === $token ) {
