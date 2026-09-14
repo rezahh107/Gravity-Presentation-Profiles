@@ -125,6 +125,112 @@ if ( class_exists( $synthetic_class ) ) {
 PHP
 expect_pass "$dynamic" >/dev/null
 
+same_scope="$(fixture same-scope)"
+synthetic_class "$same_scope" 'SameScope'
+cat >> "$same_scope/src/Bootstrap.php" <<'PHP'
+function gpp_reachability_same_scope_positive() {
+    $class = 'GravityPresentationProfiles\Synthetic\SameScope';
+    if ( class_exists( $class ) ) {
+        \GFAddOn::register( $class );
+    }
+}
+PHP
+expect_pass "$same_scope" >/dev/null
+
+closure_same_scope="$(fixture closure-same-scope)"
+synthetic_class "$closure_same_scope" 'ClosureSameScope'
+cat >> "$closure_same_scope/src/Bootstrap.php" <<'PHP'
+function gpp_reachability_closure_positive() {
+    $probe = function () {
+        $class = 'GravityPresentationProfiles\Synthetic\ClosureSameScope';
+        class_exists( $class );
+    };
+}
+PHP
+expect_pass "$closure_same_scope" >/dev/null
+
+cross_scope="$(fixture cross-scope)"
+synthetic_class "$cross_scope" 'CrossScope'
+cat >> "$cross_scope/src/Bootstrap.php" <<'PHP'
+function gpp_reachability_cross_scope_source() {
+    $class = 'GravityPresentationProfiles\Synthetic\CrossScope';
+}
+function gpp_reachability_cross_scope_sink() {
+    class_exists( $class );
+}
+PHP
+expect_fail_with "$cross_scope" 'without a single provable literal class assignment in the same lexical scope'
+
+method_scope="$(fixture method-scope)"
+synthetic_class "$method_scope" 'MethodSourceOnly'
+synthetic_class "$method_scope" 'MethodSink'
+cat >> "$method_scope/src/Bootstrap.php" <<'PHP'
+final class GppReachabilityMethodScopeFixture {
+    public static function source() {
+        $class = 'GravityPresentationProfiles\Synthetic\MethodSourceOnly';
+    }
+    public static function sink() {
+        $class = 'GravityPresentationProfiles\Synthetic\MethodSink';
+        class_exists( $class );
+    }
+}
+PHP
+expect_fail_with "$method_scope" 'src/Synthetic/MethodSourceOnly.php'
+
+top_level_to_function="$(fixture top-level-to-function)"
+synthetic_class "$top_level_to_function" 'TopLevelToFunction'
+cat >> "$top_level_to_function/src/Bootstrap.php" <<'PHP'
+$class = 'GravityPresentationProfiles\Synthetic\TopLevelToFunction';
+function gpp_reachability_top_level_sink() {
+    class_exists( $class );
+}
+PHP
+expect_fail_with "$top_level_to_function" 'without a single provable literal class assignment in the same lexical scope'
+
+captured="$(fixture captured)"
+synthetic_class "$captured" 'Captured'
+cat >> "$captured/src/Bootstrap.php" <<'PHP'
+$class = 'GravityPresentationProfiles\Synthetic\Captured';
+$gpp_reachability_capture_probe = function () use ( $class ) {
+    class_exists( $class );
+};
+PHP
+expect_fail_with "$captured" 'closure-captured dynamic class flow is unsupported'
+
+global_flow="$(fixture global-flow)"
+synthetic_class "$global_flow" 'GlobalFlow'
+cat >> "$global_flow/src/Bootstrap.php" <<'PHP'
+$class = 'GravityPresentationProfiles\Synthetic\GlobalFlow';
+function gpp_reachability_global_sink() {
+    global $class;
+    class_exists( $class );
+}
+PHP
+expect_fail_with "$global_flow" 'global dynamic class flow is unsupported'
+
+multiple_assignments="$(fixture multiple-assignments)"
+synthetic_class "$multiple_assignments" 'MultipleAssignmentsA'
+synthetic_class "$multiple_assignments" 'MultipleAssignmentsB'
+cat >> "$multiple_assignments/src/Bootstrap.php" <<'PHP'
+function gpp_reachability_multiple_assignments() {
+    $class = 'GravityPresentationProfiles\Synthetic\MultipleAssignmentsA';
+    class_exists( $class );
+    $class = 'GravityPresentationProfiles\Synthetic\MultipleAssignmentsB';
+}
+PHP
+expect_fail_with "$multiple_assignments" 'without a single provable literal class assignment in the same lexical scope'
+
+variable_variable="$(fixture variable-variable)"
+synthetic_class "$variable_variable" 'VariableVariable'
+cat >> "$variable_variable/src/Bootstrap.php" <<'PHP'
+function gpp_reachability_variable_variable() {
+    $name = 'class';
+    $$name = 'GravityPresentationProfiles\Synthetic\VariableVariable';
+    class_exists( $$name );
+}
+PHP
+expect_fail_with "$variable_variable" 'uses a non-literal/non-local-variable class argument'
+
 unsupported_dynamic="$(fixture unsupported-dynamic)"
 synthetic_class "$unsupported_dynamic" 'UnsupportedDynamic'
 cat >> "$unsupported_dynamic/src/Bootstrap.php" <<'PHP'
