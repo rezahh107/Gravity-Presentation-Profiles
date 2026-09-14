@@ -16,6 +16,7 @@ $cases = array(
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
     'entry-detail-presentation-model.php',
+    'print-dossier-presentation-model.php',
 );
 
 foreach ( $cases as $case ) {
