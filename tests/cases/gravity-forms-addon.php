@@ -155,6 +155,43 @@ $addon->validate_visual_package_import( $invalid_probe, '{not-json' );
 gpp_assert_true( is_string( $invalid_probe->error ) && '' !== $invalid_probe->error, 'Invalid JSON must preserve an explicit settings validation error.' );
 gpp_assert_same( $before_invalid, $visual->snapshot(), 'Invalid JSON must create zero partial installation state.' );
 
+$invalid_schema = json_decode( $canonical_json, true );
+$invalid_schema['schema_version'] = '9.9.9';
+$invalid_schema_probe = new GppAddonSettingsField();
+$before_invalid_schema = $visual->snapshot();
+$addon->validate_visual_package_import( $invalid_schema_probe, json_encode( $invalid_schema, JSON_UNESCAPED_SLASHES ) );
+gpp_assert_true( is_string( $invalid_schema_probe->error ) && '' !== $invalid_schema_probe->error, 'Unsupported schema must preserve an explicit settings validation error.' );
+gpp_assert_same( $before_invalid_schema, $visual->snapshot(), 'Unsupported schema must create zero partial installation state.' );
+
+$unsupported_capability = json_decode( $canonical_json, true );
+$unsupported_capability['surface_profiles'][0]['presentation']['capabilities'][] = 'gp_advanced_select.guessed_adapter';
+$unsupported_capability_probe = new GppAddonSettingsField();
+$before_unsupported_capability = $visual->snapshot();
+$addon->validate_visual_package_import( $unsupported_capability_probe, json_encode( $unsupported_capability, JSON_UNESCAPED_SLASHES ) );
+gpp_assert_true( is_string( $unsupported_capability_probe->error ) && '' !== $unsupported_capability_probe->error, 'Unsupported capability must be rejected by the production import path.' );
+gpp_assert_same( $before_unsupported_capability, $visual->snapshot(), 'Unsupported capability must create zero partial installation state.' );
+
+$dangerous_css = json_decode( $canonical_json, true );
+$dangerous_css['surface_profiles'][0]['presentation']['raw_css'] = 'body{display:none}';
+$dangerous_css_probe = new GppAddonSettingsField();
+$before_dangerous_css = $visual->snapshot();
+$addon->validate_visual_package_import( $dangerous_css_probe, json_encode( $dangerous_css, JSON_UNESCAPED_SLASHES ) );
+gpp_assert_true( is_string( $dangerous_css_probe->error ) && '' !== $dangerous_css_probe->error, 'Package-supplied arbitrary CSS must be rejected by the production import path.' );
+gpp_assert_same( $before_dangerous_css, $visual->snapshot(), 'Dangerous package content must create zero partial installation state.' );
+
+$environment_identity = json_decode( $canonical_json, true );
+$environment_identity['package_id'] = 'form-77.registration.presentation';
+$environment_identity_probe = new GppAddonSettingsField();
+$before_environment_identity = $visual->snapshot();
+$addon->validate_visual_package_import( $environment_identity_probe, json_encode( $environment_identity, JSON_UNESCAPED_SLASHES ) );
+gpp_assert_true( is_string( $environment_identity_probe->error ) && '' !== $environment_identity_probe->error, 'Environment identity must be rejected from portable package identity by the production import path.' );
+gpp_assert_same( $before_environment_identity, $visual->snapshot(), 'Environment-identity package attempt must create zero partial installation state.' );
+
+$legacy_package_json = file_get_contents( dirname( __DIR__ ) . '/fixtures/wu09-visual-package.json' );
+$legacy_package_probe = new GppAddonSettingsField();
+$addon->validate_visual_package_import( $legacy_package_probe, $legacy_package_json );
+gpp_assert_same( null, $legacy_package_probe->error, 'Schema 1.0 package compatibility must remain intact through the production import path.' );
+
 $alternate = json_decode( $canonical_json, true );
 $alternate['package_id'] = 'alternate.registration.presentation';
 $alternate['package_version'] = '2.0.0';
@@ -185,6 +222,7 @@ $alternate_ref = DeclarativePresentationResolver::encodeReference(
 );
 gpp_assert_true( in_array( $canonical_ref, $declarative_values, true ), 'Imported canonical package/version/profile must become an exact form-selection choice.' );
 gpp_assert_true( in_array( $alternate_ref, $declarative_values, true ), 'Second imported package/version/profile must become an exact form-selection choice.' );
+gpp_assert_true( ! in_array( DeclarativePresentationResolver::encodeReference( 'gpp.portable.shared.v1', '1.0.0', 'shared.inbox.v1' ), $declarative_values, true ), 'Package without gravity_forms.form must not become a declarative Gravity Forms choice.' );
 $legacy_values = array_column( $fields[2]['choices'], 'value' );
 gpp_assert_true( in_array( 'srwf-registration', $legacy_values, true ), 'Legacy SRWF Registration profile must remain selectable.' );
 
@@ -229,6 +267,24 @@ $missing_form = array(
         'profile' => 'srwf-registration',
     ),
 );
+$missing_profile_form = array(
+    'id' => 23,
+    'cssClass' => 'host-missing-profile-class',
+    'gravity-presentation-profiles' => array(
+        'enabled' => '1',
+        'declarative_profile' => DeclarativePresentationResolver::encodeReference( 'srwf.registration.presentation', '1.1.0', 'missing.profile' ),
+        'profile' => 'srwf-registration',
+    ),
+);
+$wrong_surface_form = array(
+    'id' => 24,
+    'cssClass' => 'host-wrong-surface-class',
+    'gravity-presentation-profiles' => array(
+        'enabled' => '1',
+        'declarative_profile' => DeclarativePresentationResolver::encodeReference( 'gpp.portable.shared.v1', '1.0.0', 'shared.inbox.v1' ),
+        'profile' => 'srwf-registration',
+    ),
+);
 $malformed_form = array(
     'id' => 22,
     'cssClass' => 'host-malformed-class',
@@ -249,6 +305,8 @@ gpp_assert_same( $declarative_state->profile()->key(), $same_selection_state->pr
 gpp_assert_true( $declarative_state->profile()->key() !== $alternate_state->profile()->key(), 'Distinct declarative package/profile references must receive distinct runtime scope identities.' );
 gpp_assert_true( ! $addon->resolve_form_state( $plain_form )->isActive(), 'Disabled form must remain native.' );
 gpp_assert_true( ! $addon->resolve_form_state( $missing_form )->isActive(), 'Missing declarative version must fail closed instead of falling back to legacy.' );
+gpp_assert_true( ! $addon->resolve_form_state( $missing_profile_form )->isActive(), 'Missing declarative profile in an installed version must fail closed instead of falling back to legacy.' );
+gpp_assert_true( ! $addon->resolve_form_state( $wrong_surface_form )->isActive(), 'Installed package without gravity_forms.form must fail closed when referenced by a form.' );
 gpp_assert_true( ! $addon->resolve_form_state( $malformed_form )->isActive(), 'Malformed persisted declarative reference must fail closed instead of falling back to legacy.' );
 
 $GLOBALS['gpp_enqueued_styles'] = array();
