@@ -15,6 +15,7 @@ $cases = array(
     'package-lifecycle-deactivation.php',
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
+    'entry-detail-presentation-model.php',
 );
 
 foreach ( $cases as $case ) {
