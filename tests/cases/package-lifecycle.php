@@ -236,7 +236,7 @@ foreach ( $binding_export['bindings'] as $binding ) {
 
 // Reserved seam stays inert across install/activation.
 $profile_before = $visual->effectiveProfile( 'gravity_flow.inbox' );
-$visual->import( wu10_visual( '1.2.0', '1.1.0' ) );
+$visual->import( wu10_visual( '1.2.0' ) );
 $visual->activate( array( 'surface' => 'gravity_flow.inbox', 'package_id' => 'gpp.shared.defaults', 'package_version' => '1.2.0', 'profile_id' => 'shared.inbox.v1' ) );
 gpp_assert_same( $profile_before, $visual->effectiveProfile( 'gravity_flow.inbox' ), 'Reserved seam data is inert in V1 resolution.' );
 
