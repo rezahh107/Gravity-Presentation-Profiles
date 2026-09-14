@@ -207,11 +207,11 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/core-spine-results.json"
           test -s "$WU21_ARTIFACT_DIR/entry-visual-contract-results.json"
           test -s "$WU21_ARTIFACT_DIR/print-visual-contract-results.json"
-          php tests/repro-evidence-lab/build-qualification-evidence.php
-          test -s "$WU21_ARTIFACT_DIR/gpp-qualification.json"
           test "${{ steps.core_qualification.outcome }}" = 'success'
           test "${{ steps.entry_visual_qualification.outcome }}" = 'success'
           test "${{ steps.print_visual_qualification.outcome }}" = 'success'
+          php tests/repro-evidence-lab/build-qualification-evidence.php
+          test -s "$WU21_ARTIFACT_DIR/gpp-qualification.json"
       - name: Upload WU19 and qualification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
