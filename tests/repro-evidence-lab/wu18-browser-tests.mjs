@@ -95,7 +95,10 @@ await test('WU18-BROWSER-004', 'PDF is host-file open affordance and history is 
   if (!href?.includes('report-card.pdf') || target !== '_blank' || await page.locator('[data-gpp-section="documents"] [data-gpp-image-preview]').count() !== 0) throw new Error(`PDF representation failed: ${href}`);
   const details = page.locator('[data-gpp-history-details]');
   if (await details.count() !== 1 || await details.evaluate(el => el.open)) throw new Error('History not collapsed.');
-  if ((await page.locator('.gpp-entry-dossier__history-help').innerText()).trim() !== manifest.locked_history_helper || await details.locator('.gravityflow-timeline').count() !== 1) throw new Error('History helper/native timeline failed.');
+  const helper = (await page.locator('.gpp-entry-dossier__history-help').innerText()).trim();
+  const timelineInDetails = await details.locator('.gravityflow-timeline').count();
+  const timelineGlobal = await page.locator('form .gravityflow-timeline').count();
+  if (helper !== manifest.locked_history_helper || timelineInDetails !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
   return { pdf_href: href, history_collapsed: true, native_timeline: true };
 });
 
@@ -120,7 +123,8 @@ await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed b
   await login(deniedPage, 'wu21_viewer', 'wu21-synthetic-viewer-2026'); await deniedPage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   const state = await deniedPage.evaluate(() => ({ dossier: document.querySelectorAll('.gpp-entry-dossier').length, native_table: document.querySelectorAll('.entry-detail-view').length, body_text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 1200) }));
   await deniedContext.close();
-  if (state.dossier !== 0 || state.native_table !== 0 || !state.body_text.includes('permission')) throw new Error(`Authorization boundary failed: ${JSON.stringify(state)}`);
+  const nativeDenial = state.body_text.includes("You don't have permission to view this entry.") || state.body_text.includes('Sorry, you are not allowed to access this page.');
+  if (state.dossier !== 0 || state.native_table !== 0 || !nativeDenial) throw new Error(`Authorization boundary failed: ${JSON.stringify(state)}`);
   return { dossier: 0, native_table: 0, native_permission_denial: true };
 });
 
