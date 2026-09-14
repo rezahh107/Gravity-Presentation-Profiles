@@ -130,7 +130,7 @@ $required_unsupported = wu17_set_slot_state(
     $alpha,
     'workflow.current_step',
     'PROVEN',
-    array( 'type' => 'gravity_flow.state', 'state_key' => 'unsupported_state' )
+    array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' )
 );
 $required_unsupported_model = new InboxPresentationModel( $profile, array( $required_unsupported ), $package['semantic_slots'] );
 $unsupported_result = $required_unsupported_model->resolve( $alpha_entry, 'workflow.current_step' );
