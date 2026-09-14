@@ -74,6 +74,14 @@ jobs:
         shell: bash
         run: bash tests/visual-governance-guardrail.sh
 
+      - name: Validate production reachability
+        shell: bash
+        run: bash scripts/validate-production-reachability.sh .
+
+      - name: Run production reachability falsification controls
+        shell: bash
+        run: bash tests/production-reachability-guardrail.sh
+
       - name: Lint production and test PHP
         shell: bash
         run: |
@@ -161,6 +169,14 @@ jobs:
       - name: Run visual governance falsification controls
         shell: bash
         run: bash tests/visual-governance-guardrail.sh
+
+      - name: Validate production reachability
+        shell: bash
+        run: bash scripts/validate-production-reachability.sh .
+
+      - name: Run production reachability falsification controls
+        shell: bash
+        run: bash tests/production-reachability-guardrail.sh
 
       - name: Lint production and test PHP
         shell: bash
