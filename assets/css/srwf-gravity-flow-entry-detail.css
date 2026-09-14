@@ -1,0 +1,435 @@
+/* SRWF shared Gravity Flow Entry Detail dossier presentation. */
+
+.gpp-entry-detail__projection {
+    display: none;
+}
+
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced {
+    color: #172033;
+    direction: rtl;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced .gpp-entry-detail__projection {
+    display: block;
+    box-sizing: border-box;
+    max-width: 1040px;
+    margin: 0 auto;
+}
+
+/* Native fields remain in the host form and become presentation-hidden only
+ * after the controller has validated/re-homed every admitted native region. */
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced table.entry-detail-view {
+    display: none !important;
+}
+
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced #poststuff #post-body.columns-2,
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced #poststuff #post-body.columns-1 {
+    margin: 0 !important;
+}
+
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced #post-body-content {
+    float: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced #postbox-container-1,
+.gravityflow_workflow_detail.gpp-entry-detail--enhanced #postbox-container-2 {
+    display: none !important;
+}
+
+.gpp-entry-detail__utility {
+    display: flex;
+    justify-content: flex-start;
+    margin: 0 0 12px;
+}
+
+.gpp-entry-detail__utility .detail-view-print {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.gpp-entry-detail__identity,
+.gpp-entry-detail__task,
+.gpp-entry-detail__section,
+.gpp-entry-detail__history {
+    box-sizing: border-box;
+    margin: 0 0 16px;
+    border: 1px solid #e4e7ec;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.gpp-entry-detail__identity {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+    padding: 20px;
+}
+
+.gpp-entry-detail__identity-photo,
+.gpp-entry-detail__identity-photo > img,
+.gpp-entry-detail__identity-photo > span[aria-hidden="true"] {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+}
+
+.gpp-entry-detail__identity-photo > img {
+    display: block;
+    object-fit: cover;
+}
+
+.gpp-entry-detail__identity-photo > span[aria-hidden="true"] {
+    display: grid;
+    place-items: center;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.gpp-entry-detail__identity-main h1 {
+    margin: 0 0 12px;
+    color: #172033;
+    font-size: 22px;
+    line-height: 1.55;
+}
+
+.gpp-entry-detail__identity-facts,
+.gpp-entry-detail__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin: 0;
+}
+
+.gpp-entry-detail__identity-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gpp-entry-detail__fact {
+    min-width: 0;
+}
+
+.gpp-entry-detail__fact dt {
+    margin: 0 0 4px;
+    color: #667085;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.gpp-entry-detail__fact dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #172033;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.7;
+}
+
+.gpp-entry-detail__task {
+    padding: 20px;
+    border-color: #bfdbfe;
+    background: #f8fbff;
+}
+
+.gpp-entry-detail__task > h2,
+.gpp-entry-detail__section > h2 {
+    margin: 0 0 14px;
+    color: #172033;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.gpp-entry-detail__task .gravityflow-instructions {
+    min-width: 0;
+    margin: 0 0 14px;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.gpp-entry-detail__task .gravityflow-instructions .inside {
+    margin: 0;
+    padding: 0;
+    color: #475467;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.gpp-entry-detail__task #gravityflow-status-box-container {
+    min-width: 0;
+    margin: 0;
+    padding: 14px 0 0;
+    border: 0;
+    border-top: 1px solid #dbeafe;
+    box-shadow: none;
+    background: transparent;
+}
+
+.gpp-entry-detail__task #gravityflow-status-box-container > h3 {
+    display: none;
+}
+
+.gpp-entry-detail__task #submitcomment,
+.gpp-entry-detail__task #minor-publishing {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+}
+
+.gpp-entry-detail__task .gravityflow-status-box-field {
+    color: #475467;
+}
+
+.gpp-entry-detail__task .gravityflow-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    text-align: right;
+}
+
+.gpp-entry-detail__task .gravityflow-action-buttons .button {
+    min-height: 42px;
+    padding: 0 18px;
+    border-radius: 10px;
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 40px;
+}
+
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="approved"] {
+    border-color: #1d4ed8;
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="approved"]:hover,
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="approved"]:focus {
+    border-color: #1e40af;
+    background: #1e40af;
+    color: #fff;
+}
+
+/* A reject decision is deliberately not styled like a validation message. */
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="rejected"] {
+    border-color: #b42318;
+    background: #fff;
+    color: #b42318;
+}
+
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="rejected"]:hover,
+.gpp-entry-detail__task .gravityflow-action-buttons .button[value="rejected"]:focus {
+    border-color: #912018;
+    background: #fff5f4;
+    color: #912018;
+}
+
+.gpp-entry-detail__section {
+    padding: 20px;
+}
+
+.gpp-entry-detail__document-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.gpp-entry-detail__document {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #e4e7ec;
+    border-radius: 10px;
+    background: #f9fafb;
+}
+
+.gpp-entry-detail__thumbnail {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #172033;
+    text-align: right;
+    cursor: pointer;
+}
+
+.gpp-entry-detail__thumbnail img {
+    display: block;
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.gpp-entry-detail__thumbnail:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 4px;
+}
+
+.gpp-entry-detail__document--file {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.gpp-entry-detail__document-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.gpp-entry-detail__document--file a {
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+.gpp-entry-detail__history {
+    padding: 0;
+    overflow: hidden;
+}
+
+.gpp-entry-detail__history > summary {
+    padding: 18px 20px;
+    color: #172033;
+    cursor: pointer;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.gpp-entry-detail__history-help {
+    margin: 0;
+    padding: 0 20px 16px;
+    color: #667085;
+    line-height: 1.8;
+}
+
+.gpp-entry-detail__history-body {
+    padding: 0 20px 20px;
+}
+
+.gpp-entry-detail__history .gravityflow-timeline {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.gpp-entry-detail__history .gravityflow-timeline > h3 {
+    display: none;
+}
+
+.gpp-entry-detail__history .gravityflow-timeline .inside {
+    margin: 0;
+    padding: 0;
+}
+
+.gpp-entry-detail__preview[hidden] {
+    display: none !important;
+}
+
+.gpp-entry-detail__preview {
+    position: fixed;
+    z-index: 100000;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: 24px;
+    background: rgba(23, 32, 51, 0.72);
+}
+
+.gpp-entry-detail__preview-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    max-width: min(920px, 92vw);
+    max-height: 90vh;
+    padding: 12px;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 18px 50px rgba(16, 24, 40, 0.3);
+}
+
+.gpp-entry-detail__preview-panel img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(90vh - 70px);
+    margin: auto;
+    object-fit: contain;
+}
+
+.gpp-entry-detail__preview-close {
+    justify-self: start;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid #8690a1;
+    border-radius: 8px;
+    background: #fff;
+    color: #172033;
+    cursor: pointer;
+}
+
+@media (max-width: 782px) {
+    .gravityflow_workflow_detail.gpp-entry-detail--enhanced .gpp-entry-detail__projection {
+        max-width: none;
+    }
+
+    .gpp-entry-detail__identity {
+        grid-template-columns: 60px minmax(0, 1fr);
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .gpp-entry-detail__identity-photo,
+    .gpp-entry-detail__identity-photo > img,
+    .gpp-entry-detail__identity-photo > span[aria-hidden="true"] {
+        width: 56px;
+        height: 56px;
+    }
+
+    .gpp-entry-detail__identity-main h1 {
+        font-size: 19px;
+    }
+
+    .gpp-entry-detail__identity-facts,
+    .gpp-entry-detail__facts,
+    .gpp-entry-detail__document-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gpp-entry-detail__task,
+    .gpp-entry-detail__section {
+        padding: 16px;
+    }
+
+    .gpp-entry-detail__task .gravityflow-action-buttons {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gpp-entry-detail__task .gravityflow-action-buttons .button {
+        width: 100%;
+    }
+
+    .gpp-entry-detail__preview {
+        padding: 12px;
+    }
+}
