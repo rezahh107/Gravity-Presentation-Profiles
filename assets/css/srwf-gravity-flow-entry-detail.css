@@ -1,0 +1,73 @@
+.gpp-entry-dossier {
+    direction: rtl;
+    max-width: 1120px;
+    margin: 0 0 24px;
+    color: #172033;
+    font-family: inherit;
+}
+
+.gpp-entry-dossier__section {
+    box-sizing: border-box;
+    margin: 0 0 18px;
+    padding: 22px;
+    border: 1px solid #e4e7ec;
+    border-radius: 14px;
+    background: #fff;
+}
+
+.gpp-entry-dossier__section h1,
+.gpp-entry-dossier__section h2 {
+    margin: 0 0 16px;
+    color: #172033;
+    line-height: 1.5;
+}
+.gpp-entry-dossier__section h1 { font-size: 24px; }
+.gpp-entry-dossier__section h2 { font-size: 18px; }
+.gpp-entry-dossier__identity { border-top: 4px solid #1d4ed8; }
+.gpp-entry-dossier__identity-main { display: flex; align-items: flex-start; gap: 20px; }
+.gpp-entry-dossier__identity-text { flex: 1 1 auto; min-width: 0; }
+.gpp-entry-dossier__task { border-color: #93c5fd; background: #f8fbff; box-shadow: 0 1px 0 rgba(29, 78, 216, .08); }
+.gpp-entry-dossier__task-step { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; color: #475467; }
+.gpp-entry-dossier__task-step strong { color: #172033; }
+.gpp-entry-dossier__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: #e4e7ec; border: 1px solid #e4e7ec; border-radius: 10px; overflow: hidden; }
+.gpp-entry-dossier__fact { min-width: 0; padding: 13px 15px; background: #fff; }
+.gpp-entry-dossier__fact dt { margin: 0 0 5px; color: #667085; font-size: 12px; font-weight: 600; }
+.gpp-entry-dossier__fact dd { margin: 0; color: #172033; font-size: 14px; overflow-wrap: anywhere; }
+.gpp-entry-dossier__facts--identity { margin-top: 12px; }
+.gpp-entry-dossier__image-trigger { padding: 0; border: 1px solid #d0d5dd; border-radius: 10px; background: #fff; cursor: zoom-in; }
+.gpp-entry-dossier__image-trigger:focus-visible,
+.gpp-entry-dossier__file-link:focus-visible,
+.gpp-entry-dossier__preview-close:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.gpp-entry-dossier__student-photo img { display: block; width: 96px; height: 112px; object-fit: cover; border-radius: 9px; }
+.gpp-entry-dossier__document { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.gpp-entry-dossier__document-label { font-weight: 700; }
+.gpp-entry-dossier__document-thumbnail img { display: block; width: 120px; height: 88px; object-fit: cover; border-radius: 8px; }
+.gpp-entry-dossier__file-link { overflow-wrap: anywhere; }
+.gpp-entry-dossier__native-instructions .gravityflow-instructions,
+.gpp-entry-dossier__native-editor .gform_wrapper,
+.gpp-entry-dossier__native-actions .gravityflow-action-buttons,
+.gpp-entry-dossier__history .gravityflow-timeline { margin: 14px 0 0; }
+.gpp-entry-dossier__native-editor:empty,
+.gpp-entry-dossier__native-instructions:empty,
+.gpp-entry-dossier__native-actions:empty { display: none; }
+.gpp-entry-dossier__native-actions .gravityflow-action-buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.gpp-entry-dossier__native-actions button[value="approved"] { border-color: #18794e; }
+.gpp-entry-dossier__native-actions button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
+.gpp-entry-dossier__history details > summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+.gpp-entry-dossier__history-help { margin: 12px 0; color: #475467; line-height: 1.9; }
+.gpp-entry-dossier__history .gravityflow-timeline > h3 { display: none; }
+.gpp-entry-dossier__history .postbox.gravityflow-timeline { border: 0; box-shadow: none; }
+.gpp-entry-dossier__preview { box-sizing: border-box; width: min(92vw, 960px); max-height: 90vh; padding: 42px 18px 18px; border: 0; border-radius: 14px; }
+.gpp-entry-dossier__preview::backdrop { background: rgba(17, 24, 39, .72); }
+.gpp-entry-dossier__preview img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: auto; object-fit: contain; }
+.gpp-entry-dossier__preview-close { position: absolute; top: 8px; inset-inline-end: 10px; width: 34px; height: 34px; border: 0; background: transparent; font-size: 26px; cursor: pointer; }
+
+/* Native Entry Detail remains visible unless JS proves the composition worked. */
+.gpp-entry-dossier--composed ~ .entry-detail-view { display: none; }
+
+@media (max-width: 782px) {
+    .gpp-entry-dossier__section { padding: 16px; }
+    .gpp-entry-dossier__identity-main { flex-direction: column; }
+    .gpp-entry-dossier__facts { grid-template-columns: minmax(0, 1fr); }
+    .gpp-entry-dossier__student-photo img { width: 88px; height: 104px; }
+}
