@@ -11,8 +11,6 @@ EXTRACTOR="scripts/extract-production-references.php"
 # Exact file-level exceptions only. These are admitted source contracts/helpers
 # that remain intentionally non-rooted in the current production activation graph.
 DEFERRED_UNREACHABLE=(
-  "src/Core/Lifecycle/SettingsLifecycleWorkflow.php"
-  "src/Core/Portable/VisualProfileResolver.php"
 )
 
 # Production invariants. These files must both exist and be reached from the real
@@ -25,7 +23,9 @@ REQUIRED_REACHABLE=(
   "src/Core/Lifecycle/BindingEvidenceGate.php"
   "src/Core/Lifecycle/BindingSetLifecycle.php"
   "src/Core/Lifecycle/EvidenceReferenceGate.php"
+  "src/Core/Lifecycle/InstalledVisualProfileCatalog.php"
   "src/Core/Lifecycle/LifecycleException.php"
+  "src/Core/Lifecycle/SettingsLifecycleWorkflow.php"
   "src/Core/Lifecycle/StateStore.php"
   "src/Core/Lifecycle/VisualPackageLifecycle.php"
   "src/Core/Lifecycle/WordPressOptionStateStore.php"
@@ -35,6 +35,9 @@ REQUIRED_REACHABLE=(
   "src/Core/Portable/SemanticBindingResolver.php"
   "src/Core/Portable/VisualProfilePackage.php"
   "src/Core/Portable/VisualProfilePackageV11.php"
+  "src/Core/Portable/VisualProfileResolver.php"
+  "src/GravityForms/DeclarativePresentationResolver.php"
+  "src/GravityForms/DeclarativeProfileDefinition.php"
 )
 
 fail() {
