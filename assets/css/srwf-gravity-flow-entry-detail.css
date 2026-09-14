@@ -1,0 +1,346 @@
+/* WU18: presentation-only dossier layer over native Gravity Flow Entry Detail. */
+.gravityflow_workflow_detail .gpp-entry-dossier {
+    direction: rtl;
+    max-inline-size: 1040px;
+    margin: 0 auto 20px;
+    color: #172033;
+    font-family: Vazirmatn, Tahoma, Arial, sans-serif;
+}
+
+.gravityflow_workflow_detail .gpp-entry-section {
+    box-sizing: border-box;
+    margin: 0 0 16px;
+    padding: 20px;
+    border: 1px solid #e4e7ec;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
+
+.gravityflow_workflow_detail .gpp-entry-section h2 {
+    margin: 0 0 14px;
+    color: #172033;
+    font-size: 18px;
+    line-height: 1.7;
+}
+
+.gravityflow_workflow_detail .gpp-entry-section__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-block-end: 14px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-section__heading h2,
+.gravityflow_workflow_detail .gpp-entry-section__heading p {
+    margin: 0;
+}
+
+.gravityflow_workflow_detail .gpp-entry-section__heading p {
+    margin-block-start: 4px;
+    color: #667085;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task > h2 {
+    color: #1d4ed8;
+}
+
+.gravityflow_workflow_detail .gpp-entry-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    border-block-start: 1px solid #eef0f3;
+}
+
+.gravityflow_workflow_detail .gpp-entry-fact {
+    display: grid;
+    grid-template-columns: minmax(130px, .8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    padding: 12px 0;
+    border-block-end: 1px solid #eef0f3;
+}
+
+.gravityflow_workflow_detail .gpp-entry-fact:nth-child(odd) {
+    padding-inline-end: 18px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-fact:nth-child(even) {
+    padding-inline-start: 18px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-fact dt {
+    color: #667085;
+    font-weight: 600;
+}
+
+.gravityflow_workflow_detail .gpp-entry-fact dd {
+    margin: 0;
+    color: #172033;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.gravityflow_workflow_detail .gpp-entry-photo,
+.gravityflow_workflow_detail .gpp-entry-file__thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #d0d5dd;
+    border-radius: 12px;
+    background: #fff;
+    cursor: zoom-in;
+}
+
+.gravityflow_workflow_detail .gpp-entry-photo img {
+    inline-size: 84px;
+    block-size: 84px;
+    object-fit: cover;
+    border-radius: 11px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-instructions,
+.gravityflow_workflow_detail .gpp-entry-current-task #gravityflow-status-box-container {
+    margin: 12px 0 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-instructions .inside,
+.gravityflow_workflow_detail .gpp-entry-current-task #gravityflow-status-box-container .inside,
+.gravityflow_workflow_detail .gpp-entry-current-task #gravityflow-status-box-container #minor-publishing {
+    padding-inline: 0;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-block-start: 14px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-action-buttons button[value="approved"] {
+    min-block-size: 44px;
+    border-color: #18794e;
+    color: #fff;
+    background: #18794e;
+}
+
+.gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-action-buttons button[value="rejected"] {
+    min-block-size: 44px;
+    border-color: #b42318;
+    color: #fff;
+    background: #b42318;
+}
+
+.gravityflow_workflow_detail .gpp-entry-files {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-file {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-block-size: 72px;
+    padding: 12px;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-file__thumb img {
+    inline-size: 56px;
+    block-size: 56px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-file__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: 10px;
+    background: #f2f4f7;
+    color: #475467;
+    font-weight: 700;
+}
+
+.gravityflow_workflow_detail .gpp-entry-file strong,
+.gravityflow_workflow_detail .gpp-entry-file a {
+    display: block;
+}
+
+.gravityflow_workflow_detail .gpp-entry-file a {
+    margin-block-start: 6px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-utilities {
+    display: flex;
+    justify-content: flex-end;
+    margin: 4px 0 16px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-utilities .detail-view-print {
+    float: none;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history {
+    max-inline-size: 1040px;
+    margin: 16px auto;
+    border: 1px solid #e4e7ec;
+    border-radius: 16px;
+    background: #fff;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history > summary {
+    cursor: pointer;
+    padding: 18px 20px;
+    font-weight: 700;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history-helper {
+    max-inline-size: 1000px;
+    margin: 0 auto 12px;
+    color: #667085;
+    line-height: 1.9;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history > .gpp-entry-history-helper {
+    margin: 0;
+    padding: 0 20px 14px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history .gravityflow-timeline {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.gravityflow_workflow_detail .gpp-entry-history .gravityflow-timeline > h3 {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.gravityflow_workflow_detail .entry-detail-view {
+    max-inline-size: 1040px;
+    margin-inline: auto;
+}
+
+.gravityflow_workflow_detail .entry-detail-view .entry-view-field-name {
+    padding-block-start: 14px;
+    color: #667085;
+    font-weight: 600;
+    background: #fff;
+}
+
+.gravityflow_workflow_detail .entry-detail-view .entry-view-field-value {
+    padding-block-end: 14px;
+    color: #172033;
+    background: #fff;
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview {
+    inline-size: min(92vw, 980px);
+    max-inline-size: none;
+    padding: 0;
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview::backdrop {
+    background: rgba(15, 23, 42, .72);
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview__panel {
+    max-block-size: 90vh;
+    overflow: auto;
+    padding: 14px;
+    border-radius: 16px;
+    background: #fff;
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-block-end: 12px;
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview__header button {
+    inline-size: 40px;
+    block-size: 40px;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.gravityflow_workflow_detail .gpp-entry-preview [data-gpp-image-large] {
+    display: block;
+    max-inline-size: 100%;
+    max-block-size: calc(90vh - 80px);
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+@media (max-width: 782px) {
+    .gravityflow_workflow_detail .gpp-entry-dossier,
+    .gravityflow_workflow_detail .gpp-entry-history,
+    .gravityflow_workflow_detail .entry-detail-view {
+        inline-size: 100%;
+        max-inline-size: 100%;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-section {
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-section__heading {
+        align-items: center;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-facts,
+    .gravityflow_workflow_detail .gpp-entry-files {
+        grid-template-columns: 1fr;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-fact,
+    .gravityflow_workflow_detail .gpp-entry-fact:nth-child(odd),
+    .gravityflow_workflow_detail .gpp-entry-fact:nth-child(even) {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 10px 0;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-action-buttons {
+        flex-direction: column;
+    }
+
+    .gravityflow_workflow_detail .gpp-entry-current-task .gravityflow-action-buttons button {
+        inline-size: 100%;
+    }
+}
