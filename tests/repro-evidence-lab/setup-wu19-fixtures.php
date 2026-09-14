@@ -200,6 +200,11 @@ $bootstrap = get_user_by( 'login', 'bootstrap_admin' );
 $viewer = get_user_by( 'login', 'wu21_viewer' );
 if ( ! $bootstrap || ! $viewer ) throw new RuntimeException( 'Pinned WU19 users missing.' );
 
+// The permission-loss subject must not retain submitter access after its
+// assignment changes. Keep the Entry synthetic, but make the other test user
+// its submitter before establishing the assignee-only access precondition.
+GFAPI::update_entry_property( $beta_entry_id, 'created_by', (int) $viewer->ID );
+
 $alpha_api = new Gravity_Flow_API( $alpha_form_id );
 $alpha_step = $alpha_api->get_current_step( GFAPI::get_entry( $alpha_entry_id ) );
 $beta_api = new Gravity_Flow_API( $beta_form_id );
