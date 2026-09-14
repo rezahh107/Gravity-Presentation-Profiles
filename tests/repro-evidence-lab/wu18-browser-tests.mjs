@@ -95,7 +95,7 @@ await test('WU18-BROWSER-004', 'PDF is host-file open affordance and history is 
   if (!href?.includes('report-card.pdf') || target !== '_blank' || await page.locator('[data-gpp-section="documents"] [data-gpp-image-preview]').count() !== 0) throw new Error(`PDF representation failed: ${href}`);
   const details = page.locator('[data-gpp-history-details]');
   if (await details.count() !== 1 || await details.evaluate(el => el.open)) throw new Error('History not collapsed.');
-  const helper = (await page.locator('.gpp-entry-dossier__history-help').innerText()).trim();
+  const helper = (await page.locator('.gpp-entry-dossier__history-help').textContent()).trim();
   const timelineInDetails = await details.locator('.gravityflow-timeline').count();
   const timelineGlobal = await page.locator('form .gravityflow-timeline').count();
   if (helper !== manifest.locked_history_helper || timelineInDetails !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
