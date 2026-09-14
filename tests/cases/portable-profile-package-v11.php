@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../src/Autoloader.php';
 use GravityPresentationProfiles\Autoloader;
 use GravityPresentationProfiles\Core\Portable\ContractViolation;
 use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
+use GravityPresentationProfiles\Core\Portable\SemanticBindingResolver;
 use GravityPresentationProfiles\Core\Portable\VisualProfilePackage;
 use GravityPresentationProfiles\Core\Portable\VisualProfileResolver;
 
@@ -71,7 +72,11 @@ gpp_assert_same(
 );
 gpp_assert_true(
     in_array( 'gravity_forms.form', VisualProfilePackage::admittedSurfaces(), true ),
-    'Generic Gravity Forms form surface must be admitted by the evolved package API.'
+    'Generic Gravity Forms form surface must be admitted by the evolved visual package API.'
+);
+gpp_assert_true(
+    ! in_array( 'gravity_forms.form', EnvironmentBindingSet::admittedSurfaces(), true ),
+    'Visual schema evolution must not silently evolve the independent binding schema.'
 );
 gpp_assert_same( 1, count( $v11['surface_profiles'] ), 'Unrelated Inbox/Entry/Print profiles must not be required in schema 1.1.' );
 
@@ -171,15 +176,33 @@ $bad = $v11;
 $bad['reserved_extension_seam']['form_id'] = 77;
 gpp_v11_expect_violation( static function () use ( $bad ) { VisualProfilePackage::validate( $bad ); }, 'Reserved Extension Seam must remain inert and untargeted.' );
 
-// Semantic binding remains unable to choose or override visual identity.
+// Semantic binding remains unable to choose or override visual identity, and its V1 surface set remains its own authority.
 $binding = gpp_v11_fixture( 'wu09-binding-set-a.json' );
-$binding['profile_id'] = 'srwf.registration.v1';
+$binding_with_profile = $binding;
+$binding_with_profile['profile_id'] = 'srwf.registration.v1';
 gpp_v11_expect_violation(
-    static function () use ( $binding ) {
-        EnvironmentBindingSet::validate( $binding );
+    static function () use ( $binding_with_profile ) {
+        EnvironmentBindingSet::validate( $binding_with_profile );
     },
     'Environment binding artifact must reject visual profile selection.'
 );
+
+$binding_slots = array_map(
+    static function ( $item ) { return $item['semantic_slot_key']; },
+    $binding['bindings']
+);
+$binding_resolver = new SemanticBindingResolver( array( $binding ), $binding_slots );
+$gf_binding_attempt = $binding_resolver->resolve(
+    array(
+        'installation_id' => $binding['context']['installation_source_ref']['installation_id'],
+        'form_id' => $binding['context']['form_source_ref']['form_id'],
+        'entry_id' => 'fixture-entry',
+        'surface' => 'gravity_forms.form',
+    ),
+    $binding_slots[0]
+);
+gpp_assert_same( false, $gf_binding_attempt['resolved'], 'Binding V1 must not start resolving the new visual-only Gravity Forms surface.' );
+gpp_assert_same( 'invalid_runtime_context', $gf_binding_attempt['reason'], 'Binding resolver must use binding-surface authority, not visual-surface authority.' );
 
 // Canonicalization remains deterministic while semantic changes change content identity.
 $reordered = gpp_v11_reverse_object_keys( $v11 );
