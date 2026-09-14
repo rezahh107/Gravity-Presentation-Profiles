@@ -56,7 +56,7 @@ final class InboxPresentationAdapter {
         // columns; if the card is appended after wide native support columns,
         // narrow viewports may never create its cell in the DOM. Reordering via
         // the admitted column filter keeps all host rowData while guaranteeing
-        // the one visible presentation cell stays in the rendered viewport.
+        // the one presentation cell remains available to the CSS readiness gate.
         unset( $columns[ self::CARD_COLUMN ] );
         $card = array(
             self::CARD_COLUMN => __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' ),
@@ -108,8 +108,14 @@ final class InboxPresentationAdapter {
             $visual = new VisualPackageLifecycle(
                 new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME )
             );
+            $activation = $visual->resolve( self::SURFACE );
+            if ( null === $activation ) {
+                return null;
+            }
+
             $profile = $visual->effectiveProfile( self::SURFACE );
-            if ( null === $profile ) {
+            $package = self::activeVisualPackage( $visual->snapshot(), $activation );
+            if ( null === $profile || null === $package ) {
                 return null;
             }
 
@@ -119,13 +125,39 @@ final class InboxPresentationAdapter {
             );
             $active_binding_sets = self::activeBindingSets( $bindings->snapshot() );
 
-            self::$model = new InboxPresentationModel( $profile, $active_binding_sets );
+            self::$model = new InboxPresentationModel(
+                $profile,
+                $active_binding_sets,
+                $package['semantic_slots']
+            );
         } catch ( \Throwable $exception ) {
             // Presentation fails closed; native Gravity Flow remains available.
             self::$model = null;
         }
 
         return self::$model;
+    }
+
+    private static function activeVisualPackage( $snapshot, $activation ) {
+        if ( ! is_array( $snapshot ) || ! is_array( $activation ) ) {
+            return null;
+        }
+        if ( ! isset( $activation['package_id'], $activation['package_version'], $activation['profile_id'] ) ) {
+            return null;
+        }
+
+        $id = $activation['package_id'];
+        $version = $activation['package_version'];
+        if ( empty( $snapshot['installed'][ $id ][ $version ]['artifact'] ) ) {
+            return null;
+        }
+
+        $package = $snapshot['installed'][ $id ][ $version ]['artifact'];
+        if ( empty( $package['semantic_slots'] ) || ! is_array( $package['semantic_slots'] ) ) {
+            return null;
+        }
+
+        return $package;
     }
 
     private static function activeBindingSets( $snapshot ) {
@@ -157,6 +189,10 @@ final class InboxPresentationAdapter {
     }
 
     private static function renderCard( InboxPresentationModel $model, $entry ) {
+        if ( ! $model->isPresentationReady( $entry ) ) {
+            return self::readinessMarker( false );
+        }
+
         $name = self::slotValue( $model, $entry, 'student.full_name' );
         $national_id = self::slotValue( $model, $entry, 'student.national_id' );
         $photo = self::slotValue( $model, $entry, 'student.photo' );
@@ -180,7 +216,8 @@ final class InboxPresentationAdapter {
             static function ( $item ) { return null !== $item && '' !== (string) $item; }
         );
 
-        $html = '<span class="gpp-inbox-card__search-key" aria-hidden="true">' . esc_html( implode( ' ', $search_values ) ) . '</span>';
+        $html = self::readinessMarker( true );
+        $html .= '<span class="gpp-inbox-card__search-key" aria-hidden="true">' . esc_html( implode( ' ', $search_values ) ) . '</span>';
         $html .= '<article class="gpp-inbox-card" dir="rtl" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '">';
         $html .= '<div class="gpp-inbox-card__photo">' . self::photoMarkup( $photo, $name_display ) . '</div>';
         $html .= '<div class="gpp-inbox-card__identity">';
@@ -202,6 +239,11 @@ final class InboxPresentationAdapter {
         $html .= '</article>';
 
         return $html;
+    }
+
+    private static function readinessMarker( $ready ) {
+        $state = $ready ? 'ready' : 'unready';
+        return '<span hidden class="gpp-inbox-card__readiness gpp-inbox-card__readiness--' . $state . '" data-gpp-readiness="' . $state . '" aria-hidden="true"></span>';
     }
 
     private static function slotValue( InboxPresentationModel $model, $entry, $slot ) {
