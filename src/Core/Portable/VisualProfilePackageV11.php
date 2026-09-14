@@ -485,16 +485,24 @@ final class VisualProfilePackageV11 {
             if ( $position <= $last ) {
                 throw new ContractViolation( $path . ' must follow canonical capability order.' );
             }
-            $last                 = $position;
-            $seen[ $capability ]  = true;
+            $last                = $position;
+            $seen[ $capability ] = true;
         }
     }
 
     private static function validateReservedExtensionSeam( $seam ) {
         self::requireArray( $seam, 'reserved_extension_seam must be an object.' );
         self::requireExactKeys( $seam, array( 'version', 'state' ), 'reserved_extension_seam' );
-        self::requireVersion( $seam['version'], 'reserved_extension_seam.version' );
-        self::requireSame( 'INERT', $seam['state'], 'reserved_extension_seam.state must remain INERT.' );
+        self::requireSame(
+            VisualProfilePackage::RESERVED_EXTENSION_SEAM_VERSION,
+            $seam['version'],
+            'reserved_extension_seam.version is not admitted.'
+        );
+        self::requireSame(
+            VisualProfilePackage::RESERVED_EXTENSION_SEAM_STATE,
+            $seam['state'],
+            'reserved_extension_seam.state must remain INERT.'
+        );
     }
 
     private static function requireAllowedKeys( $value, $allowed, $path ) {
