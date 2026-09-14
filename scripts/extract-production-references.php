@@ -65,6 +65,15 @@ function gpp_next_significant( $tokens, $index ) {
     return null;
 }
 
+function gpp_previous_significant( $tokens, $index ) {
+    for ( $i = $index; $i >= 0; $i-- ) {
+        if ( ! gpp_is_trivia( $tokens[$i] ) ) {
+            return $i;
+        }
+    }
+    return null;
+}
+
 function gpp_is_name_token_id( $id ) {
     $ids = array( T_STRING );
     foreach ( array( 'T_NAME_QUALIFIED', 'T_NAME_FULLY_QUALIFIED', 'T_NAME_RELATIVE', 'T_NS_SEPARATOR' ) as $constant ) {
@@ -203,6 +212,43 @@ function gpp_classify_assignment_expression( $expr ) {
     );
 }
 
+function gpp_function_is_closure( $tokens, $index ) {
+    $next = gpp_next_significant( $tokens, $index + 1 );
+    if ( null === $next ) {
+        return false;
+    }
+
+    if ( '&' === gpp_token_text( $tokens[$next] ) ) {
+        $next = gpp_next_significant( $tokens, $next + 1 );
+    }
+
+    return null !== $next && '(' === $tokens[$next];
+}
+
+function gpp_collect_variables_until_closing_paren( $tokens, $open_index ) {
+    $variables = array();
+    $depth = 0;
+    $count = count( $tokens );
+    for ( $i = $open_index; $i < $count; $i++ ) {
+        $token = $tokens[$i];
+        if ( ! is_array( $token ) ) {
+            if ( '(' === $token ) {
+                $depth++;
+            } elseif ( ')' === $token ) {
+                $depth--;
+                if ( 0 === $depth ) {
+                    return $variables;
+                }
+            }
+            continue;
+        }
+        if ( T_VARIABLE === $token[0] && $depth > 0 ) {
+            $variables[$token[1]] = true;
+        }
+    }
+    return null;
+}
+
 $namespace = '';
 $imports = array();
 $brace_depth = 0;
@@ -228,6 +274,12 @@ for ( $i = 0; $i < $count; $i++ ) {
     }
 
     if ( T_USE !== $token[0] || 0 !== $brace_depth ) {
+        continue;
+    }
+
+    $previous = gpp_previous_significant( $tokens, $i - 1 );
+    if ( null !== $previous && ')' === $tokens[$previous] ) {
+        // Closure capture syntax is not a namespace import.
         continue;
     }
 
@@ -286,7 +338,146 @@ for ( $i = 0; $i < $count; $i++ ) {
 }
 
 $references = array();
-$assignments = array();
+$assignments = array( 'top' => array() );
+$scope_meta = array(
+    'top' => array(
+        'captured' => array(),
+        'global'   => array(),
+    ),
+);
+$scope_open_depth = array( 'top' => 0 );
+$scope_by_index = array();
+$scope_stack = array(
+    array(
+        'id' => 'top',
+        'open_depth' => 0,
+    ),
+);
+$current_scope = 'top';
+$brace_depth = 0;
+$pending_function_scope = null;
+
+$unsupported_dynamic = function ( $detail ) use ( $source_arg ) {
+    fwrite( STDERR, "GPP_PRODUCTION_REACHABILITY_UNSUPPORTED_DYNAMIC: {$source_arg}: {$detail}\n" );
+    exit( 2 );
+};
+
+// First bind every variable-assignment fact to one lexical function-like scope.
+// This pass intentionally does not infer propagation across scopes.
+for ( $i = 0; $i < $count; $i++ ) {
+    $token = $tokens[$i];
+    $scope_by_index[$i] = $current_scope;
+
+    if ( ! is_array( $token ) ) {
+        if ( '{' === $token ) {
+            $brace_depth++;
+            if ( null !== $pending_function_scope ) {
+                $current_scope = $pending_function_scope['id'];
+                $scope_stack[] = array(
+                    'id' => $current_scope,
+                    'open_depth' => $brace_depth,
+                );
+                $assignments[$current_scope] = array();
+                $scope_meta[$current_scope] = array(
+                    'captured' => $pending_function_scope['captured'],
+                    'global' => array(),
+                );
+                $scope_open_depth[$current_scope] = $brace_depth;
+                $pending_function_scope = null;
+            }
+        } elseif ( '}' === $token ) {
+            $top = end( $scope_stack );
+            if ( false !== $top && 'top' !== $top['id'] && $top['open_depth'] === $brace_depth ) {
+                array_pop( $scope_stack );
+                $parent = end( $scope_stack );
+                $current_scope = false === $parent ? 'top' : $parent['id'];
+            }
+            $brace_depth--;
+        } elseif ( ';' === $token && null !== $pending_function_scope ) {
+            // Abstract/interface declarations have no executable function scope.
+            $pending_function_scope = null;
+        }
+        continue;
+    }
+
+    if ( T_FUNCTION === $token[0] ) {
+        $scope_id = 'function@' . $i;
+        $pending_function_scope = array(
+            'id' => $scope_id,
+            'captured' => array(),
+            'closure' => gpp_function_is_closure( $tokens, $i ),
+        );
+        continue;
+    }
+
+    if ( defined( 'T_FN' ) && T_FN === $token[0] ) {
+        $unsupported_dynamic( 'arrow-function lexical scope is unsupported by the bounded dynamic provenance extractor' );
+    }
+
+    if ( T_USE === $token[0] && null !== $pending_function_scope && $pending_function_scope['closure'] ) {
+        $open = gpp_next_significant( $tokens, $i + 1 );
+        if ( null === $open || '(' !== $tokens[$open] ) {
+            $unsupported_dynamic( 'closure capture list could not be analyzed' );
+        }
+        $captured = gpp_collect_variables_until_closing_paren( $tokens, $open );
+        if ( null === $captured ) {
+            $unsupported_dynamic( 'closure capture list could not be bounded' );
+        }
+        $pending_function_scope['captured'] = $captured;
+        continue;
+    }
+
+    if ( null !== $pending_function_scope ) {
+        // Parameter/default tokens belong to the pending declaration, not the
+        // surrounding lexical scope. The body will get its own scope at `{`.
+        continue;
+    }
+
+    if ( T_GLOBAL === $token[0] ) {
+        $j = gpp_next_significant( $tokens, $i + 1 );
+        while ( null !== $j && $j < $count && ';' !== $tokens[$j] ) {
+            if ( is_array( $tokens[$j] ) && T_VARIABLE === $tokens[$j][0] ) {
+                $scope_meta[$current_scope]['global'][$tokens[$j][1]] = true;
+            }
+            $j++;
+        }
+        continue;
+    }
+
+    if ( T_VARIABLE !== $token[0] ) {
+        continue;
+    }
+
+    $next = gpp_next_significant( $tokens, $i + 1 );
+    if ( null === $next || '=' !== $tokens[$next] ) {
+        continue;
+    }
+
+    list( $expr, $end ) = gpp_expression_until_semicolon( $tokens, $next + 1 );
+    $classification = gpp_classify_assignment_expression( $expr );
+
+    if ( ! empty( $scope_meta[$current_scope]['global'][$token[1]] )
+        || ! empty( $scope_meta[$current_scope]['captured'][$token[1]] ) ) {
+        $classification = array(
+            'kind' => 'unknown',
+            'contains_repo_prefix' => ! empty( $classification['contains_repo_prefix'] )
+                || ( isset( $classification['value'] ) && false !== strpos( $classification['value'], 'GravityPresentationProfiles\\' ) ),
+        );
+    }
+
+    if ( isset( $assignments[$current_scope][$token[1]] ) ) {
+        $previous = $assignments[$current_scope][$token[1]];
+        $classification = array(
+            'kind'                 => 'unknown',
+            'contains_repo_prefix' => ! empty( $classification['contains_repo_prefix'] )
+                || ( isset( $classification['value'] ) && false !== strpos( $classification['value'], 'GravityPresentationProfiles\\' ) )
+                || ( isset( $previous['value'] ) && false !== strpos( $previous['value'], 'GravityPresentationProfiles\\' ) )
+                || ! empty( $previous['contains_repo_prefix'] ),
+        );
+    }
+
+    $assignments[$current_scope][$token[1]] = $classification;
+}
 
 $add_reference = function ( $resolved ) use ( &$references, $known_classes ) {
     if ( null === $resolved ) {
@@ -298,12 +489,7 @@ $add_reference = function ( $resolved ) use ( &$references, $known_classes ) {
     }
 };
 
-$unsupported_dynamic = function ( $detail ) use ( $source_arg ) {
-    fwrite( STDERR, "GPP_PRODUCTION_REACHABILITY_UNSUPPORTED_DYNAMIC: {$source_arg}: {$detail}\n" );
-    exit( 2 );
-};
-
-$consume_dynamic = function ( $arg_index, $sink ) use ( &$assignments, $tokens, $known_classes, $add_reference, $unsupported_dynamic ) {
+$consume_dynamic = function ( $arg_index, $sink, $scope_id ) use ( &$assignments, &$scope_meta, $tokens, $known_classes, $add_reference, $unsupported_dynamic ) {
     if ( null === $arg_index || ! isset( $tokens[$arg_index] ) ) {
         $unsupported_dynamic( "{$sink} has no analyzable class argument" );
     }
@@ -314,10 +500,16 @@ $consume_dynamic = function ( $arg_index, $sink ) use ( &$assignments, $tokens, 
         $value = gpp_decode_string_literal( $arg[1] );
     } elseif ( is_array( $arg ) && T_VARIABLE === $arg[0] ) {
         $var = $arg[1];
-        if ( ! isset( $assignments[$var] ) || 'literal' !== $assignments[$var]['kind'] ) {
-            $unsupported_dynamic( "{$sink} uses {$var} without a single provable literal class assignment" );
+        if ( ! empty( $scope_meta[$scope_id]['global'][$var] ) ) {
+            $unsupported_dynamic( "{$sink} uses global {$var}; global dynamic class flow is unsupported" );
         }
-        $value = $assignments[$var]['value'];
+        if ( ! empty( $scope_meta[$scope_id]['captured'][$var] ) ) {
+            $unsupported_dynamic( "{$sink} uses captured {$var}; closure-captured dynamic class flow is unsupported" );
+        }
+        if ( ! isset( $assignments[$scope_id][$var] ) || 'literal' !== $assignments[$scope_id][$var]['kind'] ) {
+            $unsupported_dynamic( "{$sink} uses {$var} without a single provable literal class assignment in the same lexical scope" );
+        }
+        $value = $assignments[$scope_id][$var]['value'];
     } else {
         $unsupported_dynamic( "{$sink} uses a non-literal/non-local-variable class argument" );
     }
@@ -338,39 +530,31 @@ $consume_dynamic = function ( $arg_index, $sink ) use ( &$assignments, $tokens, 
     }
 };
 
+// Resolve references only after the complete scope-local assignment inventory is
+// known, so a later second assignment cannot make an earlier sink look unambiguous.
 for ( $i = 0; $i < $count; $i++ ) {
     $token = $tokens[$i];
+    $current_scope = isset( $scope_by_index[$i] ) ? $scope_by_index[$i] : 'top';
 
-    if ( is_array( $token ) && T_VARIABLE === $token[0] ) {
-        $next = gpp_next_significant( $tokens, $i + 1 );
-        if ( null !== $next && '=' === $tokens[$next] ) {
-            list( $expr, $end ) = gpp_expression_until_semicolon( $tokens, $next + 1 );
-            $classification = gpp_classify_assignment_expression( $expr );
-            if ( isset( $assignments[$token[1]] ) ) {
-                $classification = array(
-                    'kind'                 => 'unknown',
-                    'contains_repo_prefix' => ! empty( $classification['contains_repo_prefix'] )
-                        || ( isset( $assignments[$token[1]]['value'] ) && false !== strpos( $assignments[$token[1]]['value'], 'GravityPresentationProfiles\\' ) )
-                        || ! empty( $assignments[$token[1]]['contains_repo_prefix'] ),
-                );
-            }
-            $assignments[$token[1]] = $classification;
-        }
+    if ( ! is_array( $token ) ) {
+        continue;
+    }
 
+    if ( T_VARIABLE === $token[0] ) {
         $double_colon = gpp_next_significant( $tokens, $i + 1 );
         if ( null !== $double_colon && is_array( $tokens[$double_colon] ) && T_DOUBLE_COLON === $tokens[$double_colon][0] ) {
-            $consume_dynamic( $i, 'dynamic static class reference' );
+            $consume_dynamic( $i, 'dynamic static class reference', $current_scope );
         }
         continue;
     }
 
-    if ( is_array( $token ) && in_array( $token[0], array( T_NEW, T_INSTANCEOF ), true ) ) {
+    if ( in_array( $token[0], array( T_NEW, T_INSTANCEOF ), true ) ) {
         $target = gpp_next_significant( $tokens, $i + 1 );
         if ( null === $target ) {
             continue;
         }
         if ( is_array( $tokens[$target] ) && T_VARIABLE === $tokens[$target][0] ) {
-            $consume_dynamic( $target, T_NEW === $token[0] ? 'new $class' : 'instanceof $class' );
+            $consume_dynamic( $target, T_NEW === $token[0] ? 'new $class' : 'instanceof $class', $current_scope );
             continue;
         }
         $name = gpp_read_name( $tokens, $target );
@@ -380,7 +564,7 @@ for ( $i = 0; $i < $count; $i++ ) {
         continue;
     }
 
-    if ( is_array( $token ) && T_EXTENDS === $token[0] ) {
+    if ( T_EXTENDS === $token[0] ) {
         $target = gpp_next_significant( $tokens, $i + 1 );
         $name = null === $target ? null : gpp_read_name( $tokens, $target );
         if ( null !== $name ) {
@@ -389,7 +573,7 @@ for ( $i = 0; $i < $count; $i++ ) {
         continue;
     }
 
-    if ( is_array( $token ) && T_IMPLEMENTS === $token[0] ) {
+    if ( T_IMPLEMENTS === $token[0] ) {
         $j = gpp_next_significant( $tokens, $i + 1 );
         while ( null !== $j && $j < $count && '{' !== $tokens[$j] ) {
             $name = gpp_read_name( $tokens, $j );
@@ -406,7 +590,7 @@ for ( $i = 0; $i < $count; $i++ ) {
         continue;
     }
 
-    if ( is_array( $token ) && gpp_is_name_token_id( $token[0] ) ) {
+    if ( gpp_is_name_token_id( $token[0] ) ) {
         $name = gpp_read_name( $tokens, $i );
         if ( null === $name ) {
             continue;
@@ -426,7 +610,7 @@ for ( $i = 0; $i < $count; $i++ ) {
             $normalized_static = null === $resolved ? ltrim( $name[0], '\\' ) : ltrim( $resolved, '\\' );
             if ( 'gfaddon' === strtolower( $normalized_static ) && 'register' === $method_name && null !== $open_index && '(' === $tokens[$open_index] ) {
                 $arg = gpp_next_significant( $tokens, $open_index + 1 );
-                $consume_dynamic( $arg, 'GFAddOn::register()' );
+                $consume_dynamic( $arg, 'GFAddOn::register()', $current_scope );
             }
             $i = $name[1];
             continue;
@@ -436,7 +620,7 @@ for ( $i = 0; $i < $count; $i++ ) {
             $function_name = strtolower( ltrim( $name[0], '\\' ) );
             if ( in_array( $function_name, array( 'class_exists', 'interface_exists', 'trait_exists' ), true ) ) {
                 $arg = gpp_next_significant( $tokens, $after + 1 );
-                $consume_dynamic( $arg, $function_name . '()' );
+                $consume_dynamic( $arg, $function_name . '()', $current_scope );
             }
         }
 
