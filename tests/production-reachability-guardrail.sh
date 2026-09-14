@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUARD_REL="scripts/validate-production-reachability.sh"
 EXTRACTOR_REL="scripts/extract-production-references.php"
 TMP="$(mktemp -d)"
+# Every mutation below is applied only to a copied fixture tree; repository production source is never edited.
 trap 'rm -rf "$TMP"' EXIT
 
 php -l "$ROOT/$EXTRACTOR_REL" >/dev/null
