@@ -62,6 +62,7 @@ final class SemanticBindingResolver {
                 return array(
                     'resolved' => false,
                     'binding_set_id' => $selected['binding_set_id'],
+                    'binding_set_version' => $selected['binding_set_version'],
                     'semantic_slot_key' => $slot_key,
                     'state' => $binding['state'],
                     'source_ref' => null,
@@ -72,6 +73,7 @@ final class SemanticBindingResolver {
             return array(
                 'resolved' => true,
                 'binding_set_id' => $selected['binding_set_id'],
+                'binding_set_version' => $selected['binding_set_version'],
                 'semantic_slot_key' => $slot_key,
                 'state' => 'PROVEN',
                 'source_ref' => $binding['source_ref'],
@@ -82,6 +84,7 @@ final class SemanticBindingResolver {
         return array(
             'resolved' => false,
             'binding_set_id' => $selected['binding_set_id'],
+            'binding_set_version' => $selected['binding_set_version'],
             'semantic_slot_key' => $slot_key,
             'state' => 'NOT_PROVEN',
             'source_ref' => null,
@@ -168,6 +171,7 @@ final class SemanticBindingResolver {
         return array(
             'resolved' => false,
             'binding_set_id' => null,
+            'binding_set_version' => null,
             'semantic_slot_key' => $slot_key,
             'state' => $state,
             'source_ref' => null,
