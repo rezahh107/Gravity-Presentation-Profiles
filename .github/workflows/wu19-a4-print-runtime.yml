@@ -12,6 +12,13 @@ on:
       - 'tests/repro-evidence-lab/wu19-runtime-tests.php'
       - 'tests/repro-evidence-lab/wu19-browser-tests.mjs'
       - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
+      - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
+      - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
+      - 'tests/repro-evidence-lab/qualification-control.php'
+      - 'tests/repro-evidence-lab/core-spine-browser-tests.mjs'
+      - 'tests/repro-evidence-lab/entry-visual-contract-tests.mjs'
+      - 'tests/repro-evidence-lab/print-visual-contract-tests.mjs'
+      - 'tests/repro-evidence-lab/build-qualification-evidence.php'
       - 'tests/repro-evidence-lab/setup-fixtures.php'
       - 'tests/fixtures/wu09-visual-package.json'
       - 'tests/run.php'
@@ -23,9 +30,9 @@ permissions:
 
 jobs:
   print-runtime:
-    name: WU19 pinned native Print + Chromium A4
+    name: WU19 pinned Print + Core Spine + C/D/E/F qualification
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     services:
       database:
         image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
@@ -48,6 +55,8 @@ jobs:
       WU21_FLOW_SIZE: '2603034'
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
+      GPP_OWNER_HTML: /tmp/wu19-packages/PersianGravity-Visual-Reference-Final.html
+      GPP_OWNER_PDF: /tmp/wu19-packages/PersianGravity-Final-Print-Sample.pdf
 
     steps:
       - name: Checkout exact PR Head
@@ -108,6 +117,16 @@ jobs:
           unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
           grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
           grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+      - name: Fetch and byte-verify locked Owner visual references
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 4 -o "$GPP_OWNER_HTML" "https://drive.usercontent.google.com/download?id=13uGhCEGVCkwS1RUR8OFHC1kOwBpjzS7Y&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "$GPP_OWNER_PDF" "https://drive.usercontent.google.com/download?id=1yBSgBje68ewUKgzugMCty3LWtwP_-k2j&export=download&confirm=t"
+          test "$(stat -c '%s' "$GPP_OWNER_HTML")" = '115728'
+          test "$(stat -c '%s' "$GPP_OWNER_PDF")" = '321990'
+          echo "666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81  $GPP_OWNER_HTML" | sha256sum -c -
+          echo "34d9b4e137667ca103d5c6e7752f7148f0c92e36f0f1d182d7d87a890c55fec5  $GPP_OWNER_PDF" | sha256sum -c -
       - name: Activate exact plugins and create WU19 fixtures
         shell: bash
         run: |
@@ -118,11 +137,13 @@ jobs:
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-wu18-fixtures.php
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-wu19-fixtures.php
           test -s "$WU21_ARTIFACT_DIR/wu19-fixture-manifest.json"
-      - name: Execute native PHP/runtime assertions
+      - name: Reuse focused WU18 and WU19 native PHP/runtime assertions
         shell: bash
         run: |
           set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-runtime-tests.php
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu19-runtime-tests.php
+          test -s "$WU21_ARTIFACT_DIR/wu18-runtime-results.json"
           test -s "$WU21_ARTIFACT_DIR/wu19-runtime-results.json"
       - name: Set up exact Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -139,7 +160,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends poppler-utils
           node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1);"
           pdfinfo -v 2>&1 | head -1
-      - name: Start WordPress and execute browser/pagination assertions
+      - name: Start WordPress and reuse focused WU18/WU19 browser gates
         shell: bash
         run: |
           set -euo pipefail
@@ -149,21 +170,56 @@ jobs:
             sleep 1
           done
           curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null
+          node tests/repro-evidence-lab/wu18-browser-tests.mjs
           node tests/repro-evidence-lab/wu19-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/wu18-browser-results.json"
           test -s "$WU21_ARTIFACT_DIR/wu19-browser-results.json"
           test -s "$WU21_ARTIFACT_DIR/wu19-canonical.pdf"
           test -s "$WU21_ARTIFACT_DIR/wu19-long-content.pdf"
-      - name: Upload WU19 evidence
+      - name: Execute Stateful Core Spine qualification
+        id: core_qualification
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/core-spine-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/core-spine-results.json"
+      - name: Execute Owner C/D Entry Detail visual qualification
+        id: entry_visual_qualification
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/entry-visual-contract-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/entry-visual-contract-results.json"
+      - name: Execute Owner E/F Print visual qualification
+        id: print_visual_qualification
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/print-visual-contract-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/print-visual-contract-results.json"
+      - name: Build compact qualification evidence and enforce both gates
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$WU21_ARTIFACT_DIR/core-spine-results.json"
+          test -s "$WU21_ARTIFACT_DIR/entry-visual-contract-results.json"
+          test -s "$WU21_ARTIFACT_DIR/print-visual-contract-results.json"
+          php tests/repro-evidence-lab/build-qualification-evidence.php
+          test -s "$WU21_ARTIFACT_DIR/gpp-qualification.json"
+          test "${{ steps.core_qualification.outcome }}" = 'success'
+          test "${{ steps.entry_visual_qualification.outcome }}" = 'success'
+          test "${{ steps.print_visual_qualification.outcome }}" = 'success'
+      - name: Upload WU19 and qualification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: wu19-a4-print-${{ github.run_id }}-${{ github.run_attempt }}
+          name: wu19-core-spine-visual-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            /tmp/wu19-artifacts/wu19-fixture-manifest.json
-            /tmp/wu19-artifacts/wu19-runtime-results.json
-            /tmp/wu19-artifacts/wu19-browser-results.json
-            /tmp/wu19-artifacts/wu19-canonical.pdf
-            /tmp/wu19-artifacts/wu19-long-content.pdf
+            /tmp/wu19-artifacts/**
             /tmp/wu19-wp-server.log
           if-no-files-found: warn
           retention-days: 30
