@@ -63,11 +63,16 @@ for required in \
   'src/Core/Lifecycle/VisualPackageLifecycle.php' \
   'src/Core/Lifecycle/BindingSetLifecycle.php' \
   'src/Core/Lifecycle/EvidenceReferenceGate.php' \
+  'src/Core/Lifecycle/InstalledVisualProfileCatalog.php' \
+  'src/Core/Lifecycle/SettingsLifecycleWorkflow.php' \
   'src/Core/Lifecycle/WordPressOptionStateStore.php' \
   'src/Core/Portable/SemanticBindingResolver.php' \
   'src/Core/Portable/VisualProfilePackage.php' \
   'src/Core/Portable/VisualProfilePackageV11.php' \
-  'src/Core/Portable/EnvironmentBindingSet.php'; do
+  'src/Core/Portable/VisualProfileResolver.php' \
+  'src/Core/Portable/EnvironmentBindingSet.php' \
+  'src/GravityForms/DeclarativePresentationResolver.php' \
+  'src/GravityForms/DeclarativeProfileDefinition.php'; do
   grep -Fq "REACHABLE_PRODUCTION $required" <<<"$baseline_output" || {
     echo "$baseline_output" >&2
     echo "Expected production path to reach: $required" >&2
@@ -75,8 +80,11 @@ for required in \
   }
 done
 
-grep -Fq 'DEFERRED_UNREACHABLE src/Core/Lifecycle/SettingsLifecycleWorkflow.php' <<<"$baseline_output"
-grep -Fq 'DEFERRED_UNREACHABLE src/Core/Portable/VisualProfileResolver.php' <<<"$baseline_output"
+if grep -Fq 'DEFERRED_UNREACHABLE' <<<"$baseline_output"; then
+  echo "$baseline_output" >&2
+  echo 'No production source should remain intentionally deferred after the declarative settings/runtime path is rooted.' >&2
+  exit 1
+fi
 
 missing_required="$(fixture missing-required)"
 rm "$missing_required/src/Core/Lifecycle/VisualPackageLifecycle.php"
