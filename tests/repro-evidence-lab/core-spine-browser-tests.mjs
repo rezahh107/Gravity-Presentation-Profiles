@@ -60,6 +60,7 @@ async function entryState(page) {
       full_name: dossier?.querySelector('[data-gpp-section="identity"] h1')?.textContent?.trim() || null,
       national_id: slot?.textContent?.trim() || null,
       native_visible: Boolean(native && getComputedStyle(native).display !== 'none'),
+      native_editor_text: dossier?.querySelector('[data-gpp-native-editor]')?.innerText?.replace(/\s+/g, ' ').trim() || '',
       body: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
   });
@@ -125,15 +126,17 @@ await test('CORE-SPINE-002', 'schema drift never guesses a similar replacement a
   try {
     await openEntry(page); const entryDrift = await entryState(page);
     await openPrint(page); const printDrift = await printState(page);
-    if (entryDrift.national_id === drift.replacement_value || entryDrift.body.includes(drift.replacement_value)) throw new Error('Entry Detail guessed the similar-looking replacement field.');
-    if (printDrift.national_id === drift.replacement_value || printDrift.body.includes(drift.replacement_value)) throw new Error('Print guessed the similar-looking replacement field.');
+    const replacementVisibleInNativeEditor = entryDrift.native_editor_text.includes(drift.replacement_value);
+    if (!replacementVisibleInNativeEditor) throw new Error('Schema-drift falsification control is invalid: replacement value is not visible in the native editor.');
+    if (entryDrift.national_id === drift.replacement_value) throw new Error('Entry Detail semantic national-id rebound to the similar-looking replacement field.');
+    if (printDrift.national_id === drift.replacement_value) throw new Error('Print semantic national-id rebound to the similar-looking replacement field.');
     if (printDrift.national_id !== '' || !traceHas(printDrift, 'PRINT_BINDINGS_EVALUATED', 'source_unavailable')) throw new Error(`Print did not fail closed at the stale source: ${JSON.stringify(printDrift)}`);
 
     const repair = control('schema-drift-repair');
     await openEntry(page); const entryRepair = await entryState(page);
     await openPrint(page); const printRepair = await printState(page);
     if (entryRepair.national_id !== repair.replacement_value || printRepair.national_id !== repair.replacement_value) throw new Error('Explicit authoritative remap did not propagate to both surfaces.');
-    return { source_field_removed: true, similar_field_created: true, fuzzy_rebind: false, stale_source_failed_closed: true, explicit_repair_observed_by_entry_detail: true, explicit_repair_observed_by_print: true };
+    return { source_field_removed: true, similar_field_created: true, replacement_visible_in_native_editor: replacementVisibleInNativeEditor, semantic_oracle_scope: 'authoritative_slot_and_print_trace_only', fuzzy_rebind: false, stale_source_failed_closed: true, explicit_repair_observed_by_entry_detail: true, explicit_repair_observed_by_print: true };
   } finally {
     control('schema-drift-off');
   }

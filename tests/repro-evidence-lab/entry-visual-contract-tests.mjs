@@ -92,11 +92,37 @@ async function productionEntryMetrics(page) {
     }
     const csRoot = getComputedStyle(root); const csSection = getComputedStyle(identity); const csTask = getComputedStyle(task);
     const h1 = identity.querySelector('h1'); const h2 = task.querySelector('h2');
+    const fontSizeCascade = (() => {
+      const candidates = [];
+      const visit = (rules, href) => {
+        for (const rule of rules) {
+          if (rule.type === CSSRule.STYLE_RULE) {
+            let matches = false;
+            try { matches = h2.matches(rule.selectorText); } catch {}
+            const value = rule.style?.fontSize || '';
+            if (matches && value) candidates.push({ rule, href: href || 'inline', selector: rule.selectorText, value, priority: rule.style.getPropertyPriority('font-size') || '' });
+          }
+          if (rule.cssRules) { try { visit(rule.cssRules, href); } catch {} }
+        }
+      };
+      for (const sheet of document.styleSheets) { try { visit(sheet.cssRules, sheet.href); } catch {} }
+      let winner = null;
+      for (const candidate of candidates) {
+        const oldValue = candidate.rule.style.getPropertyValue('font-size');
+        const oldPriority = candidate.rule.style.getPropertyPriority('font-size');
+        candidate.rule.style.setProperty('font-size', '101px', oldPriority);
+        const wins = Math.abs(parseFloat(getComputedStyle(h2).fontSize) - 101) < 0.1;
+        candidate.rule.style.setProperty('font-size', oldValue, oldPriority);
+        if (wins) winner = { href: candidate.href, selector: candidate.selector, value: candidate.value, priority: candidate.priority || 'normal' };
+      }
+      return { computed_px: parseFloat(getComputedStyle(h2).fontSize), winner, candidates: candidates.map(({href,selector,value,priority}) => ({ href, selector, value, priority: priority || 'normal' })) };
+    })();
     return {
       missing: false, root: r(root), identity: r(identity), task: r(task), documents: documents ? r(documents) : null, history: history ? r(history) : null, actions: actions ? r(actions) : null,
       sectionOrder: sections.map(el => el.dataset.gppSection), sectionRects: sections.map(el => ({ section: el.dataset.gppSection, ...r(el) })),
       styles: { text: csRoot.color, fontSynthesis: csRoot.fontSynthesis, identityBorderTop: csSection.borderTopColor, identityBackground: csSection.backgroundColor, identityBorder: csSection.borderRightColor, taskBackground: csTask.backgroundColor },
       h1: { size: parseFloat(getComputedStyle(h1).fontSize), weight: getComputedStyle(h1).fontWeight }, h2: { size: parseFloat(getComputedStyle(h2).fontSize), weight: getComputedStyle(h2).fontWeight },
+      h2FontSizeCascade: fontSizeCascade,
       weights,
       rootOverflow: root.scrollWidth > root.clientWidth + 1,
       viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
