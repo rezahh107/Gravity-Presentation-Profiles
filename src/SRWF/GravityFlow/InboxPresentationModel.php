@@ -17,8 +17,9 @@ final class InboxPresentationModel {
     private $profile;
     private $binding_sets;
     private $resolver;
+    private $required_slots;
 
-    public function __construct( $profile, $binding_sets ) {
+    public function __construct( $profile, $binding_sets, $semantic_slot_declarations ) {
         if ( ! is_array( $profile ) || ! isset( $profile['surface'], $profile['profile_id'], $profile['semantic_slots'] ) ) {
             throw new ContractViolation( 'Inbox presentation requires one resolved surface profile.' );
         }
@@ -28,10 +29,14 @@ final class InboxPresentationModel {
         if ( ! is_array( $binding_sets ) ) {
             throw new ContractViolation( 'Inbox presentation binding sets must be an array.' );
         }
+        if ( ! is_array( $semantic_slot_declarations ) ) {
+            throw new ContractViolation( 'Inbox presentation requires semantic-slot declarations from the active visual package.' );
+        }
 
-        $this->profile      = $profile;
-        $this->binding_sets = array_values( $binding_sets );
-        $this->resolver     = new SemanticBindingResolver( $this->binding_sets, $profile['semantic_slots'] );
+        $this->profile        = $profile;
+        $this->binding_sets   = array_values( $binding_sets );
+        $this->required_slots = $this->requiredSlotsFromPackage( $semantic_slot_declarations );
+        $this->resolver       = new SemanticBindingResolver( $this->binding_sets, $profile['semantic_slots'] );
     }
 
     public function profileId() {
@@ -40,6 +45,30 @@ final class InboxPresentationModel {
 
     public function profile() {
         return $this->profile;
+    }
+
+    /**
+     * Required Inbox semantics are owned by the active visual package contract.
+     * This accessor exists for deterministic conformance tests, not as a second
+     * registry or configuration surface.
+     */
+    public function requiredSemanticSlotKeys() {
+        return $this->required_slots;
+    }
+
+    /**
+     * Presentation projection is allowed only when every package-declared
+     * required Inbox semantic resolves through the existing admitted path.
+     */
+    public function isPresentationReady( $entry ) {
+        foreach ( $this->required_slots as $slot_key ) {
+            $resolved = $this->resolve( $entry, $slot_key );
+            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function resolve( $entry, $slot_key ) {
@@ -79,6 +108,32 @@ final class InboxPresentationModel {
         }
 
         return $resolved;
+    }
+
+    private function requiredSlotsFromPackage( $semantic_slot_declarations ) {
+        $required = array();
+
+        foreach ( $semantic_slot_declarations as $declaration ) {
+            if ( ! is_array( $declaration ) || empty( $declaration['semantic_slot_key'] ) || ! isset( $declaration['surface_usage'] ) || ! is_array( $declaration['surface_usage'] ) ) {
+                throw new ContractViolation( 'Active visual package contains an invalid semantic-slot declaration.' );
+            }
+
+            foreach ( $declaration['surface_usage'] as $usage ) {
+                if ( ! is_array( $usage ) || ! isset( $usage['surface'], $usage['required'] ) ) {
+                    throw new ContractViolation( 'Active visual package contains invalid semantic surface usage.' );
+                }
+
+                if ( self::SURFACE === $usage['surface'] && true === $usage['required'] ) {
+                    $required[ $declaration['semantic_slot_key'] ] = true;
+                }
+            }
+        }
+
+        if ( array() === $required ) {
+            throw new ContractViolation( 'Active Inbox visual package declares no required semantic readiness contract.' );
+        }
+
+        return array_keys( $required );
     }
 
     private function installationIdForEntry( $entry ) {
