@@ -82,7 +82,8 @@ try {
     $invalid_field = GFAPI::get_field( $invalid_form, $alpha_document_field );
     wu18_assert( false === $invalid_field->get_file_name_from_url( $invalid_entry[ (string) $alpha_document_field ] ), 'Negative control did not produce unusable host filename metadata.' );
     wu18_assert( false === strpos( $invalid_document_html, 'data-gpp-section="documents"' ), 'Invalid host filename metadata did not fail closed.' );
-    wu18_assert( false === strpos( $invalid_document_html, 'not-a-valid-url' ), 'Invalid file value leaked into projected filename, kind or URL.' );
+    wu18_assert( false === strpos( $invalid_document_html, 'gpp-entry-dossier__document-thumbnail' ), 'Invalid host filename metadata projected an image document.' );
+    wu18_assert( false === strpos( $invalid_document_html, 'gpp-entry-dossier__file-link' ), 'Invalid host filename metadata projected a file link.' );
 } finally {
     $restore = GFAPI::update_entry_field( $alpha_entry['id'], $alpha_document_field, $original_document_value );
     if ( is_wp_error( $restore ) ) throw new RuntimeException( $restore->get_error_message() );
