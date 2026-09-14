@@ -183,6 +183,25 @@ wu17_test( 'WU17-RUNTIME-011', 'GPP does not broaden native assignment or author
     return array( 'operator' => $operator_total, 'viewer' => $viewer_total );
 } );
 
+wu17_test( 'WU17-NEGATIVE-001', 'active visual profile with zero active bindings must fall back to native presentation', function () use ( $manifest ) {
+    $original = get_option( BindingSetLifecycle::OPTION_NAME );
+    wu17_assert( is_array( $original ) && isset( $original['activations'] ), 'Binding lifecycle state unavailable for negative control.' );
+    $without_bindings = $original;
+    $without_bindings['activations'] = array();
+    update_option( BindingSetLifecycle::OPTION_NAME, $without_bindings, false );
+    InboxPresentationAdapter::resetRuntimeCache();
+
+    try {
+        list( $record, $entry ) = wu17_entry_for_form( $manifest, $manifest['forms'][0]['form_id'] );
+        $html = apply_filters( 'gravityflow_inbox_field_value', '', (int) $record['form_id'], InboxPresentationAdapter::CARD_COLUMN, $entry );
+        wu17_assert( false === strpos( $html, 'gpp-inbox-card' ), 'Original defect reproduced: zero active bindings still emit a pseudo-success GPP card.' );
+        return 'Native fallback preserved with zero active binding sets.';
+    } finally {
+        update_option( BindingSetLifecycle::OPTION_NAME, $original, false );
+        InboxPresentationAdapter::resetRuntimeCache();
+    }
+} );
+
 $result_path = trailingslashit( $artifact_dir ) . 'wu17-runtime-results.json';
 file_put_contents( $result_path, wp_json_encode( array( 'suite' => 'WU17 production adapter runtime', 'results' => $GLOBALS['wu17_results'] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n" );
 foreach ( $GLOBALS['wu17_results'] as $result ) {
