@@ -2,6 +2,7 @@
 
 namespace GravityPresentationProfiles;
 
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 
 final class Bootstrap {
@@ -39,9 +40,10 @@ final class Bootstrap {
         \GFAddOn::register( $addon_class );
 
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
-        // depends on Gravity Forms, so its presentation adapter is registered
-        // only after Gravity Forms has loaded successfully.
+        // depends on Gravity Forms, so native-surface presentation adapters are
+        // registered only after Gravity Forms has loaded successfully.
         InboxPresentationAdapter::register();
+        EntryDetailPresentationAdapter::register();
 
         return true;
     }
