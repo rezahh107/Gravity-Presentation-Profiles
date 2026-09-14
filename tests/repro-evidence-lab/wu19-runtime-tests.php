@@ -24,9 +24,16 @@ function wu19_render_print( $entry_ids, $intent = true ) {
 $operator = get_user_by( 'login', 'bootstrap_admin' );
 $viewer = get_user_by( 'login', 'wu21_viewer' );
 if ( ! $operator || ! $viewer ) throw new RuntimeException( 'Pinned users unavailable.' );
+$alpha_entry = GFAPI::get_entry( $manifest['alpha']['entry_id'] );
+if ( is_wp_error( $alpha_entry ) || ! is_array( $alpha_entry ) ) throw new RuntimeException( 'WU19 alpha Entry unavailable.' );
+$alpha_fields = $manifest['alpha']['fields'];
+$full_name = (string) $alpha_entry[ (string) $alpha_fields['student.full_name'] ];
+$entry_created_at = (string) $alpha_entry['date_created'];
+$father_mobile = isset( $alpha_fields['student.father_mobile'], $alpha_entry[ (string) $alpha_fields['student.father_mobile'] ] ) ? (string) $alpha_entry[ (string) $alpha_fields['student.father_mobile'] ] : '';
+$mother_mobile = isset( $alpha_fields['student.mother_mobile'], $alpha_entry[ (string) $alpha_fields['student.mother_mobile'] ] ) ? (string) $alpha_entry[ (string) $alpha_fields['student.mother_mobile'] ] : '';
 
 wp_set_current_user( $operator->ID );
-$happy = wu19_render_print( array( $manifest['happy']['entry_id'] ) );
+$happy = wu19_render_print( array( $manifest['alpha']['entry_id'] ) );
 wu19_assert( false !== strpos( $happy, 'data-gpp-print-state="ready"' ), 'Canonical dossier did not reach ready state.' );
 wu19_assert( 1 === substr_count( $happy, 'data-gpp-print-page="front"' ), 'Front page cardinality changed.' );
 wu19_assert( 1 === substr_count( $happy, 'data-gpp-print-page="back"' ), 'Back page cardinality changed.' );
@@ -35,18 +42,20 @@ wu19_assert( 6 === substr_count( $happy, 'gpp-print-cheque-row' ), 'Cheque rows 
 wu19_assert( false !== strpos( $happy, 'data-gpp-logo="razavi"' ) && false !== strpos( $happy, 'data-gpp-logo="kanoon"' ), 'Approved Front logos missing.' );
 wu19_assert( false === strpos( $happy, 'data-gpp-logo="center"' ), 'Forbidden center logo appeared.' );
 wu19_assert( false !== strpos( $happy, 'data-gpp-manual="front-stamp-signature"' ) && false !== strpos( $happy, 'data-gpp-manual="management-approval"' ), 'Manual approval regions missing.' );
-wu19_assert( false === strpos( $happy, $manifest['trap_values']['entry_created_at'] ), 'Financial date leaked from entry creation date.' );
-wu19_assert( false === strpos( $happy, $manifest['trap_values']['father_mobile'] ) && false === strpos( $happy, $manifest['trap_values']['mother_mobile'] ), 'Phone 2 fell back to parent mobile.' );
+wu19_assert( false !== strpos( $happy, esc_html( $full_name ) ), 'Authoritative full name missing from canonical dossier.' );
+wu19_assert( false === strpos( $happy, esc_html( $entry_created_at ) ), 'Financial date leaked from Entry creation date.' );
+if ( '' !== $father_mobile ) wu19_assert( false === strpos( $happy, esc_html( $father_mobile ) ), 'Phone 2 fell back to father mobile.' );
+if ( '' !== $mother_mobile ) wu19_assert( false === strpos( $happy, esc_html( $mother_mobile ) ), 'Phone 2 fell back to mother mobile.' );
 wu19_assert( false === strpos( $happy, 'data-gpp-checked="1">✓</i>عادی' ) && false === strpos( $happy, 'data-gpp-checked="1">✓</i>نقد' ), 'Unproven option group selected a plausible fallback.' );
 $trace = PrintDossierPresentationAdapter::lastDecisionTrace();
-wu19_assert( ! empty( $trace ), 'Decision trace unavailable.' );
 wu19_assert( in_array( array( 'stage' => 'PRINT_COMPOSITION_READY', 'outcome' => 'ready_two_pages' ), $trace, true ), 'ready_two_pages trace outcome missing.' );
+wu19_assert( in_array( array( 'stage' => 'PRINT_BINDINGS_EVALUATED', 'outcome' => 'binding_not_proven' ), $trace, true ), 'Manual/unbound semantic reason was not recorded.' );
 
-$native = wu19_render_print( array( $manifest['happy']['entry_id'] ), false );
+$native = wu19_render_print( array( $manifest['alpha']['entry_id'] ), false );
 wu19_assert( false === strpos( $native, 'data-gpp-print-state=' ), 'Ordinary native Print was hijacked.' );
 wu19_assert( false !== strpos( $native, 'entry-detail-view' ) || false !== strpos( $native, '<table' ), 'Native Print content disappeared without dossier intent.' );
 
-$multi = wu19_render_print( array( $manifest['happy']['entry_id'], $manifest['second']['entry_id'] ) );
+$multi = wu19_render_print( array( $manifest['alpha']['entry_id'], $manifest['beta']['entry_id'] ) );
 wu19_assert( false !== strpos( $multi, 'data-gpp-print-failure="unsupported_request_cardinality"' ), 'Multi-entry dossier request did not fail closed.' );
 wu19_assert( false === strpos( $multi, 'data-gpp-print-state="ready"' ), 'Multi-entry request produced canonical dossiers.' );
 
@@ -54,7 +63,7 @@ $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPacka
 $activation = $visual->resolve( 'print.dossier' );
 $visual->deactivate( array( 'surface' => 'print.dossier' ) );
 try {
-    $inactive = wu19_render_print( array( $manifest['happy']['entry_id'] ) );
+    $inactive = wu19_render_print( array( $manifest['alpha']['entry_id'] ) );
     wu19_assert( false !== strpos( $inactive, 'data-gpp-print-failure="profile_not_active"' ), 'Inactive Print profile did not fail explicitly.' );
     wu19_assert( false === strpos( $inactive, 'data-gpp-print-state="ready"' ), 'Inactive profile silently produced a dossier.' );
 } finally {
@@ -62,9 +71,9 @@ try {
 }
 
 wp_set_current_user( $viewer->ID );
-$denied = wu19_render_print( array( $manifest['happy']['entry_id'] ) );
+$denied = wu19_render_print( array( $manifest['alpha']['entry_id'] ) );
 wu19_assert( false === strpos( $denied, 'data-gpp-print-state=' ), 'GPP composed dossier material after native permission denial.' );
-wu19_assert( false === strpos( $denied, $manifest['happy']['full_name'] ), 'Entry data leaked through a pre-permission seam.' );
+wu19_assert( false === strpos( $denied, esc_html( $full_name ) ), 'Entry data leaked through a pre-permission seam.' );
 wp_set_current_user( $operator->ID );
 
 $results = array(
@@ -73,9 +82,10 @@ $results = array(
     'gravity_forms' => GFForms::$version,
     'happy_ready' => true,
     'native_print_regression' => true,
-    'permission_recheck_denial' => true,
+    'permission_denial_blocks_footer_composer' => true,
     'unsupported_multi_entry' => true,
     'inactive_profile_failure' => true,
+    'semantic_traps_blank' => true,
     'receipt_rows' => 5,
     'cheque_rows' => 6,
 );
