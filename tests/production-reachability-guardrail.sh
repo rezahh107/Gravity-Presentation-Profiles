@@ -66,10 +66,11 @@ for required in \
   'src/Core/Lifecycle/WordPressOptionStateStore.php' \
   'src/Core/Portable/SemanticBindingResolver.php' \
   'src/Core/Portable/VisualProfilePackage.php' \
+  'src/Core/Portable/VisualProfilePackageV11.php' \
   'src/Core/Portable/EnvironmentBindingSet.php'; do
   grep -Fq "REACHABLE_PRODUCTION $required" <<<"$baseline_output" || {
     echo "$baseline_output" >&2
-    echo "Expected post-WU17 production path to reach: $required" >&2
+    echo "Expected production path to reach: $required" >&2
     exit 1
   }
 done
@@ -79,7 +80,11 @@ grep -Fq 'DEFERRED_UNREACHABLE src/Core/Portable/VisualProfileResolver.php' <<<"
 
 missing_required="$(fixture missing-required)"
 rm "$missing_required/src/Core/Lifecycle/VisualPackageLifecycle.php"
-expect_fail_with "$missing_required" 'required post-WU17 production file is missing: src/Core/Lifecycle/VisualPackageLifecycle.php'
+expect_fail_with "$missing_required" 'required production file is missing: src/Core/Lifecycle/VisualPackageLifecycle.php'
+
+missing_v11_validator="$(fixture missing-v11-validator)"
+rm "$missing_v11_validator/src/Core/Portable/VisualProfilePackageV11.php"
+expect_fail_with "$missing_v11_validator" 'required production file is missing: src/Core/Portable/VisualProfilePackageV11.php'
 
 unreachable="$(fixture unreachable)"
 synthetic_class "$unreachable" 'Unreachable'
