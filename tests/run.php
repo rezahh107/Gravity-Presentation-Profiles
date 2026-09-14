@@ -4,6 +4,7 @@ $cases = array(
     'bootstrap-without-gravity-forms.php',
     'core-resolution.php',
     'gravity-forms-addon.php',
+    'declarative-preference-presence.php',
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
     'portable-profile-package-v11.php',
