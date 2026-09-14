@@ -57,7 +57,7 @@ final class PrintDossierRenderer {
         $this->frontLine( 'تلفن همراه ۲:', $v['print.phone_2'], true );
         echo '</div><div class="front-unlabeled front-bottom-blank" data-gpp-manual="front-bottom"></div></div>';
         echo '</div></section>';
-        echo '<footer class="paper-footer"><span>فیلدهای دارای بایندینگ اثبات‌شده چاپ می‌شوند و سایر محل‌ها برای تکمیل دستی خالی می‌مانند.</span><span>روی پرونده • صفحهٔ ۱ (A4)</span></footer>';
+        echo '<footer class="paper-footer"><span>فیلدهای دارای داده الکترونیکی چاپ می‌شوند و سایر محل‌ها برای تکمیل دستی با خودکار خالی می‌مانند.</span><span>روی پرونده • صفحهٔ ۱ (A4)</span></footer>';
         echo '</article>';
     }
 
