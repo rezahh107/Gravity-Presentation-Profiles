@@ -19,12 +19,15 @@ The project intends to follow Semantic Versioning once production releases begin
 - Evidence-synthesis review and owner canonicalization closure record.
 - Dependency-free visual-governance validator and mutation controls for contract determinism and visual-reference provenance.
 - Bounded generic core bootstrap for `WU-GPP-CORE-BOOTSTRAP-01`, including Gravity Forms Add-On integration, per-form profile state, deterministic resolution, conditional assets, and automated tests.
+- Independent production-reachability validation and falsification controls so unexplained `src/*.php` files fail CI.
 
 ### Changed
 
 - Closed SRWF Registration visual choices at `16px` mobile padding, below-input help text, below-input field validation messages, `#8690A1` control border, and a white desktop outer form surface.
 - Reclassified approximate implementation-driving typography, focus-ring, spacing, shadow, and desktop-pairing observations as explicit `NON_NORMATIVE_REFERENCE` or `NOT_PROVEN` states instead of implicit canonical values.
 - Added explicit fail-closed provenance state to every current visual reference; current external mockups remain unbound with `sha256: UNCOMPUTED` and cannot independently establish canonical numeric rules.
+- Removed unreachable WU09/WU10 prototype production code and implementation-only tests/fixtures while retaining their still-approved destination semantics as explicitly deferred architecture.
+- Decoupled the WU21 reproducible evidence lab from the removed production prototypes; its synthetic binding resolver is now test-local and cannot make production source reachable.
 
 ### Pending before first release
 

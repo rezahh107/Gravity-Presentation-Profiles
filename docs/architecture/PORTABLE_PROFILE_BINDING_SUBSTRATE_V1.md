@@ -5,22 +5,31 @@ document_id: GPP-PORTABLE-PROFILE-BINDING-SUBSTRATE-V1
 work_unit_id: WU-GPP-PROFILE-PACKAGE-09
 run_id: RUN-GPP-PROFILE-PACKAGE-09-001
 architecture: SHARED_DEFAULTS_PER_SURFACE__SEPARATE_ENVIRONMENT_BINDINGS
-runtime_activation: NOT_IMPLEMENTED
-persistence_import_lifecycle: OUT_OF_SCOPE_WU10
+status: DESTINATION_SEMANTICS_RETAINED__PRODUCTION_IMPLEMENTATION_DEFERRED
+production_runtime: NOT_IMPLEMENTED
+production_source: NOT_PRESENT
 ```
 
-## Boundary
+## Current implementation status
 
-V1 has two independent declarative artifact classes:
+This document preserves the approved **destination semantics** established by WU09. It is not a statement that a portable package/binding subsystem currently exists in production code.
+
+WU09 originally materialized prototype PHP classes and fixtures before any production caller existed. The production-reachability cleanup intentionally removed that premature implementation. Reintroducing these concepts requires a later authorized production integration with a real entrypoint/framework-callback path and its own runtime evidence; code must not be wired into startup merely to make it reachable.
+
+The current production implementation remains the bounded Gravity Forms / SRWF Registration path defined by the Mother Architecture. Gravity Flow Inbox, Entry Detail and print runtime implementation remain separately deferred.
+
+## Destination boundary
+
+A future authorized implementation must keep two independent declarative artifact classes:
 
 1. `gpp.visual_profile_package` — portable presentation identity, shared design tokens, stable semantic slots, and exactly one shared default profile for each admitted operational surface.
 2. `gpp.environment_binding_set` — environment/context-specific semantic-source bindings and runtime evidence claims.
 
-Gravity Forms and Gravity Flow retain ownership of data, workflow, assignment, authorization, actions, availability and editability. These contracts do not create a queue, workflow, permission model, target adapter, persistence/import lifecycle, or runtime Inbox/Entry/Print implementation.
+Gravity Forms and Gravity Flow retain ownership of data, workflow, assignment, authorization, actions, availability and editability. These contracts must not create a queue, workflow, permission model, target adapter, or parallel runtime truth.
 
-## Visual profile package V1
+## Visual profile package contract
 
-`VisualProfilePackage` is strict and rejects unknown keys. The root keys are exactly:
+The destination root keys are exactly:
 
 ```text
 artifact_type
@@ -42,9 +51,9 @@ gravity_flow.entry_detail
 print.dossier
 ```
 
-Every package contains exactly one `surface_profiles` record for every admitted surface. `profile_id` is portable. Form, field, step, page, route, user, role and binding-set identity cannot participate in profile identity or profile resolution.
+Every package has exactly one `surface_profiles` record for every admitted surface. `profile_id` is portable. Form, field, step, page, route, user, role and binding-set identity cannot participate in profile identity or profile resolution.
 
-Design tokens are typed scalar maps only. V1 admits hex colors, bounded pixel values, bounded numeric line heights and integer font weights. Arbitrary CSS, selectors, callbacks, HTML/JS/PHP and remote-code payloads are not schema fields.
+Design tokens are typed scalar maps only. The V1 contract admits hex colors, bounded pixel values, bounded numeric line heights and integer font weights. Arbitrary CSS, selectors, callbacks, HTML/JS/PHP and remote-code payloads are not schema fields.
 
 A semantic slot has:
 
@@ -58,9 +67,9 @@ surface_usage:
 
 `required` means the shared surface profile must declare that slot. It does not assert that a concrete target source, permission or runtime capability exists.
 
-## Environment binding set V1
+## Environment binding set contract
 
-`EnvironmentBindingSet` is a separate artifact with exact root keys:
+The destination root keys are exactly:
 
 ```text
 artifact_type
@@ -96,23 +105,23 @@ gravity_flow.region
 gravity_flow.action
 ```
 
-Each type has an exact key shape and bounded identifier/value rules. Raw selectors, hook names, callback names, arbitrary API endpoints, executable payloads and unknown source types are rejected.
+Each type must have an exact key shape and bounded identifier/value rules. Raw selectors, hook names, callback names, arbitrary API endpoints, executable payloads and unknown source types are rejected.
 
-`runtime_claims` separately records evidence for `host_seam`, `availability`, `editability`, `authorization`, `action_permission` or `print_mapping`. Structural `BINDING_VALID` therefore never promotes these runtime claims. A runtime claim with evidence state `PROVEN` requires its own evidence refs.
+`runtime_claims` separately records evidence for `host_seam`, `availability`, `editability`, `authorization`, `action_permission` or `print_mapping`. Structural binding validity must never promote these runtime claims.
 
-## Independent resolvers
+## Independent resolution requirements
 
-`VisualProfileResolver` accepts an admitted surface and returns the one shared default profile. Supplying environment context is rejected.
+Visual-profile resolution accepts an admitted surface and returns the one shared default profile. Environment context must not influence that resolution.
 
-`SemanticBindingResolver` accepts host-reported `installation_id`, `form_id`, `entry_id`, `surface` plus a stable slot key. It selects the matching binding set, preferring an exact entry-scoped set over a form-wide set. Missing, ambiguous, unknown, `UNBOUND` and `NOT_PROVEN` cases fail closed for that slot only.
+Semantic-binding resolution accepts host-reported `installation_id`, `form_id`, optional `entry_id`, `surface`, and a stable slot key. It selects the matching binding set, preferring an exact entry-scoped set over a form-wide set. Missing, ambiguous, unknown, `UNBOUND` and `NOT_PROVEN` cases fail closed for that slot only.
 
-The binding resolver never receives or returns `profile_id`. A form or binding set therefore cannot select or override the visual profile.
+Binding resolution never receives or returns `profile_id`. A form or binding set therefore cannot select or override the visual profile.
 
 ## Multi-form Inbox invariant
 
 For a multi-form Inbox, each entry may resolve through a different binding set while every row continues to use the single shared `gravity_flow.inbox` profile. A missing School or Due mapping remains local to that binding context; it cannot fall back to another form, another slot, a guessed ID or another profile.
 
-The sanitized WU09 fixtures under `tests/fixtures/` exercise two distinct mock forms and one shared Inbox profile. They contain no production SRWF IDs or PII.
+The WU21 reproducible evidence lab may exercise this invariant with synthetic test-local records. Those records and their resolver are test infrastructure only and are not a production portable-substrate implementation.
 
 ## Reserved Extension Seam
 
@@ -126,25 +135,25 @@ reserved_extension_seam:
 
 No payload, targeting, preference, permission, UI or activation field is accepted. The seam cannot participate in profile or binding resolution.
 
-## Canonical normalization and hashes
+## Canonical normalization and identity
 
-Both artifact classes validate before canonicalization. Canonical JSON:
+A future implementation must validate before canonicalization. Canonical JSON must:
 
-- recursively sorts object keys lexicographically;
-- preserves list/array order exactly;
-- preserves scalar types and does no coercion;
-- uses UTF-8 JSON without escaped Unicode/slashes and preserves zero fractions.
+- recursively sort object keys lexicographically;
+- preserve list/array order exactly;
+- preserve scalar types without coercion;
+- use UTF-8 JSON without escaped Unicode/slashes and preserve zero fractions.
 
-Content identity is SHA-256 of that canonical JSON. Objects that differ only in associative key order hash identically. Ordered-array changes or semantic scalar/type changes do not.
+Content identity is SHA-256 of that canonical JSON. Objects that differ only in associative key order hash identically; ordered-array or semantic scalar/type changes do not.
 
-## Validation states
+## Validation semantics
 
-`VisualProfilePackage::validationReport()` returns structural `PACKAGE_VALID` and explicitly leaves target runtime evidence `NOT_PROVEN`.
+Structural package validity leaves target runtime evidence `NOT_PROVEN`.
 
-`EnvironmentBindingSet::validationReport()` returns structural `BINDING_VALID` plus only the binding sources and runtime claims that have explicit `PROVEN` state with required evidence provenance.
+Structural binding validity may report only binding sources and runtime claims that have explicit `PROVEN` state with required evidence provenance.
 
 Schema validity never proves a target selector/hook/seam, a concrete source, runtime availability/editability, authorization, action permission or print mapping.
 
-## WU09 non-goals
+## Deferred non-goals
 
-This substrate does not persist, import, activate, roll back or migrate artifacts. It does not discover target SRWF identifiers, add host-specific adapters, style the Gravity Flow Inbox/Entry Detail, render A4 output, alter closed Registration history, or activate the Reserved Extension Seam.
+This retained contract does not currently persist, import, activate, roll back or migrate artifacts. It does not discover target SRWF identifiers, add host-specific production adapters, style the Gravity Flow Inbox/Entry Detail, render A4 output, alter Registration history, or activate the Reserved Extension Seam.

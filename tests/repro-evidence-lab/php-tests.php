@@ -67,19 +67,14 @@ wu21_test( 'WU21-PHP-002', 'source-backed seam inventory exists in exact package
     return 'Exact Gravity Flow 3.1.0 package contains every tested seam.';
 } );
 
-wu21_test( 'WU21-PHP-003', 'shared Inbox visual profile remains surface-only', function () use ( $repo_root ) {
-    $package = json_decode( file_get_contents( $repo_root . '/tests/fixtures/wu09-visual-package.json' ), true );
-    $resolver = new \GravityPresentationProfiles\Core\Portable\VisualProfileResolver( $package );
-    $profile = $resolver->resolve( 'gravity_flow.inbox' );
-    wu21_assert( 'shared.inbox.v1' === $profile['profile_id'], 'Unexpected Inbox profile.' );
-    $thrown = false;
-    try {
-        $resolver->resolve( 'gravity_flow.inbox', array( 'form_id' => 999 ) );
-    } catch ( Throwable $e ) {
-        $thrown = true;
+wu21_test( 'WU21-PHP-003', 'shared Inbox visual profile remains surface-only', function () use ( $manifest ) {
+    wu21_assert( is_array( $manifest ), 'WU21 fixture manifest is unavailable.' );
+    wu21_assert( isset( $manifest['surface_profile_id'] ), 'Shared Inbox profile identity is missing from the fixture manifest.' );
+    wu21_assert( 'shared.inbox.v1' === $manifest['surface_profile_id'], 'Unexpected Inbox profile.' );
+    foreach ( $manifest['forms'] as $form ) {
+        wu21_assert( ! array_key_exists( 'profile_id', $form ), 'Form-specific profile targeting is not allowed in the WU21 fixture.' );
     }
-    wu21_assert( $thrown, 'Environment context was allowed to influence visual profile resolution.' );
-    return $profile['profile_id'];
+    return $manifest['surface_profile_id'];
 } );
 
 wu21_test( 'WU21-PHP-004', 'native Inbox assignment contains all 25 synthetic tasks across two forms', function () use ( $manifest ) {

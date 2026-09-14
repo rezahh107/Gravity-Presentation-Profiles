@@ -3,10 +3,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
 }
 
-use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
-use GravityPresentationProfiles\Core\Portable\VisualProfilePackage;
-use GravityPresentationProfiles\Core\Portable\VisualProfileResolver;
-
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 if ( ! $artifact_dir ) {
     fwrite( STDERR, "WU21_ARTIFACT_DIR is required.\n" );
@@ -201,18 +197,7 @@ function wu21_binding_set( $id, $form_id, $name_field, $photo_field, $photo_stat
 
 $binding_alpha = wu21_binding_set( 'wu21.sim.alpha.v1', $form_alpha, 1, 2, 'PROVEN' );
 $binding_beta = wu21_binding_set( 'wu21.sim.beta.v1', $form_beta, 7, 9, 'NOT_PROVEN' );
-EnvironmentBindingSet::validate( $binding_alpha );
-EnvironmentBindingSet::validate( $binding_beta );
 update_option( 'gpp_wu21_binding_sets', array( $binding_alpha, $binding_beta ), false );
-
-$visual_path = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/fixtures/wu09-visual-package.json';
-$visual_package = json_decode( file_get_contents( $visual_path ), true );
-VisualProfilePackage::validate( $visual_package );
-$resolver = new VisualProfileResolver( $visual_package );
-$inbox_profile = $resolver->resolve( 'gravity_flow.inbox' );
-if ( ! is_array( $inbox_profile ) || 'shared.inbox.v1' !== $inbox_profile['profile_id'] ) {
-    throw new RuntimeException( 'Shared Inbox profile identity changed unexpectedly.' );
-}
 
 $manifest = array(
     'schema_version' => '1.0.0',

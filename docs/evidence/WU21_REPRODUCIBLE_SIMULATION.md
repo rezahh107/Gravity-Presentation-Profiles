@@ -14,13 +14,13 @@ The evidence artifact records the checked-out repository commit, workflow path a
 
 The lab uses only seams evidenced in the exact Gravity Flow 3.1.0 package: `gravityflow_columns_inbox_table`, `gravityflow_inbox_field_value`, `Gravity_Flow_API::get_current_step()`, `Gravity_Flow_API::get_inbox_entries()`, `get_inbox_search_criteria()`, `get_inbox_paging()`, `get_inbox_sorting()`, `Gravity_Flow_Inbox::display()`, the native `inbox/changes` refresh endpoint and its internal REST base-route construction, and the bundled native Inbox grid behavior (`gflow-inbox-search`, `setQuickFilter`, `applyTransaction`, AG Grid sorting/pagination and Entry Details links). The host remains authoritative for assignment, authorization, workflow, queue/search/index, refresh, pagination and navigation.
 
-The WU21 adapter is a test-only MU plugin. It adds four presentation columns through the two source-backed Inbox filters and reads host state through the admitted portable semantic-binding contract. It creates no custom workflow, queue, search engine, authorization system, scheduler, REST application or parallel state store.
+The WU21 adapter is a test-only MU plugin. It adds four presentation columns through the two source-backed Inbox filters and reads host state through **test-local synthetic binding records and a test-local fail-closed resolver**. That resolver exists only to preserve the evidence-lab mechanics after removal of the unreachable WU09/WU10 production prototypes. It is not a production portable-substrate implementation, does not make any `src/` file reachable, and creates no custom workflow, queue, search engine, authorization system, scheduler, REST application or parallel state store.
 
 ## Synthetic fixture boundary
 
 CI creates two Gravity Forms with different synthetic field IDs, one native Gravity Flow Approval step per form, and 25 base entries assigned by Gravity Flow to a synthetic operator account. All names use the `WU21 ...` prefix and all test email addresses use `example.invalid`. No production entry, student, form, field, workflow step, page or route identifier is copied into the lab.
 
-The two form contexts deliberately use different name/photo field IDs. `student.full_name`, `workflow.current_step` and `entry.created_at` are PROVEN in both synthetic binding sets. `student.photo` is PROVEN only for Alpha; Beta contains a host value but the binding is `NOT_PROVEN`, so the adapter must return nothing rather than cross-form fallback. `school.name` remains `UNBOUND` and `workflow.due_at` remains `NOT_PROVEN`; neither column is activated.
+The two form contexts deliberately use different name/photo field IDs. `student.full_name`, `workflow.current_step` and `entry.created_at` are PROVEN in both synthetic binding records. `student.photo` is PROVEN only for Alpha; Beta contains a host value but the binding is `NOT_PROVEN`, so the adapter must return nothing rather than cross-form fallback. `school.name` remains `UNBOUND` and `workflow.due_at` remains `NOT_PROVEN`; neither column is activated. A single manifest-level `surface_profile_id` preserves the shared Inbox-profile invariant without depending on a production package/resolver implementation.
 
 ## Runtime behavior and evidence gating
 
@@ -32,6 +32,8 @@ A mechanic receives `PROVEN_IN_REPRODUCIBLE_SIMULATION` only when every test lis
 
 ## Downstream consumption
 
-A downstream WU may cite the immutable WU21 evidence artifact for the portable mechanics whose required tests passed, but only with the evidence class `PROVEN_IN_REPRODUCIBLE_SIMULATION`. It must independently obtain target evidence before claiming exact production plugin versions, licenses/configuration, Form/Field/Step/Page/route IDs, or cache/CDN/theme/server facts. Those production-specific facts remain `UNBOUND` or `NOT_PROVEN` here.
+A downstream WU may cite the immutable WU21 evidence artifact for the **native Gravity Flow and synthetic fail-closed mechanics** whose required tests passed, but only with the evidence class `PROVEN_IN_REPRODUCIBLE_SIMULATION`. The artifact does not prove that WU09/WU10 package/lifecycle PHP implementations exist or are production-reachable; those implementations were intentionally removed by the reachability cleanup while their destination semantics remain documented separately.
+
+A downstream WU must independently obtain target evidence before claiming exact production plugin versions, licenses/configuration, Form/Field/Step/Page/route IDs, or cache/CDN/theme/server facts. Those production-specific facts remain `UNBOUND` or `NOT_PROVEN` here.
 
 `production_equivalence.state` is permanently `NOT_PROVEN` for this lab artifact.

@@ -11,8 +11,8 @@ final class GPP_WU21_Lab_Adapter {
     const OPTION_BINDINGS = 'gpp_wu21_binding_sets';
     const INSTALLATION_ID = 'wu21-sim-installation';
 
-    private static $resolver = null;
     private static $binding_sets = array();
+    private static $binding_sets_loaded = false;
 
     public static function boot() {
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'columns' ), 30, 2 );
@@ -74,61 +74,115 @@ final class GPP_WU21_Lab_Adapter {
     }
 
     public static function resolve( $entry, $slot ) {
-        self::ensure_resolver();
-        if ( ! self::$resolver ) {
+        self::ensure_binding_sets();
+
+        if ( ! is_array( $entry ) || ! isset( $entry['id'], $entry['form_id'] ) ) {
+            return self::unresolved( $slot, 'invalid_lab_entry' );
+        }
+
+        $matches = array();
+        foreach ( self::$binding_sets as $binding_set ) {
+            if ( ! is_array( $binding_set ) || ! isset( $binding_set['binding_set_id'], $binding_set['context'], $binding_set['bindings'] ) ) {
+                continue;
+            }
+
+            $context = $binding_set['context'];
+            if (
+                ! isset( $context['installation_source_ref']['installation_id'] )
+                || self::INSTALLATION_ID !== $context['installation_source_ref']['installation_id']
+                || ! isset( $context['form_source_ref']['form_id'] )
+                || (int) $entry['form_id'] !== (int) $context['form_source_ref']['form_id']
+                || ! isset( $context['surfaces'] )
+                || ! is_array( $context['surfaces'] )
+                || ! in_array( 'gravity_flow.inbox', $context['surfaces'], true )
+            ) {
+                continue;
+            }
+
+            $specificity = 0;
+            if ( ! empty( $context['entry_source_ref'] ) ) {
+                if ( ! isset( $context['entry_source_ref']['entry_id'] ) || (int) $entry['id'] !== (int) $context['entry_source_ref']['entry_id'] ) {
+                    continue;
+                }
+                $specificity = 1;
+            }
+
+            foreach ( $binding_set['bindings'] as $binding ) {
+                if ( isset( $binding['semantic_slot_key'] ) && $slot === $binding['semantic_slot_key'] ) {
+                    $matches[] = array(
+                        'binding_set_id' => $binding_set['binding_set_id'],
+                        'binding' => $binding,
+                        'specificity' => $specificity,
+                    );
+                    break;
+                }
+            }
+        }
+
+        if ( empty( $matches ) ) {
+            return self::unresolved( $slot, 'lab_binding_not_found' );
+        }
+
+        usort( $matches, function ( $a, $b ) {
+            return $b['specificity'] <=> $a['specificity'];
+        } );
+        $best = $matches[0];
+        if ( isset( $matches[1] ) && $matches[1]['specificity'] === $best['specificity'] ) {
+            return self::unresolved( $slot, 'ambiguous_lab_binding' );
+        }
+
+        $binding = $best['binding'];
+        $state = isset( $binding['state'] ) ? $binding['state'] : 'NOT_PROVEN';
+        $source = isset( $binding['source_ref'] ) && is_array( $binding['source_ref'] ) ? $binding['source_ref'] : null;
+        if ( 'PROVEN' !== $state || null === $source ) {
             return array(
                 'resolved' => false,
-                'binding_set_id' => null,
+                'binding_set_id' => $best['binding_set_id'],
                 'semantic_slot_key' => $slot,
-                'state' => 'NOT_PROVEN',
+                'state' => $state,
                 'source_ref' => null,
-                'reason' => 'lab_binding_resolver_unavailable',
+                'reason' => 'lab_binding_' . strtolower( $state ),
             );
         }
 
-        return self::$resolver->resolve(
-            array(
-                'installation_id' => self::INSTALLATION_ID,
-                'form_id' => (int) $entry['form_id'],
-                'entry_id' => (int) $entry['id'],
-                'surface' => 'gravity_flow.inbox',
-            ),
-            $slot
+        return array(
+            'resolved' => true,
+            'binding_set_id' => $best['binding_set_id'],
+            'semantic_slot_key' => $slot,
+            'state' => 'PROVEN',
+            'source_ref' => $source,
+            'reason' => 'resolved',
         );
     }
 
-    private static function ensure_resolver() {
-        if ( null !== self::$resolver ) {
+    private static function ensure_binding_sets() {
+        if ( self::$binding_sets_loaded ) {
             return;
         }
 
-        if ( ! class_exists( '\\GravityPresentationProfiles\\Core\\Portable\\SemanticBindingResolver' ) ) {
-            return;
-        }
+        self::$binding_sets_loaded = true;
+        $binding_sets = get_option( self::OPTION_BINDINGS, array() );
+        self::$binding_sets = is_array( $binding_sets ) ? $binding_sets : array();
+    }
 
-        self::$binding_sets = get_option( self::OPTION_BINDINGS, array() );
-        if ( ! is_array( self::$binding_sets ) || array() === self::$binding_sets ) {
-            return;
-        }
-
-        $slots = array(
-            'student.full_name',
-            'student.photo',
-            'entry.created_at',
-            'workflow.current_step',
-            'school.name',
-            'workflow.due_at',
+    private static function unresolved( $slot, $reason ) {
+        return array(
+            'resolved' => false,
+            'binding_set_id' => null,
+            'semantic_slot_key' => $slot,
+            'state' => 'NOT_PROVEN',
+            'source_ref' => null,
+            'reason' => $reason,
         );
-        self::$resolver = new \GravityPresentationProfiles\Core\Portable\SemanticBindingResolver( self::$binding_sets, $slots );
     }
 
     private static function availability_is_proven( $binding_set_id, $slot ) {
         foreach ( self::$binding_sets as $binding_set ) {
-            if ( $binding_set_id !== $binding_set['binding_set_id'] ) {
+            if ( ! isset( $binding_set['binding_set_id'], $binding_set['runtime_claims'] ) || $binding_set_id !== $binding_set['binding_set_id'] ) {
                 continue;
             }
             foreach ( $binding_set['runtime_claims'] as $claim ) {
-                if ( $slot === $claim['semantic_slot_key'] && 'availability' === $claim['claim'] ) {
+                if ( isset( $claim['semantic_slot_key'], $claim['claim'], $claim['evidence_state'] ) && $slot === $claim['semantic_slot_key'] && 'availability' === $claim['claim'] ) {
                     return 'PROVEN' === $claim['evidence_state'];
                 }
             }

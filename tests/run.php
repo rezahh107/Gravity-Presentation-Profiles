@@ -5,10 +5,6 @@ $cases = array(
     'core-resolution.php',
     'gravity-forms-addon.php',
     'srwf-registration-profile.php',
-    'portable-profile-substrate.php',
-    'package-lifecycle.php',
-    'package-lifecycle-deactivation.php',
-    'wordpress-option-state-store.php',
 );
 
 foreach ( $cases as $case ) {
