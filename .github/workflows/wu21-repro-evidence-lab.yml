@@ -8,6 +8,8 @@ on:
       - 'tests/repro-evidence-lab/**'
       - 'docs/evidence/WU21_REPRODUCIBLE_SIMULATION.md'
       - 'src/**'
+      - 'assets/css/srwf-gravity-flow-inbox.css'
+      - 'assets/css/srwf-gravity-flow-inbox-native.css'
       - 'tests/fixtures/wu09-visual-package.json'
       - 'gravity-presentation-profiles.php'
   workflow_dispatch:
