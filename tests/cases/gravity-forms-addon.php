@@ -205,6 +205,11 @@ $declarative_form = array(
     'cssClass' => 'host-declarative-class',
     'gravity-presentation-profiles' => array( 'enabled' => '1', 'declarative_profile' => $canonical_ref, 'profile' => 'srwf-registration' ),
 );
+$same_selection_form = array(
+    'id' => 118,
+    'cssClass' => 'host-same-selection-class',
+    'gravity-presentation-profiles' => array( 'enabled' => '1', 'declarative_profile' => $canonical_ref, 'profile' => '' ),
+);
 $alternate_form = array(
     'id' => 19,
     'cssClass' => 'host-alternate-class',
@@ -234,12 +239,14 @@ $legacy_state = $addon->resolve_form_state( $legacy_form );
 gpp_assert_true( $legacy_state->isActive(), 'Legacy selected profile must remain active.' );
 gpp_assert_same( 'srwf-registration', $legacy_state->profile()->key(), 'Legacy resolver behavior must remain unchanged.' );
 
-$declarative_state = $addon->resolve_form_state( $declarative_form );
-$alternate_state   = $addon->resolve_form_state( $alternate_form );
+$declarative_state    = $addon->resolve_form_state( $declarative_form );
+$same_selection_state = $addon->resolve_form_state( $same_selection_form );
+$alternate_state      = $addon->resolve_form_state( $alternate_form );
 gpp_assert_true( $declarative_state->isActive(), 'Exact installed declarative selection must resolve active.' );
+gpp_assert_true( $same_selection_state->isActive(), 'The same declarative selection must resolve on a different form.' );
 gpp_assert_true( $alternate_state->isActive(), 'Second exact installed declarative selection must resolve active.' );
+gpp_assert_same( $declarative_state->profile()->key(), $same_selection_state->profile()->key(), 'Runtime profile identity must depend on package/version/profile selection rather than Form ID.' );
 gpp_assert_true( $declarative_state->profile()->key() !== $alternate_state->profile()->key(), 'Distinct declarative package/profile references must receive distinct runtime scope identities.' );
-gpp_assert_true( false === strpos( $declarative_state->profile()->key(), '18' ), 'Runtime profile scope identity must not encode Form ID.' );
 gpp_assert_true( ! $addon->resolve_form_state( $plain_form )->isActive(), 'Disabled form must remain native.' );
 gpp_assert_true( ! $addon->resolve_form_state( $missing_form )->isActive(), 'Missing declarative version must fail closed instead of falling back to legacy.' );
 gpp_assert_true( ! $addon->resolve_form_state( $malformed_form )->isActive(), 'Malformed persisted declarative reference must fail closed instead of falling back to legacy.' );
@@ -259,7 +266,11 @@ gpp_assert_same( 'gpp-gravity-forms-declarative', $GLOBALS['gpp_enqueued_styles'
 gpp_assert_same( 1, count( $GLOBALS['gpp_inline_styles'] ), 'Declarative selection must emit one isolated validated-variable rule.' );
 $canonical_css = $GLOBALS['gpp_inline_styles'][0]['css'];
 gpp_assert_true( false !== strpos( $canonical_css, '--gpp-primary-action-background:#1D4ED8;' ), 'Canonical declarative package must project its controlled primary token.' );
-gpp_assert_true( false === strpos( $canonical_css, '18' ), 'Declarative CSS scope must not encode Form ID.' );
+
+$GLOBALS['gpp_enqueued_styles'] = array();
+$GLOBALS['gpp_inline_styles'] = array();
+$addon->enqueue_form_assets( $same_selection_form, false );
+gpp_assert_same( $canonical_css, $GLOBALS['gpp_inline_styles'][0]['css'], 'Two different Form IDs selecting the same portable profile must receive the same runtime CSS scope.' );
 
 $GLOBALS['gpp_enqueued_styles'] = array();
 $GLOBALS['gpp_inline_styles'] = array();
