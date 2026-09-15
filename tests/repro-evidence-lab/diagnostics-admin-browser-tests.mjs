@@ -195,9 +195,13 @@ try {
     return { selected_action: action.label, health: fact.status, exact_field_id: fact.source.field_id };
   });
 
-  await test('GPP-DIAG-ADMIN-004', 'real settings lifecycle keeps rollback available and restores the previous immutable binding version', async () => {
+  await test('GPP-DIAG-ADMIN-004', 'fresh real settings render exposes rollback and restores the previous immutable binding version', async () => {
+    // GFAddOn computes select choices before processing the settings postback.
+    // Use a fresh settings request to prove rollback availability from current
+    // lifecycle state rather than asserting against the pre-mutation choices.
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' });
     const rollback = await findAction(page, ['Rollback:', stale.form_title, 'binding version 1.0.0']);
-    if (!rollback) throw new Error('Rollback to the previously authoritative immutable version is not available after repair.');
+    if (!rollback) throw new Error('Rollback to the previously authoritative immutable version is not available on a fresh settings render after repair.');
     await submitAction(page, rollback);
 
     const health = control('health');
