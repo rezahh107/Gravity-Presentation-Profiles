@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${1:-.}"
 VERSION="${2:-}"
-OUT_DIR="${3:-$ROOT/build/release}"
+REQUESTED_OUT_DIR="${3:-$ROOT/build/release}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=release-lib.sh
 source "$SCRIPT_DIR/release-lib.sh"
@@ -14,10 +14,16 @@ release_is_production_version "$VERSION" || release_fail "Invalid production rel
 release_assert_version_mirrors "$ROOT"
 [[ "$(release_plugin_version "$ROOT")" == "$VERSION" ]] || release_fail 'Requested version does not match prepared source version.'
 
+# Resolve the caller-requested output location before entering the staging cwd.
+# This keeps workflow-relative paths (for example build/release) anchored to the
+# invocation directory instead of accidentally resolving them under STAGE.
+mkdir -p "$REQUESTED_OUT_DIR"
+OUT_DIR="$(cd "$REQUESTED_OUT_DIR" && pwd -P)"
+
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 PLUGIN_ROOT="$STAGE/$GPP_RELEASE_SLUG"
-mkdir -p "$PLUGIN_ROOT" "$OUT_DIR"
+mkdir -p "$PLUGIN_ROOT"
 
 while IFS= read -r path; do
     [[ -f "$ROOT/$path" ]] || release_fail "Runtime source file is missing: $path"
