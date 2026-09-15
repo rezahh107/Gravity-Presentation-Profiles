@@ -11,6 +11,7 @@ CHANGELOG.md
 SECURITY.md
 README.md
 docs
+release
 
 # Development tooling
 composer.json
@@ -19,6 +20,7 @@ phpcs.xml.dist
 phpunit.xml.dist
 node_modules
 vendor
+scripts
 
 # Tests / local output
 tests
