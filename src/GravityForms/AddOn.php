@@ -4,6 +4,9 @@ namespace GravityPresentationProfiles\GravityForms;
 
 use GravityPresentationProfiles\Core\AssetResolver;
 use GravityPresentationProfiles\Core\BindingHealth\BindingHealthEvaluator;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeIncidentStore;
 use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\SettingsLifecycleWorkflow;
 use GravityPresentationProfiles\Core\PresentationResolver;
@@ -71,7 +74,23 @@ final class AddOn extends \GFAddOn {
                     ),
                 ),
             ),
+            array(
+                'title'       => esc_html__( 'Diagnostics & Support', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'GPP keeps a small local record of recent presentation failures and degraded fail-closed decisions. Nothing is uploaded automatically. Download the sanitized JSON bundle only when you choose to share it with support or an external LLM.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'  => 'diagnostics',
+                        'label' => esc_html__( 'Operational diagnostics', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_diagnostics',
+                    ),
+                ),
+            ),
         );
+    }
+
+    public function init_admin() {
+        parent::init_admin();
+        add_action( 'admin_post_gpp_download_support_bundle', array( $this, 'download_support_bundle' ) );
     }
 
     public function validate_visual_package_import( $field, $value ) {
@@ -219,6 +238,82 @@ final class AddOn extends \GFAddOn {
         }
     }
 
+    public function settings_gpp_diagnostics( $field ) {
+        unset( $field );
+        echo '<div data-gpp-diagnostics="local">';
+        echo '<p>' . esc_html__( 'These records contain GPP decision facts only. Submitted form values, uploaded file names/content, cookies, tokens, credentials and request payloads are not collected.', 'gravity-presentation-profiles' ) . '</p>';
+
+        try {
+            $state = RuntimeIncidentStore::forWordPress()->snapshot();
+            $incidents = array_reverse( $state['incidents'] );
+        } catch ( \Throwable $exception ) {
+            echo '<p><strong>' . esc_html__( 'Local diagnostics storage is currently unavailable. GPP presentation and native host fallback continue normally.', 'gravity-presentation-profiles' ) . '</strong></p>';
+            $incidents = array();
+        }
+
+        if ( empty( $incidents ) ) {
+            echo '<p>' . esc_html__( 'No recent GPP failure or degraded presentation decision is stored.', 'gravity-presentation-profiles' ) . '</p>';
+        } else {
+            echo '<table class="widefat striped"><thead><tr>';
+            echo '<th>' . esc_html__( 'Observed', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'Affected surface', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'What happened', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'Safe fallback', 'gravity-presentation-profiles' ) . '</th>';
+            echo '</tr></thead><tbody>';
+            foreach ( array_slice( $incidents, 0, 10 ) as $record ) {
+                $event = $this->materialDiagnosticEvent( $record );
+                echo '<tr><td><code>' . esc_html( $record['observed_at_utc'] ) . '</code></td>';
+                echo '<td>' . esc_html( RuntimeDecisionTrace::surfaceLabel( $record['surface'] ) ) . '</td>';
+                echo '<td><strong>' . esc_html( RuntimeDecisionTrace::stageLabel( $event['stage'] ) ) . '</strong>';
+                if ( ! empty( $event['reason_code'] ) ) {
+                    echo '<br><small>' . esc_html__( 'Reason:', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $event['reason_code'] ) . '</code></small>';
+                }
+                echo '</td><td>';
+                if ( ! empty( $event['fallback'] ) ) {
+                    echo esc_html( RuntimeDecisionTrace::fallbackLabel( $event['fallback'] ) );
+                    echo '<br><small><code>' . esc_html( $event['fallback'] ) . '</code></small>';
+                } else {
+                    echo esc_html__( 'No additional GPP fallback action recorded.', 'gravity-presentation-profiles' );
+                }
+                echo '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        if ( function_exists( 'admin_url' ) && function_exists( 'wp_nonce_url' ) ) {
+            $url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=gpp_download_support_bundle' ),
+                'gpp_download_support_bundle'
+            );
+            echo '<p><a class="button button-secondary" data-gpp-support-bundle-download href="' . esc_url( $url ) . '">';
+            echo esc_html__( 'Download sanitized support bundle (JSON)', 'gravity-presentation-profiles' );
+            echo '</a></p>';
+        }
+        echo '</div>';
+    }
+
+    public function download_support_bundle() {
+        if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'gravityforms_edit_settings' ) ) {
+            wp_die( esc_html__( 'You are not allowed to download GPP diagnostics.', 'gravity-presentation-profiles' ), '', array( 'response' => 403 ) );
+        }
+        check_admin_referer( 'gpp_download_support_bundle' );
+
+        try {
+            $json = SupportBundleBuilder::forWordPress()->json();
+        } catch ( \Throwable $exception ) {
+            wp_die( esc_html__( 'GPP could not build the local support bundle.', 'gravity-presentation-profiles' ), '', array( 'response' => 500 ) );
+        }
+
+        if ( function_exists( 'nocache_headers' ) ) {
+            nocache_headers();
+        }
+        header( 'Content-Type: application/json; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="gpp-support-bundle.json"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        echo $json;
+        exit;
+    }
+
     public function form_settings_fields( $form ) {
         $profile_choices = array(
             array(
@@ -299,16 +394,48 @@ final class AddOn extends \GFAddOn {
         $settings = is_array( $settings ) ? $settings : array();
 
         if ( DeclarativePresentationResolver::hasSelection( $settings ) ) {
-            return ( new DeclarativePresentationResolver( $this->visualWorkflow() ) )->resolve( $settings );
+            $state = ( new DeclarativePresentationResolver( $this->visualWorkflow() ) )->resolve( $settings );
+        } else {
+            $state = ( new PresentationResolver() )->resolve( $settings, ProfileCatalog::create() );
         }
 
-        return ( new PresentationResolver() )->resolve( $settings, ProfileCatalog::create() );
+        if ( $state->isActive() ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_PROFILE_SELECTION',
+                RuntimeDecisionTrace::RESULT_PASS
+            );
+        } elseif ( 'disabled' === $state->reason() ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_PROFILE_SELECTION',
+                RuntimeDecisionTrace::RESULT_NOT_APPLICABLE,
+                'settings_disabled',
+                'native_gravity_forms_form'
+            );
+        } else {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_PROFILE_SELECTION',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                $state->reason(),
+                'native_gravity_forms_form'
+            );
+        }
+        return $state;
     }
 
     public function enqueue_form_assets( $form, $is_ajax ) {
         unset( $is_ajax );
 
         if ( ! function_exists( 'wp_enqueue_style' ) || ! function_exists( 'plugins_url' ) || ! function_exists( 'plugin_dir_path' ) ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_ASSET_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                'host_asset_api_unavailable',
+                'native_gravity_forms_form'
+            );
             return;
         }
 
@@ -316,11 +443,27 @@ final class AddOn extends \GFAddOn {
         $assets = ( new AssetResolver() )->stylesFor( $state );
 
         if ( empty( $assets ) ) {
+            if ( $state->isActive() ) {
+                RuntimeDiagnostics::recordOnce(
+                    DeclarativePresentationResolver::SURFACE,
+                    'GF_ASSET_READINESS',
+                    RuntimeDecisionTrace::RESULT_FAIL,
+                    'asset_resolution_empty',
+                    'native_gravity_forms_form'
+                );
+            }
             return;
         }
 
         $profile = $state->profile();
         if ( $profile instanceof DeclarativeProfileDefinition && ! function_exists( 'wp_add_inline_style' ) ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_ASSET_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                'host_inline_style_api_unavailable',
+                'native_gravity_forms_form'
+            );
             return;
         }
 
@@ -328,6 +471,13 @@ final class AddOn extends \GFAddOn {
 
         foreach ( $assets as $asset ) {
             if ( ! is_readable( $plugin_root . $asset['path'] ) ) {
+                RuntimeDiagnostics::recordOnce(
+                    DeclarativePresentationResolver::SURFACE,
+                    'GF_ASSET_READINESS',
+                    RuntimeDecisionTrace::RESULT_FAIL,
+                    'required_asset_unavailable',
+                    'native_gravity_forms_form'
+                );
                 return;
             }
         }
@@ -347,16 +497,35 @@ final class AddOn extends \GFAddOn {
                 wp_add_inline_style( $profile->styleHandle(), $css );
             }
         }
+        RuntimeDiagnostics::recordOnce(
+            DeclarativePresentationResolver::SURFACE,
+            'GF_ASSET_READINESS',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
     }
 
     public function add_form_state_css_classes( $form ) {
         if ( ! is_array( $form ) ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_PRESENTATION_APPLIED',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                'invalid_form_payload',
+                'native_gravity_forms_form'
+            );
             return $form;
         }
 
         $state = $this->resolve_form_state( $form );
 
         if ( ! $state->isActive() ) {
+            RuntimeDiagnostics::recordOnce(
+                DeclarativePresentationResolver::SURFACE,
+                'GF_PRESENTATION_APPLIED',
+                'disabled' === $state->reason() ? RuntimeDecisionTrace::RESULT_NOT_APPLICABLE : RuntimeDecisionTrace::RESULT_SKIP,
+                'disabled' === $state->reason() ? 'settings_disabled' : $state->reason(),
+                'native_gravity_forms_form'
+            );
             return $form;
         }
 
@@ -379,6 +548,11 @@ final class AddOn extends \GFAddOn {
         }
 
         $form['cssClass'] = implode( ' ', $classes );
+        RuntimeDiagnostics::recordOnce(
+            DeclarativePresentationResolver::SURFACE,
+            'GF_PRESENTATION_APPLIED',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
 
         return $form;
     }
@@ -500,6 +674,16 @@ final class AddOn extends \GFAddOn {
             BindingHealthEvaluator::NOT_APPLICABLE => __( 'Not applicable', 'gravity-presentation-profiles' ),
         );
         return isset( $labels[ $status ] ) ? $labels[ $status ] : $status;
+    }
+
+    private function materialDiagnosticEvent( $record ) {
+        $events = isset( $record['events'] ) && is_array( $record['events'] ) ? array_reverse( $record['events'] ) : array();
+        foreach ( $events as $event ) {
+            if ( isset( $event['result'] ) && in_array( $event['result'], array( RuntimeDecisionTrace::RESULT_FAIL, RuntimeDecisionTrace::RESULT_SKIP ), true ) ) {
+                return $event;
+            }
+        }
+        return ! empty( $events ) ? $events[0] : array( 'stage' => 'GF_PROFILE_SELECTION', 'reason_code' => 'diagnostic_event_unavailable', 'fallback' => null );
     }
 
     private function visualWorkflow() {
