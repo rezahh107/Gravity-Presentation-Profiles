@@ -21,6 +21,7 @@ $cases = array(
     'package-lifecycle-deactivation.php',
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
+    'inbox-manual-refresh.php',
     'entry-detail-presentation-model.php',
     'print-dossier-presentation-model.php',
 );
