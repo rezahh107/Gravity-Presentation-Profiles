@@ -6,13 +6,17 @@ This document defines the repository-native release path for Gravity Presentatio
 
 The release unit is one installable WordPress plugin ZIP plus its SHA-256 checksum and GitHub Release metadata. GitHub's source archive is not the installable artifact contract.
 
+The current product context is personal/private use. Public repository or downloadable-artifact visibility does not itself create a broad public-support commitment. Compatibility policy is intentionally centered on the Owner-qualified environment.
+
 ## Owner path
 
-Routine production publication is one explicit `Production Release System` workflow-dispatch action on `main`.
+Routine production publication is one explicit `GPP Production Release` workflow-dispatch action on `main`.
 
-After the first public release, the Owner chooses only release intent (`patch`, `minor`, or `major`). The workflow derives the exact version from immutable production tags. The first release is different because no prior release baseline exists: the Owner must explicitly provide the first production SemVer once. The workflow never guesses it.
+After the first production release, the Owner chooses only release intent (`patch`, `minor`, or `major`). The workflow derives the exact version from immutable production tags. The first release is different because no prior release baseline exists: the Owner must explicitly provide the first production SemVer once. The Owner-approved first production version is `0.1.0`.
 
 The Owner does not manually edit versions, create tags, build ZIPs, calculate checksums, or upload GitHub Release assets.
+
+For the first production publication, the future explicit action is `mode = publish`, `release_intent = first`, and `first_version = 0.1.0`. Repository preparation alone does not execute that action.
 
 ## Version authority
 
@@ -49,11 +53,12 @@ After successful last-mile verification, the development continuation is pushed 
 It ships only the production allowlist derived by `release_runtime_files()`:
 
 - `gravity-presentation-profiles.php`;
+- `LICENSE`;
 - `src/**/*.php`;
 - runtime `assets` (`css`, `js`, and approved local image formats);
 - runtime/declarative `profiles` files (`php`, `css`, `json`).
 
-Repository-only material such as tests, docs, workflows, release tooling, Composer metadata, governance documents, build output, and profile Markdown is excluded.
+Repository-only material such as tests, docs, workflows, release tooling/configuration, Composer metadata, governance documents, build output, and profile Markdown remains excluded. Adding `LICENSE` does not turn those source/development files into distribution content.
 
 The builder normalizes ZIP timestamps and sorted input so a second build from identical prepared source produces the same bytes/checksum on the supported runner toolchain. Caller-relative output directories are canonicalized before entering the staging working directory, so CI and local callers use the same output-location semantics.
 
@@ -64,11 +69,11 @@ The builder normalizes ZIP timestamps and sorted input so a second build from id
 - corrupt archives;
 - unsafe/archive-traversal paths;
 - wrong plugin root;
-- missing runtime files;
+- missing required runtime files, including `LICENSE`;
 - additional files outside the canonical runtime allowlist;
 - repository/development directories and files;
 - mismatched plugin/Add-On versions;
-- packaged files whose bytes differ from the prepared source;
+- packaged files whose bytes differ from the prepared source, including `LICENSE`;
 - checksum mismatch;
 - high-confidence private-key/GitHub-token/AWS-key patterns.
 
@@ -94,21 +99,38 @@ A production candidate must pass exact-source runs of:
 
 The release workflow starts all five, captures exact run IDs, verifies their `headSha` equals the candidate SHA, and requires `success` before building/publishing.
 
+## Resolved repository compatibility authority
+
+`release/compatibility.json` is the intentional release compatibility authority for the Owner-qualified environment:
+
+- `wordpress_min`: `6.8.3`;
+- `php_min`: `8.2`;
+- `gravity_forms_min`: `3.1.1.1`;
+- `gravity_flow_min`: `3.1.0`.
+
+The WordPress plugin header mirrors the WordPress/PHP floors through `Requires at least` and `Requires PHP`, and the publication-prerequisite check fails closed if those mirrors drift. Gravity Forms and Gravity Flow remain host dependencies governed by the release compatibility authority; this release-readiness work does not add a new runtime hard-block subsystem for them.
+
+`release/compatibility.example.json` remains only the unresolved/template shape. Placeholder/sentinel values such as `OWNER_DECISION_REQUIRED`, arbitrary text, empty values, malformed version strings, or missing required keys do not satisfy publication prerequisites.
+
 ## Publication prerequisites
 
-Publication fails closed unless all of the following are true:
+The repository-level product prerequisites are now materialized as:
 
-- an Owner-selected non-empty `LICENSE` exists;
-- `release/compatibility.json` records intentional WordPress/PHP/Gravity Forms/Gravity Flow minimums as resolved numeric dotted version floors;
-- `main` begins the normal release action in the locked `0.0.0-dev` development state;
-- first-release version is explicitly supplied when no production tag exists;
+- `GPL-2.0-or-later`, with the standard GNU GPL version 2 text in `LICENSE`;
+- the exact compatibility floors above;
+- WordPress/PHP plugin metadata synchronized to those floors;
+- normal source beginning the release action in the locked `0.0.0-dev` development state with `[Unreleased]` present;
+- Owner-approved first production version intent `0.1.0` for the future first publish action.
+
+Production publication still fails closed unless all applicable release/platform/runtime conditions are true:
+
 - repository immutable releases are enabled and machine-verifiable;
 - no conflicting tag, GitHub Release, or production asset filename exists;
 - `main` remains at the approved pre-candidate source before promotion;
 - all exact candidate qualification succeeds;
 - the exact ZIP validates and smoke-tests.
 
-`release/compatibility.example.json` documents the required shape without selecting policy values. Placeholder/sentinel values such as `OWNER_DECISION_REQUIRED`, arbitrary text, empty values, and malformed version strings do not satisfy publication prerequisites.
+A missing/empty `LICENSE`, missing compatibility file, absent required compatibility key, malformed/placeholder compatibility value, WordPress/PHP metadata mismatch, invalid source-version state, or production-versioned starting source still fails closed.
 
 ## Immutable history and least privilege
 
@@ -117,6 +139,12 @@ The workflow default is `contents: read`. The dry-run job has read-only reposito
 GitHub's `GITHUB_TOKEN` does not expose repository Administration permission. Because the immutable-releases status endpoint requires Administration(read), production publication also requires a fine-grained `GPP_RELEASE_ADMIN_READ_TOKEN` secret with only that read permission. It is used only to prove immutability before the first irreversible publication step. Publication itself continues to use the GitHub-native `GITHUB_TOKEN`.
 
 The workflow uses one non-cancelling concurrency group. A second release attempt waits instead of cancelling an in-progress publication.
+
+## Dry-run boundary
+
+The release dry-run runs the release contract/mutation suite against normal source, verifies resolved product prerequisites, and confirms both version declarations remain `0.0.0-dev` before creating a synthetic overlay such as `9999.0.0`.
+
+It then builds, validates, and smoke-tests the canonical production-shaped ZIP. Its manifest remains explicitly non-production (`NOT_ATTEMPTED_DRY_RUN`). It does not create a production-versioned commit on `main`, production tag, GitHub Release, or consumer-facing production publication.
 
 ## Publication sequence
 
@@ -151,6 +179,10 @@ If a tag, draft Release, or published Release exists when a later step fails, st
 If the published artifact has already passed last-mile verification but the final development continuation cannot fast-forward because `main` moved, preserve the published release identity and stop. Do not force `main` and do not rewrite the release. Normal publication is deliberately blocked while `main` remains production-versioned; recovery is an explicit Manager/Owner action.
 
 Published immutable Release assets/tags are intentionally not auto-withdrawn. GitHub allows a release to be deleted by an authorized human, but immutable tag names cannot be reused; destructive recovery therefore requires an explicit policy decision outside this workflow.
+
+## Evidence boundary
+
+A successful dry-run and exact-head qualification do not prove an actual `0.1.0` publication, GitHub consumer-channel re-download, target-production equivalence, physical-printer equivalence, or remaining Registration production-specific evidence. Those remain separate claims until their actual boundaries are exercised.
 
 ## Supply-chain scope
 
