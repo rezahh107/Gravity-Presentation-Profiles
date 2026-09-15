@@ -75,6 +75,7 @@ final class VisualProfilePackageV11 {
             'minimum_length' => 1,
             'maximum_bytes' => 96,
             'pattern' => '^[\p{L}\p{N} ._-]+$',
+            'trim_non_empty' => true,
             'allowed_characters' => 'Unicode letters and numbers, space, dot, underscore, hyphen',
         ),
     );
@@ -245,6 +246,9 @@ final class VisualProfilePackageV11 {
             }
             if ( isset( $rule['minimum_length'] ) && strlen( $value ) < $rule['minimum_length'] ) {
                 throw new ContractViolation( $path . ' must not be empty.' );
+            }
+            if ( ! empty( $rule['trim_non_empty'] ) && '' === trim( $value ) ) {
+                throw new ContractViolation( $path . ' must be one safe font-family name.' );
             }
             if ( isset( $rule['maximum_bytes'] ) && strlen( $value ) > $rule['maximum_bytes'] ) {
                 throw new ContractViolation( $path . ' exceeds the admitted string length.' );
