@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
-trap 'rc=$?; printf "GPP_RELEASE_CONTRACT_TESTS_FAIL line=%s command=%q\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$rc"' ERR
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="$(mktemp -d)"
@@ -182,10 +181,7 @@ require_marker "$WORK/metadata-mismatch.json" 'compatibility_metadata_mismatch:p
 expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
 cp "$ROOT/gravity-presentation-profiles.php" "$PREREQ/gravity-presentation-profiles.php"
 
-if ! php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"; then
-    cat "$WORK/compat-valid.json" >&2
-    exit 1
-fi
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"
 require_marker "$WORK/compat-valid.json" '"publication_ready": true'
 
 # Invalid development source state remains fail-closed.
