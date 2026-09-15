@@ -56,7 +56,7 @@ release_runtime_files() {
     local root="${1:-.}"
     (
         cd "$root"
-        printf '%s\n' "$GPP_ENTRYPOINT"
+        printf '%s\n' "$GPP_ENTRYPOINT" 'LICENSE'
         find src -type f -name '*.php' -print
         find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print
         find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print
@@ -65,6 +65,7 @@ release_runtime_files() {
 
 release_required_runtime_files() {
     cat <<'FILES'
+LICENSE
 gravity-presentation-profiles.php
 src/Autoloader.php
 src/Bootstrap.php
