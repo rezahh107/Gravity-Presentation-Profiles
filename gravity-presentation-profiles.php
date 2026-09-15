@@ -6,6 +6,9 @@
  * Text Domain: gravity-presentation-profiles
  */
 
+// Release authority: the plugin-header Version is canonical; release tooling
+// machine-checks the Gravity Forms Add-On version mirror before packaging.
+
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }

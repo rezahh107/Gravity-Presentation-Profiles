@@ -19,6 +19,8 @@ phpcs.xml.dist
 phpunit.xml.dist
 node_modules
 vendor
+scripts
+release
 
 # Tests / local output
 tests

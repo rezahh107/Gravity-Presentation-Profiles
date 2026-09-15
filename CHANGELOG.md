@@ -19,18 +19,20 @@ The project intends to follow Semantic Versioning once production releases begin
 - Evidence-synthesis review and owner canonicalization closure record.
 - Dependency-free visual-governance validator and mutation controls for contract determinism and visual-reference provenance.
 - Bounded generic core bootstrap for `WU-GPP-CORE-BOOTSTRAP-01`, including Gravity Forms Add-On integration, per-form profile state, deterministic resolution, conditional assets, and automated tests.
+- Portable visual-profile package schema 1.1 with selected-surface support and controlled declarative Gravity Forms presentation preferences.
+- Lifecycle-backed declarative package import/validation and immutable package/version activation behavior.
+- Native Gravity Flow Inbox presentation with fail-closed semantic-binding readiness and host-owned search, sorting, pagination, navigation, and Live Refresh preserved.
+- Native Gravity Flow Entry Detail dossier presentation and direct two-page A4 Print Dossier presentation on existing Gravity Flow authority seams.
+- Mapping & Binding Health management with explicit immutable repair/rollback and stale-action concurrency protection.
+- Local runtime decision traces, bounded diagnostics, sanitized support-bundle download, and authentic admin-runtime evidence.
+- Manual native Inbox reload fallback `به‌روزرسانی کارهای من` without a second polling/refresh subsystem.
+- Fixed offline General LLM Authoring Prompt V1 with local copy/download and existing package-import lifecycle reuse.
+- Automated Production Release System V1 dry-run, canonical ZIP builder/validator, exact-ZIP smoke path, release identity controls, and Owner-facing release operation documentation.
 
 ### Changed
 
 - Closed SRWF Registration visual choices at `16px` mobile padding, below-input help text, below-input field validation messages, `#8690A1` control border, and a white desktop outer form surface.
 - Reclassified approximate implementation-driving typography, focus-ring, spacing, shadow, and desktop-pairing observations as explicit `NON_NORMATIVE_REFERENCE` or `NOT_PROVEN` states instead of implicit canonical values.
-- Added explicit fail-closed provenance state to every current visual reference; current external mockups remain unbound with `sha256: UNCOMPUTED` and cannot independently establish canonical numeric rules.
-
-### Pending before first release
-
-- owner-selected repository/plugin license;
-- intentional minimum WordPress/PHP/Gravity compatibility floors;
-- exact resolution of currently `NOT_PROVEN` implementation-driving visual items before they can drive production CSS;
-- real Gravity Forms / GP Advanced Select / GP File Upload Pro / PersianGravity runtime validation for the SRWF Registration profile;
-- approval of runtime-backed Canonical Visual Reference Gallery;
-- reproducible distribution build and artifact validation.
+- Added explicit fail-closed provenance state to every current visual reference; external visual material cannot independently establish canonical numeric rules without admitted evidence.
+- Repository CI can now be dispatched against an exact release-candidate branch so production release qualification reuses the same repository guardrails and DB advisory-lock contracts.
+- Release-facing status now reflects the implemented runtime/evidence capabilities while keeping license, compatibility policy, and first public release version as explicit unresolved publication decisions.
