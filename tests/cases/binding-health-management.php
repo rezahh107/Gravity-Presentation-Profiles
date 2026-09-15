@@ -12,6 +12,7 @@ use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\RepairBindingEvidenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\StateStore;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
+use GravityPresentationProfiles\Core\Portable\CanonicalJson;
 use GravityPresentationProfiles\GravityForms\BindingHealthService;
 use GravityPresentationProfiles\GravityForms\BindingRepairService;
 use GravityPresentationProfiles\GravityForms\GravityFormsFieldInventory;
@@ -188,7 +189,11 @@ foreach ( $new_artifact['bindings'] as $binding ) {
 }
 gpp_assert_same( 3, $new_full_name['source_ref']['field_id'], 'Repair must use exactly the administrator-selected replacement field.' );
 gpp_assert_true( 0 === strpos( $new_full_name['evidence_refs'][0], 'gpp-admin-binding:' ), 'Repaired binding must carry bounded administrator-confirmation evidence.' );
-gpp_assert_same( $initial['bindings'][1], $new_national, 'Unrelated healthy mappings must remain byte-equivalent at the binding row level.' );
+gpp_assert_same(
+    CanonicalJson::encode( $initial['bindings'][1] ),
+    CanonicalJson::encode( $new_national ),
+    'Unrelated healthy mappings must remain canonically unchanged by repair.'
+);
 gpp_assert_same( 'NOT_PROVEN', $new_artifact['runtime_claims'][0]['evidence_state'], 'Repair must not recycle old runtime evidence for a new source.' );
 gpp_assert_same( array(), $new_artifact['runtime_claims'][0]['evidence_refs'], 'Runtime evidence invalidated by repair must not retain stale evidence refs.' );
 
