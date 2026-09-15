@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -44,15 +45,32 @@ for (const pattern of forbiddenPatterns) {
   if (pattern.test(raw)) throw new Error(`Support bundle failed privacy falsification: ${pattern}`);
 }
 
+const validation = {
+  schema_version: bundle.schema_version,
+  bundle_type: bundle.bundle_type,
+  sha256: crypto.createHash('sha256').update(raw).digest('hex'),
+  size_bytes: Buffer.byteLength(raw),
+  binding_health_present: true,
+  runtime_diagnostics_present: true,
+  inbox_stages: stages,
+  privacy_falsification: 'PASS',
+};
+
 fs.writeFileSync(
   path.join(artifactDir, 'gpp-support-bundle-validation.json'),
-  JSON.stringify({
-    schema_version: bundle.schema_version,
-    bundle_type: bundle.bundle_type,
-    binding_health_present: true,
-    runtime_diagnostics_present: true,
-    inbox_stages: stages,
-    privacy_falsification: 'PASS',
-  }, null, 2) + '\n'
+  JSON.stringify(validation, null, 2) + '\n'
 );
+
+const browserResultsFile = path.join(artifactDir, 'browser-results.json');
+const diagnosticsResultsFile = path.join(artifactDir, 'diagnostics-admin-browser-results.json');
+if (!fs.existsSync(browserResultsFile) || !fs.existsSync(diagnosticsResultsFile)) {
+  throw new Error('Durable diagnostics evidence inputs are missing.');
+}
+const browserResults = JSON.parse(fs.readFileSync(browserResultsFile, 'utf8'));
+const diagnosticsAdmin = JSON.parse(fs.readFileSync(diagnosticsResultsFile, 'utf8'));
+browserResults.diagnostics_admin = diagnosticsAdmin;
+browserResults.support_bundle_validation = validation;
+browserResults.support_bundle = bundle;
+fs.writeFileSync(browserResultsFile, JSON.stringify(browserResults, null, 2) + '\n');
+
 console.log('GPP_SUPPORT_BUNDLE_VALIDATION_PASS');
