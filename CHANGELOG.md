@@ -28,6 +28,8 @@ The project intends to follow Semantic Versioning once production releases begin
 - Manual native Inbox reload fallback `به‌روزرسانی کارهای من` without a second polling/refresh subsystem.
 - Fixed offline General LLM Authoring Prompt V1 with local copy/download and existing package-import lifecycle reuse.
 - Automated Production Release System V1 dry-run, canonical ZIP builder/validator, exact-ZIP smoke path, release identity controls, and Owner-facing release operation documentation.
+- `GPL-2.0-or-later` repository/plugin licensing, with the standard GNU GPL v2 text included in the canonical installable ZIP.
+- Materialized release compatibility authority for WordPress `6.8.3`, PHP `8.2`, Gravity Forms `3.1.1.1`, and Gravity Flow `3.1.0` minimums.
 
 ### Changed
 
@@ -35,4 +37,5 @@ The project intends to follow Semantic Versioning once production releases begin
 - Reclassified approximate implementation-driving typography, focus-ring, spacing, shadow, and desktop-pairing observations as explicit `NON_NORMATIVE_REFERENCE` or `NOT_PROVEN` states instead of implicit canonical values.
 - Added explicit fail-closed provenance state to every current visual reference; external visual material cannot independently establish canonical numeric rules without admitted evidence.
 - Repository CI can now be dispatched against an exact release-candidate branch so production release qualification reuses the same repository guardrails and DB advisory-lock contracts.
-- Release-facing status now reflects the implemented runtime/evidence capabilities while keeping license, compatibility policy, and first public release version as explicit unresolved publication decisions.
+- Release-facing status now records the resolved personal/private-use context, license, compatibility floors, and Owner-approved first production version `0.1.0` while normal source remains `0.0.0-dev` and actual publication remains a separate explicit Owner action.
+- Release dry-run and contract/mutation tests now prove the resolved prerequisite state, WordPress/PHP metadata synchronization, LICENSE packaging/byte identity, and the existing negative fail-closed cases without creating a production candidate, tag, or GitHub Release.
