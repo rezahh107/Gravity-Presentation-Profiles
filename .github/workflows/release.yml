@@ -342,4 +342,44 @@ jobs:
           php scripts/release/check-identity.php \
             --approved="$GPP_RELEASE_CANDIDATE_SHA" --qualified="$GPP_RELEASE_CANDIDATE_SHA" \
             --artifact="$GPP_RELEASE_CANDIDATE_SHA" --tag="$tag_sha" --release="$release_sha"
-          echo 'GPP_RELEASE_PUBLISHED_AND_VERIFIED'
+
+      - name: Return main to locked development version after verified publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$GPP_RELEASE_CANDIDATE_SHA"
+
+          changelog_before="$(sha256sum CHANGELOG.md | awk '{print $1}')"
+          php scripts/release/prepare-development-continuation.php --root=. --released-version="$GPP_RELEASE_VERSION"
+          test "$(sha256sum CHANGELOG.md | awk '{print $1}')" = "$changelog_before"
+          git diff --name-only | sort > /tmp/release-continuation-files.txt
+          printf '%s\n' gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/release-continuation-expected.txt
+          diff -u /tmp/release-continuation-expected.txt /tmp/release-continuation-files.txt
+
+          git add gravity-presentation-profiles.php src/GravityForms/AddOn.php
+          git commit -m "chore: continue development after $GPP_RELEASE_TAG"
+          continuation="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$GPP_RELEASE_CANDIDATE_SHA"
+
+          # Deliberately non-force. A concurrent main movement makes this push fail.
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GPP_RELEASE_CANDIDATE_SHA"
+          git push origin "HEAD:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$continuation"
+
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+          grep -Fq "## [$GPP_RELEASE_VERSION]" CHANGELOG.md
+
+          tag_sha="$(git rev-list -n1 "$GPP_RELEASE_TAG")"
+          release_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GPP_RELEASE_TAG" --jq '.target_commitish')"
+          if [[ "$release_target" =~ ^[0-9a-f]{40}$ ]]; then release_sha="$release_target"; else release_sha="$tag_sha"; fi
+          php scripts/release/check-identity.php \
+            --approved="$GPP_RELEASE_CANDIDATE_SHA" --qualified="$GPP_RELEASE_CANDIDATE_SHA" \
+            --artifact="$GPP_RELEASE_CANDIDATE_SHA" --tag="$tag_sha" --release="$release_sha"
+
+          echo "GPP_RELEASE_PUBLISHED_AND_VERIFIED candidate=$GPP_RELEASE_CANDIDATE_SHA continuation=$continuation"
