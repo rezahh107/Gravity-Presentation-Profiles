@@ -2,6 +2,11 @@
 
 require __DIR__ . '/gravity-forms-addon.php';
 
+use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
+use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
+use GravityPresentationProfiles\Core\Lifecycle\SettingsLifecycleWorkflow;
+use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
+
 if ( ! function_exists( 'esc_attr' ) ) {
     function esc_attr( $text ) {
         return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
