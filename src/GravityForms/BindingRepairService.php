@@ -46,12 +46,24 @@ final class BindingRepairService {
         if ( empty( $inventory['form_exists'] ) ) {
             throw new LifecycleException( 'repair_form_missing', 'The bound Gravity Forms form no longer exists.' );
         }
-        $field = $this->inventory->exactField( $inventory['form'], $request['field_id'] );
-        if ( null === $field ) {
-            throw new LifecycleException( 'repair_field_missing', 'The selected Gravity Forms field does not exist in the bound form.' );
+
+        $requested_field_id = (string) $request['field_id'];
+        if ( empty( $inventory['fields'][ $requested_field_id ] ) ) {
+            throw new LifecycleException( 'repair_field_missing', 'The selected Gravity Forms field or compound-field input does not exist in the bound form.' );
         }
-        $field_id = isset( $field->id ) ? $field->id : $request['field_id'];
-        $field_id = is_numeric( $field_id ) && false === strpos( (string) $field_id, '.' ) ? (int) $field_id : (string) $field_id;
+        $selected_source = $inventory['fields'][ $requested_field_id ];
+        $field_id = $selected_source['field_id'];
+
+        // Confirm that Gravity Forms can still resolve the owning field through
+        // its supported API. For compound input IDs, get_field() may return the
+        // owning field object while the exact input identity remains the ID
+        // enumerated above from that field's authoritative inputs definition.
+        if ( null === $this->inventory->exactField( $inventory['form'], $field_id ) ) {
+            $parent_id = false !== strpos( (string) $field_id, '.' ) ? strstr( (string) $field_id, '.', true ) : $field_id;
+            if ( null === $this->inventory->exactField( $inventory['form'], $parent_id ) ) {
+                throw new LifecycleException( 'repair_field_missing', 'The selected Gravity Forms source is no longer resolvable in the bound form.' );
+            }
+        }
 
         $next = $artifact;
         $next['binding_set_version'] = $this->nextVersion( $snapshot, $artifact['binding_set_id'], $artifact['binding_set_version'] );
