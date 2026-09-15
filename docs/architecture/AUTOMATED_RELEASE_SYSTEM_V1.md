@@ -26,6 +26,10 @@ Normal development stays at `0.0.0-dev`. A production release action determinist
 
 The candidate commit is then qualified exactly. No unqualified source is tagged or packaged.
 
+After the published consumer artifact has been re-downloaded, checksum-verified, validated, smoke-tested again, and source identity reverified, the workflow creates one deterministic child continuation commit. That continuation changes only the plugin-header Version and Gravity Forms Add-On mirror back to `0.0.0-dev`; it retains the completed changelog release section. The release tag, GitHub Release and release artifact remain bound to the production-versioned candidate SHA.
+
+A normal publish action must start from `0.0.0-dev`. If `main` is already production-versioned, normal publication fails closed and requires explicit recovery rather than silently treating that state as ready development source.
+
 ## Exact source binding
 
 The workflow binds these identities to one exact release-candidate SHA:
@@ -35,6 +39,8 @@ The workflow binds these identities to one exact release-candidate SHA:
 The Owner action first records the exact integrated `main` SHA. Candidate preparation creates one child commit containing only deterministic release metadata changes. The candidate is pushed to a dedicated release-candidate branch and all required qualification workflows are dispatched against that exact SHA.
 
 Before publication, the workflow verifies that `main` has not moved. It then fast-forwards `main` to the already-qualified candidate. If `main` moved, publication stops rather than rebasing or silently qualifying a different source.
+
+After successful last-mile verification, the development continuation is pushed to `main` only when remote `main` is still exactly the candidate SHA. The push is a normal non-force fast-forward. Any concurrent movement causes continuation promotion to stop without changing the tag, GitHub Release, or candidate identity.
 
 ## Canonical builder
 
@@ -49,7 +55,7 @@ It ships only the production allowlist derived by `release_runtime_files()`:
 
 Repository-only material such as tests, docs, workflows, release tooling, Composer metadata, governance documents, build output, and profile Markdown is excluded.
 
-The builder normalizes ZIP timestamps and sorted input so a second build from identical prepared source produces the same bytes/checksum on the supported runner toolchain.
+The builder normalizes ZIP timestamps and sorted input so a second build from identical prepared source produces the same bytes/checksum on the supported runner toolchain. Caller-relative output directories are canonicalized before entering the staging working directory, so CI and local callers use the same output-location semantics.
 
 ## Artifact validation
 
@@ -93,7 +99,8 @@ The release workflow starts all five, captures exact run IDs, verifies their `he
 Publication fails closed unless all of the following are true:
 
 - an Owner-selected non-empty `LICENSE` exists;
-- `release/compatibility.json` records intentional WordPress/PHP/Gravity Forms/Gravity Flow minimums;
+- `release/compatibility.json` records intentional WordPress/PHP/Gravity Forms/Gravity Flow minimums as resolved numeric dotted version floors;
+- `main` begins the normal release action in the locked `0.0.0-dev` development state;
 - first-release version is explicitly supplied when no production tag exists;
 - repository immutable releases are enabled and machine-verifiable;
 - no conflicting tag, GitHub Release, or production asset filename exists;
@@ -101,7 +108,7 @@ Publication fails closed unless all of the following are true:
 - all exact candidate qualification succeeds;
 - the exact ZIP validates and smoke-tests.
 
-`release/compatibility.example.json` documents the required shape without selecting policy values.
+`release/compatibility.example.json` documents the required shape without selecting policy values. Placeholder/sentinel values such as `OWNER_DECISION_REQUIRED`, arbitrary text, empty values, and malformed version strings do not satisfy publication prerequisites.
 
 ## Immutable history and least privilege
 
@@ -125,7 +132,11 @@ After successful qualification and artifact smoke:
 8. re-download the public Release ZIP/checksum;
 9. verify checksum and ZIP contents again;
 10. install/smoke the re-downloaded ZIP in a second clean pinned WordPress database;
-11. report `GPP_RELEASE_PUBLISHED_AND_VERIFIED` only if the last-mile checks pass.
+11. reverify candidate/tag/GitHub-Release source identity;
+12. verify remote `main` is still exactly the candidate SHA;
+13. create the two-file `0.0.0-dev` development-continuation child commit while retaining the released changelog section;
+14. push that continuation to `main` with a normal non-force fast-forward and verify remote `main` plus both version mirrors;
+15. report `GPP_RELEASE_PUBLISHED_AND_VERIFIED` only after the continuation and release identity both verify.
 
 An upload response alone is not release completion.
 
@@ -136,6 +147,8 @@ The workflow never deletes or rewrites an existing production tag/Release automa
 If failure occurs before a tag is created, preserve logs/evidence and correct the source or release prerequisites before another Owner action. A failed candidate branch is reversible evidence and is not itself a production release.
 
 If a tag, draft Release, or published Release exists when a later step fails, stop promotion. Inspect exactly what was created. Do not move the tag, replace published assets, or silently retry into existing immutable identity. Prefer a corrected new version after the Owner/Manager decides the recovery path.
+
+If the published artifact has already passed last-mile verification but the final development continuation cannot fast-forward because `main` moved, preserve the published release identity and stop. Do not force `main` and do not rewrite the release. Normal publication is deliberately blocked while `main` remains production-versioned; recovery is an explicit Manager/Owner action.
 
 Published immutable Release assets/tags are intentionally not auto-withdrawn. GitHub allows a release to be deleted by an authorized human, but immutable tag names cannot be reused; destructive recovery therefore requires an explicit policy decision outside this workflow.
 
