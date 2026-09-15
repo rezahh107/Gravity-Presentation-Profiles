@@ -2,10 +2,15 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
+
 /**
- * Request-local, non-PII decision trace for the production print branch.
- * It is deliberately not persisted; later Diagnostics may consume the same
- * stable events without re-implementing print decisions.
+ * Compatibility adapter for the WU19 request-local Print trace.
+ *
+ * Legacy {stage,outcome} events remain byte-shape compatible for existing
+ * browser/runtime evidence, while every accepted event is also emitted into
+ * the shared production diagnostics vocabulary.
  */
 final class PrintDossierDecisionTrace {
     private const STAGES = array(
@@ -35,12 +40,24 @@ final class PrintDossierDecisionTrace {
 
     private $events = array();
 
+    public function __construct() {
+        RuntimeDiagnostics::resetSurface( 'print.dossier' );
+    }
+
     public function record( $stage, $outcome ) {
         if ( ! in_array( $stage, self::STAGES, true ) || ! in_array( $outcome, self::OUTCOMES, true ) ) {
             return false;
         }
 
         $this->events[] = array( 'stage' => $stage, 'outcome' => $outcome );
+        $shared = $this->sharedDecision( $outcome );
+        RuntimeDiagnostics::record(
+            'print.dossier',
+            $stage,
+            $shared['result'],
+            $shared['reason_code'],
+            $shared['fallback']
+        );
         return true;
     }
 
@@ -61,5 +78,37 @@ final class PrintDossierDecisionTrace {
         return function_exists( 'wp_json_encode' )
             ? wp_json_encode( $this->events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
             : json_encode( $this->events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+    }
+
+    private function sharedDecision( $outcome ) {
+        $pass = array(
+            'intent_admitted',
+            'profile_resolved',
+            'bindings_evaluated',
+            'ready_two_pages',
+        );
+        if ( in_array( $outcome, $pass, true ) ) {
+            return array( 'result' => RuntimeDecisionTrace::RESULT_PASS, 'reason_code' => null, 'fallback' => null );
+        }
+        if ( 'post_permission_seam_reached' === $outcome ) {
+            return array(
+                'result' => RuntimeDecisionTrace::RESULT_PASS,
+                'reason_code' => null,
+                'fallback' => 'host_authorization_preserved',
+            );
+        }
+        if ( in_array( $outcome, array( 'binding_not_proven', 'print_mapping_not_proven', 'source_unavailable' ), true ) ) {
+            return array(
+                'result' => RuntimeDecisionTrace::RESULT_SKIP,
+                'reason_code' => $outcome,
+                'fallback' => 'blank_unproven_value',
+            );
+        }
+
+        return array(
+            'result' => RuntimeDecisionTrace::RESULT_FAIL,
+            'reason_code' => $outcome,
+            'fallback' => 'dossier_not_rendered',
+        );
     }
 }

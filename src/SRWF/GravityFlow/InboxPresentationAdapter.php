@@ -2,6 +2,8 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
@@ -38,6 +40,7 @@ final class InboxPresentationAdapter {
     public static function resetRuntimeCache() {
         self::$model_loaded = false;
         self::$model = null;
+        RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
     public static function filterColumns( $columns, $args ) {
@@ -71,7 +74,31 @@ final class InboxPresentationAdapter {
         }
 
         $model = self::model();
-        if ( null === $model || ! is_array( $entry ) ) {
+        if ( null === $model ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'profile_not_active',
+                'native_gravity_flow_inbox'
+            );
+            return '';
+        }
+        if ( ! is_array( $entry ) ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_BINDING_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                'invalid_entry',
+                'native_gravity_flow_inbox'
+            );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'presentation_not_ready',
+                'native_gravity_flow_inbox'
+            );
             return '';
         }
 
@@ -110,12 +137,26 @@ final class InboxPresentationAdapter {
             );
             $activation = $visual->resolve( self::SURFACE );
             if ( null === $activation ) {
+                RuntimeDiagnostics::recordOnce(
+                    self::SURFACE,
+                    'INBOX_PROFILE_RESOLUTION',
+                    RuntimeDecisionTrace::RESULT_NOT_APPLICABLE,
+                    'profile_not_active',
+                    'native_gravity_flow_inbox'
+                );
                 return null;
             }
 
             $profile = $visual->effectiveProfile( self::SURFACE );
             $package = self::activeVisualPackage( $visual->snapshot(), $activation );
             if ( null === $profile || null === $package ) {
+                RuntimeDiagnostics::recordOnce(
+                    self::SURFACE,
+                    'INBOX_PROFILE_RESOLUTION',
+                    RuntimeDecisionTrace::RESULT_FAIL,
+                    'profile_resolution_unavailable',
+                    'native_gravity_flow_inbox'
+                );
                 return null;
             }
 
@@ -130,8 +171,20 @@ final class InboxPresentationAdapter {
                 $active_binding_sets,
                 $package['semantic_slots']
             );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_PROFILE_RESOLUTION',
+                RuntimeDecisionTrace::RESULT_PASS
+            );
         } catch ( \Throwable $exception ) {
             // Presentation fails closed; native Gravity Flow remains available.
+            RuntimeDiagnostics::recordException(
+                self::SURFACE,
+                'INBOX_PROFILE_RESOLUTION',
+                'runtime_exception',
+                'native_gravity_flow_inbox',
+                $exception
+            );
             self::$model = null;
         }
 
@@ -189,9 +242,29 @@ final class InboxPresentationAdapter {
     }
 
     private static function renderCard( InboxPresentationModel $model, $entry ) {
-        if ( ! $model->isPresentationReady( $entry ) ) {
+        $decision = $model->presentationReadiness( $entry );
+        if ( ! $decision['ready'] ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_BINDING_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                $decision['reason'],
+                'native_gravity_flow_inbox'
+            );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'INBOX_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'presentation_not_ready',
+                'native_gravity_flow_inbox'
+            );
             return self::readinessMarker( false );
         }
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'INBOX_BINDING_READINESS',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
 
         $name = self::slotValue( $model, $entry, 'student.full_name' );
         $national_id = self::slotValue( $model, $entry, 'student.national_id' );
@@ -238,6 +311,11 @@ final class InboxPresentationAdapter {
         $html .= '<span class="gpp-inbox-card__open">' . esc_html__( 'باز کردن پرونده', 'gravity-presentation-profiles' ) . '</span>';
         $html .= '</article>';
 
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'INBOX_PRESENTATION_OUTPUT',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
         return $html;
     }
 

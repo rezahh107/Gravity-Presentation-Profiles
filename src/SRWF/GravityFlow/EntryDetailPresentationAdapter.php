@@ -2,6 +2,8 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
@@ -40,13 +42,72 @@ final class EntryDetailPresentationAdapter {
     public static function resetRuntimeCache() {
         self::$model_loaded = false;
         self::$model = null;
+        RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
     public static function renderDossier( $form, $entry ) {
+        // Gravity Flow owns the permission decision. Reaching this hook is the
+        // observed fact; GPP does not claim an independent authorization grant.
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_HOST_SEAM',
+            RuntimeDecisionTrace::RESULT_PASS,
+            'post_permission_seam_reached',
+            'host_authorization_preserved'
+        );
+
         $model = self::model();
-        if ( null === $model || ! is_array( $form ) || ! is_array( $entry ) || ! $model->isPresentationReady( $entry ) ) {
+        if ( null === $model ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'profile_not_active',
+                'native_gravity_flow_entry_detail'
+            );
             return;
         }
+        if ( ! is_array( $form ) || ! is_array( $entry ) ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_BINDING_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                'invalid_host_payload',
+                'native_gravity_flow_entry_detail'
+            );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'presentation_not_ready',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+
+        $decision = $model->presentationReadiness( $entry );
+        if ( ! $decision['ready'] ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_BINDING_READINESS',
+                RuntimeDecisionTrace::RESULT_FAIL,
+                $decision['reason'],
+                'native_gravity_flow_entry_detail'
+            );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'presentation_not_ready',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_BINDING_READINESS',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
 
         $current_step = self::currentStep( $entry );
         $editable_fields = self::hostEditableFields( $current_step );
@@ -88,6 +149,11 @@ final class EntryDetailPresentationAdapter {
 
         echo self::previewDialogMarkup();
         echo '</div>';
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+            RuntimeDecisionTrace::RESULT_PASS
+        );
     }
 
     public static function filterApproveLabel( $label, $step ) {
@@ -335,11 +401,25 @@ final class EntryDetailPresentationAdapter {
             $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
             $activation = $visual->resolve( self::SURFACE );
             if ( null === $activation ) {
+                RuntimeDiagnostics::recordOnce(
+                    self::SURFACE,
+                    'ENTRY_DETAIL_PROFILE_RESOLUTION',
+                    RuntimeDecisionTrace::RESULT_NOT_APPLICABLE,
+                    'profile_not_active',
+                    'native_gravity_flow_entry_detail'
+                );
                 return null;
             }
             $profile = $visual->effectiveProfile( self::SURFACE );
             $package = self::activeVisualPackage( $visual->snapshot(), $activation );
             if ( null === $profile || null === $package ) {
+                RuntimeDiagnostics::recordOnce(
+                    self::SURFACE,
+                    'ENTRY_DETAIL_PROFILE_RESOLUTION',
+                    RuntimeDecisionTrace::RESULT_FAIL,
+                    'profile_resolution_unavailable',
+                    'native_gravity_flow_entry_detail'
+                );
                 return null;
             }
 
@@ -352,8 +432,20 @@ final class EntryDetailPresentationAdapter {
                 self::activeBindingSets( $bindings->snapshot() ),
                 $package['semantic_slots']
             );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PROFILE_RESOLUTION',
+                RuntimeDecisionTrace::RESULT_PASS
+            );
         } catch ( \Throwable $exception ) {
             // Presentation failure must never replace native Entry Detail.
+            RuntimeDiagnostics::recordException(
+                self::SURFACE,
+                'ENTRY_DETAIL_PROFILE_RESOLUTION',
+                'runtime_exception',
+                'native_gravity_flow_entry_detail',
+                $exception
+            );
             self::$model = null;
         }
 

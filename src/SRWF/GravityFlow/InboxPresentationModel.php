@@ -57,18 +57,31 @@ final class InboxPresentationModel {
     }
 
     /**
+     * Returns the exact decision made by the production readiness loop so
+     * diagnostics can observe it without re-simulating semantic resolution.
+     */
+    public function presentationReadiness( $entry ) {
+        foreach ( $this->required_slots as $slot_key ) {
+            $resolved = $this->resolve( $entry, $slot_key );
+            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
+                return array(
+                    'ready' => false,
+                    'reason' => isset( $resolved['reason'] ) && is_string( $resolved['reason'] ) ? $resolved['reason'] : 'binding_not_proven',
+                    'semantic_slot_key' => $slot_key,
+                );
+            }
+        }
+
+        return array( 'ready' => true, 'reason' => null, 'semantic_slot_key' => null );
+    }
+
+    /**
      * Presentation projection is allowed only when every package-declared
      * required Inbox semantic resolves through the existing admitted path.
      */
     public function isPresentationReady( $entry ) {
-        foreach ( $this->required_slots as $slot_key ) {
-            $resolved = $this->resolve( $entry, $slot_key );
-            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
-                return false;
-            }
-        }
-
-        return true;
+        $decision = $this->presentationReadiness( $entry );
+        return true === $decision['ready'];
     }
 
     public function resolve( $entry, $slot_key ) {

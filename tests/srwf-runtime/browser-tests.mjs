@@ -15,3 +15,9 @@ execFileSync(
 await import('./legacy-browser-tests.mjs');
 await import('./declarative-browser-tests.mjs');
 await import('./sparse-declarative-browser-tests.mjs');
+
+execFileSync(
+  'php',
+  [wpCli, `--path=${wpPath}`, 'eval-file', 'tests/srwf-runtime/diagnostics-runtime-assert.php'],
+  { stdio: 'inherit', env: process.env }
+);
