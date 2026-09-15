@@ -116,7 +116,8 @@ try {
   if (rowsAfterClick < 1 || cardsAfterClick !== rowsAfterClick) throw new Error(`GPP presentation did not reconstruct normally after reload: rows=${rowsAfterClick}, cards=${cardsAfterClick}`);
 
   const search = page.locator('[data-js="gflow-inbox-search"]');
-  await search.fill('WU21 Refresh Student');
+  await search.click();
+  await search.pressSequentially('WU21 Refresh Student');
   await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 15000 });
   const dynamicId = Number(wpControl('add'));
   try {
