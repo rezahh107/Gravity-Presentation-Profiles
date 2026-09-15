@@ -9,6 +9,8 @@ $cases = array(
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
     'portable-profile-package-v11.php',
+    'general-llm-authoring-prompt.php',
+    'general-llm-generated-packages.php',
     'semantic-binding-selected-identity.php',
     'reserved-extension-seam-version.php',
     'package-lifecycle.php',
