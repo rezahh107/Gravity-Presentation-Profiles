@@ -25,21 +25,128 @@ final class VisualProfilePackageV11 {
         'reserved_extension_seam',
     );
 
-    private const TOKEN_CATEGORIES = array(
-        'colors',
-        'spacing_px',
-        'radii_px',
-        'sizes_px',
-        'font_sizes_px',
-        'line_heights',
-        'font_weights',
-        'font_families',
+    private const IDENTIFIER_PATTERN = '^[a-z0-9]+(?:[._-][a-z0-9]+)*$';
+    private const VERSION_PATTERN = '^[0-9]+\.[0-9]+\.[0-9]+$';
+    private const TOKEN_NAME_PATTERN = '^[a-z][a-z0-9_]*$';
+
+    private const TOKEN_RULES = array(
+        'colors' => array(
+            'value_type' => 'string',
+            'pattern' => '^#[0-9A-Fa-f]{6}$',
+            'constraint' => 'exactly one six-digit hexadecimal color in #RRGGBB form',
+        ),
+        'spacing_px' => array(
+            'value_type' => 'integer',
+            'minimum' => 0,
+            'maximum' => 512,
+            'unit' => 'px',
+        ),
+        'radii_px' => array(
+            'value_type' => 'integer',
+            'minimum' => 0,
+            'maximum' => 512,
+            'unit' => 'px',
+        ),
+        'sizes_px' => array(
+            'value_type' => 'integer',
+            'minimum' => 0,
+            'maximum' => 4096,
+            'unit' => 'px',
+        ),
+        'font_sizes_px' => array(
+            'value_type' => 'integer',
+            'minimum' => 0,
+            'maximum' => 512,
+            'unit' => 'px',
+        ),
+        'line_heights' => array(
+            'value_type' => 'number',
+            'minimum' => 1,
+            'maximum' => 3,
+        ),
+        'font_weights' => array(
+            'value_type' => 'integer',
+            'minimum' => 100,
+            'maximum' => 900,
+            'step' => 100,
+        ),
+        'font_families' => array(
+            'value_type' => 'string',
+            'minimum_length' => 1,
+            'maximum_bytes' => 96,
+            'pattern' => '^[\p{L}\p{N} ._-]+$',
+            'allowed_characters' => 'Unicode letters and numbers, space, dot, underscore, hyphen',
+        ),
+    );
+
+    private const PRESENTATION_RULES = array(
+        'composition' => array(
+            'direction' => array( 'kind' => 'enum', 'values' => array( 'inherit', 'ltr', 'rtl' ) ),
+            'max_inline_size' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
+            'inline_padding' => array( 'kind' => 'token', 'token_category' => 'spacing_px' ),
+            'surface_background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'surface_radius' => array( 'kind' => 'token', 'token_category' => 'radii_px' ),
+            'field_layout' => array( 'kind' => 'enum', 'values' => array( 'host_default', 'single_column' ) ),
+        ),
+        'typography' => array(
+            'font_family' => array( 'kind' => 'token', 'token_category' => 'font_families' ),
+        ),
+        'controls' => array(
+            'background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'focus_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'error_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'radius' => array( 'kind' => 'token', 'token_category' => 'radii_px' ),
+            'min_height' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
+            'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
+            'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
+        ),
+        'labels' => array(
+            'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'required_color' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
+            'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
+        ),
+        'descriptions' => array(
+            'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+        ),
+        'sections' => array(
+            'divider' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'heading_text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'heading_font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
+            'heading_font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
+            'description_text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+        ),
+        'primary_action' => array(
+            'background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'pressed_background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'focus_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+            'min_height' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
+            'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
+            'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
+        ),
+        'validation' => array(
+            'error_color' => array( 'kind' => 'token', 'token_category' => 'colors' ),
+        ),
     );
 
     private const CAPABILITIES = array(
         'gravity_forms.orbital_control_metric_projection',
         'persian_gravity.jalali_validation_message_after_control',
     );
+
+    public static function schemaDefinition() {
+        return array(
+            'root_fields' => self::ROOT_KEYS,
+            'token_categories' => self::TOKEN_RULES,
+            'presentation' => self::PRESENTATION_RULES,
+            'capabilities' => self::CAPABILITIES,
+            'portable_identifier_pattern' => self::IDENTIFIER_PATTERN,
+            'package_version_pattern' => self::VERSION_PATTERN,
+            'token_name_pattern' => self::TOKEN_NAME_PATTERN,
+        );
+    }
 
     public static function validate( $artifact ) {
         self::requireArray( $artifact, 'Visual profile package must be an object.' );
@@ -112,7 +219,7 @@ final class VisualProfilePackageV11 {
 
         $refs = array();
         foreach ( $tokens as $category => $values ) {
-            if ( ! in_array( $category, self::TOKEN_CATEGORIES, true ) ) {
+            if ( ! isset( self::TOKEN_RULES[ $category ] ) ) {
                 throw new ContractViolation( 'Unknown design token category: ' . $category );
             }
             self::requireArray( $values, 'design_tokens.' . $category . ' must be an object.' );
@@ -130,47 +237,50 @@ final class VisualProfilePackageV11 {
     }
 
     private static function validateTokenValue( $category, $value, $path ) {
-        if ( 'colors' === $category ) {
-            if ( ! is_string( $value ) || 1 !== preg_match( '/^#[0-9A-Fa-f]{6}$/', $value ) ) {
-                throw new ContractViolation( $path . ' must be a six-digit hex color.' );
+        $rule = self::TOKEN_RULES[ $category ];
+
+        if ( 'string' === $rule['value_type'] ) {
+            if ( ! is_string( $value ) ) {
+                throw new ContractViolation( $path . ' must be a string token.' );
+            }
+            if ( isset( $rule['minimum_length'] ) && strlen( $value ) < $rule['minimum_length'] ) {
+                throw new ContractViolation( $path . ' must not be empty.' );
+            }
+            if ( isset( $rule['maximum_bytes'] ) && strlen( $value ) > $rule['maximum_bytes'] ) {
+                throw new ContractViolation( $path . ' exceeds the admitted string length.' );
+            }
+            if ( isset( $rule['pattern'] ) && 1 !== preg_match( '/' . $rule['pattern'] . '/u', $value ) ) {
+                if ( 'colors' === $category ) {
+                    throw new ContractViolation( $path . ' must be a six-digit hex color.' );
+                }
+                throw new ContractViolation( $path . ' must be one safe font-family name.' );
+            }
+            if ( 'font_families' === $category ) {
+                self::rejectDangerousString( $value, $path );
             }
             return;
         }
 
-        if ( in_array( $category, array( 'spacing_px', 'radii_px', 'font_sizes_px' ), true ) ) {
-            if ( ! is_int( $value ) || $value < 0 || $value > 512 ) {
+        if ( 'integer' === $rule['value_type'] ) {
+            if ( ! is_int( $value ) || $value < $rule['minimum'] || $value > $rule['maximum'] ) {
+                if ( 'sizes_px' === $category ) {
+                    throw new ContractViolation( $path . ' must be an integer size token between 0 and 4096 pixels.' );
+                }
+                if ( 'font_weights' === $category ) {
+                    throw new ContractViolation( $path . ' must be an integer font weight from 100 to 900.' );
+                }
                 throw new ContractViolation( $path . ' must be an integer pixel token between 0 and 512.' );
             }
-            return;
-        }
-
-        if ( 'sizes_px' === $category ) {
-            if ( ! is_int( $value ) || $value < 0 || $value > 4096 ) {
-                throw new ContractViolation( $path . ' must be an integer size token between 0 and 4096 pixels.' );
-            }
-            return;
-        }
-
-        if ( 'line_heights' === $category ) {
-            if ( ( ! is_int( $value ) && ! is_float( $value ) ) || $value < 1 || $value > 3 ) {
-                throw new ContractViolation( $path . ' must be numeric between 1 and 3.' );
-            }
-            return;
-        }
-
-        if ( 'font_weights' === $category ) {
-            if ( ! is_int( $value ) || $value < 100 || $value > 900 || 0 !== $value % 100 ) {
+            if ( isset( $rule['step'] ) && 0 !== $value % $rule['step'] ) {
                 throw new ContractViolation( $path . ' must be an integer font weight from 100 to 900.' );
             }
             return;
         }
 
-        if ( 'font_families' === $category ) {
-            if ( ! is_string( $value ) || '' === trim( $value ) || strlen( $value ) > 96
-                || 1 !== preg_match( '/^[\p{L}\p{N} ._-]+$/u', $value ) ) {
-                throw new ContractViolation( $path . ' must be one safe font-family name.' );
+        if ( 'number' === $rule['value_type'] ) {
+            if ( ( ! is_int( $value ) && ! is_float( $value ) ) || $value < $rule['minimum'] || $value > $rule['maximum'] ) {
+                throw new ContractViolation( $path . ' must be numeric between 1 and 3.' );
             }
-            self::rejectDangerousString( $value, $path );
             return;
         }
 
@@ -294,131 +404,22 @@ final class VisualProfilePackageV11 {
             throw new ContractViolation( $path . ' must contain at least one controlled presentation preference.' );
         }
 
-        $allowed = array(
-            'composition',
-            'typography',
-            'controls',
-            'labels',
-            'descriptions',
-            'sections',
-            'primary_action',
-            'validation',
-            'capabilities',
+        self::requireAllowedKeys(
+            $presentation,
+            array_merge( array_keys( self::PRESENTATION_RULES ), array( 'capabilities' ) ),
+            $path
         );
-        self::requireAllowedKeys( $presentation, $allowed, $path );
 
-        if ( isset( $presentation['composition'] ) ) {
+        foreach ( self::PRESENTATION_RULES as $block_name => $rules ) {
+            if ( ! isset( $presentation[ $block_name ] ) ) {
+                continue;
+            }
             self::validatePreferenceBlock(
-                $presentation['composition'],
-                array(
-                    'direction' => array( 'enum', array( 'inherit', 'ltr', 'rtl' ) ),
-                    'max_inline_size' => array( 'token', 'sizes_px' ),
-                    'inline_padding' => array( 'token', 'spacing_px' ),
-                    'surface_background' => array( 'token', 'colors' ),
-                    'surface_radius' => array( 'token', 'radii_px' ),
-                    'field_layout' => array( 'enum', array( 'host_default', 'single_column' ) ),
-                ),
+                $presentation[ $block_name ],
+                $rules,
                 $token_refs,
                 $profile_token_refs,
-                $path . '.composition'
-            );
-        }
-
-        if ( isset( $presentation['typography'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['typography'],
-                array( 'font_family' => array( 'token', 'font_families' ) ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.typography'
-            );
-        }
-
-        if ( isset( $presentation['controls'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['controls'],
-                array(
-                    'background' => array( 'token', 'colors' ),
-                    'text' => array( 'token', 'colors' ),
-                    'border' => array( 'token', 'colors' ),
-                    'focus_border' => array( 'token', 'colors' ),
-                    'error_border' => array( 'token', 'colors' ),
-                    'radius' => array( 'token', 'radii_px' ),
-                    'min_height' => array( 'token', 'sizes_px' ),
-                    'font_size' => array( 'token', 'font_sizes_px' ),
-                    'font_weight' => array( 'token', 'font_weights' ),
-                ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.controls'
-            );
-        }
-
-        if ( isset( $presentation['labels'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['labels'],
-                array(
-                    'text' => array( 'token', 'colors' ),
-                    'required_color' => array( 'token', 'colors' ),
-                    'font_size' => array( 'token', 'font_sizes_px' ),
-                    'font_weight' => array( 'token', 'font_weights' ),
-                ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.labels'
-            );
-        }
-
-        if ( isset( $presentation['descriptions'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['descriptions'],
-                array( 'text' => array( 'token', 'colors' ) ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.descriptions'
-            );
-        }
-
-        if ( isset( $presentation['sections'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['sections'],
-                array(
-                    'divider' => array( 'token', 'colors' ),
-                    'heading_text' => array( 'token', 'colors' ),
-                    'heading_font_size' => array( 'token', 'font_sizes_px' ),
-                    'heading_font_weight' => array( 'token', 'font_weights' ),
-                    'description_text' => array( 'token', 'colors' ),
-                ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.sections'
-            );
-        }
-
-        if ( isset( $presentation['primary_action'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['primary_action'],
-                array(
-                    'background' => array( 'token', 'colors' ),
-                    'pressed_background' => array( 'token', 'colors' ),
-                    'focus_border' => array( 'token', 'colors' ),
-                    'min_height' => array( 'token', 'sizes_px' ),
-                    'font_size' => array( 'token', 'font_sizes_px' ),
-                    'font_weight' => array( 'token', 'font_weights' ),
-                ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.primary_action'
-            );
-        }
-
-        if ( isset( $presentation['validation'] ) ) {
-            self::validatePreferenceBlock(
-                $presentation['validation'],
-                array( 'error_color' => array( 'token', 'colors' ) ),
-                $token_refs,
-                $profile_token_refs,
-                $path . '.validation'
+                $path . '.' . $block_name
             );
         }
 
@@ -436,8 +437,8 @@ final class VisualProfilePackageV11 {
 
         foreach ( $block as $key => $value ) {
             $rule = $rules[ $key ];
-            if ( 'enum' === $rule[0] ) {
-                if ( ! is_string( $value ) || ! in_array( $value, $rule[1], true ) ) {
+            if ( 'enum' === $rule['kind'] ) {
+                if ( ! is_string( $value ) || ! in_array( $value, $rule['values'], true ) ) {
                     throw new ContractViolation( $path . '.' . $key . ' is not an admitted controlled value.' );
                 }
                 continue;
@@ -445,7 +446,7 @@ final class VisualProfilePackageV11 {
 
             self::requireTokenReference(
                 $value,
-                $rule[1],
+                $rule['token_category'],
                 $token_refs,
                 $profile_token_refs,
                 $path . '.' . $key
@@ -547,13 +548,13 @@ final class VisualProfilePackageV11 {
     }
 
     private static function requireVersion( $value, $path ) {
-        if ( ! is_string( $value ) || 1 !== preg_match( '/^[0-9]+\.[0-9]+\.[0-9]+$/', $value ) ) {
+        if ( ! is_string( $value ) || 1 !== preg_match( '/' . self::VERSION_PATTERN . '/', $value ) ) {
             throw new ContractViolation( $path . ' must be an explicit x.y.z version.' );
         }
     }
 
     private static function requireIdentifier( $value, $path ) {
-        if ( ! is_string( $value ) || 1 !== preg_match( '/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/', $value ) ) {
+        if ( ! is_string( $value ) || 1 !== preg_match( '/' . self::IDENTIFIER_PATTERN . '/', $value ) ) {
             throw new ContractViolation( $path . ' must be a stable lowercase identifier.' );
         }
     }
@@ -565,7 +566,7 @@ final class VisualProfilePackageV11 {
     }
 
     private static function requireTokenName( $value, $path ) {
-        if ( ! is_string( $value ) || 1 !== preg_match( '/^[a-z][a-z0-9_]*$/', $value ) ) {
+        if ( ! is_string( $value ) || 1 !== preg_match( '/' . self::TOKEN_NAME_PATTERN . '/', $value ) ) {
             throw new ContractViolation( $path . ' contains an invalid token name.' );
         }
     }
