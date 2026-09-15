@@ -79,17 +79,103 @@ await test('WU19-BROWSER-003', 'Chromium physical pagination is exactly two A4 p
   return { pages: info.pages, width_pt: info.width, height_pt: info.height, scale: 1, prefer_css_page_size: true };
 });
 
+const longContentFieldMap = Object.freeze({
+  'student.full_name': Number(manifest.alpha.fields['student.full_name']),
+  'school.name': Number(manifest.alpha.fields['school.name']),
+  'education.grade_group': Number(manifest.alpha.fields['education.grade_group']),
+  'student.national_id': Number(manifest.alpha.fields['student.national_id']),
+  'student.mobile': Number(manifest.alpha.fields['student.mobile']),
+  'finance.tuition_amount': Number(manifest.alpha.fields['finance.tuition_amount']),
+  'finance.net_payable_amount': Number(manifest.alpha.fields['finance.net_payable_amount']),
+});
+function encodeJson(value) { return Buffer.from(JSON.stringify(value), 'utf8').toString('base64'); }
+function entryFieldSnapshot(entryId, fieldMap = longContentFieldMap) {
+  const fields = encodeJson(fieldMap);
+  const raw = wpEval(`$fields=json_decode(base64_decode('${fields}'),true); $entry=GFAPI::get_entry(${Number(entryId)}); if (is_wp_error($entry)) { fwrite(STDERR,$entry->get_error_message()); exit(2); } $out=array(); foreach($fields as $slot=>$fid){ $key=(string)$fid; $out[$slot]=array_key_exists($key,$entry)?$entry[$key]:null; } echo wp_json_encode($out, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);`);
+  return JSON.parse(raw);
+}
+function writeEntryFields(entryId, fieldMap, values) {
+  const fields = encodeJson(fieldMap);
+  const payload = encodeJson(values);
+  const result = wpEval(`$fields=json_decode(base64_decode('${fields}'),true); $values=json_decode(base64_decode('${payload}'),true); foreach($fields as $slot=>$fid){ if (!array_key_exists($slot,$values)) { fwrite(STDERR,'missing restore value for '.$slot); exit(3); } $updated=GFAPI::update_entry_field(${Number(entryId)},$fid,$values[$slot]); if (is_wp_error($updated)) { fwrite(STDERR,$updated->get_error_message()); exit(4); } } echo 'updated';`);
+  if (result !== 'updated') throw new Error(`Entry field update failed: ${result}`);
+}
+function snapshotMismatches(expected, actual) {
+  return Object.keys(expected).filter(slot => JSON.stringify(expected[slot]) !== JSON.stringify(actual[slot]));
+}
+function assertSnapshot(expected, actual, label) {
+  const mismatches = snapshotMismatches(expected, actual);
+  if (mismatches.length) throw new Error(`${label}: field restoration mismatch for ${mismatches.join(', ')}`);
+  return { verified: true, fields: Object.keys(expected) };
+}
+
 await test('WU19-BROWSER-004', 'realistic long Persian and numeric content stays inside defined print regions', async () => {
-  const f = manifest.alpha.fields;
-  wpEval(`$id=${manifest.alpha.entry_id}; GFAPI::update_entry_field($id, ${Number(f['student.full_name'])}, 'محمدرضا عبدالحسین‌پور نیک‌اندیش رضوی شیرازی'); GFAPI::update_entry_field($id, ${Number(f['school.name'])}, 'دبیرستان دوره دوم نمونه دولتی فرهنگ و معارف اسلامی شهید دستغیب ناحیه یک شیراز'); GFAPI::update_entry_field($id, ${Number(f['education.grade_group'])}, 'دوازدهم علوم تجربی ـ گروه ویژه آزمون‌های جامع سال تحصیلی ۱۴۰۵–۱۴۰۶'); GFAPI::update_entry_field($id, ${Number(f['student.national_id'])}, '۰۰۱۲۳۴۵۶۷۸'); GFAPI::update_entry_field($id, ${Number(f['student.mobile'])}, '۰۹۱۷۱۲۳۴۵۶۷'); GFAPI::update_entry_field($id, ${Number(f['finance.tuition_amount'])}, '۹۹۹۹۹۹۹۹۹۹'); GFAPI::update_entry_field($id, ${Number(f['finance.net_payable_amount'])}, '۸۸۸۸۸۸۸۸۸۸'); echo 'ok';`);
-  await page.goto(dossierUrl(manifest.alpha), { waitUntil: 'networkidle' }); await page.waitForSelector('.gpp-print-dossier[data-gpp-print-state="ready"]'); await page.emulateMedia({ media: 'print' });
-  const state = await layoutSafety(page);
-  if (state.overflows.length || state.clippedSheets.length) throw new Error(`Material clipping/overflow detected: ${JSON.stringify(state)}`);
-  const pdf = path.join(artifactDir, 'wu19-long-content.pdf');
-  await page.pdf({ path: pdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
-  const info = pdfPages(pdf);
-  if (info.pages !== 2) throw new Error(`Long-content case created ${info.pages} physical pages.`);
-  return { pages: 2, material_overflows: 0, sheet_overflows: 0 };
+  const before = entryFieldSnapshot(manifest.alpha.entry_id);
+  const longValues = {
+    'student.full_name': 'محمدرضا عبدالحسین‌پور نیک‌اندیش رضوی شیرازی',
+    'school.name': 'دبیرستان دوره دوم نمونه دولتی فرهنگ و معارف اسلامی شهید دستغیب ناحیه یک شیراز',
+    'education.grade_group': 'دوازدهم علوم تجربی ـ گروه ویژه آزمون‌های جامع سال تحصیلی ۱۴۰۵–۱۴۰۶',
+    'student.national_id': '۰۰۱۲۳۴۵۶۷۸',
+    'student.mobile': '۰۹۱۷۱۲۳۴۵۶۷',
+    'finance.tuition_amount': '۹۹۹۹۹۹۹۹۹۹',
+    'finance.net_payable_amount': '۸۸۸۸۸۸۸۸۸۸',
+  };
+  let scenarioError = null;
+  let restorationError = null;
+  let details = null;
+  let restoration = null;
+  try {
+    try {
+      writeEntryFields(manifest.alpha.entry_id, longContentFieldMap, longValues);
+      await page.goto(dossierUrl(manifest.alpha), { waitUntil: 'networkidle' }); await page.waitForSelector('.gpp-print-dossier[data-gpp-print-state="ready"]'); await page.emulateMedia({ media: 'print' });
+      const state = await layoutSafety(page);
+      if (state.overflows.length || state.clippedSheets.length) throw new Error(`Material clipping/overflow detected: ${JSON.stringify(state)}`);
+      const pdf = path.join(artifactDir, 'wu19-long-content.pdf');
+      await page.pdf({ path: pdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
+      const info = pdfPages(pdf);
+      if (info.pages !== 2) throw new Error(`Long-content case created ${info.pages} physical pages.`);
+      details = { pages: 2, material_overflows: 0, sheet_overflows: 0 };
+    } catch (error) {
+      scenarioError = error;
+    }
+  } finally {
+    try {
+      writeEntryFields(manifest.alpha.entry_id, longContentFieldMap, before);
+      const after = entryFieldSnapshot(manifest.alpha.entry_id);
+      restoration = assertSnapshot(before, after, 'WU19-BROWSER-004 verified restoration');
+    } catch (error) {
+      restorationError = error;
+    }
+  }
+  if (restorationError) throw new Error(`WU19-BROWSER-004 restoration failed: ${restorationError.message}${scenarioError ? `; scenario also failed: ${scenarioError.message}` : ''}`);
+  if (scenarioError) throw scenarioError;
+  return { ...details, state_isolation: 'RESTORED_AND_VERIFIED', restored_fields: restoration.fields };
+});
+
+await test('WU19-BROWSER-004-ISOLATION-GUARD', 'restoration assertion rejects an intentionally omitted field restore', async () => {
+  const before = entryFieldSnapshot(manifest.alpha.entry_id);
+  const omitted = 'finance.net_payable_amount';
+  const omittedMap = { [omitted]: longContentFieldMap[omitted] };
+  let assertionRejected = false;
+  let detectedMismatches = [];
+  try {
+    writeEntryFields(manifest.alpha.entry_id, omittedMap, { [omitted]: 'WU19-ISOLATION-SENTINEL' });
+    const incompleteMap = Object.fromEntries(Object.entries(longContentFieldMap).filter(([slot]) => slot !== omitted));
+    const incompleteValues = Object.fromEntries(Object.entries(before).filter(([slot]) => slot !== omitted));
+    writeEntryFields(manifest.alpha.entry_id, incompleteMap, incompleteValues);
+    const observed = entryFieldSnapshot(manifest.alpha.entry_id);
+    detectedMismatches = snapshotMismatches(before, observed);
+    try {
+      assertSnapshot(before, observed, 'Intentional incomplete restoration');
+    } catch {
+      assertionRejected = true;
+    }
+    if (!assertionRejected || !detectedMismatches.includes(omitted)) throw new Error(`Isolation guard did not reject omitted restoration: ${JSON.stringify(detectedMismatches)}`);
+  } finally {
+    writeEntryFields(manifest.alpha.entry_id, longContentFieldMap, before);
+    assertSnapshot(before, entryFieldSnapshot(manifest.alpha.entry_id), 'Isolation guard cleanup restoration');
+  }
+  return { omitted_field: omitted, incomplete_restoration_rejected: true, detected_mismatches: detectedMismatches, cleanup_restoration_verified: true };
 });
 
 await test('WU19-BROWSER-005', 'permission loss after Entry Detail open is re-evaluated by fresh native Print request', async () => {
