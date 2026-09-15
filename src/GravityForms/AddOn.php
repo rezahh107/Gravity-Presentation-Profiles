@@ -133,6 +133,8 @@ final class AddOn extends \GFAddOn {
                         'context_key' => $action['context_key'],
                         'binding_set_id' => $action['binding_set_id'],
                         'binding_set_version' => $action['binding_set_version'],
+                        'expected_binding_set_id' => $action['expected_binding_set_id'],
+                        'expected_binding_set_version' => $action['expected_binding_set_version'],
                     )
                 );
                 return;
@@ -427,6 +429,8 @@ final class AddOn extends \GFAddOn {
                             'context_key' => $rollback['context_key'],
                             'binding_set_id' => $rollback['binding_set_id'],
                             'binding_set_version' => $rollback['binding_set_version'],
+                            'expected_binding_set_id' => $rollback['expected_binding_set_id'],
+                            'expected_binding_set_version' => $rollback['expected_binding_set_version'],
                         )
                     ),
                 );
@@ -461,7 +465,7 @@ final class AddOn extends \GFAddOn {
         }
         $expected = 'repair' === $payload['action']
             ? array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' )
-            : array( 'action', 'binding_set_id', 'binding_set_version', 'context_key' );
+            : array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
         $actual = array_keys( $payload );
         sort( $actual, SORT_STRING );
         sort( $expected, SORT_STRING );
