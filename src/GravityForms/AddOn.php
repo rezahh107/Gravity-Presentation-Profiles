@@ -19,7 +19,7 @@ final class AddOn extends \GFAddOn {
     private $binding_health_service = null;
     private $binding_repair_service = null;
 
-    protected $_version     = '0.0.0-dev';
+    protected $_version     = '0.1.0';
     protected $_slug        = 'gravity-presentation-profiles';
     protected $_path        = 'gravity-presentation-profiles/gravity-presentation-profiles.php';
     protected $_full_path   = __FILE__;
