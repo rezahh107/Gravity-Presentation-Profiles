@@ -133,8 +133,16 @@ final class BindingSetLifecycle {
         return $this->changeActivation( $request, 'BINDING_ACTIVATE' );
     }
 
+    public function activateIfCurrent( $request ) {
+        return $this->changeActivation( $request, 'BINDING_ACTIVATE', true );
+    }
+
     public function rollback( $request ) {
         return $this->changeActivation( $request, 'BINDING_ROLLBACK' );
+    }
+
+    public function rollbackIfCurrent( $request ) {
+        return $this->changeActivation( $request, 'BINDING_ROLLBACK', true );
     }
 
     public function deactivate( $request ) {
@@ -229,18 +237,23 @@ final class BindingSetLifecycle {
         }
     }
 
-    private function changeActivation( $request, $event ) {
-        $this->requireExactKeys(
-            $request,
-            array( 'context', 'binding_set_id', 'binding_set_version' ),
-            'binding activation request'
-        );
+    private function changeActivation( $request, $event, $require_expected_current = false ) {
+        $expected_keys = array( 'context', 'binding_set_id', 'binding_set_version' );
+        if ( $require_expected_current ) {
+            $expected_keys[] = 'expected_current_activation';
+        }
+        $this->requireExactKeys( $request, $expected_keys, 'binding activation request' );
 
         $binding_set_id      = $request['binding_set_id'];
         $binding_set_version = $request['binding_set_version'];
         $context_key         = $this->contextKey( $request['context'] );
         $state               = $this->loadState();
-        $record              = $this->requireInstalled( $state, $binding_set_id, $binding_set_version );
+
+        if ( $require_expected_current ) {
+            $this->requireExpectedCurrentActivation( $state, $context_key, $request['expected_current_activation'] );
+        }
+
+        $record = $this->requireInstalled( $state, $binding_set_id, $binding_set_version );
 
         try {
             EnvironmentBindingSet::validate( $record['artifact'] );
@@ -292,6 +305,33 @@ final class BindingSetLifecycle {
         $this->commitState( $state );
 
         return $state['activations'][ $context_key ];
+    }
+
+    private function requireExpectedCurrentActivation( $state, $context_key, $expected ) {
+        $this->requireExactKeys(
+            $expected,
+            array( 'binding_set_id', 'binding_set_version' ),
+            'expected current binding activation'
+        );
+
+        if ( ! is_string( $expected['binding_set_id'] ) || ! is_string( $expected['binding_set_version'] ) ) {
+            throw new LifecycleException( 'invalid_binding_identity', 'Expected current binding identity/version must be strings.' );
+        }
+
+        if ( empty( $state['activations'][ $context_key ] ) ) {
+            throw new LifecycleException(
+                'stale_binding_management_action',
+                'The active binding changed after this action was prepared. Refresh the page and try again.'
+            );
+        }
+
+        $current = $state['activations'][ $context_key ];
+        if ( $current['binding_set_id'] !== $expected['binding_set_id'] || $current['binding_set_version'] !== $expected['binding_set_version'] ) {
+            throw new LifecycleException(
+                'stale_binding_management_action',
+                'The active binding changed after this action was prepared. Refresh the page and try again.'
+            );
+        }
     }
 
     private function loadState() {
