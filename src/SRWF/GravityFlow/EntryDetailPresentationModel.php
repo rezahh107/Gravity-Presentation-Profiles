@@ -46,19 +46,32 @@ final class EntryDetailPresentationModel {
     }
 
     /**
+     * Returns the exact readiness decision used by production rendering so
+     * diagnostics can observe the branch rather than re-run it independently.
+     */
+    public function presentationReadiness( $entry ) {
+        foreach ( $this->required_slots as $slot_key ) {
+            $resolved = $this->resolve( $entry, $slot_key );
+            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
+                return array(
+                    'ready' => false,
+                    'reason' => isset( $resolved['reason'] ) && is_string( $resolved['reason'] ) ? $resolved['reason'] : 'binding_not_proven',
+                    'semantic_slot_key' => $slot_key,
+                );
+            }
+        }
+
+        return array( 'ready' => true, 'reason' => null, 'semantic_slot_key' => null );
+    }
+
+    /**
      * Required package mappings must all be independently PROVEN. Availability,
      * editability and permission are deliberately not inferred here; those are
      * separate runtime facts and fail closed at their smallest presentation use.
      */
     public function isPresentationReady( $entry ) {
-        foreach ( $this->required_slots as $slot_key ) {
-            $resolved = $this->resolve( $entry, $slot_key );
-            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
-                return false;
-            }
-        }
-
-        return true;
+        $decision = $this->presentationReadiness( $entry );
+        return true === $decision['ready'];
     }
 
     public function resolve( $entry, $slot_key ) {
