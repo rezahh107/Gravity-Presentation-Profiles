@@ -15,6 +15,7 @@ $cases = array(
     'binding-health-management.php',
     'binding-health-compound-input.php',
     'binding-activation-cas.php',
+    'runtime-diagnostics.php',
     'package-lifecycle-v11.php',
     'reserved-extension-seam-lifecycle.php',
     'package-lifecycle-deactivation.php',
