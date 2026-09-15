@@ -45,6 +45,7 @@ final class AddOn extends \GFAddOn {
                         'label'               => esc_html__( 'Profile Package JSON', 'gravity-presentation-profiles' ),
                         'type'                => 'textarea',
                         'class'               => 'large',
+                        'callback'            => array( $this, 'settings_visual_profile_package_json' ),
                         'validation_callback' => array( $this, 'validate_visual_package_import' ),
                         'save_callback'       => array( $this, 'discard_visual_package_json' ),
                     ),
@@ -146,24 +147,55 @@ final class AddOn extends \GFAddOn {
         exit;
     }
 
+    public function settings_visual_profile_package_json( $field ) {
+        if ( ! is_object( $field ) || ! method_exists( $field, 'get_value' ) ) {
+            return '';
+        }
+
+        $value = $this->visualPackageJsonString( $field->get_value() );
+        if ( null === $value ) {
+            $value = '';
+        }
+
+        $description = method_exists( $field, 'get_description' ) ? $field->get_description() : '';
+        $classes = method_exists( $field, 'get_container_classes' ) ? $field->get_container_classes() : '';
+        $attributes = method_exists( $field, 'get_attributes' ) ? implode( ' ', $field->get_attributes() ) : '';
+        $error_icon = method_exists( $field, 'get_error_icon' ) ? $field->get_error_icon() : '';
+        $prefix = isset( $field->settings ) && is_object( $field->settings ) && method_exists( $field->settings, 'get_input_name_prefix' )
+            ? $field->settings->get_input_name_prefix()
+            : '_gform_setting';
+        $name = isset( $field->name ) && is_string( $field->name ) ? $field->name : 'visual_profile_package_json';
+
+        return $description . sprintf(
+            '<span class="%s"><textarea name="%s_%s" %s>%s</textarea>%s</span>',
+            esc_attr( $classes ),
+            esc_attr( $prefix ),
+            esc_attr( $name ),
+            $attributes,
+            esc_textarea( $value ),
+            $error_icon
+        );
+    }
+
     public function validate_visual_package_import( $field, $value ) {
-        if ( is_string( $value ) && '' === trim( $value ) ) {
+        $json = $this->visualPackageJsonString( $value );
+        if ( null === $json ) {
+            $this->setSettingsFieldError( $field, 'Profile Package JSON must be text or a decoded JSON object.' );
             return;
         }
-        if ( ! is_string( $value ) ) {
-            $this->setSettingsFieldError( $field, 'Profile Package JSON must be text.' );
+        if ( '' === trim( $json ) ) {
             return;
         }
 
         $workflow   = $this->visualWorkflow();
-        $validation = $workflow->validateVisualJson( $value );
+        $validation = $workflow->validateVisualJson( $json );
         if ( ! $validation['valid'] ) {
             $this->setSettingsFieldError( $field, $validation['message'] );
             return;
         }
 
         try {
-            $workflow->importVisualJson( $value );
+            $workflow->importVisualJson( $json );
         } catch ( LifecycleException $exception ) {
             $this->setSettingsFieldError( $field, $exception->getMessage() );
         }
@@ -737,6 +769,18 @@ final class AddOn extends \GFAddOn {
             }
         }
         return ! empty( $events ) ? $events[0] : array( 'stage' => 'GF_PROFILE_SELECTION', 'reason_code' => 'diagnostic_event_unavailable', 'fallback' => null );
+    }
+
+    private function visualPackageJsonString( $value ) {
+        if ( is_string( $value ) ) {
+            return $value;
+        }
+        if ( ! is_array( $value ) ) {
+            return null;
+        }
+
+        $json = json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+        return false === $json ? null : $json;
     }
 
     private function visualWorkflow() {
