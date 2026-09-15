@@ -3,6 +3,7 @@
 namespace GravityPresentationProfiles\GravityForms;
 
 use GravityPresentationProfiles\Core\AssetResolver;
+use GravityPresentationProfiles\Core\BindingHealth\BindingHealthEvaluator;
 use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\SettingsLifecycleWorkflow;
 use GravityPresentationProfiles\Core\PresentationResolver;
@@ -11,6 +12,8 @@ use GravityPresentationProfiles\ProfileCatalog;
 final class AddOn extends \GFAddOn {
     private static $_instance = null;
     private $visual_workflow = null;
+    private $binding_health_service = null;
+    private $binding_repair_service = null;
 
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
@@ -48,6 +51,26 @@ final class AddOn extends \GFAddOn {
                     ),
                 ),
             ),
+            array(
+                'title'       => esc_html__( 'Mapping & Binding Health', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Review each canonical semantic meaning against the currently active binding artifact and the current Gravity Forms field inventory. Repairs are explicit: select one action and save settings. GPP creates and activates a new immutable binding version; it never guesses a replacement field.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'  => 'binding_health',
+                        'label' => esc_html__( 'Current mapping health', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_binding_health',
+                    ),
+                    array(
+                        'name'                => 'binding_management_action',
+                        'label'               => esc_html__( 'Explicit repair or rollback', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose one repair or rollback action, then save settings. The default performs no binding change. Technical IDs are shown only as secondary diagnostics.', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'choices'             => $this->bindingManagementChoices(),
+                        'validation_callback' => array( $this, 'validate_binding_management_action' ),
+                        'save_callback'       => array( $this, 'discard_binding_management_action' ),
+                    ),
+                ),
+            ),
         );
     }
 
@@ -79,6 +102,55 @@ final class AddOn extends \GFAddOn {
         return '';
     }
 
+    public function validate_binding_management_action( $field, $value ) {
+        if ( ! is_string( $value ) || '' === trim( $value ) ) {
+            return;
+        }
+
+        $action = $this->decodeBindingManagementAction( $value );
+        if ( null === $action ) {
+            $this->setSettingsFieldError( $field, 'The selected binding management action is invalid. Refresh the page and try again.' );
+            return;
+        }
+
+        try {
+            if ( 'repair' === $action['action'] ) {
+                $this->bindingRepairService()->repairField(
+                    array(
+                        'context_key' => $action['context_key'],
+                        'binding_set_id' => $action['binding_set_id'],
+                        'binding_set_version' => $action['binding_set_version'],
+                        'semantic_slot_key' => $action['semantic_slot_key'],
+                        'field_id' => $action['field_id'],
+                    )
+                );
+                return;
+            }
+
+            if ( 'rollback' === $action['action'] ) {
+                $this->bindingRepairService()->rollback(
+                    array(
+                        'context_key' => $action['context_key'],
+                        'binding_set_id' => $action['binding_set_id'],
+                        'binding_set_version' => $action['binding_set_version'],
+                    )
+                );
+                return;
+            }
+
+            $this->setSettingsFieldError( $field, 'The selected binding management action is not supported.' );
+        } catch ( LifecycleException $exception ) {
+            $this->setSettingsFieldError( $field, $exception->getMessage() );
+        } catch ( \Throwable $exception ) {
+            $this->setSettingsFieldError( $field, 'Binding management failed before the active mapping could be changed.' );
+        }
+    }
+
+    public function discard_binding_management_action( $field, $value ) {
+        unset( $field, $value );
+        return '';
+    }
+
     public function settings_gpp_visual_inventory( $field ) {
         unset( $field );
 
@@ -105,6 +177,44 @@ final class AddOn extends \GFAddOn {
             echo '<td><code>' . esc_html( $item['profile_id'] ) . '</code></td></tr>';
         }
         echo '</tbody></table>';
+    }
+
+    public function settings_gpp_binding_health( $field ) {
+        unset( $field );
+        try {
+            $health = $this->bindingHealthService()->healthFacts();
+        } catch ( \Throwable $exception ) {
+            echo '<p>' . esc_html__( 'Binding health is unavailable because the authoritative lifecycle or host field inventory could not be read.', 'gravity-presentation-profiles' ) . '</p>';
+            return;
+        }
+
+        if ( empty( $health['contexts'] ) ) {
+            echo '<p>' . esc_html__( 'No active environment binding contexts are installed.', 'gravity-presentation-profiles' ) . '</p>';
+            return;
+        }
+
+        foreach ( $health['contexts'] as $context ) {
+            $form_name = ! empty( $context['form_title'] ) ? $context['form_title'] : sprintf( __( 'Form %s', 'gravity-presentation-profiles' ), $context['form_id'] );
+            echo '<h4>' . esc_html( $form_name ) . '</h4>';
+            echo '<p><small>' . esc_html__( 'Active binding version:', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $context['binding_set_id'] . '@' . $context['binding_set_version'] ) . '</code></small></p>';
+            echo '<table class="widefat striped"><thead><tr>';
+            echo '<th>' . esc_html__( 'Canonical meaning', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'Current host source', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'Health', 'gravity-presentation-profiles' ) . '</th>';
+            echo '</tr></thead><tbody>';
+            foreach ( $context['facts'] as $fact ) {
+                $meaning = null !== $fact['meaning'] ? $fact['meaning'] : $fact['semantic_slot_key'];
+                echo '<tr><td>' . esc_html( $meaning );
+                echo '<br><small><code>' . esc_html( $fact['semantic_slot_key'] ) . '</code></small></td>';
+                echo '<td>' . $this->bindingSourceMarkup( $fact['source'] ) . '</td>';
+                echo '<td><strong>' . esc_html( $this->bindingHealthLabel( $fact['status'] ) ) . '</strong>';
+                if ( ! empty( $fact['reason'] ) ) {
+                    echo '<br><small><code>' . esc_html( $fact['reason'] ) . '</code></small>';
+                }
+                echo '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
     }
 
     public function form_settings_fields( $form ) {
@@ -271,12 +381,143 @@ final class AddOn extends \GFAddOn {
         return $form;
     }
 
+    private function bindingManagementChoices() {
+        $choices = array(
+            array(
+                'label' => esc_html__( 'No binding change', 'gravity-presentation-profiles' ),
+                'value' => '',
+            ),
+        );
+        try {
+            $candidates = $this->bindingHealthService()->managementCandidates();
+            foreach ( $candidates['repairs'] as $repair ) {
+                $form_name = ! empty( $repair['form_title'] ) ? $repair['form_title'] : 'Form ' . $repair['form_id'];
+                foreach ( $repair['fields'] as $host_field ) {
+                    $payload = array(
+                        'action' => 'repair',
+                        'context_key' => $repair['context_key'],
+                        'binding_set_id' => $repair['binding_set_id'],
+                        'binding_set_version' => $repair['binding_set_version'],
+                        'semantic_slot_key' => $repair['semantic_slot_key'],
+                        'field_id' => $host_field['field_id'],
+                    );
+                    $choices[] = array(
+                        'label' => sprintf(
+                            __( 'Repair: %1$s — %2$s → %3$s (Field %4$s)', 'gravity-presentation-profiles' ),
+                            $form_name,
+                            $repair['meaning'],
+                            $host_field['label'],
+                            $host_field['field_id']
+                        ),
+                        'value' => $this->encodeBindingManagementAction( $payload ),
+                    );
+                }
+            }
+            foreach ( $candidates['rollbacks'] as $rollback ) {
+                $form_name = ! empty( $rollback['form_title'] ) ? $rollback['form_title'] : 'Form ' . $rollback['form_id'];
+                $choices[] = array(
+                    'label' => sprintf(
+                        __( 'Rollback: %1$s → binding version %2$s', 'gravity-presentation-profiles' ),
+                        $form_name,
+                        $rollback['binding_set_version']
+                    ),
+                    'value' => $this->encodeBindingManagementAction(
+                        array(
+                            'action' => 'rollback',
+                            'context_key' => $rollback['context_key'],
+                            'binding_set_id' => $rollback['binding_set_id'],
+                            'binding_set_version' => $rollback['binding_set_version'],
+                        )
+                    ),
+                );
+            }
+        } catch ( \Throwable $exception ) {
+            // The health table will surface the lifecycle read failure. Saving
+            // ordinary plugin settings must remain possible and change no binding.
+        }
+        return $choices;
+    }
+
+    private function encodeBindingManagementAction( $payload ) {
+        return rtrim( strtr( base64_encode( json_encode( $payload, JSON_UNESCAPED_SLASHES ) ), '+/', '-_' ), '=' );
+    }
+
+    private function decodeBindingManagementAction( $value ) {
+        if ( ! is_string( $value ) || '' === $value || 1 !== preg_match( '/^[A-Za-z0-9_-]+$/', $value ) ) {
+            return null;
+        }
+        $padded = strtr( $value, '-_', '+/' );
+        $padding = strlen( $padded ) % 4;
+        if ( $padding ) {
+            $padded .= str_repeat( '=', 4 - $padding );
+        }
+        $decoded = base64_decode( $padded, true );
+        if ( false === $decoded ) {
+            return null;
+        }
+        $payload = json_decode( $decoded, true );
+        if ( ! is_array( $payload ) || empty( $payload['action'] ) ) {
+            return null;
+        }
+        $expected = 'repair' === $payload['action']
+            ? array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' )
+            : array( 'action', 'binding_set_id', 'binding_set_version', 'context_key' );
+        $actual = array_keys( $payload );
+        sort( $actual, SORT_STRING );
+        sort( $expected, SORT_STRING );
+        return $actual === $expected ? $payload : null;
+    }
+
+    private function bindingSourceMarkup( $source ) {
+        if ( null === $source ) {
+            return esc_html__( 'Not mapped', 'gravity-presentation-profiles' );
+        }
+        if ( 'gravity_forms.field' === $source['type'] ) {
+            $label = isset( $source['label'] ) ? $source['label'] : __( 'Missing Gravity Forms field', 'gravity-presentation-profiles' );
+            return esc_html( $label ) . '<br><small>' . esc_html__( 'Field ID', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $source['field_id'] ) . '</code></small>';
+        }
+        $identity = '';
+        foreach ( array( 'meta_key', 'state_key', 'region_key', 'action_key' ) as $key ) {
+            if ( isset( $source[ $key ] ) ) {
+                $identity = $source[ $key ];
+                break;
+            }
+        }
+        return esc_html( $source['type'] ) . ( '' !== $identity ? '<br><small><code>' . esc_html( $identity ) . '</code></small>' : '' );
+    }
+
+    private function bindingHealthLabel( $status ) {
+        $labels = array(
+            BindingHealthEvaluator::HEALTHY => __( 'Healthy', 'gravity-presentation-profiles' ),
+            BindingHealthEvaluator::UNMAPPED => __( 'Unmapped', 'gravity-presentation-profiles' ),
+            BindingHealthEvaluator::STALE_SOURCE_MISSING => __( 'Stale / source missing', 'gravity-presentation-profiles' ),
+            BindingHealthEvaluator::AMBIGUOUS_NEEDS_REVIEW => __( 'Needs review', 'gravity-presentation-profiles' ),
+            BindingHealthEvaluator::EVIDENCE_NOT_PROVEN => __( 'Evidence not proven', 'gravity-presentation-profiles' ),
+            BindingHealthEvaluator::NOT_APPLICABLE => __( 'Not applicable', 'gravity-presentation-profiles' ),
+        );
+        return isset( $labels[ $status ] ) ? $labels[ $status ] : $status;
+    }
+
     private function visualWorkflow() {
         if ( null === $this->visual_workflow ) {
             $this->visual_workflow = SettingsLifecycleWorkflow::forWordPress();
         }
 
         return $this->visual_workflow;
+    }
+
+    private function bindingHealthService() {
+        if ( null === $this->binding_health_service ) {
+            $this->binding_health_service = BindingHealthService::forWordPress();
+        }
+        return $this->binding_health_service;
+    }
+
+    private function bindingRepairService() {
+        if ( null === $this->binding_repair_service ) {
+            $this->binding_repair_service = BindingRepairService::forWordPress();
+        }
+        return $this->binding_repair_service;
     }
 
     private function setSettingsFieldError( $field, $message ) {
