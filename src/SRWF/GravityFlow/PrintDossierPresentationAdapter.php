@@ -2,6 +2,7 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
@@ -320,6 +321,13 @@ final class PrintDossierPresentationAdapter {
                 $package['semantic_slots']
             );
         } catch ( \Throwable $exception ) {
+            RuntimeDiagnostics::recordException(
+                self::SURFACE,
+                'PRINT_PROFILE_RESOLVED',
+                'runtime_exception',
+                'dossier_not_rendered',
+                $exception
+            );
             self::$model = null;
         }
 
