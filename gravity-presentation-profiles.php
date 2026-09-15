@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Gravity Presentation Profiles
  * Description: Deterministic, opt-in presentation profiles for supported Gravity ecosystem surfaces.
- * Version: 0.1.0
+ * Version: 0.0.0-dev
  * Requires at least: 6.8.3
  * Requires PHP: 8.2
  * License: GPL v2 or later
