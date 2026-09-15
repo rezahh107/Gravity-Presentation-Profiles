@@ -32,6 +32,10 @@ if ( 'stale-on' === $action ) {
     if ( ! is_array( $form ) ) {
         throw new RuntimeException( 'Diagnostics synthetic form is unavailable.' );
     }
+    $form_title = isset( $form['title'] ) && is_string( $form['title'] ) ? trim( $form['title'] ) : '';
+    if ( '' === $form_title ) {
+        throw new RuntimeException( 'Diagnostics synthetic form title is unavailable.' );
+    }
     update_option( $backup_option, $form, false );
 
     $fields = array();
@@ -79,7 +83,15 @@ if ( 'stale-on' === $action ) {
         throw new RuntimeException( 'Synthetic schema drift did not produce the existing stale binding-health fact.' );
     }
 
-    gpp_diag_json( array( 'status' => 'stale', 'form_id' => $form_id, 'replacement_field_id' => 12, 'binding_health' => $status ) );
+    gpp_diag_json(
+        array(
+            'status' => 'stale',
+            'form_id' => $form_id,
+            'form_title' => $form_title,
+            'replacement_field_id' => 12,
+            'binding_health' => $status,
+        )
+    );
     return;
 }
 
