@@ -3,6 +3,7 @@
 namespace GravityPresentationProfiles;
 
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
 
@@ -43,6 +44,7 @@ final class Bootstrap {
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are
         // registered only after Gravity Forms has loaded successfully.
+        InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
         PrintDossierPresentationAdapter::register();
