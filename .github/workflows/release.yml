@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - '.github/workflows/ci.yml'
+      - 'LICENSE'
+      - 'composer.json'
       - 'release/**'
       - 'scripts/release/**'
       - 'tests/release/**'
@@ -99,17 +101,35 @@ jobs:
 
       - name: Run release contract and mutation tests
         shell: bash
-        run: bash tests/release/release-contract-tests.sh
+        run: |
+          set -euo pipefail
+          bash tests/release/release-contract-tests.sh
+          bash tests/release/license-identity-tests.sh
 
-      - name: Capture real publication blockers without overriding them
+      - name: Verify resolved publication prerequisites without publishing
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p build/release
           php scripts/release/check-publication-prerequisites.php --root=. --mode=dry-run | tee build/release/publication-prerequisites.json
-          grep -Fq 'missing_license' build/release/publication-prerequisites.json
-          grep -Fq 'missing_compatibility_policy' build/release/publication-prerequisites.json
-          grep -Fq 'development_source_version' build/release/publication-prerequisites.json
+          php -r '
+            $p=json_decode(file_get_contents("build/release/publication-prerequisites.json"),true);
+            $expected=array(
+              "wordpress_min"=>"6.8.3",
+              "php_min"=>"8.2",
+              "gravity_forms_min"=>"3.1.1.1",
+              "gravity_flow_min"=>"3.1.0",
+            );
+            if (($p["mode"]??null)!=="dry-run") exit(1);
+            if (($p["publication_ready"]??null)!==true) exit(1);
+            if (($p["blockers"]??null)!==array()) exit(1);
+            if (!in_array("development_source_version",$p["facts"]??array(),true)) exit(1);
+            if (($p["compatibility"]??null)!==$expected) exit(1);
+          '
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
 
       - name: Prepare synthetic non-production candidate overlay
         shell: bash

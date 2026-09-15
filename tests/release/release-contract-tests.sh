@@ -32,6 +32,7 @@ php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --versio
 [[ "$(plugin_version "$WORK/source")" == '9.8.7' ]]
 [[ "$(addon_version "$WORK/source")" == '9.8.7' ]]
 grep -Fq '## [9.8.7] - 2030-01-02' "$WORK/source/CHANGELOG.md"
+cmp -s "$WORK/dev-source/LICENSE" "$WORK/source/LICENSE"
 expect_fail php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --version=9.8.8 --date=2030-01-03
 expect_fail php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --version=0.0.0 --date=2030-01-03
 
@@ -57,6 +58,22 @@ SHA_ABSOLUTE_B="$(sha256sum "$ZIP_ABSOLUTE_B" | awk '{print $1}')"
     echo 'Relative/absolute canonical builder outputs are not byte-identical.' >&2
     exit 1
 }
+
+unzip -Z1 "$ZIP_RELATIVE" > "$WORK/zip-files.txt"
+grep -Fxq 'gravity-presentation-profiles/LICENSE' "$WORK/zip-files.txt"
+unzip -p "$ZIP_RELATIVE" gravity-presentation-profiles/LICENSE > "$WORK/packaged-license"
+cmp -s "$WORK/source/LICENSE" "$WORK/packaged-license"
+for forbidden_file in README.md AGENTS.md CHANGELOG.md SECURITY.md composer.json; do
+    if grep -Fxq "gravity-presentation-profiles/$forbidden_file" "$WORK/zip-files.txt"; then
+        echo "Development-only file unexpectedly shipped: $forbidden_file" >&2
+        exit 1
+    fi
+done
+if grep -Eq '^gravity-presentation-profiles/(\.github|tests|docs|scripts|release)/' "$WORK/zip-files.txt"; then
+    echo 'Development-only directory unexpectedly shipped.' >&2
+    exit 1
+fi
+
 bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$ZIP_RELATIVE" 9.8.7 "$SHA_RELATIVE" >/dev/null
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$ZIP_RELATIVE" 9.8.7 "$(printf '0%.0s' {1..64})"
 
@@ -74,6 +91,8 @@ mutate_zip() {
         forbidden) mkdir -p "$dir/gravity-presentation-profiles/tests"; echo '<?php' > "$dir/gravity-presentation-profiles/tests/forbidden.php" ;;
         missing) rm -f "$dir/gravity-presentation-profiles/src/Bootstrap.php" ;;
         wrong-version) sed -i 's/Version: 9.8.7/Version: 9.8.6/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
+        missing-license) rm -f "$dir/gravity-presentation-profiles/LICENSE" ;;
+        wrong-license) printf '%s\n' 'mutated license bytes' > "$dir/gravity-presentation-profiles/LICENSE" ;;
     esac
     ( cd "$dir" && find gravity-presentation-profiles -type f -print0 | LC_ALL=C sort -z | xargs -0 zip -X -q "$target_zip" )
 }
@@ -84,44 +103,94 @@ mutate_zip "$ZIP_RELATIVE" "$WORK/missing.zip" missing
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-version.zip" wrong-version
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-version.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/missing-license.zip" missing-license
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-license.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-license.zip" wrong-license
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-license.zip" 9.8.7
 head -c 64 "$ZIP_RELATIVE" > "$WORK/corrupt.zip"
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/corrupt.zip" 9.8.7
 
-php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=dry-run > "$WORK/blockers.json"
-require_marker "$WORK/blockers.json" 'missing_license'
-require_marker "$WORK/blockers.json" 'missing_compatibility_policy'
-require_marker "$WORK/blockers.json" 'development_source_version'
-expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=publish
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=dry-run > "$WORK/prerequisites.json"
+require_marker "$WORK/prerequisites.json" '"publication_ready": true'
+require_marker "$WORK/prerequisites.json" '"blockers": []'
+require_marker "$WORK/prerequisites.json" 'development_source_version'
+require_marker "$WORK/prerequisites.json" '"wordpress_min": "6.8.3"'
+require_marker "$WORK/prerequisites.json" '"php_min": "8.2"'
+require_marker "$WORK/prerequisites.json" '"gravity_forms_min": "3.1.1.1"'
+require_marker "$WORK/prerequisites.json" '"gravity_flow_min": "3.1.0"'
+if grep -Fq 'missing_license' "$WORK/prerequisites.json" || grep -Fq 'missing_compatibility_policy' "$WORK/prerequisites.json"; then
+    echo 'Resolved release prerequisites unexpectedly report an implementation-time blocker.' >&2
+    exit 1
+fi
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=publish > "$WORK/prerequisites-publish.json"
+require_marker "$WORK/prerequisites-publish.json" '"publication_ready": true'
 
-# Compatibility values remain Owner-selected. These are test-only synthetic versions.
 PREREQ="$WORK/prereq"
 cp -a "$WORK/dev-source" "$PREREQ"
-echo 'synthetic test license' > "$PREREQ/LICENSE"
-mkdir -p "$PREREQ/release"
+
+# The unresolved example remains a template and must continue to fail closed.
 cp "$ROOT/release/compatibility.example.json" "$PREREQ/release/compatibility.json"
 php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/compat-example.json"
 require_marker "$WORK/compat-example.json" 'invalid_compatibility_policy:wordpress_min'
 expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+cp "$ROOT/release/compatibility.json" "$PREREQ/release/compatibility.json"
 
-for bad in 'OWNER_DECISION_REQUIRED' 'x' '' '8' '08.2' '3..1' '3.1-beta'; do
-    cat > "$PREREQ/release/compatibility.json" <<JSON
-{"wordpress_min":"$bad","php_min":"99.2","gravity_forms_min":"99.3.4","gravity_flow_min":"99.4.5.6"}
-JSON
-    php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/compat-invalid.json"
-    require_marker "$WORK/compat-invalid.json" 'invalid_compatibility_policy:wordpress_min'
+# Missing and empty LICENSE remain hard blockers.
+rm "$PREREQ/LICENSE"
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/license-missing.json"
+require_marker "$WORK/license-missing.json" 'missing_license'
+expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+: > "$PREREQ/LICENSE"
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/license-empty.json"
+require_marker "$WORK/license-empty.json" 'missing_license'
+expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+cp "$ROOT/LICENSE" "$PREREQ/LICENSE"
+
+# Missing compatibility policy remains a hard blocker.
+rm "$PREREQ/release/compatibility.json"
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/compat-missing.json"
+require_marker "$WORK/compat-missing.json" 'missing_compatibility_policy'
+expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+cp "$ROOT/release/compatibility.json" "$PREREQ/release/compatibility.json"
+
+# Every required compatibility key is independently fail-closed when absent.
+for key in wordpress_min php_min gravity_forms_min gravity_flow_min; do
+    php -r '$d=json_decode(file_get_contents($argv[1]),true); unset($d[$argv[2]]); file_put_contents($argv[3],json_encode($d));' \
+        "$ROOT/release/compatibility.json" "$key" "$PREREQ/release/compatibility.json"
+    php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/compat-key-missing.json"
+    require_marker "$WORK/compat-key-missing.json" "invalid_compatibility_policy:$key"
     expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
 done
 
-cat > "$PREREQ/release/compatibility.json" <<'JSON'
-{"wordpress_min":"99.1","php_min":"99.2","gravity_forms_min":"99.3.4","gravity_flow_min":"99.4.5.6"}
-JSON
+# Placeholder/malformed values remain rejected for every compatibility authority key.
+for key in wordpress_min php_min gravity_forms_min gravity_flow_min; do
+    for bad in 'OWNER_DECISION_REQUIRED' 'x' '' '8' '08.2' '3..1' '3.1-beta'; do
+        php -r '$d=json_decode(file_get_contents($argv[1]),true); $d[$argv[2]]=$argv[3]; file_put_contents($argv[4],json_encode($d));' \
+            "$ROOT/release/compatibility.json" "$key" "$bad" "$PREREQ/release/compatibility.json"
+        php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/compat-invalid.json"
+        require_marker "$WORK/compat-invalid.json" "invalid_compatibility_policy:$key"
+        expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+    done
+done
+cp "$ROOT/release/compatibility.json" "$PREREQ/release/compatibility.json"
+
+# WordPress/PHP plugin metadata is a checked mirror of compatibility authority.
+sed -i 's/Requires PHP: 8\.2/Requires PHP: 8.3/' "$PREREQ/gravity-presentation-profiles.php"
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/metadata-mismatch.json"
+require_marker "$WORK/metadata-mismatch.json" 'compatibility_metadata_mismatch:php_min'
+expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
+cp "$ROOT/gravity-presentation-profiles.php" "$PREREQ/gravity-presentation-profiles.php"
+
 php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"
 require_marker "$WORK/compat-valid.json" '"publication_ready": true'
 
-rm "$PREREQ/LICENSE"
-php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/license-blocker.json"
-require_marker "$WORK/license-blocker.json" 'missing_license'
-echo 'synthetic test license' > "$PREREQ/LICENSE"
+# Invalid development source state remains fail-closed.
+INVALID_SOURCE="$WORK/invalid-source"
+cp -a "$PREREQ" "$INVALID_SOURCE"
+sed -i 's/Version: 0\.0\.0-dev/Version: invalid-version/' "$INVALID_SOURCE/gravity-presentation-profiles.php"
+php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$INVALID_SOURCE" --mode=dry-run > "$WORK/invalid-source.json"
+require_marker "$WORK/invalid-source.json" 'invalid_source_version_state'
+expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$INVALID_SOURCE" --mode=publish
 
 PRODUCTION_START="$WORK/production-start"
 cp -a "$PREREQ" "$PRODUCTION_START"
