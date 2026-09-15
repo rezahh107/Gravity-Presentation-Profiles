@@ -7,6 +7,7 @@ on:
       - '.github/workflows/release.yml'
       - '.github/workflows/ci.yml'
       - 'LICENSE'
+      - 'composer.json'
       - 'release/**'
       - 'scripts/release/**'
       - 'tests/release/**'
@@ -100,7 +101,10 @@ jobs:
 
       - name: Run release contract and mutation tests
         shell: bash
-        run: bash tests/release/release-contract-tests.sh
+        run: |
+          set -euo pipefail
+          bash tests/release/release-contract-tests.sh
+          bash tests/release/license-identity-tests.sh
 
       - name: Verify resolved publication prerequisites without publishing
         shell: bash
