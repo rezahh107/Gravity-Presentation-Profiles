@@ -10,95 +10,28 @@ final class GeneralLlmAuthoringPrompt {
     const FILENAME = 'gpp-general-llm-authoring-prompt-v1.md';
 
     public static function contract() {
+        $schema = VisualProfilePackageV11::schemaDefinition();
+        $used_token_categories = array();
+        foreach ( $schema['presentation'] as $preferences ) {
+            foreach ( $preferences as $rule ) {
+                if ( 'token' === $rule['kind'] ) {
+                    $used_token_categories[ $rule['token_category'] ] = true;
+                }
+            }
+        }
+
         return array(
             'prompt_version' => self::PROMPT_VERSION,
             'artifact_type' => VisualProfilePackage::ARTIFACT_TYPE,
             'schema_version' => VisualProfilePackageV11::SCHEMA_VERSION,
             'authorable_surfaces' => array( 'gravity_forms.form' ),
-            'root_fields' => array(
-                'artifact_type',
-                'schema_version',
-                'package_id',
-                'package_version',
-                'provenance',
-                'selected_surfaces',
-                'design_tokens',
-                'semantic_slots',
-                'surface_profiles',
-                'reserved_extension_seam',
-            ),
-            'token_categories' => array(
-                'colors' => array( 'value_type' => 'string', 'pattern' => '^#[0-9A-Fa-f]{6}$' ),
-                'spacing_px' => array( 'value_type' => 'integer', 'minimum' => 0, 'maximum' => 512, 'unit' => 'px' ),
-                'radii_px' => array( 'value_type' => 'integer', 'minimum' => 0, 'maximum' => 512, 'unit' => 'px' ),
-                'sizes_px' => array( 'value_type' => 'integer', 'minimum' => 0, 'maximum' => 4096, 'unit' => 'px' ),
-                'font_sizes_px' => array( 'value_type' => 'integer', 'minimum' => 0, 'maximum' => 512, 'unit' => 'px' ),
-                'font_weights' => array( 'value_type' => 'integer', 'minimum' => 100, 'maximum' => 900, 'step' => 100 ),
-                'font_families' => array(
-                    'value_type' => 'string',
-                    'minimum_length' => 1,
-                    'maximum_bytes' => 96,
-                    'allowed_characters' => 'Unicode letters and numbers, space, dot, underscore, hyphen',
-                ),
-            ),
-            'presentation' => array(
-                'composition' => array(
-                    'direction' => array( 'kind' => 'enum', 'values' => array( 'inherit', 'ltr', 'rtl' ) ),
-                    'max_inline_size' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
-                    'inline_padding' => array( 'kind' => 'token', 'token_category' => 'spacing_px' ),
-                    'surface_background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'surface_radius' => array( 'kind' => 'token', 'token_category' => 'radii_px' ),
-                    'field_layout' => array( 'kind' => 'enum', 'values' => array( 'host_default', 'single_column' ) ),
-                ),
-                'typography' => array(
-                    'font_family' => array( 'kind' => 'token', 'token_category' => 'font_families' ),
-                ),
-                'controls' => array(
-                    'background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'focus_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'error_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'radius' => array( 'kind' => 'token', 'token_category' => 'radii_px' ),
-                    'min_height' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
-                    'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
-                    'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
-                ),
-                'labels' => array(
-                    'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'required_color' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
-                    'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
-                ),
-                'descriptions' => array(
-                    'text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                ),
-                'sections' => array(
-                    'divider' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'heading_text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'heading_font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
-                    'heading_font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
-                    'description_text' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                ),
-                'primary_action' => array(
-                    'background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'pressed_background' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'focus_border' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                    'min_height' => array( 'kind' => 'token', 'token_category' => 'sizes_px' ),
-                    'font_size' => array( 'kind' => 'token', 'token_category' => 'font_sizes_px' ),
-                    'font_weight' => array( 'kind' => 'token', 'token_category' => 'font_weights' ),
-                ),
-                'validation' => array(
-                    'error_color' => array( 'kind' => 'token', 'token_category' => 'colors' ),
-                ),
-            ),
-            'capabilities' => array(
-                'gravity_forms.orbital_control_metric_projection',
-                'persian_gravity.jalali_validation_message_after_control',
-            ),
-            'portable_identifier_pattern' => '^[a-z0-9]+(?:[._-][a-z0-9]+)*$',
-            'package_version_pattern' => '^[0-9]+\\.[0-9]+\\.[0-9]+$',
-            'token_name_pattern' => '^[a-z][a-z0-9_]*$',
+            'root_fields' => $schema['root_fields'],
+            'token_categories' => array_intersect_key( $schema['token_categories'], $used_token_categories ),
+            'presentation' => $schema['presentation'],
+            'capabilities' => $schema['capabilities'],
+            'portable_identifier_pattern' => $schema['portable_identifier_pattern'],
+            'package_version_pattern' => $schema['package_version_pattern'],
+            'token_name_pattern' => $schema['token_name_pattern'],
             'forbidden_identity_examples' => array(
                 'Form ID',
                 'Field ID',
@@ -186,6 +119,9 @@ final class GeneralLlmAuthoringPrompt {
             }
             if ( isset( $rule['maximum_bytes'] ) ) {
                 $description .= '; non-empty; maximum ' . $rule['maximum_bytes'] . ' bytes; allowed characters: ' . $rule['allowed_characters'];
+            }
+            if ( isset( $rule['constraint'] ) ) {
+                $description .= '; ' . $rule['constraint'];
             }
             $lines[] = $description . '.';
         }
