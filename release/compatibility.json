@@ -1,0 +1,6 @@
+{
+  "wordpress_min": "6.8.3",
+  "php_min": "8.2",
+  "gravity_forms_min": "3.1.1.1",
+  "gravity_flow_min": "3.1.0"
+}
