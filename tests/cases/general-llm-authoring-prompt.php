@@ -48,6 +48,9 @@ function gpp_authoring_runtime_paths() {
 function gpp_authoring_contract_paths( $presentation ) {
     $paths = array();
     foreach ( $presentation as $block => $preferences ) {
+        if ( 'capabilities' === $block ) {
+            continue;
+        }
         foreach ( array_keys( $preferences ) as $preference ) {
             $paths[] = $block . '.' . $preference;
         }
@@ -152,7 +155,7 @@ $invalid_token_values = array(
     'sizes_px' => array( -1, 4097, 10.5 ),
     'font_sizes_px' => array( -1, 513, '16' ),
     'font_weights' => array( 99, 550, 1000 ),
-    'font_families' => array( '', str_repeat( 'A', 97 ), 'Arial;body' ),
+    'font_families' => array( '', '   ', str_repeat( 'A', 97 ), 'Arial;body' ),
 );
 foreach ( $contract['token_categories'] as $category => $rule ) {
     foreach ( $valid_token_values[ $category ] as $value ) {
