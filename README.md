@@ -2,7 +2,7 @@
 
 A reusable WordPress presentation layer for applying opt-in visual profiles to Gravity Forms and Gravity Flow surfaces while preserving native behavior, data, and workflow ownership.
 
-> **Status:** Core presentation, portable package/binding lifecycle, native Gravity Flow Inbox/Entry Detail/Print presentation, Mapping & Binding Health, local Diagnostics, Manual Inbox Refresh, and the Fixed Offline General LLM Authoring Prompt are implemented with pinned reproducible runtime evidence. Public production release remains blocked on Owner-selected license, compatibility policy, first release intent/version, and release-system review.
+> **Status:** Core presentation, portable package/binding lifecycle, native Gravity Flow Inbox/Entry Detail/Print presentation, Mapping & Binding Health, local Diagnostics, Manual Inbox Refresh, the Fixed Offline General LLM Authoring Prompt, and Automated Production Release System V1 are implemented with pinned reproducible runtime evidence. The Owner has resolved the first-release product decisions as personal/private use, `GPL-2.0-or-later`, WordPress `6.8.3+`, PHP `8.2+`, Gravity Forms `3.1.1.1+`, Gravity Flow `3.1.0+`, and first production version `0.1.0`. No production release has been published yet.
 
 ## Purpose
 
@@ -16,21 +16,9 @@ Gravity Presentation Profiles styles that state.
 Canonical visual references show what the styled state should look like.
 ```
 
-## Architecture at a glance
-
-```text
-Gravity Forms / Gravity Flow / supported host components
-                         ↓
-             Gravity Presentation Profiles
-                         ↓
-              Base presentation system
-                         +
-                opt-in profile rules
-                         ↓
-                 WordPress front end
-```
-
 The plugin is generic. **SRWF is the first major profile family**, not the identity of the plugin itself.
+
+The current product context is personal/private use. Public repository visibility or a downloadable release artifact does not by itself create a broad public-support or backward-compatibility commitment; compatibility policy is intentionally centered on the Owner-qualified environment.
 
 ## What this repository owns
 
@@ -85,11 +73,12 @@ A gallery illustrates the contract; it does not override it. Mockup behavior is 
 │   ├── release/             # Owner-facing release operation
 │   └── visual/              # admitted visual contracts/evidence
 ├── profiles/                # profile-scoped assets/packages
-├── release/                 # release prerequisite shape/configuration
+├── release/                 # release compatibility authority/template
 ├── scripts/                 # repository and canonical release tooling
 ├── src/                     # namespaced production source
 ├── tests/                   # automated core/governance/release tests
 ├── gravity-presentation-profiles.php
+├── LICENSE
 ├── AGENTS.md
 ├── CHANGELOG.md
 ├── SECURITY.md
@@ -133,16 +122,17 @@ The Git repository is the canonical **source** package, not the installable Word
 gravity-presentation-profiles-X.Y.Z.zip
 └── gravity-presentation-profiles/
     ├── gravity-presentation-profiles.php
+    ├── LICENSE
     ├── src/
     ├── assets/
     └── profiles/
 ```
 
-The ZIP contains only runtime files selected by the release allowlist; `.github/`, tests, docs, scripts, release configuration, Composer metadata, governance files, local output, and profile Markdown are excluded.
+The ZIP contains only `LICENSE` plus runtime files selected by the release allowlist; `.github/`, tests, docs, scripts, release configuration, Composer metadata, governance files, local output, and profile Markdown remain excluded.
 
-The WordPress plugin-header `Version` is canonical for a prepared production candidate. The Gravity Forms Add-On `_version` declaration is a machine-checked mirror. Normal source development remains `0.0.0-dev`; release automation prepares the production version only after an explicit Owner publication action.
+The WordPress plugin-header `Version` is canonical for a prepared production candidate. The Gravity Forms Add-On `_version` declaration is a machine-checked mirror. Normal source development remains `0.0.0-dev`; release automation prepares the production version only after a separate explicit Owner publication action.
 
-Production publication is intentionally **not ready yet**. It fails closed until the repository contains an Owner-selected `LICENSE`, an intentional `release/compatibility.json`, and the first public release version/intent when no prior release exists. GitHub Immutable Releases must also be enabled and machine-verifiable.
+The approved first production version is `0.1.0`, but it is intentionally **not** written into normal source. The future first publication path remains the existing `GPP Production Release` workflow with `mode = publish`, `release_intent = first`, and `first_version = 0.1.0`; that action creates and qualifies the exact versioned candidate itself. GitHub Immutable Releases and the read-only Administration token check must also pass before publication.
 
 See [`docs/release/OWNER_RELEASE_GUIDE.md`](docs/release/OWNER_RELEASE_GUIDE.md).
 
@@ -163,7 +153,7 @@ Do not merge or publish unless explicitly authorized.
 
 Repository CI and pinned authentic/reproducible WordPress, Gravity Forms, and Gravity Flow workflows provide strong evidence for exercised scenarios, including SRWF Registration, native Inbox, Entry Detail, Print, lifecycle/binding behavior, Diagnostics, Manual Inbox Refresh, and the fixed authoring-prompt/import boundary.
 
-These lanes do not prove target-production equivalence. Target installation IDs, plugin/license configuration, theme/cache/CDN/server behavior, physical print behavior, and other environment facts remain separately evidential.
+These lanes do not prove target-production equivalence. Target installation IDs, plugin/license configuration, theme/cache/CDN/server behavior, remaining Registration production-specific evidence, and physical-printer equivalence remain separate `NOT_PROVEN` claims until exercised in those environments.
 
 ## Security and privacy
 
@@ -173,4 +163,4 @@ See [`SECURITY.md`](SECURITY.md).
 
 ## License
 
-A repository/plugin production license has **not** yet been selected. The automated release system treats that as a hard publication blocker; no production release may be published until the Owner selects a compatible license and the repository contains the corresponding `LICENSE` file.
+Gravity Presentation Profiles is licensed under **GNU GPL version 2 or later** (`GPL-2.0-or-later`). The standard GNU GPL version 2 terms are included in [`LICENSE`](LICENSE) and are shipped in the canonical production ZIP.
