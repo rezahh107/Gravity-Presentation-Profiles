@@ -30,23 +30,33 @@ final class RuntimeIncidentStore {
         }
 
         $state = $this->loadState();
+
+        // Frontend instrumentation must not become a write-on-every-request
+        // telemetry subsystem. Keep one representative success per surface and
+        // collapse consecutive identical incidents. A materially different
+        // branch/result remains eligible for persistence.
+        if ( 'PASS' === $trace['status'] ) {
+            if ( isset( $state['recent_success'][ $trace['surface'] ] )
+                && $this->sameTrace( $state['recent_success'][ $trace['surface'] ], $trace ) ) {
+                return false;
+            }
+        } elseif ( ! empty( $state['incidents'] ) ) {
+            $last = $state['incidents'][ count( $state['incidents'] ) - 1 ];
+            if ( $this->sameTrace( $last, $trace ) ) {
+                return false;
+            }
+        }
+
         $record = $trace;
         $record['observed_at_utc'] = gmdate( 'c' );
-        $changed = false;
 
         if ( 'PASS' === $trace['status'] ) {
             $state['recent_success'][ $trace['surface'] ] = $record;
-            $changed = true;
         } else {
             $state['incidents'][] = $record;
             if ( count( $state['incidents'] ) > self::INCIDENT_LIMIT ) {
                 $state['incidents'] = array_slice( $state['incidents'], -1 * self::INCIDENT_LIMIT );
             }
-            $changed = true;
-        }
-
-        if ( ! $changed ) {
-            return false;
         }
 
         $expected_revision = $state['revision'];
@@ -69,6 +79,15 @@ final class RuntimeIncidentStore {
         if ( ! $this->store->commit( $expected_revision, $next ) ) {
             throw new LifecycleException( 'runtime_diagnostics_commit_failed', 'Runtime diagnostics reset failed.' );
         }
+    }
+
+    private function sameTrace( $record, $trace ) {
+        if ( ! is_array( $record ) ) {
+            return false;
+        }
+        $existing = $record;
+        unset( $existing['observed_at_utc'] );
+        return $existing === $trace;
     }
 
     private function loadState() {
