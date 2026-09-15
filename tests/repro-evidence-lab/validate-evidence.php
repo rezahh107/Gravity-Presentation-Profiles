@@ -29,7 +29,7 @@ req( 'SYNTHETIC_NON_PII' === $e['fixture_manifest']['data_class'], 'Fixture data
 req( 'shared.inbox.v1' === $e['fixture_manifest']['surface_profile_id'], 'Shared Inbox profile mismatch' );
 $expected_ids = array_merge(
     array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) ),
-    array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 6 ) )
+    array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) )
 );
 $actual_ids = array_map( function ( $t ) { return isset( $t['id'] ) ? $t['id'] : null; }, $e['tests'] );
 $unique_ids = array_values( array_unique( $actual_ids ) );
