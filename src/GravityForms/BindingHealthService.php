@@ -185,7 +185,11 @@ final class BindingHealthService {
             $context_key = $record['context_key'];
             $id = $record['binding_set_id'];
             $version = $record['binding_set_version'];
-            if ( isset( $active[ $context_key ] ) && $active[ $context_key ]['binding_set_id'] === $id && $active[ $context_key ]['binding_set_version'] === $version ) {
+            if ( empty( $active[ $context_key ] ) || ! isset( $active[ $context_key ]['binding_set_id'], $active[ $context_key ]['binding_set_version'] ) ) {
+                continue;
+            }
+            $current = $active[ $context_key ];
+            if ( $current['binding_set_id'] === $id && $current['binding_set_version'] === $version ) {
                 continue;
             }
             if ( empty( $state['installed'][ $id ][ $version ] ) ) {
@@ -206,6 +210,8 @@ final class BindingHealthService {
                 'context_key' => $context_key,
                 'binding_set_id' => $id,
                 'binding_set_version' => $version,
+                'expected_binding_set_id' => $current['binding_set_id'],
+                'expected_binding_set_version' => $current['binding_set_version'],
                 'form_id' => $form_id,
                 'form_title' => $inventory['form_title'],
             );
