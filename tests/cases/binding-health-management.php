@@ -225,6 +225,8 @@ $repair->rollback(
         'context_key' => $context_key,
         'binding_set_id' => 'health.bindings',
         'binding_set_version' => '1.0.0',
+        'expected_binding_set_id' => 'health.bindings',
+        'expected_binding_set_version' => '1.0.1',
     )
 );
 $post_rollback = ( new BindingSetLifecycle( $binding_store, new EvidenceReferenceGate( array() ) ) )->snapshot();
@@ -276,8 +278,15 @@ $health_service = new BindingHealthService(
     $evaluator
 );
 $health_output = $health_service->healthFacts();
-gpp_assert_same( '1.0.0', $health_output['schema_version'], 'Diagnostics-ready binding health facts must use an explicit small schema.' );
+gpp_assert_same( '1.0.0', $health_output['schema_version'], 'Binding health facts must use an explicit small schema.' );
 gpp_assert_true( ! isset( $health_output['entries'] ), 'Health output must not contain submitted entry data.' );
-gpp_assert_true( false === strpos( json_encode( $health_output ), 'SECRET-PERSON-VALUE' ), 'Diagnostics-ready health output must remain non-PII.' );
+gpp_assert_true( false === strpos( json_encode( $health_output ), 'SECRET-PERSON-VALUE' ), 'Binding health output must remain non-PII.' );
+$diagnostic_output = $health_service->diagnosticFacts();
+$diagnostic_json = json_encode( $diagnostic_output );
+gpp_assert_same( '1.0.0', $diagnostic_output['schema_version'], 'Diagnostics projection must retain the explicit health schema version.' );
+gpp_assert_true( false === strpos( $diagnostic_json, 'Synthetic Binding Health Form' ), 'Diagnostics projection must exclude form display titles.' );
+gpp_assert_true( false === strpos( $diagnostic_json, 'Student Name' ), 'Diagnostics projection must exclude host field labels.' );
+gpp_assert_true( false === strpos( $diagnostic_json, 'fields' ), 'Diagnostics projection must exclude the host field inventory.' );
+gpp_assert_true( false === strpos( $diagnostic_json, 'SECRET-PERSON-VALUE' ), 'Diagnostics projection must remain non-PII.' );
 
 echo "BINDING_HEALTH_MANAGEMENT_TESTS_PASS\n";
