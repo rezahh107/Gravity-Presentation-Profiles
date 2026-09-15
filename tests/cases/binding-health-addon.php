@@ -81,6 +81,8 @@ final class GppBindingHealthAddonFakeHealth {
                     'context_key' => 'context-key',
                     'binding_set_id' => 'health.bindings',
                     'binding_set_version' => '0.9.0',
+                    'expected_binding_set_id' => 'health.bindings',
+                    'expected_binding_set_version' => '1.0.0',
                     'form_id' => 77,
                     'form_title' => 'Registration Form',
                 ),
@@ -154,5 +156,7 @@ $rollback_choice = end( $action_field['choices'] );
 $addon->validate_binding_management_action( $field, $rollback_choice['value'] );
 gpp_assert_same( 1, count( $repair_fake->rollbacks ), 'Explicit rollback selection must reach the lifecycle-backed rollback service.' );
 gpp_assert_same( '0.9.0', $repair_fake->rollbacks[0]['binding_set_version'], 'Rollback must target an exact immutable previously-authoritative version.' );
+gpp_assert_same( 'health.bindings', $repair_fake->rollbacks[0]['expected_binding_set_id'], 'Rollback action must carry the binding-set identity that was active when the choice was generated.' );
+gpp_assert_same( '1.0.0', $repair_fake->rollbacks[0]['expected_binding_set_version'], 'Rollback action must carry the exact active version that was current when the choice was generated.' );
 
 echo "BINDING_HEALTH_ADDON_TESTS_PASS\n";
