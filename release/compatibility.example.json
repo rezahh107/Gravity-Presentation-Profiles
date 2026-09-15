@@ -1,0 +1,6 @@
+{
+  "wordpress_min": "OWNER_DECISION_REQUIRED",
+  "php_min": "OWNER_DECISION_REQUIRED",
+  "gravity_forms_min": "OWNER_DECISION_REQUIRED",
+  "gravity_flow_min": "OWNER_DECISION_REQUIRED"
+}

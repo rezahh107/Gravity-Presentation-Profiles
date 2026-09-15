@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,12 +51,8 @@ jobs:
             "profiles/README.md"
             ".distignore"
           )
-
           for file in "${required[@]}"; do
-            test -f "$file" || {
-              echo "Missing required repository file: $file" >&2
-              exit 1
-            }
+            test -f "$file" || { echo "Missing required repository file: $file" >&2; exit 1; }
           done
 
       - name: Verify architecture identity
@@ -86,8 +83,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 \
-            | xargs -0 -n1 php -l
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Run GPP core tests
         run: php tests/run.php
@@ -102,22 +98,22 @@ jobs:
             exit 1
           fi
 
-  pr-exact-head-guardrails:
-    name: PR exact-Head validation
-    if: github.event_name == 'pull_request'
+  exact-head-guardrails:
+    name: Exact-Head validation
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact PR Head
+      - name: Checkout exact requested Head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Assert exact PR Head identity
+      - name: Assert exact Head identity
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          expected="${{ github.event.pull_request.head.sha }}"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           echo "observed_checkout=$actual"
           echo "expected_checkout=$expected"
           test "$actual" = "$expected"
@@ -146,12 +142,8 @@ jobs:
             "profiles/README.md"
             ".distignore"
           )
-
           for file in "${required[@]}"; do
-            test -f "$file" || {
-              echo "Missing required repository file: $file" >&2
-              exit 1
-            }
+            test -f "$file" || { echo "Missing required repository file: $file" >&2; exit 1; }
           done
 
       - name: Verify architecture identity
@@ -182,8 +174,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 \
-            | xargs -0 -n1 php -l
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Run GPP core tests
         run: php tests/run.php
@@ -200,7 +191,7 @@ jobs:
 
   db-advisory-lock-contract:
     name: DB advisory lock (${{ matrix.database }})
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -219,17 +210,17 @@ jobs:
         ports:
           - 3306/tcp
     steps:
-      - name: Checkout exact PR Head
+      - name: Checkout exact requested Head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Assert exact PR Head identity
+      - name: Assert exact Head identity
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          expected="${{ github.event.pull_request.head.sha }}"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           echo "observed_checkout=$actual"
           echo "expected_checkout=$expected"
           test "$actual" = "$expected"

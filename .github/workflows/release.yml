@@ -5,33 +5,58 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release.yml'
+      - '.github/workflows/ci.yml'
       - 'release/**'
       - 'scripts/release/**'
-      - 'tests/release-system-contract.sh'
-      - 'docs/RELEASE_SYSTEM.md'
+      - 'tests/release/**'
+      - 'docs/architecture/AUTOMATED_RELEASE_SYSTEM_V1.md'
+      - 'docs/release/**'
+      - '.distignore'
       - 'CHANGELOG.md'
       - 'README.md'
+      - 'gravity-presentation-profiles.php'
   workflow_dispatch:
     inputs:
-      release_intent:
-        description: 'Owner action: dry-run, patch, minor, or major'
+      mode:
+        description: 'Dry-run the release system or explicitly authorize production publication.'
+        type: choice
         required: true
         default: dry-run
+        options: [dry-run, publish]
+      release_intent:
+        description: 'Routine release intent. First is allowed only when no production tag exists.'
         type: choice
-        options: [dry-run, patch, minor, major]
+        required: true
+        default: patch
+        options: [patch, minor, major, first]
+      first_version:
+        description: 'Owner-approved first public SemVer; required only when release_intent=first.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
 
 concurrency:
   group: gpp-production-release-v1
   cancel-in-progress: false
 
+env:
+  GPP_RELEASE_DB_NAME: wordpress
+  GPP_RELEASE_DB_USER: root
+  GPP_RELEASE_DB_PASS: gpp-release-root
+  GPP_RELEASE_DB_HOST: 127.0.0.1:3306
+  GPP_RELEASE_BASE_URL: http://127.0.0.1:8090
+
 jobs:
   dry-run:
-    if: github.event_name == 'pull_request' || inputs.release_intent == 'dry-run'
+    name: Release dry-run + exact ZIP smoke
+    if: github.event_name == 'pull_request' || inputs.mode == 'dry-run'
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 35
     permissions:
       contents: read
-      actions: write
     services:
       database:
         image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
@@ -42,108 +67,113 @@ jobs:
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-release-root --silent"
           --health-interval=5s --health-timeout=5s --health-retries=20
-    env:
-      GPP_RELEASE_MODE: dry-run
-      WP_PATH: /tmp/gpp-release-wordpress
-      WP_CLI: /tmp/gpp-release-wp-cli.phar
-      GF_ZIP: /tmp/gravityforms.zip
-      FLOW_ZIP: /tmp/gravityflow.zip
     steps:
-      - name: Checkout exact source
+      - name: Checkout exact dry-run source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Assert exact source identity
+
+      - name: Assert exact dry-run source identity
         shell: bash
         run: |
           set -euo pipefail
-          source_sha="$(git rev-parse HEAD)"
           expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-          test "$source_sha" = "$expected"
-          echo "SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
-          echo "SOURCE_REF=${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}" >> "$GITHUB_ENV"
-      - name: Set up PHP
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "GPP_RELEASE_SOURCE_SHA=$actual" >> "$GITHUB_ENV"
+
+      - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.2.33'
           coverage: none
-      - name: Run release-system contract and mutation tests
-        shell: bash
-        run: bash tests/release-system-contract.sh
-      - name: Build and validate canonical dry-run ZIP
+
+      - name: Install release test tools
         shell: bash
         run: |
           set -euo pipefail
-          version="0.0.0-dryrun.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
-          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$SOURCE_SHA")"
-          export GPP_RELEASE_SOURCE_SHA="$SOURCE_SHA"
-          zip_path="$(bash scripts/release/build-release.sh "$version" "$RUNNER_TEMP/gpp-release")"
-          bash scripts/release/validate-release.sh "$zip_path" "$version" "$SOURCE_SHA"
-          bash scripts/release/verify-checksum.sh "$zip_path" "$zip_path.sha256"
-          echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
-          echo "ZIP_NAME=$(basename "$zip_path")" >> "$GITHUB_ENV"
-          echo "ZIP_SHA=$(sha256sum "$zip_path" | awk '{print $1}')" >> "$GITHUB_ENV"
-      - name: Install pinned WordPress and host plugins
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+
+      - name: Run release contract and mutation tests
+        shell: bash
+        run: bash tests/release/release-contract-tests.sh
+
+      - name: Capture real publication blockers without overriding them
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 3 -o "$WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
-          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WP_CLI" | sha256sum -c -
-          mkdir -p "$WP_PATH"
-          php "$WP_CLI" core download --path="$WP_PATH" --version=6.8.3 --force
-          php "$WP_CLI" config create --path="$WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-release-root --dbhost=127.0.0.1:3306 --skip-check
-          php "$WP_CLI" core install --path="$WP_PATH" --url=http://127.0.0.1:8089 --title='GPP Release Smoke' --admin_user=release_admin --admin_password='synthetic-release-pass' --admin_email='release@example.invalid' --skip-email
-          curl -L --fail --retry 4 -o "$GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
-          echo "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b  $GF_ZIP" | sha256sum -c -
-          echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  $FLOW_ZIP" | sha256sum -c -
-          unzip -q "$GF_ZIP" -d "$WP_PATH/wp-content/plugins"
-          unzip -q "$FLOW_ZIP" -d "$WP_PATH/wp-content/plugins"
-          php "$WP_CLI" plugin activate gravityforms gravityflow --path="$WP_PATH"
-      - name: Smoke-test the exact generated ZIP
-        shell: bash
-        run: bash scripts/release/smoke-release.sh "$WP_CLI" "$WP_PATH" "$ZIP_PATH"
-      - name: Dispatch exact-source runtime qualifications
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: bash scripts/release/dispatch-qualifications.sh "$SOURCE_SHA" "$SOURCE_REF"
-      - name: Wait for exact-source qualification
-        env:
-          GH_TOKEN: ${{ github.token }}
+          mkdir -p build/release
+          php scripts/release/check-publication-prerequisites.php --root=. --mode=dry-run | tee build/release/publication-prerequisites.json
+          grep -Fq 'missing_license' build/release/publication-prerequisites.json
+          grep -Fq 'missing_compatibility_policy' build/release/publication-prerequisites.json
+          grep -Fq 'development_source_version' build/release/publication-prerequisites.json
+
+      - name: Prepare synthetic non-production candidate overlay
         shell: bash
         run: |
           set -euo pipefail
-          ci_event='push'
-          if [[ "${{ github.event_name }}" == 'pull_request' ]]; then ci_event='pull_request'; fi
-          bash scripts/release/wait-for-qualifications.sh "$SOURCE_SHA" "$ci_event"
-      - name: Write dry-run identity manifest
+          echo 'GPP_RELEASE_DRY_VERSION=9999.0.0' >> "$GITHUB_ENV"
+          php scripts/release/prepare-candidate.php --root=. --version=9999.0.0 --date=2099-01-01
+          git diff --name-only | sort > /tmp/release-prepared-files.txt
+          printf '%s\n' CHANGELOG.md gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/release-expected-files.txt
+          diff -u /tmp/release-expected-files.txt /tmp/release-prepared-files.txt
+
+      - name: Build canonical production-shaped ZIP
         shell: bash
         run: |
           set -euo pipefail
-          blockers="$(bash -c 'source scripts/release/release-lib.sh; publication_blockers' | paste -sd, -)"
+          ZIP="$(bash scripts/release/build-release.sh . "$GPP_RELEASE_DRY_VERSION" build/release | head -n1)"
+          test -s "$ZIP"
+          echo "GPP_RELEASE_ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "GPP_RELEASE_ZIP_SHA=$(sha256sum "$ZIP" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Validate exact ZIP and checksum
+        shell: bash
+        run: bash scripts/release/validate-release.sh . "$GPP_RELEASE_ZIP" "$GPP_RELEASE_DRY_VERSION" "$GPP_RELEASE_ZIP_SHA"
+
+      - name: Smoke-test the exact installable ZIP
+        shell: bash
+        run: bash scripts/release/smoke-zip.sh . "$GPP_RELEASE_ZIP" /tmp/gpp-release-wordpress
+
+      - name: Emit bounded dry-run identity manifest
+        shell: bash
+        run: |
+          set -euo pipefail
           php scripts/release/write-manifest.php \
-            "$RUNNER_TEMP/gpp-release/release-manifest.json" "$SOURCE_SHA" "$RELEASE_VERSION" "$ZIP_NAME" "$ZIP_SHA" PASS PASS PASS "$blockers"
-          cat "$RUNNER_TEMP/gpp-release/release-manifest.json"
-      - name: Upload dry-run release evidence
+            --output=build/release/release-manifest.json \
+            --mode=dry-run \
+            --source-sha="$GPP_RELEASE_SOURCE_SHA" \
+            --version="$GPP_RELEASE_DRY_VERSION" \
+            --zip="$GPP_RELEASE_ZIP" \
+            --sha256="$GPP_RELEASE_ZIP_SHA" \
+            --validation=PASS \
+            --smoke=PASS \
+            --qualification=RELEASE_SPECIFIC_DRY_RUN_PASS_PRODUCT_GATES_EXTERNAL \
+            --run-id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          php -r '$m=json_decode(file_get_contents("build/release/release-manifest.json"),true); if(($m["publication"]??null)!=="NOT_ATTEMPTED_DRY_RUN") exit(1);'
+
+      - name: Upload non-production release evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: gpp-release-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+          name: gpp-release-system-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ env.ZIP_PATH }}
-            ${{ env.ZIP_PATH }}.sha256
-            ${{ runner.temp }}/gpp-release/release-manifest.json
+            build/release/gravity-presentation-profiles-9999.0.0.zip
+            build/release/gravity-presentation-profiles-9999.0.0.zip.sha256
+            build/release/release-manifest.json
+            build/release/publication-prerequisites.json
           if-no-files-found: error
           retention-days: 30
 
-  production-candidate:
-    if: github.event_name == 'workflow_dispatch' && inputs.release_intent != 'dry-run'
+  publish:
+    name: Explicit Owner production publication
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 180
     permissions:
-      contents: read
+      contents: write
       actions: write
     services:
       database:
@@ -155,211 +185,161 @@ jobs:
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-release-root --silent"
           --health-interval=5s --health-timeout=5s --health-retries=20
-    env:
-      GPP_RELEASE_MODE: publish
-      GPP_RELEASE_AUTHORIZED: 'true'
-      WP_PATH: /tmp/gpp-release-wordpress
-      WP_CLI: /tmp/gpp-release-wp-cli.phar
-      GF_ZIP: /tmp/gravityforms.zip
-      FLOW_ZIP: /tmp/gravityflow.zip
     steps:
-      - name: Require Owner action on current main
+      - name: Enforce explicit main-branch Owner action
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/main'
-      - name: Checkout exact approved source
+          test "${{ inputs.mode }}" = 'publish'
+          echo "GPP_RELEASE_APPROVED_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Checkout exact Owner-approved integrated source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Set up PHP
+
+      - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.2.33'
           coverage: none
-      - name: Resolve version and enforce reversible prerequisites
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_sha="$(git rev-parse HEAD)"; echo "SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
-          source scripts/release/release-lib.sh
-          blockers="$(publication_blockers | sed '/^$/d')"
-          test -z "$blockers" || { printf '%s\n' "$blockers" >&2; exit 1; }
-          latest="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name' | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)"
-          version="$(resolve_release_version "$latest" '${{ inputs.release_intent }}')"
-          is_stable_version "$version"
-          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
-          echo "TAG=v$version" >> "$GITHUB_ENV"
-          echo "ZIP_NAME=gravity-presentation-profiles-$version.zip" >> "$GITHUB_ENV"
-          bash scripts/release/guard-publication.sh
-      - name: Reject existing immutable identity conflicts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/tags?per_page=100" > "$RUNNER_TEMP/tags.json"
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
-          php scripts/release/check-release-conflicts.php "$RELEASE_VERSION" "$RUNNER_TEMP/tags.json" "$RUNNER_TEMP/releases.json" "$ZIP_NAME"
-      - name: Dispatch required exact-source qualification
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: bash scripts/release/dispatch-qualifications.sh "$SOURCE_SHA" main
-      - name: Wait for exact-source qualification
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: bash scripts/release/wait-for-qualifications.sh "$SOURCE_SHA" push
-      - name: Build and validate exact release candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$SOURCE_SHA")"
-          export GPP_RELEASE_SOURCE_SHA="$SOURCE_SHA"
-          zip_path="$(bash scripts/release/build-release.sh "$RELEASE_VERSION" "$RUNNER_TEMP/gpp-release")"
-          bash scripts/release/validate-release.sh "$zip_path" "$RELEASE_VERSION" "$SOURCE_SHA"
-          bash scripts/release/verify-checksum.sh "$zip_path" "$zip_path.sha256"
-          bash scripts/release/render-release-notes.sh "$RELEASE_VERSION" "$RUNNER_TEMP/gpp-release/release-notes.md"
-          echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
-          echo "ZIP_SHA=$(sha256sum "$zip_path" | awk '{print $1}')" >> "$GITHUB_ENV"
-      - name: Install pinned WordPress and host plugins
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -L --fail --retry 3 -o "$WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
-          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WP_CLI" | sha256sum -c -
-          mkdir -p "$WP_PATH"
-          php "$WP_CLI" core download --path="$WP_PATH" --version=6.8.3 --force
-          php "$WP_CLI" config create --path="$WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-release-root --dbhost=127.0.0.1:3306 --skip-check
-          php "$WP_CLI" core install --path="$WP_PATH" --url=http://127.0.0.1:8089 --title='GPP Release Candidate' --admin_user=release_admin --admin_password='synthetic-release-pass' --admin_email='release@example.invalid' --skip-email
-          curl -L --fail --retry 4 -o "$GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
-          echo "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b  $GF_ZIP" | sha256sum -c -
-          echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  $FLOW_ZIP" | sha256sum -c -
-          unzip -q "$GF_ZIP" -d "$WP_PATH/wp-content/plugins"; unzip -q "$FLOW_ZIP" -d "$WP_PATH/wp-content/plugins"
-          php "$WP_CLI" plugin activate gravityforms gravityflow --path="$WP_PATH"
-      - name: Smoke-test exact candidate ZIP
-        shell: bash
-        run: bash scripts/release/smoke-release.sh "$WP_CLI" "$WP_PATH" "$ZIP_PATH"
-      - name: Recheck source has not moved
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          observed="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
-          source scripts/release/release-lib.sh
-          assert_source_identity "$SOURCE_SHA" "$observed"
-      - name: Write tested candidate manifest
-        shell: bash
-        run: php scripts/release/write-manifest.php "$RUNNER_TEMP/gpp-release/release-manifest.json" "$SOURCE_SHA" "$RELEASE_VERSION" "$ZIP_NAME" "$ZIP_SHA" PASS PASS PASS ''
-      - name: Upload exact tested release candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: gpp-release-candidate-${{ github.run_id }}
-          path: |
-            ${{ env.ZIP_PATH }}
-            ${{ env.ZIP_PATH }}.sha256
-            ${{ runner.temp }}/gpp-release/release-notes.md
-            ${{ runner.temp }}/gpp-release/release-manifest.json
-          if-no-files-found: error
-          retention-days: 30
 
-  publish:
-    needs: production-candidate
-    if: github.event_name == 'workflow_dispatch' && inputs.release_intent != 'dry-run'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      actions: read
-    services:
-      database:
-        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+      - name: Install release tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip jq
+
+      - name: Bind Owner approval to exact current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GPP_RELEASE_APPROVED_SHA"
+          remote="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote" = "$GPP_RELEASE_APPROVED_SHA"
+
+      - name: Fail closed on unresolved product publication prerequisites
+        shell: bash
+        run: php scripts/release/check-publication-prerequisites.php --root=. --mode=publish
+
+      - name: Verify GitHub immutable-release protection before publication
         env:
-          MARIADB_ROOT_PASSWORD: gpp-release-root
-          MARIADB_DATABASE: wordpress
-        ports: ['3306:3306']
-    env:
-      GPP_RELEASE_MODE: publish
-      GPP_RELEASE_AUTHORIZED: 'true'
-      ADMIN_READ_TOKEN: ${{ secrets.GPP_RELEASE_ADMIN_READ_TOKEN }}
-      WP_PATH: /tmp/gpp-published-wordpress
-      WP_CLI: /tmp/gpp-release-wp-cli.phar
-    steps:
-      - name: Checkout exact approved source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-      - name: Download exact tested candidate
-        uses: actions/download-artifact@v4
-        with:
-          name: gpp-release-candidate-${{ github.run_id }}
-          path: ${{ runner.temp }}/candidate
-      - name: Verify candidate identity and publication prerequisites again
+          GPP_RELEASE_ADMIN_READ_TOKEN: ${{ secrets.GPP_RELEASE_ADMIN_READ_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GPP_RELEASE_ADMIN_READ_TOKEN" || { echo 'Missing fine-grained Administration(read) token required to prove immutable releases are enabled.' >&2; exit 1; }
+          response="$(curl -sS --fail-with-body \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GPP_RELEASE_ADMIN_READ_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/immutable-releases")"
+          test "$(printf '%s' "$response" | jq -r '.enabled')" = 'true'
+
+      - name: Resolve future version and reject existing immutable identity conflicts
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/release/guard-publication.sh
-          manifest="$RUNNER_TEMP/candidate/release-manifest.json"
-          source_sha="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["source_commit"];' "$manifest")"
-          version="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["release_version"];' "$manifest")"
-          zip_name="gravity-presentation-profiles-$version.zip"
-          zip_path="$RUNNER_TEMP/candidate/$zip_name"
-          zip_sha="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["zip_sha256"];' "$manifest")"
-          test "$(sha256sum "$zip_path" | awk '{print $1}')" = "$zip_sha"
-          bash scripts/release/validate-release.sh "$zip_path" "$version" "$source_sha"
-          observed="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
-          source scripts/release/release-lib.sh; assert_source_identity "$source_sha" "$observed"
-          test -n "$ADMIN_READ_TOKEN" || { echo 'GPP_RELEASE_ADMIN_READ_TOKEN is required to verify immutable releases before publication.' >&2; exit 1; }
-          status="$(curl -sS -o "$RUNNER_TEMP/immutable.json" -w '%{http_code}' -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $ADMIN_READ_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "https://api.github.com/repos/$GITHUB_REPOSITORY/immutable-releases")"
-          test "$status" = 200
-          php -r '$d=json_decode(file_get_contents($argv[1]),true); if(!is_array($d)||empty($d["enabled"])) exit(1);' "$RUNNER_TEMP/immutable.json"
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/tags?per_page=100" > "$RUNNER_TEMP/tags.json"
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
-          php scripts/release/check-release-conflicts.php "$version" "$RUNNER_TEMP/tags.json" "$RUNNER_TEMP/releases.json" "$zip_name"
-          echo "SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"; echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"; echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"; echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"; echo "TAG=v$version" >> "$GITHUB_ENV"
-      - name: Create exact tag, draft release and immutable assets
+          mkdir -p build/release
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/tags?per_page=100" | jq 'add // []' > build/release/tags.json
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq 'add // []' > build/release/releases.json
+          version="$(php scripts/release/resolve-version.php --intent='${{ inputs.release_intent }}' --first-version='${{ inputs.first_version }}' --tags-json=build/release/tags.json)"
+          php scripts/release/check-conflicts.php --version="$version" --source-sha="$GPP_RELEASE_APPROVED_SHA" --tags-json=build/release/tags.json --releases-json=build/release/releases.json
+          echo "GPP_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "GPP_RELEASE_TAG=v$version" >> "$GITHUB_ENV"
+
+      - name: Deterministically prepare release-candidate source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/release/prepare-candidate.php --root=. --version="$GPP_RELEASE_VERSION" --date="$(date -u +%F)"
+          git diff --name-only | sort > /tmp/release-prepared-files.txt
+          printf '%s\n' CHANGELOG.md gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/release-expected-files.txt
+          diff -u /tmp/release-expected-files.txt /tmp/release-prepared-files.txt
+          git config user.name 'gpp-release-automation'
+          git config user.email 'gpp-release-automation@users.noreply.github.com'
+          git add CHANGELOG.md gravity-presentation-profiles.php src/GravityForms/AddOn.php
+          git commit -m "release: prepare v$GPP_RELEASE_VERSION"
+          candidate="$(git rev-parse HEAD)"
+          branch="release-candidate/v$GPP_RELEASE_VERSION-$GITHUB_RUN_ID"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "GPP_RELEASE_CANDIDATE_SHA=$candidate" >> "$GITHUB_ENV"
+          echo "GPP_RELEASE_CANDIDATE_BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Run all required qualification on exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: bash scripts/release/wait-qualifications.sh "$GPP_RELEASE_CANDIDATE_BRANCH" "$GPP_RELEASE_CANDIDATE_SHA" build/release/qualification.json
+
+      - name: Build, validate and smoke exact qualified candidate ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$(bash scripts/release/build-release.sh . "$GPP_RELEASE_VERSION" build/release | head -n1)"
+          SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
+          bash scripts/release/validate-release.sh . "$ZIP" "$GPP_RELEASE_VERSION" "$SHA"
+          bash scripts/release/smoke-zip.sh . "$ZIP" /tmp/gpp-release-prepublish-wordpress
+          php scripts/release/extract-release-notes.php --changelog=CHANGELOG.md --version="$GPP_RELEASE_VERSION" --output=build/release/release-notes.md
+          php scripts/release/write-manifest.php \
+            --output=build/release/release-manifest.json --mode=publish \
+            --source-sha="$GPP_RELEASE_CANDIDATE_SHA" --candidate-sha="$GPP_RELEASE_CANDIDATE_SHA" \
+            --version="$GPP_RELEASE_VERSION" --zip="$ZIP" --sha256="$SHA" \
+            --validation=PASS --smoke=PASS --qualification=PASS \
+            --run-id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "GPP_RELEASE_ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "GPP_RELEASE_ZIP_SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Recheck source and release conflicts immediately before irreversible publication
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$SOURCE_SHA" >/dev/null
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Gravity Presentation Profiles $RELEASE_VERSION" --notes-file "$RUNNER_TEMP/candidate/release-notes.md"
-          gh release upload "$TAG" "$ZIP_PATH" "$ZIP_PATH.sha256" --repo "$GITHUB_REPOSITORY"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-      - name: Verify published consumer-facing assets and smoke exact re-download
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GPP_RELEASE_APPROVED_SHA"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/tags?per_page=100" | jq 'add // []' > build/release/tags-final.json
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq 'add // []' > build/release/releases-final.json
+          php scripts/release/check-conflicts.php --version="$GPP_RELEASE_VERSION" --source-sha="$GPP_RELEASE_CANDIDATE_SHA" --tags-json=build/release/tags-final.json --releases-json=build/release/releases-final.json
+
+      - name: Promote exact qualified candidate and create release identity
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/published"
-          gh release verify "$TAG" --repo "$GITHUB_REPOSITORY"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ZIP_NAME" --pattern "$ZIP_NAME.sha256" --dir "$RUNNER_TEMP/published"
-          gh release verify-asset "$TAG" "$RUNNER_TEMP/published/$ZIP_NAME" --repo "$GITHUB_REPOSITORY"
-          bash scripts/release/verify-checksum.sh "$RUNNER_TEMP/published/$ZIP_NAME" "$RUNNER_TEMP/published/$ZIP_NAME.sha256"
-          test "$(sha256sum "$RUNNER_TEMP/published/$ZIP_NAME" | awk '{print $1}')" = "$(sha256sum "$ZIP_PATH" | awk '{print $1}')"
-          bash scripts/release/validate-release.sh "$RUNNER_TEMP/published/$ZIP_NAME" "$RELEASE_VERSION" "$SOURCE_SHA"
-          curl -L --fail --retry 3 -o "$WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
-          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WP_CLI" | sha256sum -c -
-          mkdir -p "$WP_PATH"
-          php "$WP_CLI" core download --path="$WP_PATH" --version=6.8.3 --force
-          php "$WP_CLI" config create --path="$WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-release-root --dbhost=127.0.0.1:3306 --skip-check
-          php "$WP_CLI" core install --path="$WP_PATH" --url=http://127.0.0.1:8090 --title='GPP Published Smoke' --admin_user=release_admin --admin_password='synthetic-release-pass' --admin_email='release@example.invalid' --skip-email
-          curl -L --fail --retry 4 -o /tmp/gf.zip "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o /tmp/flow.zip "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
-          echo "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b  /tmp/gf.zip" | sha256sum -c -
-          echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  /tmp/flow.zip" | sha256sum -c -
-          unzip -q /tmp/gf.zip -d "$WP_PATH/wp-content/plugins"
-          unzip -q /tmp/flow.zip -d "$WP_PATH/wp-content/plugins"
-          php "$WP_CLI" plugin activate gravityforms gravityflow --path="$WP_PATH"
-          bash scripts/release/smoke-release.sh "$WP_CLI" "$WP_PATH" "$RUNNER_TEMP/published/$ZIP_NAME"
-          echo PUBLISHED_AND_VERIFIED >> "$GITHUB_STEP_SUMMARY"
+          git push origin "$GPP_RELEASE_CANDIDATE_SHA:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GPP_RELEASE_CANDIDATE_SHA"
+          git tag -a "$GPP_RELEASE_TAG" "$GPP_RELEASE_CANDIDATE_SHA" -m "Gravity Presentation Profiles $GPP_RELEASE_TAG"
+          git push origin "refs/tags/$GPP_RELEASE_TAG"
+          gh release create "$GPP_RELEASE_TAG" \
+            "$GPP_RELEASE_ZIP" "$GPP_RELEASE_ZIP.sha256" build/release/release-manifest.json \
+            --verify-tag --draft --title "$GPP_RELEASE_TAG" --notes-file build/release/release-notes.md
+          gh release edit "$GPP_RELEASE_TAG" --draft=false
+
+      - name: Re-download and verify consumer-facing GitHub Release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/release/downloaded
+          base="$(basename "$GPP_RELEASE_ZIP")"
+          gh release download "$GPP_RELEASE_TAG" --pattern "$base" --pattern "$base.sha256" --dir build/release/downloaded
+          downloaded="build/release/downloaded/$base"
+          test "$(sha256sum "$downloaded" | awk '{print $1}')" = "$GPP_RELEASE_ZIP_SHA"
+          bash scripts/release/validate-release.sh . "$downloaded" "$GPP_RELEASE_VERSION" "$GPP_RELEASE_ZIP_SHA"
+          php -r '$m=new mysqli("127.0.0.1","root","gpp-release-root"); if($m->connect_errno||!$m->query("CREATE DATABASE IF NOT EXISTS wordpress_lastmile")) exit(1);'
+          GPP_RELEASE_DB_NAME=wordpress_lastmile GPP_RELEASE_BASE_URL=http://127.0.0.1:8091 \
+            bash scripts/release/smoke-zip.sh . "$downloaded" /tmp/gpp-release-lastmile-wordpress
+          tag_sha="$(git rev-list -n1 "$GPP_RELEASE_TAG")"
+          release_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GPP_RELEASE_TAG" --jq '.target_commitish')"
+          if [[ "$release_target" =~ ^[0-9a-f]{40}$ ]]; then release_sha="$release_target"; else release_sha="$tag_sha"; fi
+          php scripts/release/check-identity.php \
+            --approved="$GPP_RELEASE_CANDIDATE_SHA" --qualified="$GPP_RELEASE_CANDIDATE_SHA" \
+            --artifact="$GPP_RELEASE_CANDIDATE_SHA" --tag="$tag_sha" --release="$release_sha"
+          echo 'GPP_RELEASE_PUBLISHED_AND_VERIFIED'
