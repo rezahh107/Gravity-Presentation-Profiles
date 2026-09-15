@@ -26,7 +26,7 @@ $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );
 $expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
-$expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 6 ) );
+$expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
 function require_exact_test_ids( $suite, $expected, $label ) {
     if ( ! isset( $suite['results'] ) || ! is_array( $suite['results'] ) ) throw new RuntimeException( $label . ' results missing.' );
     $ids = array_map( function ( $t ) { return isset( $t['id'] ) ? $t['id'] : null; }, $suite['results'] );
@@ -41,7 +41,7 @@ require_exact_test_ids( $browser, $expected_browser_ids, 'Browser/runtime' );
 $tests = array_merge( $php['results'], $browser['results'] );
 $map = status_map( $tests );
 $groups = array(
-    'native_inbox_behavior' => array( 'WU21-PHP-004','WU21-PHP-005','WU21-PHP-010','WU21-PHP-011','WU21-PHP-012','WU21-PHP-013','WU21-PHP-014','WU21-PHP-015','WU21-BROWSER-001','WU21-BROWSER-002','WU21-BROWSER-003','WU21-BROWSER-004','WU21-BROWSER-005','WU21-BROWSER-006' ),
+    'native_inbox_behavior' => array( 'WU21-PHP-004','WU21-PHP-005','WU21-PHP-010','WU21-PHP-011','WU21-PHP-012','WU21-PHP-013','WU21-PHP-014','WU21-PHP-015','WU21-BROWSER-001','WU21-BROWSER-002','WU21-BROWSER-003','WU21-BROWSER-004','WU21-BROWSER-005','WU21-BROWSER-006','WU21-BROWSER-007' ),
     'semantic_binding' => array( 'WU21-PHP-003','WU21-PHP-006','WU21-PHP-007','WU21-PHP-008','WU21-PHP-009' ),
     'fail_closed' => array( 'WU21-PHP-005','WU21-PHP-006','WU21-PHP-008','WU21-PHP-016' ),
     'synthetic_privacy' => array( 'WU21-PHP-017' ),
