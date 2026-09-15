@@ -26,11 +26,13 @@ if ( ! is_file( $compatibility_path ) ) {
 } else {
     $compatibility = json_decode( file_get_contents( $compatibility_path ), true );
     $required = array( 'wordpress_min', 'php_min', 'gravity_forms_min', 'gravity_flow_min' );
+    $resolved_floor = '/^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){1,3}$/';
     if ( ! is_array( $compatibility ) ) {
         $blockers[] = 'invalid_compatibility_policy';
     } else {
         foreach ( $required as $key ) {
-            if ( empty( $compatibility[ $key ] ) || ! is_string( $compatibility[ $key ] ) ) {
+            $value = isset( $compatibility[ $key ] ) ? $compatibility[ $key ] : null;
+            if ( ! is_string( $value ) || 1 !== preg_match( $resolved_floor, $value ) ) {
                 $blockers[] = 'invalid_compatibility_policy:' . $key;
             }
         }
@@ -48,6 +50,9 @@ if ( '0.0.0-dev' === $version ) {
     $blockers[] = 'invalid_source_version_state';
 } else {
     $facts[] = 'production_version_already_prepared';
+    if ( 'publish' === $mode ) {
+        $blockers[] = 'production_version_source_requires_recovery';
+    }
 }
 
 $changelog = $root . '/CHANGELOG.md';
