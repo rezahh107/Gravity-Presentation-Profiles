@@ -293,7 +293,7 @@ final class AddOn extends \GFAddOn {
     }
 
     public function download_support_bundle() {
-        if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'gravityforms_edit_settings' ) ) {
+        if ( ! class_exists( 'GFCommon' ) || ! \GFCommon::current_user_can_any( 'gravityforms_edit_settings' ) ) {
             wp_die( esc_html__( 'You are not allowed to download GPP diagnostics.', 'gravity-presentation-profiles' ), '', array( 'response' => 403 ) );
         }
         check_admin_referer( 'gpp_download_support_bundle' );
