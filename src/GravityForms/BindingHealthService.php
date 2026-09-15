@@ -72,6 +72,44 @@ final class BindingHealthService {
         );
     }
 
+    /**
+     * Small support/diagnostics projection. It intentionally excludes host
+     * display labels/titles, field inventories and all entry values. The
+     * management UI uses healthFacts(); future support tooling should prefer
+     * this narrower non-PII shape.
+     */
+    public function diagnosticFacts() {
+        $health = $this->healthFacts();
+        $contexts = array();
+
+        foreach ( $health['contexts'] as $context ) {
+            $facts = array();
+            foreach ( $context['facts'] as $fact ) {
+                $facts[] = array(
+                    'semantic_slot_key' => $fact['semantic_slot_key'],
+                    'status' => $fact['status'],
+                    'reason' => $fact['reason'],
+                    'binding_state' => $fact['binding_state'],
+                    'source' => $this->diagnosticSource( $fact['source'] ),
+                    'runtime_claims' => $fact['runtime_claims'],
+                );
+            }
+
+            $contexts[] = array(
+                'context_key' => $context['context_key'],
+                'binding_set_id' => $context['binding_set_id'],
+                'binding_set_version' => $context['binding_set_version'],
+                'form_id' => $context['form_id'],
+                'facts' => $facts,
+            );
+        }
+
+        return array(
+            'schema_version' => '1.0.0',
+            'contexts' => $contexts,
+        );
+    }
+
     public function managementCandidates() {
         $health = $this->healthFacts();
         $repairs = array();
@@ -113,6 +151,22 @@ final class BindingHealthService {
             'repairs' => $repairs,
             'rollbacks' => $this->rollbackCandidates(),
         );
+    }
+
+    private function diagnosticSource( $source ) {
+        if ( ! is_array( $source ) || empty( $source['type'] ) ) {
+            return null;
+        }
+
+        $result = array( 'type' => $source['type'] );
+        foreach ( array( 'field_id', 'meta_key', 'state_key', 'region_key', 'action_key' ) as $key ) {
+            if ( isset( $source[ $key ] ) ) {
+                $result[ $key ] = $source[ $key ];
+                break;
+            }
+        }
+
+        return $result;
     }
 
     private function rollbackCandidates() {
