@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+trap 'rc=$?; printf "GPP_RELEASE_CONTRACT_TESTS_FAIL line=%s command=%q\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="$(mktemp -d)"
