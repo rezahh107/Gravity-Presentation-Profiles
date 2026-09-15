@@ -5,6 +5,7 @@ require_once dirname( __DIR__, 2 ) . '/src/Autoloader.php';
 
 use GravityPresentationProfiles\Autoloader;
 use GravityPresentationProfiles\Core\BindingHealth\BindingHealthEvaluator;
+use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 
 function esc_html__( $text, $domain = null ) {
     unset( $domain );
@@ -94,6 +95,7 @@ final class GppBindingHealthAddonFakeHealth {
 final class GppBindingHealthAddonFakeRepair {
     public $repairs = array();
     public $rollbacks = array();
+    public $stale_rollback = false;
 
     public function repairField( $request ) {
         $this->repairs[] = $request;
@@ -102,6 +104,12 @@ final class GppBindingHealthAddonFakeRepair {
 
     public function rollback( $request ) {
         $this->rollbacks[] = $request;
+        if ( $this->stale_rollback ) {
+            throw new LifecycleException(
+                'stale_binding_management_action',
+                'The active binding changed after this action was prepared. Refresh the page and try again.'
+            );
+        }
         return array( 'status' => 'ROLLED_BACK' );
     }
 }
@@ -158,5 +166,10 @@ gpp_assert_same( 1, count( $repair_fake->rollbacks ), 'Explicit rollback selecti
 gpp_assert_same( '0.9.0', $repair_fake->rollbacks[0]['binding_set_version'], 'Rollback must target an exact immutable previously-authoritative version.' );
 gpp_assert_same( 'health.bindings', $repair_fake->rollbacks[0]['expected_binding_set_id'], 'Rollback action must carry the binding-set identity that was active when the choice was generated.' );
 gpp_assert_same( '1.0.0', $repair_fake->rollbacks[0]['expected_binding_set_version'], 'Rollback action must carry the exact active version that was current when the choice was generated.' );
+
+$repair_fake->stale_rollback = true;
+$stale_field = new GppBindingHealthAddonField();
+$addon->validate_binding_management_action( $stale_field, $rollback_choice['value'] );
+gpp_assert_true( false !== strpos( (string) $stale_field->error, 'Refresh the page and try again.' ), 'Stale binding-management rejection must surface refresh/retry guidance through the settings UI.' );
 
 echo "BINDING_HEALTH_ADDON_TESTS_PASS\n";
