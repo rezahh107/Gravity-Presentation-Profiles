@@ -112,11 +112,15 @@ final class BindingRepairService {
         $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
         $lifecycle->import( $next );
         $this->evidence_store->recordConfirmation( $next, $request['semantic_slot_key'], $new_source );
-        $lifecycle->activate(
+        $lifecycle->activateIfCurrent(
             array(
                 'context' => $next['context'],
                 'binding_set_id' => $next['binding_set_id'],
                 'binding_set_version' => $next['binding_set_version'],
+                'expected_current_activation' => array(
+                    'binding_set_id' => $request['binding_set_id'],
+                    'binding_set_version' => $request['binding_set_version'],
+                ),
             )
         );
 
@@ -130,7 +134,17 @@ final class BindingRepairService {
     }
 
     public function rollback( $request ) {
-        $this->requireKeys( $request, array( 'context_key', 'binding_set_id', 'binding_set_version' ), 'binding rollback request' );
+        $this->requireKeys(
+            $request,
+            array(
+                'context_key',
+                'binding_set_id',
+                'binding_set_version',
+                'expected_binding_set_id',
+                'expected_binding_set_version',
+            ),
+            'binding rollback request'
+        );
         $snapshot = $this->snapshot();
         if ( empty( $snapshot['activations'][ $request['context_key'] ] ) ) {
             throw new LifecycleException( 'rollback_context_inactive', 'The binding context is not active.' );
@@ -150,11 +164,15 @@ final class BindingRepairService {
             new EvidenceReferenceGate( $this->fallback_refs )
         );
         $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
-        $lifecycle->rollback(
+        $lifecycle->rollbackIfCurrent(
             array(
                 'context' => $target['artifact']['context'],
                 'binding_set_id' => $target['binding_set_id'],
                 'binding_set_version' => $target['binding_set_version'],
+                'expected_current_activation' => array(
+                    'binding_set_id' => $request['expected_binding_set_id'],
+                    'binding_set_version' => $request['expected_binding_set_version'],
+                ),
             )
         );
 
