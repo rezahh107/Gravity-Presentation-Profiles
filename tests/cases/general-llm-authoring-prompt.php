@@ -31,44 +31,6 @@ function gpp_authoring_expect_drift( $contract, $message ) {
     gpp_fail( $message );
 }
 
-function gpp_authoring_normalize_rules( $rules ) {
-    foreach ( $rules as &$block ) {
-        ksort( $block, SORT_STRING );
-    }
-    unset( $block );
-    ksort( $rules, SORT_STRING );
-    return $rules;
-}
-
-function gpp_authoring_schema_presentation_rules() {
-    $source = file_get_contents( dirname( __DIR__, 2 ) . '/src/Core/Portable/VisualProfilePackageV11.php' );
-    $pattern = "/if \\( isset\\( \\$presentation\\['([^']+)'\\] \\) \\) \\{\\s*self::validatePreferenceBlock\\(\\s*\\$presentation\\['\\1'\\],\\s*array\\((.*?)\\),\\s*\\$token_refs,\\s*\\$profile_token_refs,/s";
-    preg_match_all( $pattern, $source, $blocks, PREG_SET_ORDER );
-    if ( 8 !== count( $blocks ) ) {
-        gpp_fail( 'Unable to mechanically extract all V1.1 presentation preference blocks from the production validator.' );
-    }
-
-    $rules = array();
-    foreach ( $blocks as $match ) {
-        $block_name = $match[1];
-        $body = $match[2];
-        $rules[ $block_name ] = array();
-
-        preg_match_all( "/'([^']+)'\\s*=>\\s*array\\(\\s*'token'\\s*,\\s*'([^']+)'\\s*\\)/", $body, $token_matches, PREG_SET_ORDER );
-        foreach ( $token_matches as $token_match ) {
-            $rules[ $block_name ][ $token_match[1] ] = array( 'kind' => 'token', 'token_category' => $token_match[2] );
-        }
-
-        preg_match_all( "/'([^']+)'\\s*=>\\s*array\\(\\s*'enum'\\s*,\\s*array\\((.*?)\\)\\s*\\)/s", $body, $enum_matches, PREG_SET_ORDER );
-        foreach ( $enum_matches as $enum_match ) {
-            preg_match_all( "/'([^']+)'/", $enum_match[2], $values );
-            $rules[ $block_name ][ $enum_match[1] ] = array( 'kind' => 'enum', 'values' => $values[1] );
-        }
-    }
-
-    return gpp_authoring_normalize_rules( $rules );
-}
-
 function gpp_authoring_runtime_paths() {
     $reflection = new ReflectionClass( DeclarativeProfileDefinition::class );
     $constant = $reflection->getReflectionConstant( 'PREFERENCE_CLASSES' );
@@ -83,15 +45,27 @@ function gpp_authoring_runtime_paths() {
     return $paths;
 }
 
-function gpp_authoring_contract_paths( $contract ) {
+function gpp_authoring_contract_paths( $presentation ) {
     $paths = array();
-    foreach ( $contract['presentation'] as $block => $preferences ) {
+    foreach ( $presentation as $block => $preferences ) {
         foreach ( array_keys( $preferences ) as $preference ) {
             $paths[] = $block . '.' . $preference;
         }
     }
     sort( $paths, SORT_STRING );
     return $paths;
+}
+
+function gpp_authoring_used_token_categories( $presentation ) {
+    $used = array();
+    foreach ( $presentation as $preferences ) {
+        foreach ( $preferences as $rule ) {
+            if ( 'token' === $rule['kind'] ) {
+                $used[ $rule['token_category'] ] = true;
+            }
+        }
+    }
+    return $used;
 }
 
 function gpp_authoring_token_probe( $category, $value ) {
@@ -128,29 +102,37 @@ function gpp_authoring_token_probe( $category, $value ) {
     );
 }
 
+$schema = VisualProfilePackageV11::schemaDefinition();
 $contract = GeneralLlmAuthoringPrompt::contract();
 $prompt = GeneralLlmAuthoringPrompt::contents();
+$used_token_categories = gpp_authoring_used_token_categories( $schema['presentation'] );
+$expected_token_rules = array_intersect_key( $schema['token_categories'], $used_token_categories );
 
 gpp_assert_same( '1.0.0', $contract['prompt_version'], 'Fixed authoring prompt version must be explicit.' );
 gpp_assert_same( VisualProfilePackageV11::SCHEMA_VERSION, $contract['schema_version'], 'Authoring prompt must emit the current schema 1.1 contract.' );
 gpp_assert_same( array( DeclarativePresentationResolver::SURFACE ), $contract['authorable_surfaces'], 'General authoring must be limited to the runtime-supported Gravity Forms form surface.' );
-gpp_assert_same(
-    gpp_authoring_schema_presentation_rules(),
-    gpp_authoring_normalize_rules( $contract['presentation'] ),
-    'Prompt presentation vocabulary must exactly match the production V1.1 validator rules.'
-);
-gpp_assert_same( gpp_authoring_runtime_paths(), gpp_authoring_contract_paths( $contract ), 'Every prompt preference must be consumed by the production Gravity Forms declarative runtime, with no runtime preference omitted.' );
+gpp_assert_same( $schema['root_fields'], $contract['root_fields'], 'Prompt root fields must come from the production V1.1 schema definition.' );
+gpp_assert_same( $schema['presentation'], $contract['presentation'], 'Prompt presentation vocabulary must come from the production V1.1 schema definition.' );
+gpp_assert_same( $expected_token_rules, $contract['token_categories'], 'Prompt token vocabulary must be the schema-authoritative subset referenced by controlled presentation preferences.' );
+gpp_assert_true( isset( $schema['token_categories']['line_heights'] ), 'Schema 1.1 must retain its admitted line-height token category.' );
+gpp_assert_true( ! isset( $contract['token_categories']['line_heights'] ), 'General authoring must not advertise an admitted schema token that has no current controlled runtime preference consumer.' );
+gpp_assert_same( $schema['capabilities'], $contract['capabilities'], 'Prompt capabilities must come from the production schema allowlist.' );
+gpp_assert_same( $schema['portable_identifier_pattern'], $contract['portable_identifier_pattern'], 'Portable identifier syntax must come from the production schema definition.' );
+gpp_assert_same( $schema['package_version_pattern'], $contract['package_version_pattern'], 'Package-version syntax must come from the production schema definition.' );
+gpp_assert_same( $schema['token_name_pattern'], $contract['token_name_pattern'], 'Token-name syntax must come from the production schema definition.' );
 
-$schema_reflection = new ReflectionClass( VisualProfilePackageV11::class );
-$schema_capabilities = $schema_reflection->getReflectionConstant( 'CAPABILITIES' )->getValue();
+gpp_assert_same(
+    gpp_authoring_runtime_paths(),
+    gpp_authoring_contract_paths( $contract['presentation'] ),
+    'Every prompt preference must be consumed by the production Gravity Forms declarative runtime, with no runtime preference omitted.'
+);
 $runtime_reflection = new ReflectionClass( DeclarativeProfileDefinition::class );
 $runtime_capabilities = array_keys( $runtime_reflection->getReflectionConstant( 'CAPABILITY_CLASSES' )->getValue() );
-gpp_assert_same( $schema_capabilities, $contract['capabilities'], 'Prompt capabilities must match the production schema capability allowlist.' );
-gpp_assert_same( $runtime_capabilities, $contract['capabilities'], 'Prompt capabilities must match the runtime-supported capability classes.' );
+gpp_assert_same( $runtime_capabilities, $contract['capabilities'], 'Prompt capabilities must match runtime-supported capability classes.' );
 
 $rich = json_decode( file_get_contents( __DIR__ . '/../fixtures/general-llm-rich-valid.json' ), true );
 gpp_assert_true( is_array( $rich ) && VisualProfilePackage::validate( $rich ), 'Rich generated-package fixture must validate through the production package validator.' );
-gpp_assert_same( gpp_authoring_contract_paths( $contract ), gpp_authoring_contract_paths( array( 'presentation' => $rich['surface_profiles'][0]['presentation'] ) ), 'Rich fixture must exercise every authorable presentation preference.' );
+gpp_assert_same( gpp_authoring_contract_paths( $contract['presentation'] ), gpp_authoring_contract_paths( $rich['surface_profiles'][0]['presentation'] ), 'Rich fixture must exercise every authorable presentation preference.' );
 gpp_assert_same( array_keys( $contract['token_categories'] ), array_keys( $rich['design_tokens'] ), 'Rich fixture must exercise every authorable token category.' );
 gpp_assert_same( $contract['capabilities'], $rich['surface_profiles'][0]['presentation']['capabilities'], 'Rich fixture must exercise the complete admitted capability list.' );
 
