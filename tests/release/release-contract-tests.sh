@@ -182,7 +182,10 @@ require_marker "$WORK/metadata-mismatch.json" 'compatibility_metadata_mismatch:p
 expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
 cp "$ROOT/gravity-presentation-profiles.php" "$PREREQ/gravity-presentation-profiles.php"
 
-php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"
+if ! php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"; then
+    cat "$WORK/compat-valid.json" >&2
+    exit 1
+fi
 require_marker "$WORK/compat-valid.json" '"publication_ready": true'
 
 # Invalid development source state remains fail-closed.
