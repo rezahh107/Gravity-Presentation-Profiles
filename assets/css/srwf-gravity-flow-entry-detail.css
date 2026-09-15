@@ -1,9 +1,17 @@
 .gpp-entry-dossier {
     direction: rtl;
-    max-width: 1120px;
+    box-sizing: border-box;
+    width: 1060px;
+    max-width: min(1060px, calc(100vw - 32px));
     margin: 0 0 24px;
+    padding: 30px 36px;
+    border: 1px solid #e4e7ec;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
     color: #172033;
     font-family: inherit;
+    font-synthesis: none;
 }
 
 .gpp-entry-dossier__section {
@@ -15,23 +23,26 @@
     background: #fff;
 }
 
-.gpp-entry-dossier__section h1,
-.gpp-entry-dossier__section h2 {
+.gpp-entry-dossier .gpp-entry-dossier__section h1,
+.gpp-entry-dossier .gpp-entry-dossier__section h2 {
     margin: 0 0 16px;
     color: #172033;
+    font-weight: 700;
     line-height: 1.5;
 }
-.gpp-entry-dossier__section h1 { font-size: 24px; }
-.gpp-entry-dossier__section h2 { font-size: 18px; }
-.gpp-entry-dossier__identity { border-top: 4px solid #1d4ed8; }
+.gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 27px; }
+.gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 20px; }
+.gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
+#poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 21px; font-weight: 700; }
+.gpp-entry-dossier__identity { margin-bottom: 0; border-top: 4px solid #1d4ed8; }
 .gpp-entry-dossier__identity-main { display: flex; align-items: flex-start; gap: 20px; }
 .gpp-entry-dossier__identity-text { flex: 1 1 auto; min-width: 0; }
-.gpp-entry-dossier__task { border-color: #93c5fd; background: #f8fbff; box-shadow: 0 1px 0 rgba(29, 78, 216, .08); }
+.gpp-entry-dossier__task { margin-bottom: 14px; border-color: #93c5fd; background: #f8fbff; box-shadow: 0 1px 0 rgba(29, 78, 216, .08); }
 .gpp-entry-dossier__task-step { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; color: #475467; }
 .gpp-entry-dossier__task-step strong { color: #172033; }
 .gpp-entry-dossier__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: #e4e7ec; border: 1px solid #e4e7ec; border-radius: 10px; overflow: hidden; }
 .gpp-entry-dossier__fact { min-width: 0; padding: 13px 15px; background: #fff; }
-.gpp-entry-dossier__fact dt { margin: 0 0 5px; color: #667085; font-size: 12px; font-weight: 600; }
+.gpp-entry-dossier__fact dt { margin: 0 0 5px; color: #667085; font-size: 12px; font-weight: 500; }
 .gpp-entry-dossier__fact dd { margin: 0; color: #172033; font-size: 14px; overflow-wrap: anywhere; }
 .gpp-entry-dossier__facts--identity { margin-top: 12px; }
 .gpp-entry-dossier__image-trigger { padding: 0; border: 1px solid #d0d5dd; border-radius: 10px; background: #fff; cursor: zoom-in; }
@@ -66,7 +77,18 @@
 .gpp-entry-dossier--composed ~ .entry-detail-view { display: none; }
 
 @media (max-width: 782px) {
+    .gpp-entry-dossier {
+        width: calc(100% - 25px);
+        max-width: none;
+        margin: 0 auto 24px;
+        padding: 20px 16px;
+        border-radius: 12px;
+    }
     .gpp-entry-dossier__section { padding: 16px; }
+    .gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 22px; }
+    .gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 18px; }
+    .gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
+    #poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 19px; font-weight: 700; }
     .gpp-entry-dossier__identity-main { flex-direction: column; }
     .gpp-entry-dossier__facts { grid-template-columns: minmax(0, 1fr); }
     .gpp-entry-dossier__student-photo img { width: 88px; height: 104px; }
