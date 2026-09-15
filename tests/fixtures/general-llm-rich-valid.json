@@ -1,0 +1,162 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "portable.reference.presentation",
+  "package_version": "2.3.0",
+  "provenance": {
+    "producer": "external general llm authoring",
+    "evidence_refs": [
+      "manual visual reference"
+    ]
+  },
+  "selected_surfaces": [
+    "gravity_forms.form"
+  ],
+  "design_tokens": {
+    "colors": {
+      "surface": "#F7F7F8",
+      "control_background": "#FFFFFF",
+      "control_text": "#202124",
+      "control_border": "#777777",
+      "focus_border": "#3157D5",
+      "error_border": "#B42318",
+      "label_text": "#202124",
+      "required_text": "#B42318",
+      "description_text": "#5F6368",
+      "divider": "#DADCE0",
+      "heading_text": "#202124",
+      "section_description": "#5F6368",
+      "action": "#3157D5",
+      "action_pressed": "#2747B3",
+      "action_focus": "#183A9E",
+      "validation_error": "#B42318"
+    },
+    "spacing_px": {
+      "page_inline": 24
+    },
+    "radii_px": {
+      "surface": 16,
+      "control": 10
+    },
+    "sizes_px": {
+      "content": 840,
+      "control_height": 52,
+      "action_height": 56
+    },
+    "font_sizes_px": {
+      "control": 16,
+      "label": 14,
+      "heading": 18,
+      "action": 16
+    },
+    "font_weights": {
+      "control": 400,
+      "label": 600,
+      "heading": 700,
+      "action": 700
+    },
+    "font_families": {
+      "primary": "Arial"
+    }
+  },
+  "semantic_slots": [],
+  "surface_profiles": [
+    {
+      "surface": "gravity_forms.form",
+      "profile_id": "portable.reference.v2",
+      "token_refs": [
+        "colors.surface",
+        "colors.control_background",
+        "colors.control_text",
+        "colors.control_border",
+        "colors.focus_border",
+        "colors.error_border",
+        "colors.label_text",
+        "colors.required_text",
+        "colors.description_text",
+        "colors.divider",
+        "colors.heading_text",
+        "colors.section_description",
+        "colors.action",
+        "colors.action_pressed",
+        "colors.action_focus",
+        "colors.validation_error",
+        "spacing_px.page_inline",
+        "radii_px.surface",
+        "radii_px.control",
+        "sizes_px.content",
+        "sizes_px.control_height",
+        "sizes_px.action_height",
+        "font_sizes_px.control",
+        "font_sizes_px.label",
+        "font_sizes_px.heading",
+        "font_sizes_px.action",
+        "font_weights.control",
+        "font_weights.label",
+        "font_weights.heading",
+        "font_weights.action",
+        "font_families.primary"
+      ],
+      "semantic_slots": [],
+      "presentation": {
+        "composition": {
+          "direction": "ltr",
+          "max_inline_size": "sizes_px.content",
+          "inline_padding": "spacing_px.page_inline",
+          "surface_background": "colors.surface",
+          "surface_radius": "radii_px.surface",
+          "field_layout": "single_column"
+        },
+        "typography": {
+          "font_family": "font_families.primary"
+        },
+        "controls": {
+          "background": "colors.control_background",
+          "text": "colors.control_text",
+          "border": "colors.control_border",
+          "focus_border": "colors.focus_border",
+          "error_border": "colors.error_border",
+          "radius": "radii_px.control",
+          "min_height": "sizes_px.control_height",
+          "font_size": "font_sizes_px.control",
+          "font_weight": "font_weights.control"
+        },
+        "labels": {
+          "text": "colors.label_text",
+          "required_color": "colors.required_text",
+          "font_size": "font_sizes_px.label",
+          "font_weight": "font_weights.label"
+        },
+        "descriptions": {
+          "text": "colors.description_text"
+        },
+        "sections": {
+          "divider": "colors.divider",
+          "heading_text": "colors.heading_text",
+          "heading_font_size": "font_sizes_px.heading",
+          "heading_font_weight": "font_weights.heading",
+          "description_text": "colors.section_description"
+        },
+        "primary_action": {
+          "background": "colors.action",
+          "pressed_background": "colors.action_pressed",
+          "focus_border": "colors.action_focus",
+          "min_height": "sizes_px.action_height",
+          "font_size": "font_sizes_px.action",
+          "font_weight": "font_weights.action"
+        },
+        "validation": {
+          "error_color": "colors.validation_error"
+        },
+        "capabilities": [
+          "gravity_forms.orbital_control_metric_projection",
+          "persian_gravity.jalali_validation_message_after_control"
+        ]
+      }
+    }
+  ],
+  "reserved_extension_seam": {
+    "version": "1.0.0",
+    "state": "INERT"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "portable.escape.presentation",
+  "package_version": "1.0.0",
+  "provenance": {"producer": "external general llm authoring", "evidence_refs": []},
+  "selected_surfaces": ["gravity_forms.form"],
+  "design_tokens": {
+    "font_families": {"primary": "Arial; body{display:none}"}
+  },
+  "semantic_slots": [],
+  "surface_profiles": [{
+    "surface": "gravity_forms.form",
+    "profile_id": "portable.escape.v1",
+    "token_refs": ["font_families.primary"],
+    "semantic_slots": [],
+    "presentation": {"typography": {"font_family": "font_families.primary"}}
+  }],
+  "reserved_extension_seam": {"version": "1.0.0", "state": "INERT"}
+}

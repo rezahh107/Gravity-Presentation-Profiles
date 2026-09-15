@@ -131,9 +131,16 @@ foreach ( array( 'binding_health_service' => $health_fake, 'binding_repair_servi
 }
 
 $sections = $addon->plugin_settings_fields();
-gpp_assert_same( 'Mapping & Binding Health', $sections[1]['title'], 'Existing Gravity Forms Add-On settings must contain the Mapping & Binding Health management surface.' );
-$health_field = $sections[1]['fields'][0];
-$action_field = $sections[1]['fields'][1];
+$binding_section = null;
+foreach ( $sections as $section ) {
+    if ( isset( $section['title'] ) && 'Mapping & Binding Health' === $section['title'] ) {
+        $binding_section = $section;
+        break;
+    }
+}
+gpp_assert_true( is_array( $binding_section ), 'Existing Gravity Forms Add-On settings must contain the Mapping & Binding Health management surface.' );
+$health_field = $binding_section['fields'][0];
+$action_field = $binding_section['fields'][1];
 gpp_assert_same( 'gpp_binding_health', $health_field['type'], 'Health must render through the existing Add-On settings surface.' );
 gpp_assert_same( array( $addon, 'validate_binding_management_action' ), $action_field['validation_callback'], 'Repair must execute only when an explicit settings action is selected and saved.' );
 gpp_assert_same( '', $action_field['choices'][0]['value'], 'Ordinary settings saves must default to no binding change.' );

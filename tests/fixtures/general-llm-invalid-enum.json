@@ -1,0 +1,21 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "portable.invalidenum.presentation",
+  "package_version": "1.0.0",
+  "provenance": {"producer": "external general llm authoring", "evidence_refs": []},
+  "selected_surfaces": ["gravity_forms.form"],
+  "design_tokens": {"colors": {"control_border": "#777777"}},
+  "semantic_slots": [],
+  "surface_profiles": [{
+    "surface": "gravity_forms.form",
+    "profile_id": "portable.invalidenum.v1",
+    "token_refs": ["colors.control_border"],
+    "semantic_slots": [],
+    "presentation": {
+      "composition": {"direction": "auto"},
+      "controls": {"border": "colors.control_border"}
+    }
+  }],
+  "reserved_extension_seam": {"version": "1.0.0", "state": "INERT"}
+}

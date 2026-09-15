@@ -3,6 +3,7 @@
 namespace GravityPresentationProfiles\GravityForms;
 
 use GravityPresentationProfiles\Core\AssetResolver;
+use GravityPresentationProfiles\Core\Authoring\GeneralLlmAuthoringPrompt;
 use GravityPresentationProfiles\Core\BindingHealth\BindingHealthEvaluator;
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
@@ -44,6 +45,7 @@ final class AddOn extends \GFAddOn {
                         'label'               => esc_html__( 'Profile Package JSON', 'gravity-presentation-profiles' ),
                         'type'                => 'textarea',
                         'class'               => 'large',
+                        'callback'            => array( $this, 'settings_visual_profile_package_json' ),
                         'validation_callback' => array( $this, 'validate_visual_package_import' ),
                         'save_callback'       => array( $this, 'discard_visual_package_json' ),
                     ),
@@ -51,6 +53,17 @@ final class AddOn extends \GFAddOn {
                         'name'  => 'installed_visual_profiles',
                         'label' => esc_html__( 'Installed Gravity Forms profiles', 'gravity-presentation-profiles' ),
                         'type'  => 'gpp_visual_inventory',
+                    ),
+                ),
+            ),
+            array(
+                'title'       => esc_html__( 'General LLM Authoring Prompt', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Use the fixed GPP prompt with a general-purpose LLM outside this site, then paste only the resulting package JSON into the existing Profile Package JSON importer above. GPP does not contact an AI service or automatically send site data.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'  => 'general_llm_authoring_prompt',
+                        'label' => esc_html__( 'Offline authoring prompt', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_general_llm_authoring_prompt',
                     ),
                 ),
             ),
@@ -90,27 +103,99 @@ final class AddOn extends \GFAddOn {
 
     public function init_admin() {
         parent::init_admin();
+        add_action( 'admin_post_gpp_download_general_llm_authoring_prompt', array( $this, 'download_general_llm_authoring_prompt' ) );
         add_action( 'admin_post_gpp_download_support_bundle', array( $this, 'download_support_bundle' ) );
     }
 
+    public function settings_gpp_general_llm_authoring_prompt( $field ) {
+        unset( $field );
+        $prompt = GeneralLlmAuthoringPrompt::contents();
+
+        echo '<div data-gpp-general-llm-authoring-prompt="offline">';
+        echo '<p>' . esc_html__( 'GPP does not contact an AI service. Copy or download this fixed prompt and use it in an external general-purpose LLM of your choice.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p>' . esc_html__( 'Optional screenshots or design references are selected and shared by you directly with that external tool. GPP does not collect or attach site, form, entry, upload, credential or token data to this prompt.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p>' . esc_html__( 'Bring only the resulting package JSON back to the Profile Package JSON field above. GPP treats that output as untrusted input and validates it through the existing package lifecycle before it can be installed.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<details><summary>' . esc_html__( 'Show prompt for copying', 'gravity-presentation-profiles' ) . '</summary>';
+        echo '<textarea readonly rows="18" class="large-text code" data-gpp-general-llm-authoring-prompt-copyable>' . esc_textarea( $prompt ) . '</textarea>';
+        echo '</details>';
+
+        if ( function_exists( 'admin_url' ) && function_exists( 'wp_nonce_url' ) ) {
+            $url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=gpp_download_general_llm_authoring_prompt' ),
+                'gpp_download_general_llm_authoring_prompt'
+            );
+            echo '<p><a class="button button-secondary" data-gpp-general-llm-authoring-prompt-download href="' . esc_url( $url ) . '">';
+            echo esc_html__( 'Download fixed authoring prompt', 'gravity-presentation-profiles' );
+            echo '</a></p>';
+        }
+        echo '</div>';
+    }
+
+    public function download_general_llm_authoring_prompt() {
+        if ( ! class_exists( 'GFCommon' ) || ! \GFCommon::current_user_can_any( 'gravityforms_edit_settings' ) ) {
+            wp_die( esc_html__( 'You are not allowed to download the GPP authoring prompt.', 'gravity-presentation-profiles' ), '', array( 'response' => 403 ) );
+        }
+        check_admin_referer( 'gpp_download_general_llm_authoring_prompt' );
+
+        if ( function_exists( 'nocache_headers' ) ) {
+            nocache_headers();
+        }
+        header( 'Content-Type: text/markdown; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="' . GeneralLlmAuthoringPrompt::FILENAME . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        echo GeneralLlmAuthoringPrompt::contents();
+        exit;
+    }
+
+    public function settings_visual_profile_package_json( $field ) {
+        if ( ! is_object( $field ) || ! method_exists( $field, 'get_value' ) ) {
+            return '';
+        }
+
+        $value = $this->visualPackageJsonString( $field->get_value() );
+        if ( null === $value ) {
+            $value = '';
+        }
+
+        $description = method_exists( $field, 'get_description' ) ? $field->get_description() : '';
+        $classes = method_exists( $field, 'get_container_classes' ) ? $field->get_container_classes() : '';
+        $attributes = method_exists( $field, 'get_attributes' ) ? implode( ' ', $field->get_attributes() ) : '';
+        $error_icon = method_exists( $field, 'get_error_icon' ) ? $field->get_error_icon() : '';
+        $prefix = isset( $field->settings ) && is_object( $field->settings ) && method_exists( $field->settings, 'get_input_name_prefix' )
+            ? $field->settings->get_input_name_prefix()
+            : '_gform_setting';
+        $name = isset( $field->name ) && is_string( $field->name ) ? $field->name : 'visual_profile_package_json';
+
+        return $description . sprintf(
+            '<span class="%s"><textarea name="%s_%s" %s>%s</textarea>%s</span>',
+            esc_attr( $classes ),
+            esc_attr( $prefix ),
+            esc_attr( $name ),
+            $attributes,
+            esc_textarea( $value ),
+            $error_icon
+        );
+    }
+
     public function validate_visual_package_import( $field, $value ) {
-        if ( is_string( $value ) && '' === trim( $value ) ) {
+        $json = $this->visualPackageJsonString( $value );
+        if ( null === $json ) {
+            $this->setSettingsFieldError( $field, 'Profile Package JSON must be text or a decoded JSON object.' );
             return;
         }
-        if ( ! is_string( $value ) ) {
-            $this->setSettingsFieldError( $field, 'Profile Package JSON must be text.' );
+        if ( '' === trim( $json ) ) {
             return;
         }
 
         $workflow   = $this->visualWorkflow();
-        $validation = $workflow->validateVisualJson( $value );
+        $validation = $workflow->validateVisualJson( $json );
         if ( ! $validation['valid'] ) {
             $this->setSettingsFieldError( $field, $validation['message'] );
             return;
         }
 
         try {
-            $workflow->importVisualJson( $value );
+            $workflow->importVisualJson( $json );
         } catch ( LifecycleException $exception ) {
             $this->setSettingsFieldError( $field, $exception->getMessage() );
         }
@@ -684,6 +769,18 @@ final class AddOn extends \GFAddOn {
             }
         }
         return ! empty( $events ) ? $events[0] : array( 'stage' => 'GF_PROFILE_SELECTION', 'reason_code' => 'diagnostic_event_unavailable', 'fallback' => null );
+    }
+
+    private function visualPackageJsonString( $value ) {
+        if ( is_string( $value ) ) {
+            return $value;
+        }
+        if ( ! is_array( $value ) ) {
+            return null;
+        }
+
+        $json = json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+        return false === $json ? null : $json;
     }
 
     private function visualWorkflow() {
