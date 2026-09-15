@@ -15,9 +15,30 @@ if ( ! in_array( $mode, array( 'dry-run', 'publish' ), true ) ) {
 
 $blockers = array();
 $facts = array();
+
+// Owner-approved release-license identity. These are checked mirrors of the
+// existing decision; this checker remains the release prerequisite boundary.
+$approved_license_spdx = 'GPL-2.0-or-later';
+$approved_plugin_license = 'GPL v2 or later';
+$approved_license_sha256 = '8272fab389a03e9ab3531c5f8d6f64ab711b91e82b2a1b145018dde314a26873';
+
 $license = $root . '/LICENSE';
 if ( ! is_file( $license ) || 0 === filesize( $license ) ) {
     $blockers[] = 'missing_license';
+} elseif ( hash_file( 'sha256', $license ) !== $approved_license_sha256 ) {
+    $blockers[] = 'license_identity_mismatch:source_bytes';
+}
+
+$composer_path = $root . '/composer.json';
+$composer_license = null;
+if ( is_file( $composer_path ) ) {
+    $composer = json_decode( file_get_contents( $composer_path ), true );
+    if ( is_array( $composer ) && isset( $composer['license'] ) && is_string( $composer['license'] ) ) {
+        $composer_license = $composer['license'];
+    }
+}
+if ( $composer_license !== $approved_license_spdx ) {
+    $blockers[] = 'license_identity_mismatch:composer';
 }
 
 $compatibility = null;
@@ -63,6 +84,14 @@ if ( '0.0.0-dev' === $version ) {
     if ( 'publish' === $mode ) {
         $blockers[] = 'production_version_source_requires_recovery';
     }
+}
+
+$plugin_license = '';
+if ( preg_match( '/^\s*\*\s*License:\s*([^\r\n]+)/mi', $entrypoint_text, $m ) ) {
+    $plugin_license = trim( $m[1] );
+}
+if ( $plugin_license !== $approved_plugin_license ) {
+    $blockers[] = 'license_identity_mismatch:plugin_header';
 }
 
 if ( is_array( $compatibility ) ) {
