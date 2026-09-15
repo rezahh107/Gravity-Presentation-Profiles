@@ -163,6 +163,10 @@ async function openReadyPrint() {
 
 await test('VISUAL-PRINT-CONTENT-VARIATION', 'Structural comparator ignores content-only variation while preserving layout', async () => {
   await openReadyPrint();
+  const cleanPdf = path.join(artifactDir, 'print-content-variation-control.pdf');
+  await productionPage.pdf({ path: cleanPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
+  const clean = validatePrintPdf(cleanPdf, ownerPdf, 'content-variation-control');
+  if (!clean.pass) throw new Error(`Content-variation clean control does not pass structural gate: ${JSON.stringify(clean.failures)}`);
   const variation = await productionPage.evaluate(() => {
     const values = [...document.querySelectorAll('.gpp-print-dossier .paper-finance .print-value')].slice(0, 3);
     const replacements = ['۱', '۱۲۳۴۵۶۷۸۹۰', '۹۹۹۹۹۹۹۹۹۹۹۹'];
@@ -175,32 +179,51 @@ await test('VISUAL-PRINT-CONTENT-VARIATION', 'Structural comparator ignores cont
   const variedPdf = path.join(artifactDir, 'print-content-variation.pdf');
   await productionPage.pdf({ path: variedPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
   const validation = validatePrintPdf(variedPdf, ownerPdf, 'content-variation');
-  if (!validation.pass) throw new Error(`Content-only variation changed structural geometry verdict: ${JSON.stringify(validation.failures)}`);
-  return { ...variation, geometry_verdict: 'PASS', dynamic_text_excluded_from_signal: true, signal: validation.signal };
+  if (!validation.pass) throw new Error(`PRINT_CONTENT_INVARIANCE_ROOT_CAUSE_UNRESOLVED: clean control passed but content-only mutation changed structural geometry verdict: ${JSON.stringify(validation.failures)}`);
+  return { ...variation, clean_control: 'PASS', geometry_verdict: 'PASS', dynamic_text_excluded_from_signal: true, signal: validation.signal };
 });
+
+const contentVariationResult = results.find(r => r.id === 'VISUAL-PRINT-CONTENT-VARIATION');
+if (contentVariationResult?.status === 'FAIL' && contentVariationResult.details?.error?.includes('PRINT_CONTENT_INVARIANCE_ROOT_CAUSE_UNRESOLVED')) {
+  const partialOutput = {
+    schema_version:'1.0.0', suite:'Owner Print Visual Contract Qualification', data_class:'SYNTHETIC_NON_PII',
+    owner_reference_sha256:pdfIdentity.sha256,
+    surfaces:{print_front_E:results.find(r=>r.id==='VISUAL-PRINT-EF')?.status||'FAIL',print_back_F:results.find(r=>r.id==='VISUAL-PRINT-EF')?.status||'FAIL'},
+    content_variation:'FAIL', deliberate_regression:'NOT_PROVEN', deliberate_management_regression:'NOT_PROVEN',
+    structural_signal:'long-rules-borders-and-box-edges-only', results,
+  };
+  fs.writeFileSync(path.join(artifactDir,'print-visual-contract-results.json'),JSON.stringify(partialOutput,null,2)+'\n');
+  for(const result of results) console.log(`${result.status} ${result.id} ${result.name}`);
+  await productionContext.close(); await browser.close();
+  process.exit(1);
+}
 
 await test('VISUAL-PRINT-REGRESSION', 'Structural gate rejects the existing 48px finance-table displacement', async () => {
   await openReadyPrint();
-  const controlPdf = path.join(artifactDir, 'qualification-print-control.pdf');
+  const controlPdf = path.join(artifactDir, 'print-finance-control.pdf');
   await productionPage.pdf({ path: controlPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
-  const control = validatePrintPdf(controlPdf, ownerPdf, 'deliberate-control');
-  if (!control.pass) throw new Error(`Precondition control PDF does not pass structural gate: ${JSON.stringify(control.failures)}`);
+  const control = validatePrintPdf(controlPdf, ownerPdf, 'finance-control');
+  if (!control.pass) throw new Error(`Finance clean control does not pass structural gate: ${JSON.stringify(control.failures)}`);
   await productionPage.addStyleTag({ content: '.gpp-print-dossier .paper-finance{transform:translateX(48px)!important;}' });
   const mutatedPdf = path.join(artifactDir, 'print-deliberate-regression.pdf');
   await productionPage.pdf({ path: mutatedPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
   const mutated = validatePrintPdf(mutatedPdf, ownerPdf, 'deliberate-finance');
   if (mutated.pass || !mutated.failures.some(f => f.startsWith('back_finance_table '))) throw new Error(`Structural gate did not specifically reject the 48px finance-table displacement: ${JSON.stringify(mutated.failures)}`);
-  return { injected_only_in_test: true, rejected: true, target_region: 'back_finance_table', failure_classes: mutated.failures };
+  return { clean_control: 'PASS', injected_only_in_test: true, rejected: true, target_region: 'back_finance_table', failure_classes: mutated.failures };
 });
 
 await test('VISUAL-PRINT-REGRESSION-MANAGEMENT', 'Structural gate rejects a non-finance management-box displacement', async () => {
   await openReadyPrint();
+  const controlPdf = path.join(artifactDir, 'print-management-control.pdf');
+  await productionPage.pdf({ path: controlPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
+  const control = validatePrintPdf(controlPdf, ownerPdf, 'management-control');
+  if (!control.pass) throw new Error(`Management clean control does not pass structural gate: ${JSON.stringify(control.failures)}`);
   await productionPage.addStyleTag({ content: '.gpp-print-dossier .paper-management{transform:translateX(36px)!important;}' });
   const mutatedPdf = path.join(artifactDir, 'print-management-regression.pdf');
   await productionPage.pdf({ path: mutatedPdf, printBackground: true, preferCSSPageSize: true, scale: 1 });
   const mutated = validatePrintPdf(mutatedPdf, ownerPdf, 'deliberate-management');
   if (mutated.pass || !mutated.failures.some(f => f.startsWith('back_management '))) throw new Error(`Structural gate did not specifically reject management displacement: ${JSON.stringify(mutated.failures)}`);
-  return { injected_only_in_test: true, rejected: true, target_region: 'back_management', failure_classes: mutated.failures };
+  return { clean_control: 'PASS', injected_only_in_test: true, rejected: true, target_region: 'back_management', failure_classes: mutated.failures };
 });
 
 await productionContext.close(); await browser.close();
