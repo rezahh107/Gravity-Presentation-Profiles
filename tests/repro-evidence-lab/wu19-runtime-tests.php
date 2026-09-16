@@ -7,7 +7,7 @@ $missing_asset_observed = false;
 foreach ( $negative_trace['events'] as $event ) {
     if ( 'PRINT_COMPOSITION_READY' === $event['stage']
         && 'FAIL' === $event['result']
-        && 'required_asset_unavailable' === $event['reason_code']
+        && 'required_asset_missing' === $event['reason_code']
         && 'dossier_not_rendered' === $event['fallback'] ) {
         $missing_asset_observed = true;
         break;
