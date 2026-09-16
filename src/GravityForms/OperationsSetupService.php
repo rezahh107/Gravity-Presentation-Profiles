@@ -230,10 +230,22 @@ final class OperationsSetupService {
         $identity = $this->printProfileIdentity();
         $steps    = array();
 
-        $steps['package_import']  = $this->importPackage();
+        $steps['package_import'] = $this->importPackage();
+        if ( ! in_array( $steps['package_import']['outcome'], array( 'installed', 'already_installed' ), true ) ) {
+            return $this->initializationResult( $form_id, $identity, $steps );
+        }
+
         $steps['print_activation'] = $this->adoptPrintActivation( $identity );
+        if ( ! in_array( $steps['print_activation']['outcome'], array( 'activated', 'already_active' ), true ) ) {
+            return $this->initializationResult( $form_id, $identity, $steps );
+        }
+
         $steps['binding_context'] = $this->adoptBindingContext( $form_id );
 
+        return $this->initializationResult( $form_id, $identity, $steps );
+    }
+
+    private function initializationResult( $form_id, $identity, $steps ) {
         return array(
             'status' => $this->overallStatus( $steps ),
             'form_id' => $form_id,
@@ -324,17 +336,12 @@ final class OperationsSetupService {
             $seed = $this->seedBindingSet( $form_id, $context );
             $this->bindings->import( $seed );
 
-            // Re-check immediately before activating so a context that became
-            // active while this request was preparing is preserved, not replaced.
-            if ( null !== $this->bindings->resolve( $context ) ) {
-                return array( 'outcome' => 'already_bound', 'reason' => 'activated_concurrently' );
-            }
-
-            $this->bindings->activate(
+            $this->bindings->activateIfCurrent(
                 array(
                     'context' => $context,
                     'binding_set_id' => $seed['binding_set_id'],
                     'binding_set_version' => $seed['binding_set_version'],
+                    'expected_current_activation' => null,
                 )
             );
 
@@ -346,7 +353,7 @@ final class OperationsSetupService {
             );
         } catch ( LifecycleException $exception ) {
             return array(
-                'outcome' => 'identity_version_conflict' === $exception->reasonCode() ? 'conflict' : 'failed',
+                'outcome' => in_array( $exception->reasonCode(), array( 'identity_version_conflict', 'stale_binding_management_action' ), true ) ? 'conflict' : 'failed',
                 'reason' => $exception->reasonCode(),
                 'message' => $exception->getMessage(),
             );
