@@ -74,7 +74,30 @@ $assert( null === $setup['visual']['entry_detail_activation'], 'Entry Detail was
 $assert( (int) $setup['visual']['revision'] > 0, 'Operations Setup did not persist visual lifecycle state in WordPress storage.' );
 $assert( (int) $setup['binding']['revision'] > 0, 'Operations Setup did not persist binding lifecycle state in WordPress storage.' );
 $assert( is_array( $setup['binding']['activation'] ), 'Operations Setup did not persist a binding activation.' );
+
+$setup_bindings  = $binding_map( $setup['binding']['artifact'] );
+$binding_keys    = array_keys( $setup_bindings );
+$catalogue_keys  = (array) ( $setup['visual']['semantic_catalogue_keys'] ?? array() );
+sort( $binding_keys );
+sort( $catalogue_keys );
+$assert( 53 === count( $catalogue_keys ), 'Shipped Operations Package semantic catalogue size is not the expected current 53-slot contract.' );
+$assert( $catalogue_keys === $binding_keys, 'Product-created binding artifact does not exactly cover the shipped semantic catalogue.' );
 $assert( 53 === (int) $setup['binding']['semantic_count'], 'Operations Setup did not seed the complete semantic catalogue.' );
+
+$direct_field_count = 0;
+foreach ( (array) ( $setup['binding']['management_kinds'] ?? array() ) as $slot => $kind ) {
+    if ( 'direct_field' !== $kind ) {
+        continue;
+    }
+    $direct_field_count++;
+    $binding = $setup_bindings[ $slot ] ?? null;
+    $assert( is_array( $binding ), 'Missing direct-field binding for semantic slot ' . $slot );
+    $assert( 'UNBOUND' === ( $binding['state'] ?? null ), 'Direct-field semantic was not seeded UNBOUND: ' . $slot );
+    $assert( null === ( $binding['source_ref'] ?? null ), 'Direct-field semantic guessed a host source: ' . $slot );
+    $assert( array() === ( $binding['evidence_refs'] ?? null ), 'Unbound direct-field semantic unexpectedly has source evidence: ' . $slot );
+}
+$assert( $direct_field_count > 0, 'Production binding-management policy exposed no direct-field slots for qualification.' );
+
 $initial_first = $setup['binding']['student_first_name'];
 $assert( 'UNBOUND' === ( $initial_first['state'] ?? null ), 'student.first_name was not explicitly seeded UNBOUND.' );
 $assert( null === ( $initial_first['source_ref'] ?? null ), 'student.first_name seed guessed a host source.' );
@@ -103,11 +126,15 @@ $assert( 'PROVEN' === ( $repaired_first['state'] ?? null ), 'Row repair did not 
 $assert( (string) $fixture['fields']['first_name']['id'] === (string) ( $repaired_first['source_ref']['field_id'] ?? '' ), 'Row repair did not persist the exact actual host field ID.' );
 $assert( $normalized_unrelated( $setup['binding']['artifact'] ) === $normalized_unrelated( $repair['binding']['artifact'] ), 'Row repair changed an unrelated binding.' );
 $assert( $setup['binding']['artifact']['runtime_claims'] === $repair['binding']['artifact']['runtime_claims'], 'Repairing student.first_name unexpectedly changed unrelated runtime-proof claims.' );
+foreach ( (array) ( $repair['binding']['runtime_claims']['student.first_name'] ?? array() ) as $claim ) {
+    $assert( 'NOT_PROVEN' === ( $claim['evidence_state'] ?? null ), 'Changed source retained an invalid positive runtime proof for student.first_name.' );
+}
 echo "GPP_BEHAVIORAL_STEP row_mapping_observed PASS\n";
 
 $assert( $rerun['binding']['activation'] === $repair['binding']['activation'], 'Operations Setup rerun changed active repaired binding identity.' );
 $assert( $rerun['binding']['artifact_hash'] === $repair['binding']['artifact_hash'], 'Operations Setup rerun rewrote the repaired binding artifact.' );
 $assert( $rerun['binding']['student_first_name'] === $repair['binding']['student_first_name'], 'Operations Setup rerun reset the explicit repaired mapping.' );
+$assert( $rerun['binding']['artifact'] === $repair['binding']['artifact'], 'Operations Setup rerun silently rewrote unrelated binding/runtime state.' );
 $assert( $rerun['visual']['print_activation'] === $repair['visual']['print_activation'], 'Operations Setup rerun changed compatible Print activation.' );
 echo "GPP_BEHAVIORAL_STEP rerun_preservation_observed PASS\n";
 
@@ -153,6 +180,7 @@ $summary = array(
         'binding_artifact_hash' => $setup['binding']['artifact_hash'],
         'student_first_name' => $setup['binding']['student_first_name'],
         'semantic_count' => $setup['binding']['semantic_count'],
+        'direct_field_count' => $direct_field_count,
     ),
     'after_repair' => array(
         'binding_activation' => $repair['binding']['activation'],
