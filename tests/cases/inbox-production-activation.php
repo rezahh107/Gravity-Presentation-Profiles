@@ -169,6 +169,12 @@ $visual->activateIfCurrent(
 );
 $print_before = $visual->resolve( 'print.dossier' );
 gpp_assert_same( '1.0.0', $print_before['package_version'], 'Legacy Print activation is established as the upgrade precondition.' );
+$legacy_readiness = $operations->readiness( 77 );
+gpp_assert_same( 'active_operations_profile', $legacy_readiness['print_surface_activation'], 'The predecessor Print activation remains a compatible Operations profile.' );
+$legacy_rerun = $operations->initialize( array( 'form_id' => 77 ) );
+gpp_assert_same( OperationsSetupService::STATUS_COMPLETED, $legacy_rerun['status'], 'Operations setup rerun must accept the compatible legacy Print activation.' );
+gpp_assert_same( 'already_active', $legacy_rerun['steps']['print_activation']['outcome'], 'Operations setup must preserve rather than upgrade the compatible legacy Print activation.' );
+gpp_assert_same( $print_before, $visual->resolve( 'print.dossier' ), 'Operations setup rerun must leave the legacy Print activation byte-for-byte unchanged.' );
 gpp_assert_same( null, $visual->resolve( 'gravity_flow.inbox' ), 'Inbox must be inactive before the explicit Inbox action.' );
 
 $context = $operations->bindingContext( 77 );
@@ -248,11 +254,11 @@ foreach ( $qualified['runtime_claims'] as $claim ) {
 }
 foreach ( array( 'student.photo', 'student.first_name', 'student.last_name', 'student.national_id', 'education.grade_group', 'school.name', 'entry.created_at', 'workflow.current_step' ) as $slot ) {
     gpp_assert_same( 'PROVEN', $claims[ $slot ]['evidence_state'], 'Required source availability must be PROVEN after qualification: ' . $slot );
-    $expected = InboxRuntimeEvidence::availabilityRef( $qualified, $slot, $binding_by_slot[ $slot ]['source_ref'] );
+    $expected = InboxRuntimeEvidence::availabilityRef( $qualified, $slot, $bindings = $binding_by_slot[ $slot ]['source_ref'] );
     gpp_assert_true( in_array( $expected, $claims[ $slot ]['evidence_refs'], true ), 'Availability proof must be bound to exact source and binding version: ' . $slot );
 }
-gpp_assert_true( ! isset( $claims['workflow.due_at'] ), 'Optional unresolved Due must not receive invented availability proof.' );
-gpp_assert_true( ! isset( $claims['student.full_name'] ), 'Derived full name must not receive duplicate direct-source availability proof.' );
+gpp_assert_true( ! isset( $claims['workflow.due_at|availability'] ), 'Unresolved optional Due received invented availability proof.' );
+gpp_assert_true( ! isset( $claims['student.full_name|availability'] ), 'Derived full name must not receive duplicate direct-source availability proof.' );
 
 $second = $inbox->initialize( array( 'form_id' => 77 ) );
 gpp_assert_same( InboxSetupService::STATUS_COMPLETED, $second['status'], 'Compatible Inbox setup rerun must be idempotent.' );
