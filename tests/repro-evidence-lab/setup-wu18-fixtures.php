@@ -105,6 +105,9 @@ $visual_package = json_decode( file_get_contents( $visual_path ), true );
 $profile = ( new VisualProfileResolver( $visual_package ) )->resolve( 'gravity_flow.entry_detail' );
 if ( ! is_array( $profile ) || 'shared.entry_detail.v1' !== $profile['profile_id'] ) throw new RuntimeException( 'Shared Entry Detail profile identity changed.' );
 $visual_lifecycle = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
+// WU18 owns this legacy visual fixture dependency. PR4's WU21 setup now uses
+// only the authentic Operations Package path and no longer pre-installs wu09.
+$visual_lifecycle->import( $visual_package );
 $visual_lifecycle->activate( array( 'surface' => 'gravity_flow.entry_detail', 'package_id' => $visual_package['package_id'], 'package_version' => $visual_package['package_version'], 'profile_id' => $profile['profile_id'] ) );
 
 function wu18_binding_set( $id, $form_meta, $fields, $entry_ref = null, $negative_required = false ) {
