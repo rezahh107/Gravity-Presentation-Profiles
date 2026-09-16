@@ -17,6 +17,7 @@ use GravityPresentationProfiles\GravityForms\GravityFormsFieldInventory;
 function esc_html__( $text, $domain = null ) { unset( $domain ); return $text; }
 function __( $text, $domain = null ) { unset( $domain ); return $text; }
 function esc_html( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' ); }
+function esc_attr( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' ); }
 
 class GFAddOn {
     public function get_form_settings( $form ) { unset( $form ); return array(); }
@@ -66,14 +67,29 @@ final class GppPr2Field {
 
 final class GppPr2RepairRecorder {
     public $repairs = array();
+    public $unmaps = array();
+    public $print_options = array();
+    public $clears = array();
+    public $rollbacks = array();
+
     public function repairField( $request ) { $this->repairs[] = $request; return array( 'status' => 'REPAIRED_AND_ACTIVATED' ); }
-    public function confirmPrintOption( $request ) { unset( $request ); }
-    public function rollback( $request ) { unset( $request ); }
+    public function unmapField( $request ) { $this->unmaps[] = $request; return array( 'status' => 'UNMAPPED_AND_ACTIVATED' ); }
+    public function confirmPrintOption( $request ) { $this->print_options[] = $request; return array( 'status' => 'PRINT_OPTION_CONFIRMED' ); }
+    public function clearPrintOption( $request ) { $this->clears[] = $request; return array( 'status' => 'PRINT_OPTION_CLEARED' ); }
+    public function rollback( $request ) { $this->rollbacks[] = $request; return array( 'status' => 'ROLLED_BACK' ); }
 }
 
 final class GppPr2RenderedHealth {
     private $facts;
-    public function __construct( $facts ) { $this->facts = $facts; }
+    private $inventory;
+    private $artifact;
+
+    public function __construct( $facts, $inventory, $artifact ) {
+        $this->facts = $facts;
+        $this->inventory = $inventory;
+        $this->artifact = $artifact;
+    }
+
     public function healthFacts() {
         return array(
             'schema_version' => '1.0.0',
@@ -84,10 +100,16 @@ final class GppPr2RenderedHealth {
                     'binding_set_version' => '1.0.1',
                     'form_id' => 77,
                     'form_title' => 'SRWF Registration',
+                    'fields' => $this->inventory['fields'],
+                    'artifact' => $this->artifact,
                     'facts' => $this->facts,
                 ),
             ),
         );
+    }
+
+    public function managementCandidates() {
+        return array( 'repairs' => array(), 'rollbacks' => array(), 'print_options' => array() );
     }
 }
 
@@ -103,24 +125,6 @@ function gpp_pr2_set_private( $object, $property, $value ) {
     $reflection = new ReflectionProperty( get_class( $object ), $property );
     $reflection->setAccessible( true );
     $reflection->setValue( $object, $value );
-}
-
-function gpp_pr2_binding_section( $addon ) {
-    foreach ( $addon->plugin_settings_fields() as $section ) {
-        if ( isset( $section['title'] ) && 'Mapping & Binding Health' === $section['title'] ) {
-            return $section;
-        }
-    }
-    gpp_fail( 'Mapping & Binding Health section missing.' );
-}
-
-function gpp_pr2_find_choice( $choices, $slot, $field_id ) {
-    foreach ( $choices as $choice ) {
-        if ( false !== strpos( $choice['label'], $slot ) && false !== strpos( $choice['label'], 'Field ' . $field_id ) ) {
-            return $choice;
-        }
-    }
-    gpp_fail( 'Repair choice missing for ' . $slot . ' / Field ' . $field_id );
 }
 
 function gpp_pr2_binding_map( $artifact ) {
@@ -155,6 +159,29 @@ function gpp_pr2_candidate_binding() {
     );
 }
 
+function gpp_pr2_row( $markup, $slot ) {
+    $pattern = '/<tr data-gpp-semantic-slot="' . preg_quote( $slot, '/' ) . '">(.*?)<\/tr>/s';
+    if ( 1 !== preg_match( $pattern, $markup, $matches ) ) {
+        gpp_fail( 'Row missing for ' . $slot );
+    }
+    return $matches[1];
+}
+
+function gpp_pr2_mapping_control( $row ) {
+    if ( 1 !== preg_match( '/<select name="gpp_binding_row\[([a-f0-9]{24})\]"[^>]*>(.*?)<\/select>/s', $row, $matches ) ) {
+        gpp_fail( 'Mapping selector missing from direct-field row.' );
+    }
+    return array( $matches[1], $matches[2] );
+}
+
+function gpp_pr2_field_option( $select_markup, $field_id ) {
+    $pattern = '/<option value="([^"]*)"[^>]*>Field ' . preg_quote( (string) $field_id, '/' ) . ' — [^<]*<\/option>/u';
+    if ( 1 !== preg_match( $pattern, $select_markup, $matches ) ) {
+        gpp_fail( 'Field option missing for Field ' . $field_id );
+    }
+    return html_entity_decode( $matches[1], ENT_QUOTES, 'UTF-8' );
+}
+
 GFAPI::$forms['77'] = array(
     'id' => 77,
     'title' => 'SRWF Registration',
@@ -183,7 +210,7 @@ $package = json_decode( file_get_contents( dirname( __DIR__ ) . '/fixtures/wu09-
 foreach ( $package['semantic_slots'] as &$slot ) {
     if ( 'student.photo' === $slot['semantic_slot_key'] ) {
         // Valid but deliberately misleading descriptive metadata reproduces the
-        // authentic failure mode: meaning text must never replace slot identity.
+        // authentic PR2 failure mode. Stable slot identity must remain visible.
         $slot['meaning'] = 'student given name';
     }
 }
@@ -201,7 +228,7 @@ $visual->activate(
 
 $health_service = new BindingHealthService( $bindings, $visual, new GravityFormsFieldInventory(), new BindingHealthEvaluator() );
 $candidates = $health_service->managementCandidates();
-gpp_assert_same( 4, count( $candidates['repairs'] ), 'All four simultaneously available semantic slots must produce explicit repair candidates.' );
+gpp_assert_same( 4, count( $candidates['repairs'] ), 'All four simultaneously available semantic slots must retain explicit repair candidates at the service boundary.' );
 foreach ( $candidates['repairs'] as $candidate ) {
     gpp_assert_true(
         0 === strpos( $candidate['meaning'], $candidate['semantic_slot_key'] . ' / ' ),
@@ -213,8 +240,10 @@ $addon = \GravityPresentationProfiles\GravityForms\AddOn::get_instance();
 $recorder = new GppPr2RepairRecorder();
 gpp_pr2_set_private( $addon, 'binding_health_service', $health_service );
 gpp_pr2_set_private( $addon, 'binding_repair_service', $recorder );
-$choices = gpp_pr2_binding_section( $addon )['fields'][1]['choices'];
 
+ob_start();
+$addon->settings_gpp_binding_health( null );
+$markup = ob_get_clean();
 $representative = array(
     array( 'student.first_name', 101 ),
     array( 'student.last_name', 102 ),
@@ -222,32 +251,46 @@ $representative = array(
     array( 'student.national_id', 104 ),
 );
 $seen_values = array();
+$first_payload = null;
 foreach ( $representative as $identity ) {
-    $choice = gpp_pr2_find_choice( $choices, $identity[0], $identity[1] );
-    gpp_assert_true( false !== strpos( $choice['label'], $identity[0] ), 'Rendered option must expose the exact actionable semantic slot.' );
-    gpp_assert_true( false !== strpos( $choice['label'], 'Field ' . $identity[1] ), 'Rendered option must expose the exact actionable field ID.' );
-    gpp_assert_true( ! isset( $seen_values[ $choice['value'] ] ), 'Distinct slot/field pairs must emit distinct actionable option values.' );
-    $seen_values[ $choice['value'] ] = true;
+    $row = gpp_pr2_row( $markup, $identity[0] );
+    list( $token, $select ) = gpp_pr2_mapping_control( $row );
+    $payload = gpp_pr2_field_option( $select, $identity[1] );
 
+    gpp_assert_true( false !== strpos( $row, '<code>' . $identity[0] . '</code>' ), 'Rendered row must expose the exact actionable semantic slot.' );
+    gpp_assert_true( false !== strpos( $select, 'Field ' . $identity[1] . ' —' ), 'Rendered selector must expose the exact actionable field ID.' );
+    gpp_assert_true( ! isset( $seen_values[ $payload ] ), 'Distinct slot/field pairs must emit distinct actionable payloads.' );
+    $seen_values[ $payload ] = true;
+    if ( 'student.first_name' === $identity[0] ) {
+        $first_payload = $payload;
+    }
+
+    $_POST = array(
+        'gpp_binding_row_action' => $token,
+        'gpp_binding_row' => array( $token => $payload ),
+    );
     $field = new GppPr2Field();
     $before = count( $recorder->repairs );
-    $addon->validate_binding_management_action( $field, stripslashes( trim( $choice['value'] ) ) );
-    gpp_assert_same( null, $field->error, 'Rendered action must survive the Gravity Forms-style trim/unslash submission path.' );
-    gpp_assert_same( $before + 1, count( $recorder->repairs ), 'Exactly one repair call must result from one explicit selected option.' );
-    gpp_assert_same( $identity[0], $recorder->repairs[ $before ]['semantic_slot_key'], 'Visible slot must equal submitted/decoded/repaired slot.' );
+    $addon->validate_binding_management_action( $field, '' );
+    gpp_assert_same( null, $field->error, 'Rendered row action must survive the settings submission path.' );
+    gpp_assert_same( $before + 1, count( $recorder->repairs ), 'Exactly one repair call must result from one explicit row Apply.' );
+    gpp_assert_same( $identity[0], $recorder->repairs[ $before ]['semantic_slot_key'], 'Visible row must equal submitted/decoded/repaired slot.' );
     gpp_assert_same( $identity[1], $recorder->repairs[ $before ]['field_id'], 'Visible field must equal submitted/decoded/repaired field.' );
 }
 
-$photo_choice = gpp_pr2_find_choice( $choices, 'student.photo', 103 );
-gpp_assert_true( false !== strpos( $photo_choice['label'], 'student.photo / student given name' ), 'Misleading descriptive metadata cannot hide or substitute stable student.photo identity.' );
+$photo_row = gpp_pr2_row( $markup, 'student.photo' );
+gpp_assert_true( false !== strpos( $photo_row, '<code>student.photo</code>' ), 'Misleading descriptive metadata cannot hide or substitute stable student.photo identity.' );
+gpp_assert_true( false !== strpos( $photo_row, 'student given name' ), 'The deliberately misleading description remains visible as description only, not action identity.' );
 
-$first_choice = gpp_pr2_find_choice( $choices, 'student.first_name', 101 );
 GFAPI::$forms['77']['fields'] = array_reverse( GFAPI::$forms['77']['fields'] );
-$reordered_choices = gpp_pr2_binding_section( $addon )['fields'][1]['choices'];
-$reordered_first = gpp_pr2_find_choice( $reordered_choices, 'student.first_name', 101 );
-gpp_assert_same( $first_choice['value'], $reordered_first['value'], 'Candidate/field ordering must not change the payload meaning of an exact slot/field pair.' );
+ob_start();
+$addon->settings_gpp_binding_health( null );
+$reordered_markup = ob_get_clean();
+list( $reordered_token, $reordered_select ) = gpp_pr2_mapping_control( gpp_pr2_row( $reordered_markup, 'student.first_name' ) );
+$reordered_payload = gpp_pr2_field_option( $reordered_select, 101 );
+gpp_assert_same( $first_payload, $reordered_payload, 'Host-field ordering must not change the payload meaning of an exact slot/field pair.' );
 
-$raw = strtr( $first_choice['value'], '-_', '+/' );
+$raw = strtr( $first_payload, '-_', '+/' );
 $padding = strlen( $raw ) % 4;
 if ( $padding ) {
     $raw .= str_repeat( '=', 4 - $padding );
@@ -255,11 +298,16 @@ if ( $padding ) {
 $incomplete = json_decode( base64_decode( $raw, true ), true );
 unset( $incomplete['semantic_slot_key'] );
 $malformed = rtrim( strtr( base64_encode( json_encode( $incomplete, JSON_UNESCAPED_SLASHES ) ), '+/', '-_' ), '=' );
+$_POST = array(
+    'gpp_binding_row_action' => $reordered_token,
+    'gpp_binding_row' => array( $reordered_token => $malformed ),
+);
 $malformed_field = new GppPr2Field();
 $count_before_malformed = count( $recorder->repairs );
-$addon->validate_binding_management_action( $malformed_field, $malformed );
-gpp_assert_true( false !== strpos( (string) $malformed_field->error, 'invalid' ), 'Malformed/incomplete payload must fail closed.' );
+$addon->validate_binding_management_action( $malformed_field, '' );
+gpp_assert_true( false !== strpos( (string) $malformed_field->error, 'no longer matches' ), 'Malformed/incomplete row payload must fail closed at row identity validation.' );
 gpp_assert_same( $count_before_malformed, count( $recorder->repairs ), 'Malformed payload must not reach BindingRepairService.' );
+$_POST = array();
 
 echo "PR2_BINDING_OPTION_ROUND_TRIP_PASS\n";
 
@@ -368,12 +416,12 @@ gpp_assert_same( BindingHealthEvaluator::HEALTHY, $fact_map['student.first_name'
 gpp_assert_same( 101, $fact_map['student.first_name']['source']['field_id'], 'Health must reflect Field 101 on repaired first_name.' );
 gpp_assert_same( 101, $fact_map['student.photo']['source']['field_id'], 'Health must preserve independent student.photo -> Field 101 state.' );
 
-gpp_pr2_set_private( $addon, 'binding_health_service', new GppPr2RenderedHealth( $facts ) );
+gpp_pr2_set_private( $addon, 'binding_health_service', new GppPr2RenderedHealth( $facts, $inventory, $after_artifact ) );
 ob_start();
 $addon->settings_gpp_binding_health( null );
 $health_markup = ob_get_clean();
-gpp_assert_true( false !== strpos( $health_markup, 'student.first_name' ), 'Rendered Health must expose repaired stable semantic slot.' );
-gpp_assert_true( false !== strpos( $health_markup, 'student.photo' ), 'Rendered Health must continue to expose independent photo slot.' );
+gpp_assert_true( false !== strpos( $health_markup, '<code>student.first_name</code>' ), 'Rendered Health must expose repaired stable semantic slot.' );
+gpp_assert_true( false !== strpos( $health_markup, '<code>student.photo</code>' ), 'Rendered Health must continue to expose independent photo slot.' );
 gpp_assert_true( false !== strpos( $health_markup, '<code>101</code>' ), 'Rendered Health must expose the repaired/current Field 101 identity.' );
 
 echo "PR2_BINDING_ARTIFACT_DELTA_PASS\n";
