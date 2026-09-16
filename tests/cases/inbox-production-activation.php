@@ -200,8 +200,10 @@ $binding_by_slot = array();
 foreach ( $qualified['bindings'] as $binding ) {
     $binding_by_slot[ $binding['semantic_slot_key'] ] = $binding;
 }
-gpp_assert_same( array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ), $binding_by_slot['entry.created_at']['source_ref'], 'entry.created_at binds to authentic Gravity Forms Entry metadata.' );
-gpp_assert_same( array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ), $binding_by_slot['workflow.current_step']['source_ref'], 'workflow.current_step binds to the admitted Gravity Flow state seam.' );
+gpp_assert_same( 'gravity_forms.entry_meta', $binding_by_slot['entry.created_at']['source_ref']['type'], 'entry.created_at uses the Gravity Forms entry-metadata adapter.' );
+gpp_assert_same( 'date_created', $binding_by_slot['entry.created_at']['source_ref']['meta_key'], 'entry.created_at binds to authentic date_created metadata.' );
+gpp_assert_same( 'gravity_flow.state', $binding_by_slot['workflow.current_step']['source_ref']['type'], 'workflow.current_step uses the Gravity Flow state adapter.' );
+gpp_assert_same( 'current_step', $binding_by_slot['workflow.current_step']['source_ref']['state_key'], 'workflow.current_step binds to the admitted current-step seam.' );
 gpp_assert_same( 'UNBOUND', $binding_by_slot['workflow.due_at']['state'], 'Optional Due remains unresolved when no authoritative source exists.' );
 gpp_assert_same( null, $binding_by_slot['workflow.due_at']['source_ref'], 'Optional Due must not be fabricated.' );
 gpp_assert_same( 'UNBOUND', $binding_by_slot['student.full_name']['state'], 'Full name remains a presentation derivation after qualification.' );
