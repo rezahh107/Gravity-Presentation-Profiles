@@ -50,6 +50,10 @@ $happy = wu19_render_print( array( $alpha['entry_id'] ) );
 wu19_assert( false !== strpos( $happy, 'data-gpp-print-state="ready"' ), 'Canonical dossier did not reach ready state.' );
 wu19_assert( 1 === substr_count( $happy, 'data-gpp-print-page="front"' ), 'Front page cardinality changed.' );
 wu19_assert( 1 === substr_count( $happy, 'data-gpp-print-page="back"' ), 'Back page cardinality changed.' );
+wu19_assert( 2 === substr_count( $happy, 'data-gpp-print-page="' ), 'Canonical dossier must contain exactly two Print pages.' );
+$front_position = strpos( $happy, 'data-gpp-print-page="front"' );
+$back_position = strpos( $happy, 'data-gpp-print-page="back"' );
+wu19_assert( false !== $front_position && false !== $back_position && $front_position < $back_position, 'Canonical dossier page order must be Front then Back.' );
 wu19_assert( 5 === substr_count( $happy, 'gpp-print-receipt-row' ), 'Receipt rows must remain exactly five.' );
 wu19_assert( 6 === substr_count( $happy, 'gpp-print-cheque-row' ), 'Cheque rows must remain exactly six.' );
 wu19_assert( false !== strpos( $happy, 'data-gpp-logo="razavi"' ) && false !== strpos( $happy, 'data-gpp-logo="kanoon"' ), 'Approved Front logos missing.' );
@@ -84,7 +88,7 @@ $activation = $visual->resolve( 'print.dossier' );
 $visual->deactivate( array( 'surface' => 'print.dossier' ) );
 try {
     $inactive = wu19_render_print( array( $alpha['entry_id'] ) );
-    wu19_assert( false !== strpos( $inactive, 'data-gpp-print-failure="profile_not_active"' ), 'Inactive Print profile did not fail explicitly.' );
+    wu19_assert( false !== strpos( $inactive, 'data-gpp-print-failure="print_surface_not_activated"' ), 'Inactive Print surface did not report the current production reason.' );
     wu19_assert( false === strpos( $inactive, 'data-gpp-print-state="ready"' ), 'Inactive profile silently produced a dossier.' );
 } finally {
     if ( is_array( $activation ) ) {
@@ -103,7 +107,7 @@ $missing_path = $asset_paths['razavi'] . '.wu19-missing';
 wu19_assert( rename( $asset_paths['razavi'], $missing_path ), 'Unable to induce required asset failure.' );
 try {
     $missing_asset = wu19_render_print( array( $alpha['entry_id'] ) );
-    wu19_assert( false !== strpos( $missing_asset, 'data-gpp-print-failure="required_asset_unavailable"' ), 'Missing indispensable asset did not fail closed.' );
+    wu19_assert( false !== strpos( $missing_asset, 'data-gpp-print-failure="required_asset_missing"' ), 'Missing indispensable asset did not report the current production reason.' );
     wu19_assert( false === strpos( $missing_asset, 'data-gpp-print-state="ready"' ), 'Missing asset produced an approximate successful dossier.' );
 } finally {
     if ( is_file( $missing_path ) ) rename( $missing_path, $asset_paths['razavi'] );
