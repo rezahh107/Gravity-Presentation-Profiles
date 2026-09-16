@@ -18,6 +18,7 @@ final class InboxPresentationModel {
     private $binding_sets;
     private $resolver;
     private $required_slots;
+    private $required_source_slots;
 
     public function __construct( $profile, $binding_sets, $semantic_slot_declarations ) {
         if ( ! is_array( $profile ) || ! isset( $profile['surface'], $profile['profile_id'], $profile['semantic_slots'] ) ) {
@@ -33,10 +34,14 @@ final class InboxPresentationModel {
             throw new ContractViolation( 'Inbox presentation requires semantic-slot declarations from the active visual package.' );
         }
 
-        $this->profile        = $profile;
-        $this->binding_sets   = array_values( $binding_sets );
-        $this->required_slots = $this->requiredSlotsFromPackage( $semantic_slot_declarations );
-        $this->resolver       = new SemanticBindingResolver( $this->binding_sets, $profile['semantic_slots'] );
+        $this->profile               = $profile;
+        $this->binding_sets          = array_values( $binding_sets );
+        $this->required_slots        = $this->requiredSlotsFromPackage( $semantic_slot_declarations );
+        $this->required_source_slots = $this->requiredSourceSlots( $this->required_slots );
+        $this->resolver              = new SemanticBindingResolver(
+            $this->binding_sets,
+            array_values( array_unique( array_merge( $profile['semantic_slots'], $this->required_source_slots ) ) )
+        );
     }
 
     public function profileId() {
@@ -49,11 +54,79 @@ final class InboxPresentationModel {
 
     /**
      * Required Inbox semantics are owned by the active visual package contract.
-     * This accessor exists for deterministic conformance tests, not as a second
-     * registry or configuration surface.
+     * Optional catalog slots such as workflow.due_at remain resolvable/displayable
+     * when proven, but do not participate in mandatory Card Mode readiness.
      */
     public function requiredSemanticSlotKeys() {
         return $this->required_slots;
+    }
+
+    /**
+     * Exact authoritative source slots needed to satisfy the required semantic
+     * contract. Derived slots expand to their canonical components instead of
+     * introducing a duplicate host source.
+     */
+    public function requiredSourceSemanticSlotKeys() {
+        return $this->required_source_slots;
+    }
+
+    public function isDerivedSlot( $slot_key ) {
+        return array() !== OperationsBindingManagementPolicy::derivationComponents( $slot_key );
+    }
+
+    /**
+     * Read-only presentation derivation. Every component must be independently
+     * bound and source-bound availability-proven in the same active environment.
+     */
+    public function derivedDecision( $entry, $slot_key ) {
+        $components = OperationsBindingManagementPolicy::derivationComponents( $slot_key );
+        if ( array() === $components ) {
+            return array(
+                'ready' => false,
+                'reason' => 'slot_is_not_derived',
+                'semantic_slot_key' => $slot_key,
+                'component_source_refs' => array(),
+            );
+        }
+
+        $sources = array();
+        $binding_set_id = null;
+        $binding_set_version = null;
+
+        foreach ( $components as $component ) {
+            $resolved = $this->resolve( $entry, $component );
+            if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
+                return array(
+                    'ready' => false,
+                    'reason' => 'derivation_component_unresolved',
+                    'semantic_slot_key' => $component,
+                    'component_source_refs' => array(),
+                );
+            }
+
+            if ( null === $binding_set_id ) {
+                $binding_set_id = $resolved['binding_set_id'];
+                $binding_set_version = $resolved['binding_set_version'];
+            } elseif ( $binding_set_id !== $resolved['binding_set_id'] || $binding_set_version !== $resolved['binding_set_version'] ) {
+                return array(
+                    'ready' => false,
+                    'reason' => 'derivation_component_context_mismatch',
+                    'semantic_slot_key' => $component,
+                    'component_source_refs' => array(),
+                );
+            }
+
+            $sources[ $component ] = $resolved['source_ref'];
+        }
+
+        return array(
+            'ready' => true,
+            'reason' => null,
+            'semantic_slot_key' => $slot_key,
+            'component_source_refs' => $sources,
+            'binding_set_id' => $binding_set_id,
+            'binding_set_version' => $binding_set_version,
+        );
     }
 
     /**
@@ -62,6 +135,18 @@ final class InboxPresentationModel {
      */
     public function presentationReadiness( $entry ) {
         foreach ( $this->required_slots as $slot_key ) {
+            if ( $this->isDerivedSlot( $slot_key ) ) {
+                $derived = $this->derivedDecision( $entry, $slot_key );
+                if ( empty( $derived['ready'] ) ) {
+                    return array(
+                        'ready' => false,
+                        'reason' => $derived['reason'],
+                        'semantic_slot_key' => $derived['semantic_slot_key'],
+                    );
+                }
+                continue;
+            }
+
             $resolved = $this->resolve( $entry, $slot_key );
             if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
                 return array(
@@ -75,16 +160,21 @@ final class InboxPresentationModel {
         return array( 'ready' => true, 'reason' => null, 'semantic_slot_key' => null );
     }
 
-    /**
-     * Presentation projection is allowed only when every package-declared
-     * required Inbox semantic resolves through the existing admitted path.
-     */
     public function isPresentationReady( $entry ) {
         $decision = $this->presentationReadiness( $entry );
         return true === $decision['ready'];
     }
 
+    /**
+     * Resolve one host-backed semantic only. Presentation-derived semantics are
+     * intentionally rejected here so no direct student.full_name source can be
+     * mistaken for authority.
+     */
     public function resolve( $entry, $slot_key ) {
+        if ( $this->isDerivedSlot( $slot_key ) ) {
+            return $this->unresolved( $slot_key, 'derived_slot_requires_derivation' );
+        }
+
         if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
             return $this->unresolved( $slot_key, 'invalid_entry' );
         }
@@ -104,19 +194,15 @@ final class InboxPresentationModel {
             $slot_key
         );
 
-        if ( empty( $resolved['resolved'] ) || empty( $resolved['binding_set_id'] ) ) {
+        if ( empty( $resolved['resolved'] ) || empty( $resolved['binding_set_id'] ) || empty( $resolved['binding_set_version'] ) ) {
             return $resolved;
         }
 
-        if ( ! $this->availabilityIsProven( $resolved['binding_set_id'], $slot_key, $entry, $installation_id ) ) {
+        if ( ! $this->availabilityIsProven( $resolved, $slot_key, $entry, $installation_id ) ) {
             return $this->failResolved( $resolved, 'availability_not_proven' );
         }
 
-        // A PROVEN semantic binding is necessary but not sufficient to call an
-        // arbitrary host API. WU17 only admits source adapters already covered
-        // by the portable contract/WU21 runtime evidence. Unknown state readers
-        // fail closed until a later evidence unit admits them explicitly.
-        if ( ! $this->sourceAdapterIsAdmitted( $resolved['source_ref'] ) ) {
+        if ( ! $this->sourceAdapterIsAdmitted( $slot_key, $resolved['source_ref'] ) ) {
             return $this->failResolved( $resolved, 'source_adapter_not_admitted' );
         }
 
@@ -149,6 +235,21 @@ final class InboxPresentationModel {
         return array_keys( $required );
     }
 
+    private function requiredSourceSlots( $required_slots ) {
+        $sources = array();
+        foreach ( $required_slots as $slot_key ) {
+            $components = OperationsBindingManagementPolicy::derivationComponents( $slot_key );
+            if ( array() !== $components ) {
+                foreach ( $components as $component ) {
+                    $sources[ $component ] = true;
+                }
+                continue;
+            }
+            $sources[ $slot_key ] = true;
+        }
+        return array_keys( $sources );
+    }
+
     private function installationIdForEntry( $entry ) {
         $ids = array();
 
@@ -164,18 +265,27 @@ final class InboxPresentationModel {
         return 1 === count( $ids ) ? reset( $ids ) : null;
     }
 
-    private function availabilityIsProven( $binding_set_id, $slot_key, $entry, $installation_id ) {
+    /**
+     * A PROVEN bit is not enough: the evidence ref must match the exact active
+     * binding-set identity/version and exact resolved source. This makes copied
+     * or stale proof fail closed after a remap/version change.
+     */
+    private function availabilityIsProven( $resolved, $slot_key, $entry, $installation_id ) {
         foreach ( $this->binding_sets as $binding_set ) {
-            if ( $binding_set_id !== $binding_set['binding_set_id'] || ! $this->bindingSetMatchesEntry( $binding_set, $entry ) ) {
+            if ( $resolved['binding_set_id'] !== $binding_set['binding_set_id']
+                || $resolved['binding_set_version'] !== $binding_set['binding_set_version']
+                || ! $this->bindingSetMatchesEntry( $binding_set, $entry ) ) {
                 continue;
             }
             if ( $binding_set['context']['installation_source_ref']['installation_id'] !== $installation_id ) {
                 continue;
             }
 
+            $expected_ref = InboxRuntimeEvidence::availabilityRef( $binding_set, $slot_key, $resolved['source_ref'] );
             foreach ( $binding_set['runtime_claims'] as $claim ) {
                 if ( $slot_key === $claim['semantic_slot_key'] && 'availability' === $claim['claim'] ) {
-                    return 'PROVEN' === $claim['evidence_state'];
+                    return 'PROVEN' === $claim['evidence_state']
+                        && in_array( $expected_ref, $claim['evidence_refs'], true );
                 }
             }
         }
@@ -183,16 +293,21 @@ final class InboxPresentationModel {
         return false;
     }
 
-    private function sourceAdapterIsAdmitted( $source_ref ) {
+    private function sourceAdapterIsAdmitted( $slot_key, $source_ref ) {
         if ( ! is_array( $source_ref ) || empty( $source_ref['type'] ) ) {
             return false;
         }
 
-        if ( 'gravity_forms.field' === $source_ref['type'] || 'gravity_forms.entry_meta' === $source_ref['type'] ) {
+        if ( 'gravity_forms.field' === $source_ref['type'] ) {
             return true;
         }
 
-        return 'gravity_flow.state' === $source_ref['type']
+        if ( 'entry.created_at' === $slot_key && 'gravity_forms.entry_meta' === $source_ref['type'] ) {
+            return isset( $source_ref['meta_key'] ) && 'date_created' === $source_ref['meta_key'];
+        }
+
+        return 'workflow.current_step' === $slot_key
+            && 'gravity_flow.state' === $source_ref['type']
             && isset( $source_ref['state_key'] )
             && 'current_step' === $source_ref['state_key'];
     }
@@ -227,6 +342,7 @@ final class InboxPresentationModel {
         return array(
             'resolved' => false,
             'binding_set_id' => null,
+            'binding_set_version' => null,
             'semantic_slot_key' => $slot_key,
             'state' => 'NOT_PROVEN',
             'source_ref' => null,
