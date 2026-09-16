@@ -12,21 +12,28 @@ The project intends to follow Semantic Versioning once production releases begin
 - Bounded operations setup path in Gravity Forms plugin settings that installs the shipped operations package, adopts the Print presentation profile, and creates the environment binding context for one explicitly selected form.
 - Compare-and-set visual activation (`VisualPackageLifecycle::activateIfCurrent()`), so an unattended setup path cannot replace a different existing surface activation.
 - Environment binding-set schema `1.1.0`, an additive revision whose only change is an optional `print_option_map` on a `print_mapping` runtime claim, letting an environment declare what its own Gravity Forms raw choice values mean for the canonical Print option vocabulary.
-- Explicit Print option confirmation (`BindingRepairService::confirmPrintOption()`), offered through the existing Mapping & Binding Health action rather than a second mapping UI. An administrator states what one real host choice value means for one canonical Print option, and the value must already exist in the bound field's own choice list.
+- Explicit Print option confirmation (`BindingRepairService::confirmPrintOption()`), now managed beside the bound semantic row. An administrator states what one real host choice value means for one canonical Print option, and the value must already exist in the bound field's own choice list.
+- Row-oriented Mapping & Binding Health controls for admitted Gravity Forms-backed semantics, with one exact field selector and explicit Apply action per semantic slot.
+- First-class explicit unmap (`BindingRepairService::unmapField()`), producing a new immutable binding-set version with the selected slot `UNBOUND`, its source/evidence cleared, unrelated mappings preserved, and source-tied runtime proof invalidated.
+- Explicit per-canonical-option `Not confirmed` handling for Print choice proof without changing the bound host field.
 - Configuration-readiness projection in plugin settings, reported strictly as configuration facts and never as a claim that any user may print.
 - Per-asset Print asset integrity reporting that distinguishes a missing required asset from one whose bytes no longer match the declared release identity.
 - Automated coverage for the operator setup path, seed semantics, activation-conflict handling, rerun preservation, stale Print-proof invalidation, raw-versus-display reads, canonical choice mapping, and the two-page composition.
+- Authentic disposable WordPress admin-browser qualification for row-level stale-binding repair, fresh immutable-version rollback availability, and post-rollback health re-evaluation through the real Gravity Forms Add-On settings form.
 
 ### Changed
 
-- Mapping & Binding Health repair choices now expose the exact stable semantic slot key and Gravity Forms field ID carried by the actionable payload, so descriptive meaning text cannot present a different repair identity from the immutable binding mutation that will execute.
+- Mapping & Binding Health now uses stable semantic slot keys as row identity and keeps the global control for explicit immutable-version rollback only; ordinary field mapping and unmapping are performed on the exact row being changed.
+- Direct-field selectors show the live Gravity Forms Field ID, label, and field type without label guessing or compatibility heuristics; an unchanged exact mapping is a service-level no-op rather than an unnecessary new binding version.
+- Derived semantics such as `student.full_name` and host-managed/non-field Gravity Flow semantics are shown as such instead of being offered the arbitrary Gravity Forms field inventory.
+- Print choice mapping is shown beside an eligible bound choice semantic, using canonical option identities from the existing Print contract and real raw/text choices from the authoritative Gravity Forms field definition; unchanged confirmations are no-ops.
 - SRWF dossier Print typography now selects the admitted `Vazir` family first and reuses the existing Vazir plugin's self-hosted delivery through Gravity Flow's Print stylesheet seam; GPP still owns no font binaries or independent font loader.
 - `student.full_name` is now derived read-only from the separately bound `student.first_name` and `student.last_name` slots, matching the authoritative binding matrix. A derived slot can no longer be read as a direct host source, and an unresolved component leaves the field blank instead of printing a half-composed identity.
 - `BoundHostValueReader` exposes separate `readRaw()` and `readDisplay()` entry points instead of one ambiguous `read()`. Print option selection compares authoritative raw host values; presentation text uses the host display label.
 - `BoundHostValueReader` now passes Gravity Forms' `get_value_entry_detail()` arguments in their documented positions; the entry array was previously passed where the currency code belongs.
 - Print option selection is driven by the active binding set's declared option map rather than raw choice values assumed by the adapter.
 - Print setup and model-resolution failures report distinct reasons (`print_surface_not_activated`, `activated_package_unresolved`, `semantic_package_unusable`, `required_asset_missing`, `required_asset_modified`, `runtime_exception`) instead of collapsing into `profile_not_active`.
-- Explicit binding repair now also drops a Print option map that described the previous source's raw values, alongside the runtime proof it invalidates.
+- Explicit binding repair or unmap also drops a Print option map that described the previous source's raw values, alongside the runtime proof it invalidates.
 
 ## [0.1.0] - 2026-09-15
 

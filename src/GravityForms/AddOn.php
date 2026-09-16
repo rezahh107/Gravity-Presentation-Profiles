@@ -12,6 +12,8 @@ use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\SettingsLifecycleWorkflow;
 use GravityPresentationProfiles\Core\PresentationResolver;
 use GravityPresentationProfiles\ProfileCatalog;
+use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPolicy;
+use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierValueResolver;
 
 final class AddOn extends \GFAddOn {
     private static $_instance = null;
@@ -89,7 +91,7 @@ final class AddOn extends \GFAddOn {
             ),
             array(
                 'title'       => esc_html__( 'Mapping & Binding Health', 'gravity-presentation-profiles' ),
-                'description' => esc_html__( 'Review each canonical semantic meaning against the currently active binding artifact and the current Gravity Forms field inventory. Repairs are explicit: select one action and save settings. GPP creates and activates a new immutable binding version; it never guesses a replacement field.', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Map each admitted Gravity Forms-backed canonical meaning on its own row, apply that row explicitly, then review the resulting health. Not mapped is always explicit. Derived and host-managed meanings are shown without a misleading field selector. Every accepted change creates and conflict-safely activates a new immutable binding version.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
                     array(
                         'name'  => 'binding_health',
@@ -98,10 +100,10 @@ final class AddOn extends \GFAddOn {
                     ),
                     array(
                         'name'                => 'binding_management_action',
-                        'label'               => esc_html__( 'Explicit repair or rollback', 'gravity-presentation-profiles' ),
-                        'description'         => esc_html__( 'Choose one repair or rollback action, then save settings. The default performs no binding change. Technical IDs are shown only as secondary diagnostics.', 'gravity-presentation-profiles' ),
+                        'label'               => esc_html__( 'Binding history rollback', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Rollback is separate from normal row-by-row mapping. Choose one previously-authoritative immutable version only when you intentionally want to reactivate it. The default performs no binding change.', 'gravity-presentation-profiles' ),
                         'type'                => 'select',
-                        'choices'             => $this->bindingManagementChoices(),
+                        'choices'             => $this->bindingRollbackChoices(),
                         'validation_callback' => array( $this, 'validate_binding_management_action' ),
                         'save_callback'       => array( $this, 'discard_binding_management_action' ),
                     ),
@@ -227,43 +229,93 @@ final class AddOn extends \GFAddOn {
     }
 
     public function validate_binding_management_action( $field, $value ) {
+        $row_submission = false;
+        $row_token = isset( $_POST['gpp_binding_row_action'] ) && is_scalar( $_POST['gpp_binding_row_action'] )
+            ? trim( (string) ( function_exists( 'wp_unslash' ) ? wp_unslash( $_POST['gpp_binding_row_action'] ) : $_POST['gpp_binding_row_action'] ) )
+            : '';
+
+        if ( '' !== $row_token ) {
+            $row_submission = true;
+            $row_values = isset( $_POST['gpp_binding_row'] ) && is_array( $_POST['gpp_binding_row'] )
+                ? ( function_exists( 'wp_unslash' ) ? wp_unslash( $_POST['gpp_binding_row'] ) : $_POST['gpp_binding_row'] )
+                : array();
+            $encoded = isset( $row_values[ $row_token ] ) && is_scalar( $row_values[ $row_token ] )
+                ? (string) $row_values[ $row_token ]
+                : '';
+            $row_action = $this->decodeBindingManagementAction( $encoded );
+            if ( 1 !== preg_match( '/^[a-f0-9]{24}$/', $row_token ) || null === $row_action || $this->bindingRowToken( $row_action ) !== $row_token ) {
+                $this->setSettingsFieldError( $field, 'The selected mapping row no longer matches its submitted action. Refresh the page and try again.' );
+                return;
+            }
+            $value = $encoded;
+        }
+
         if ( ! is_string( $value ) || '' === trim( $value ) ) {
             return;
         }
 
         $action = $this->decodeBindingManagementAction( $value );
-        if ( null === $action ) {
+        if ( null === $action || ( ! $row_submission && 'rollback' !== $action['action'] ) ) {
             $this->setSettingsFieldError( $field, 'The selected binding management action is invalid. Refresh the page and try again.' );
             return;
         }
 
         try {
-            if ( 'repair' === $action['action'] ) {
-                $this->bindingRepairService()->repairField(
-                    array(
-                        'context_key' => $action['context_key'],
-                        'binding_set_id' => $action['binding_set_id'],
-                        'binding_set_version' => $action['binding_set_version'],
-                        'semantic_slot_key' => $action['semantic_slot_key'],
-                        'field_id' => $action['field_id'],
-                    )
-                );
+            if ( in_array( $action['action'], array( 'repair', 'unmap' ), true ) ) {
+                if ( OperationsBindingManagementPolicy::DIRECT_FIELD !== OperationsBindingManagementPolicy::kind( $action['semantic_slot_key'] ) ) {
+                    throw new LifecycleException( 'mapping_slot_not_direct_field', 'This semantic meaning is not admitted as a direct Gravity Forms field mapping.' );
+                }
+
+                if ( 'repair' === $action['action'] ) {
+                    $this->bindingRepairService()->repairField(
+                        array(
+                            'context_key' => $action['context_key'],
+                            'binding_set_id' => $action['binding_set_id'],
+                            'binding_set_version' => $action['binding_set_version'],
+                            'semantic_slot_key' => $action['semantic_slot_key'],
+                            'field_id' => $action['field_id'],
+                        )
+                    );
+                } else {
+                    $this->bindingRepairService()->unmapField(
+                        array(
+                            'context_key' => $action['context_key'],
+                            'binding_set_id' => $action['binding_set_id'],
+                            'binding_set_version' => $action['binding_set_version'],
+                            'semantic_slot_key' => $action['semantic_slot_key'],
+                        )
+                    );
+                }
                 return;
             }
 
-            if ( 'print_option' === $action['action'] ) {
-                // Confirming what a host value means for Print is separate from
-                // binding the field, and is never a permission decision.
-                $this->bindingRepairService()->confirmPrintOption(
-                    array(
-                        'context_key' => $action['context_key'],
-                        'binding_set_id' => $action['binding_set_id'],
-                        'binding_set_version' => $action['binding_set_version'],
-                        'semantic_slot_key' => $action['semantic_slot_key'],
-                        'canonical_option' => $action['canonical_option'],
-                        'host_raw_value' => $action['host_raw_value'],
-                    )
-                );
+            if ( in_array( $action['action'], array( 'print_option', 'clear_print_option' ), true ) ) {
+                if ( OperationsBindingManagementPolicy::DIRECT_FIELD !== OperationsBindingManagementPolicy::kind( $action['semantic_slot_key'] ) ) {
+                    throw new LifecycleException( 'mapping_slot_not_direct_field', 'This Print meaning is not admitted as a direct Gravity Forms field mapping.' );
+                }
+
+                if ( 'print_option' === $action['action'] ) {
+                    $this->bindingRepairService()->confirmPrintOption(
+                        array(
+                            'context_key' => $action['context_key'],
+                            'binding_set_id' => $action['binding_set_id'],
+                            'binding_set_version' => $action['binding_set_version'],
+                            'semantic_slot_key' => $action['semantic_slot_key'],
+                            'canonical_option' => $action['canonical_option'],
+                            'host_raw_value' => $action['host_raw_value'],
+                        )
+                    );
+                } else {
+                    $this->bindingRepairService()->clearPrintOption(
+                        array(
+                            'context_key' => $action['context_key'],
+                            'binding_set_id' => $action['binding_set_id'],
+                            'binding_set_version' => $action['binding_set_version'],
+                            'semantic_slot_key' => $action['semantic_slot_key'],
+                            'canonical_option' => $action['canonical_option'],
+                        )
+                    );
+                }
                 return;
             }
 
@@ -395,8 +447,6 @@ final class AddOn extends \GFAddOn {
         }
 
         if ( OperationsSetupService::STATUS_COMPLETED !== $result['status'] ) {
-            // Partial completion is never reported as success. Name the step that
-            // stopped so the operator can make the explicit decision it needs.
             $this->setSettingsFieldError( $field, $this->operationsSetupFailureMessage( $result ) );
         }
     }
@@ -491,24 +541,156 @@ final class AddOn extends \GFAddOn {
             $form_name = ! empty( $context['form_title'] ) ? $context['form_title'] : sprintf( __( 'Form %s', 'gravity-presentation-profiles' ), $context['form_id'] );
             echo '<h4>' . esc_html( $form_name ) . '</h4>';
             echo '<p><small>' . esc_html__( 'Active binding version:', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $context['binding_set_id'] . '@' . $context['binding_set_version'] ) . '</code></small></p>';
-            echo '<table class="widefat striped"><thead><tr>';
+            echo '<table class="widefat striped" data-gpp-binding-management><thead><tr>';
             echo '<th>' . esc_html__( 'Canonical meaning', 'gravity-presentation-profiles' ) . '</th>';
             echo '<th>' . esc_html__( 'Current host source', 'gravity-presentation-profiles' ) . '</th>';
             echo '<th>' . esc_html__( 'Health', 'gravity-presentation-profiles' ) . '</th>';
+            echo '<th>' . esc_html__( 'Mapping', 'gravity-presentation-profiles' ) . '</th>';
             echo '</tr></thead><tbody>';
             foreach ( $context['facts'] as $fact ) {
-                $meaning = null !== $fact['meaning'] ? $fact['meaning'] : $fact['semantic_slot_key'];
-                echo '<tr><td>' . esc_html( $meaning );
-                echo '<br><small><code>' . esc_html( $fact['semantic_slot_key'] ) . '</code></small></td>';
+                $meaning = null !== $fact['meaning'] ? $fact['meaning'] : __( 'Authoritative meaning unavailable', 'gravity-presentation-profiles' );
+                echo '<tr data-gpp-semantic-slot="' . esc_attr( $fact['semantic_slot_key'] ) . '"><td><code>' . esc_html( $fact['semantic_slot_key'] ) . '</code>';
+                echo '<br><small>' . esc_html( $meaning ) . '</small></td>';
                 echo '<td>' . $this->bindingSourceMarkup( $fact['source'] ) . '</td>';
                 echo '<td><strong>' . esc_html( $this->bindingHealthLabel( $fact['status'] ) ) . '</strong>';
                 if ( ! empty( $fact['reason'] ) ) {
                     echo '<br><small><code>' . esc_html( $fact['reason'] ) . '</code></small>';
                 }
-                echo '</td></tr>';
+                echo '</td><td>' . $this->bindingManagementMarkup( $context, $fact ) . '</td></tr>';
             }
             echo '</tbody></table>';
         }
+    }
+
+    private function bindingManagementMarkup( $context, $fact ) {
+        $kind = OperationsBindingManagementPolicy::kind( $fact['semantic_slot_key'] );
+        if ( OperationsBindingManagementPolicy::DERIVED === $kind ) {
+            $components = OperationsBindingManagementPolicy::derivationComponents( $fact['semantic_slot_key'] );
+            return esc_html__( 'Derived from', 'gravity-presentation-profiles' ) . ' <code>'
+                . implode( '</code> + <code>', array_map( 'esc_html', $components ) ) . '</code>';
+        }
+
+        if ( OperationsBindingManagementPolicy::DIRECT_FIELD !== $kind ) {
+            return '<small>' . esc_html__( 'Managed by its host adapter or semantic contract; no arbitrary Gravity Forms field selector is admitted here.', 'gravity-presentation-profiles' ) . '</small>';
+        }
+
+        if ( null === $fact['meaning'] ) {
+            return '<small>' . esc_html__( 'Field mapping is disabled until this semantic meaning has one unambiguous authoritative definition.', 'gravity-presentation-profiles' ) . '</small>';
+        }
+
+        $common = array(
+            'context_key' => $context['context_key'],
+            'binding_set_id' => $context['binding_set_id'],
+            'binding_set_version' => $context['binding_set_version'],
+            'semantic_slot_key' => $fact['semantic_slot_key'],
+        );
+        $unmap = array_merge( array( 'action' => 'unmap' ), $common );
+        $token = $this->bindingRowToken( $unmap );
+        $current_field_id = is_array( $fact['source'] ) && isset( $fact['source']['type'], $fact['source']['field_id'] ) && 'gravity_forms.field' === $fact['source']['type']
+            ? (string) $fact['source']['field_id']
+            : null;
+        $has_current = null !== $current_field_id && isset( $context['fields'][ $current_field_id ] );
+
+        $html = '<div class="gpp-binding-row-control">';
+        $html .= '<select name="gpp_binding_row[' . esc_attr( $token ) . ']" aria-label="' . esc_attr( sprintf( __( 'Mapping for %s', 'gravity-presentation-profiles' ), $fact['semantic_slot_key'] ) ) . '">';
+        if ( null !== $current_field_id && ! $has_current ) {
+            $html .= '<option value="" selected disabled>' . esc_html( sprintf( __( 'Current Field %s is missing — choose explicitly', 'gravity-presentation-profiles' ), $current_field_id ) ) . '</option>';
+        }
+        $html .= '<option value="' . esc_attr( $this->encodeBindingManagementAction( $unmap ) ) . '"' . ( null === $current_field_id ? ' selected' : '' ) . '>' . esc_html__( 'Not mapped', 'gravity-presentation-profiles' ) . '</option>';
+        foreach ( $context['fields'] as $host_field ) {
+            $repair = array_merge(
+                array( 'action' => 'repair' ),
+                $common,
+                array( 'field_id' => $host_field['field_id'] )
+            );
+            $label = sprintf(
+                __( 'Field %1$s — %2$s (%3$s)', 'gravity-presentation-profiles' ),
+                $host_field['field_id'],
+                $host_field['label'],
+                $host_field['type']
+            );
+            $html .= '<option value="' . esc_attr( $this->encodeBindingManagementAction( $repair ) ) . '"'
+                . ( $has_current && (string) $host_field['field_id'] === $current_field_id ? ' selected' : '' ) . '>'
+                . esc_html( $label ) . '</option>';
+        }
+        $html .= '</select> ';
+        $html .= '<button type="submit" class="button button-secondary" name="gpp_binding_row_action" value="' . esc_attr( $token ) . '">' . esc_html__( 'Apply mapping', 'gravity-presentation-profiles' ) . '</button>';
+        $html .= '</div>';
+        $html .= $this->printOptionManagementMarkup( $context, $fact );
+        return $html;
+    }
+
+    private function printOptionManagementMarkup( $context, $fact ) {
+        $groups = PrintDossierValueResolver::optionGroups();
+        $slot = $fact['semantic_slot_key'];
+        if ( empty( $groups[ $slot ] ) || ! is_array( $fact['source'] ) || 'gravity_forms.field' !== ( isset( $fact['source']['type'] ) ? $fact['source']['type'] : null ) ) {
+            return '';
+        }
+
+        $field_id = (string) $fact['source']['field_id'];
+        if ( empty( $context['fields'][ $field_id ]['choices'] ) ) {
+            return '';
+        }
+        $choices = $context['fields'][ $field_id ]['choices'];
+        $confirmed = $this->confirmedPrintOptionMap( $context['artifact'], $slot );
+        $common = array(
+            'context_key' => $context['context_key'],
+            'binding_set_id' => $context['binding_set_id'],
+            'binding_set_version' => $context['binding_set_version'],
+            'semantic_slot_key' => $slot,
+        );
+
+        $html = '<div class="gpp-print-option-mapping"><p><small><strong>' . esc_html__( 'Print choice meaning', 'gravity-presentation-profiles' ) . '</strong> — '
+            . esc_html__( 'Confirm real raw host values explicitly; no labels are guessed.', 'gravity-presentation-profiles' ) . '</small></p>';
+        foreach ( $groups[ $slot ] as $canonical_option ) {
+            $clear = array_merge(
+                array( 'action' => 'clear_print_option' ),
+                $common,
+                array( 'canonical_option' => $canonical_option )
+            );
+            $token = $this->bindingRowToken( $clear );
+            $selected_raw = isset( $confirmed[ $canonical_option ] ) ? (string) $confirmed[ $canonical_option ] : null;
+            $html .= '<div class="gpp-print-option-row"><code>' . esc_html( $canonical_option ) . '</code> → ';
+            $html .= '<select name="gpp_binding_row[' . esc_attr( $token ) . ']" aria-label="' . esc_attr( sprintf( __( 'Print mapping for %1$s %2$s', 'gravity-presentation-profiles' ), $slot, $canonical_option ) ) . '">';
+            $html .= '<option value="' . esc_attr( $this->encodeBindingManagementAction( $clear ) ) . '"' . ( null === $selected_raw ? ' selected' : '' ) . '>' . esc_html__( 'Not confirmed', 'gravity-presentation-profiles' ) . '</option>';
+            foreach ( $choices as $choice ) {
+                $confirm = array_merge(
+                    array( 'action' => 'print_option' ),
+                    $common,
+                    array(
+                        'canonical_option' => $canonical_option,
+                        'host_raw_value' => $choice['value'],
+                    )
+                );
+                $choice_label = sprintf( __( '%1$s — raw: %2$s', 'gravity-presentation-profiles' ), $choice['text'], $choice['value'] );
+                $html .= '<option value="' . esc_attr( $this->encodeBindingManagementAction( $confirm ) ) . '"'
+                    . ( null !== $selected_raw && $selected_raw === (string) $choice['value'] ? ' selected' : '' ) . '>'
+                    . esc_html( $choice_label ) . '</option>';
+            }
+            $html .= '</select> ';
+            $html .= '<button type="submit" class="button button-secondary" name="gpp_binding_row_action" value="' . esc_attr( $token ) . '">' . esc_html__( 'Apply Print meaning', 'gravity-presentation-profiles' ) . '</button></div>';
+        }
+        $html .= '</div>';
+        return $html;
+    }
+
+    private function confirmedPrintOptionMap( $artifact, $semantic_slot_key ) {
+        if ( empty( $artifact['runtime_claims'] ) ) {
+            return array();
+        }
+        foreach ( $artifact['runtime_claims'] as $claim ) {
+            if ( $claim['semantic_slot_key'] !== $semantic_slot_key || 'print_mapping' !== $claim['claim'] || 'PROVEN' !== $claim['evidence_state'] || empty( $claim['print_option_map'] ) ) {
+                continue;
+            }
+            $map = array();
+            foreach ( $claim['print_option_map'] as $pair ) {
+                if ( isset( $pair['canonical_option'], $pair['host_raw_value'] ) ) {
+                    $map[ $pair['canonical_option'] ] = (string) $pair['host_raw_value'];
+                }
+            }
+            return $map;
+        }
+        return array();
     }
 
     public function settings_gpp_diagnostics( $field ) {
@@ -830,69 +1012,15 @@ final class AddOn extends \GFAddOn {
         return $form;
     }
 
-    private function bindingManagementChoices() {
+    private function bindingRollbackChoices() {
         $choices = array(
             array(
-                'label' => esc_html__( 'No binding change', 'gravity-presentation-profiles' ),
+                'label' => esc_html__( 'No rollback', 'gravity-presentation-profiles' ),
                 'value' => '',
             ),
         );
         try {
             $candidates = $this->bindingHealthService()->managementCandidates();
-            foreach ( $candidates['repairs'] as $repair ) {
-                $form_name = ! empty( $repair['form_title'] ) ? $repair['form_title'] : 'Form ' . $repair['form_id'];
-                foreach ( $repair['fields'] as $host_field ) {
-                    $payload = array(
-                        'action' => 'repair',
-                        'context_key' => $repair['context_key'],
-                        'binding_set_id' => $repair['binding_set_id'],
-                        'binding_set_version' => $repair['binding_set_version'],
-                        'semantic_slot_key' => $repair['semantic_slot_key'],
-                        'field_id' => $host_field['field_id'],
-                    );
-                    $choices[] = array(
-                        'label' => sprintf(
-                            __( 'Repair: %1$s — %2$s → %3$s (Field %4$s)', 'gravity-presentation-profiles' ),
-                            $form_name,
-                            $repair['meaning'],
-                            $host_field['label'],
-                            $host_field['field_id']
-                        ),
-                        'value' => $this->encodeBindingManagementAction( $payload ),
-                    );
-                }
-            }
-            foreach ( $candidates['print_options'] as $group ) {
-                $form_name = ! empty( $group['form_title'] ) ? $group['form_title'] : 'Form ' . $group['form_id'];
-                foreach ( $group['canonical_options'] as $canonical_option ) {
-                    foreach ( $group['choices'] as $choice ) {
-                        if ( isset( $group['confirmed'][ $canonical_option ] ) && $group['confirmed'][ $canonical_option ] === $choice['value'] ) {
-                            continue;
-                        }
-                        $choices[] = array(
-                            'label' => sprintf(
-                                __( 'Print option: %1$s — %2$s — “%3$s” (%4$s) means %5$s', 'gravity-presentation-profiles' ),
-                                $form_name,
-                                $group['field_label'],
-                                $choice['text'],
-                                $choice['value'],
-                                $canonical_option
-                            ),
-                            'value' => $this->encodeBindingManagementAction(
-                                array(
-                                    'action' => 'print_option',
-                                    'context_key' => $group['context_key'],
-                                    'binding_set_id' => $group['binding_set_id'],
-                                    'binding_set_version' => $group['binding_set_version'],
-                                    'semantic_slot_key' => $group['semantic_slot_key'],
-                                    'canonical_option' => $canonical_option,
-                                    'host_raw_value' => $choice['value'],
-                                )
-                            ),
-                        );
-                    }
-                }
-            }
             foreach ( $candidates['rollbacks'] as $rollback ) {
                 $form_name = ! empty( $rollback['form_title'] ) ? $rollback['form_title'] : 'Form ' . $rollback['form_id'];
                 $choices[] = array(
@@ -914,8 +1042,8 @@ final class AddOn extends \GFAddOn {
                 );
             }
         } catch ( \Throwable $exception ) {
-            // The health table will surface the lifecycle read failure. Saving
-            // ordinary plugin settings must remain possible and change no binding.
+            // The health table will surface lifecycle read failures. Ordinary
+            // settings saves remain possible and make no binding change.
         }
         return $choices;
     }
@@ -941,17 +1069,37 @@ final class AddOn extends \GFAddOn {
         if ( ! is_array( $payload ) || empty( $payload['action'] ) ) {
             return null;
         }
-        if ( 'repair' === $payload['action'] ) {
-            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' );
-        } elseif ( 'print_option' === $payload['action'] ) {
-            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'host_raw_value', 'semantic_slot_key' );
-        } else {
-            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
+
+        $expected_by_action = array(
+            'repair' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' ),
+            'unmap' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'semantic_slot_key' ),
+            'print_option' => array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'host_raw_value', 'semantic_slot_key' ),
+            'clear_print_option' => array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'semantic_slot_key' ),
+            'rollback' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' ),
+        );
+        if ( ! isset( $expected_by_action[ $payload['action'] ] ) ) {
+            return null;
         }
+
         $actual = array_keys( $payload );
+        $expected = $expected_by_action[ $payload['action'] ];
         sort( $actual, SORT_STRING );
         sort( $expected, SORT_STRING );
         return $actual === $expected ? $payload : null;
+    }
+
+    private function bindingRowToken( $action ) {
+        if ( ! is_array( $action ) || empty( $action['action'] ) ) {
+            return '';
+        }
+        if ( in_array( $action['action'], array( 'repair', 'unmap' ), true ) ) {
+            $parts = array( 'mapping', $action['context_key'], $action['binding_set_id'], $action['binding_set_version'], $action['semantic_slot_key'] );
+        } elseif ( in_array( $action['action'], array( 'print_option', 'clear_print_option' ), true ) ) {
+            $parts = array( 'print', $action['context_key'], $action['binding_set_id'], $action['binding_set_version'], $action['semantic_slot_key'], $action['canonical_option'] );
+        } else {
+            return '';
+        }
+        return substr( hash( 'sha256', implode( '|', array_map( 'strval', $parts ) ) ), 0, 24 );
     }
 
     private function bindingSourceMarkup( $source ) {
@@ -960,7 +1108,11 @@ final class AddOn extends \GFAddOn {
         }
         if ( 'gravity_forms.field' === $source['type'] ) {
             $label = isset( $source['label'] ) ? $source['label'] : __( 'Missing Gravity Forms field', 'gravity-presentation-profiles' );
-            return esc_html( $label ) . '<br><small>' . esc_html__( 'Field ID', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $source['field_id'] ) . '</code></small>';
+            $detail = esc_html__( 'Field ID', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $source['field_id'] ) . '</code>';
+            if ( isset( $source['field_type'] ) ) {
+                $detail .= ' · ' . esc_html__( 'Type', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $source['field_type'] ) . '</code>';
+            }
+            return esc_html( $label ) . '<br><small>' . $detail . '</small>';
         }
         $identity = '';
         foreach ( array( 'meta_key', 'state_key', 'region_key', 'action_key' ) as $key ) {

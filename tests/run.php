@@ -20,6 +20,7 @@ $cases = array(
     'binding-activation-cas.php',
     'pr25-root-repairs.php',
     'pr2-binding-repair-identity.php',
+    'pr3-mapping-ux-unmap.php',
     'pr2-print-font-contract.php',
     'runtime-diagnostics.php',
     'package-lifecycle-v11.php',

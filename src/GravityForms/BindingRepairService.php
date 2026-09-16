@@ -10,6 +10,7 @@ use GravityPresentationProfiles\Core\Lifecycle\RepairBindingEvidenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\StateStore;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
+use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierValueResolver;
 
 final class BindingRepairService {
     private $binding_store;
@@ -41,6 +42,11 @@ final class BindingRepairService {
         $snapshot = $this->snapshot();
         $current = $this->currentRecord( $snapshot, $request );
         $artifact = $current['artifact'];
+        $current_binding = $this->bindingForSlot( $artifact, $request['semantic_slot_key'] );
+        if ( 'NOT_APPLICABLE' === $current_binding['state'] ) {
+            throw new LifecycleException( 'repair_not_applicable', 'A NOT_APPLICABLE semantic slot cannot be repaired to a host field.' );
+        }
+
         $form_id = $artifact['context']['form_source_ref']['form_id'];
         $inventory = $this->inventory->load( $form_id );
         if ( empty( $inventory['form_exists'] ) ) {
@@ -65,45 +71,33 @@ final class BindingRepairService {
             }
         }
 
+        $new_source = array( 'type' => 'gravity_forms.field', 'field_id' => $field_id );
+        if ( 'PROVEN' === $current_binding['state'] && $this->sameSource( $current_binding['source_ref'], $new_source ) ) {
+            return array(
+                'status' => 'UNCHANGED',
+                'binding_set_id' => $artifact['binding_set_id'],
+                'previous_version' => $artifact['binding_set_version'],
+                'binding_set_version' => $artifact['binding_set_version'],
+                'semantic_slot_key' => $request['semantic_slot_key'],
+            );
+        }
+
         $next = $artifact;
         $next['binding_set_version'] = $this->nextVersion( $snapshot, $artifact['binding_set_id'], $artifact['binding_set_version'] );
-        $slot_found = false;
-        $new_source = array( 'type' => 'gravity_forms.field', 'field_id' => $field_id );
         $ref = $this->evidence_store->confirmationRef( $next, $request['semantic_slot_key'], $new_source );
 
         foreach ( $next['bindings'] as &$binding ) {
             if ( $binding['semantic_slot_key'] !== $request['semantic_slot_key'] ) {
                 continue;
             }
-            if ( 'NOT_APPLICABLE' === $binding['state'] ) {
-                throw new LifecycleException( 'repair_not_applicable', 'A NOT_APPLICABLE semantic slot cannot be repaired to a host field.' );
-            }
-            $slot_found = true;
             $binding['state'] = 'PROVEN';
             $binding['source_ref'] = $new_source;
             $binding['evidence_refs'] = array( $ref );
             break;
         }
         unset( $binding );
-        if ( ! $slot_found ) {
-            throw new LifecycleException( 'repair_slot_missing', 'The selected semantic slot is not present in the active binding artifact.' );
-        }
 
-        // Changing the source for a slot invalidates every runtime claim that
-        // depended on the previous source. A declared Print option map described
-        // the previous field's raw values, so it is dropped with the proof rather
-        // than silently surviving into the new binding version.
-        foreach ( $next['runtime_claims'] as &$claim ) {
-            if ( $claim['semantic_slot_key'] !== $request['semantic_slot_key'] ) {
-                continue;
-            }
-            if ( 'PROVEN' === $claim['evidence_state'] ) {
-                $claim['evidence_state'] = 'NOT_PROVEN';
-                $claim['evidence_refs'] = array();
-            }
-            unset( $claim['print_option_map'] );
-        }
-        unset( $claim );
+        $this->invalidateRuntimeClaims( $next, $request['semantic_slot_key'] );
 
         $next['provenance']['producer'] = 'Gravity Presentation Profiles admin binding repair';
         if ( ! in_array( $ref, $next['provenance']['evidence_refs'], true ) ) {
@@ -120,20 +114,79 @@ final class BindingRepairService {
         $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
         $lifecycle->import( $next );
         $this->evidence_store->recordConfirmation( $next, $request['semantic_slot_key'], $new_source );
-        $lifecycle->activateIfCurrent(
-            array(
-                'context' => $next['context'],
-                'binding_set_id' => $next['binding_set_id'],
-                'binding_set_version' => $next['binding_set_version'],
-                'expected_current_activation' => array(
-                    'binding_set_id' => $request['binding_set_id'],
-                    'binding_set_version' => $request['binding_set_version'],
-                ),
-            )
-        );
+        $this->activateNext( $lifecycle, $next, $request );
 
         return array(
             'status' => 'REPAIRED_AND_ACTIVATED',
+            'binding_set_id' => $next['binding_set_id'],
+            'previous_version' => $artifact['binding_set_version'],
+            'binding_set_version' => $next['binding_set_version'],
+            'semantic_slot_key' => $request['semantic_slot_key'],
+        );
+    }
+
+    /**
+     * Explicitly removes one field-backed mapping while preserving every other
+     * binding in the immutable artifact. This never guesses or substitutes a
+     * replacement source.
+     */
+    public function unmapField( $request ) {
+        $this->requireKeys(
+            $request,
+            array( 'context_key', 'binding_set_id', 'binding_set_version', 'semantic_slot_key' ),
+            'binding unmap request'
+        );
+
+        $snapshot = $this->snapshot();
+        $current = $this->currentRecord( $snapshot, $request );
+        $artifact = $current['artifact'];
+        $current_binding = $this->bindingForSlot( $artifact, $request['semantic_slot_key'] );
+
+        if ( 'NOT_APPLICABLE' === $current_binding['state'] ) {
+            throw new LifecycleException( 'unmap_not_applicable', 'A NOT_APPLICABLE semantic slot cannot be changed by field unmapping.' );
+        }
+        if ( null !== $current_binding['source_ref'] && 'gravity_forms.field' !== $current_binding['source_ref']['type'] ) {
+            throw new LifecycleException( 'unmap_not_field_backed', 'Only a Gravity Forms field mapping can be removed by this operation.' );
+        }
+        if ( 'UNBOUND' === $current_binding['state'] && null === $current_binding['source_ref'] && array() === $current_binding['evidence_refs'] ) {
+            return array(
+                'status' => 'UNCHANGED',
+                'binding_set_id' => $artifact['binding_set_id'],
+                'previous_version' => $artifact['binding_set_version'],
+                'binding_set_version' => $artifact['binding_set_version'],
+                'semantic_slot_key' => $request['semantic_slot_key'],
+            );
+        }
+
+        $next = $artifact;
+        $next['binding_set_version'] = $this->nextVersion( $snapshot, $artifact['binding_set_id'], $artifact['binding_set_version'] );
+        foreach ( $next['bindings'] as &$binding ) {
+            if ( $binding['semantic_slot_key'] !== $request['semantic_slot_key'] ) {
+                continue;
+            }
+            $binding['state'] = 'UNBOUND';
+            $binding['source_ref'] = null;
+            $binding['evidence_refs'] = array();
+            break;
+        }
+        unset( $binding );
+
+        $this->invalidateRuntimeClaims( $next, $request['semantic_slot_key'] );
+        $next['provenance']['producer'] = 'Gravity Presentation Profiles admin binding unmap';
+        EnvironmentBindingSet::validate( $next );
+
+        $gate = new RepairBindingEvidenceGate(
+            $this->evidence_store,
+            $next,
+            $artifact,
+            new EvidenceReferenceGate( $this->fallback_refs )
+        );
+        $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
+        $lifecycle->import( $next );
+        $this->activateNext( $lifecycle, $next, $request );
+
+        return array(
+            'status' => 'UNMAPPED_AND_ACTIVATED',
             'binding_set_id' => $next['binding_set_id'],
             'previous_version' => $artifact['binding_set_version'],
             'binding_set_version' => $next['binding_set_version'],
@@ -166,25 +219,12 @@ final class BindingRepairService {
             ),
             'print option confirmation request'
         );
+        $this->requireCanonicalPrintOption( $request['semantic_slot_key'], $request['canonical_option'] );
 
         $snapshot = $this->snapshot();
         $current  = $this->currentRecord( $snapshot, $request );
         $artifact = $current['artifact'];
-
-        $source = null;
-        foreach ( $artifact['bindings'] as $binding ) {
-            if ( $binding['semantic_slot_key'] === $request['semantic_slot_key'] ) {
-                $source = 'PROVEN' === $binding['state'] ? $binding['source_ref'] : null;
-                break;
-            }
-        }
-
-        if ( null === $source || 'gravity_forms.field' !== $source['type'] ) {
-            throw new LifecycleException(
-                'print_option_source_not_bound',
-                'Bind this meaning to a Gravity Forms field before confirming what its values mean for Print.'
-            );
-        }
+        $source = $this->boundFieldSource( $artifact, $request['semantic_slot_key'] );
 
         $inventory = $this->inventory->load( $artifact['context']['form_source_ref']['form_id'] );
         if ( empty( $inventory['form_exists'] ) ) {
@@ -197,14 +237,13 @@ final class BindingRepairService {
         }
 
         $host_raw_value = (string) $request['host_raw_value'];
-        $known          = false;
+        $known = false;
         foreach ( $inventory['fields'][ $field_id ]['choices'] as $choice ) {
             if ( $choice['value'] === $host_raw_value ) {
                 $known = true;
                 break;
             }
         }
-
         if ( ! $known ) {
             throw new LifecycleException(
                 'print_option_value_not_in_form',
@@ -212,8 +251,29 @@ final class BindingRepairService {
             );
         }
 
-        $next                        = $artifact;
-        $next['schema_version']      = EnvironmentBindingSet::SCHEMA_VERSION_1_1;
+        $existing_claim = $this->printMappingClaim( $artifact, $request['semantic_slot_key'] );
+        if ( null === $existing_claim ) {
+            throw new LifecycleException(
+                'print_mapping_claim_missing',
+                'This meaning has no Print mapping claim in the active binding artifact.'
+            );
+        }
+        $existing_map = $this->printOptionMap( $existing_claim );
+        if ( 'PROVEN' === $existing_claim['evidence_state']
+            && isset( $existing_map[ (string) $request['canonical_option'] ] )
+            && $existing_map[ (string) $request['canonical_option'] ] === $host_raw_value ) {
+            return array(
+                'status' => 'UNCHANGED',
+                'binding_set_id' => $artifact['binding_set_id'],
+                'previous_version' => $artifact['binding_set_version'],
+                'binding_set_version' => $artifact['binding_set_version'],
+                'semantic_slot_key' => $request['semantic_slot_key'],
+                'canonical_option' => (string) $request['canonical_option'],
+            );
+        }
+
+        $next = $artifact;
+        $next['schema_version'] = EnvironmentBindingSet::SCHEMA_VERSION_1_1;
         $next['binding_set_version'] = $this->nextVersion( $snapshot, $artifact['binding_set_id'], $artifact['binding_set_version'] );
 
         $discriminator = array(
@@ -223,20 +283,14 @@ final class BindingRepairService {
         );
         $ref = $this->evidence_store->confirmationRef( $next, $request['semantic_slot_key'], $source, $discriminator );
 
-        $claim_found = false;
         foreach ( $next['runtime_claims'] as &$claim ) {
             if ( $claim['semantic_slot_key'] !== $request['semantic_slot_key'] || 'print_mapping' !== $claim['claim'] ) {
                 continue;
             }
 
-            $claim_found = true;
-            $map         = isset( $claim['print_option_map'] ) && is_array( $claim['print_option_map'] )
+            $map = isset( $claim['print_option_map'] ) && is_array( $claim['print_option_map'] )
                 ? $claim['print_option_map']
                 : array();
-
-            // One canonical option has one raw value, and one raw value means one
-            // canonical option. Re-confirming replaces both sides of any pair it
-            // would otherwise duplicate.
             $map = array_values(
                 array_filter(
                     $map,
@@ -246,34 +300,25 @@ final class BindingRepairService {
                     }
                 )
             );
-
             $map[] = array(
                 'canonical_option' => $discriminator['canonical_option'],
                 'host_raw_value' => $host_raw_value,
             );
 
             $claim['print_option_map'] = $map;
-            $claim['evidence_state']   = 'PROVEN';
-            $claim['evidence_refs']    = array( $ref );
+            $claim['evidence_state'] = 'PROVEN';
+            $claim['evidence_refs'] = array( $ref );
             break;
         }
         unset( $claim );
-
-        if ( ! $claim_found ) {
-            throw new LifecycleException(
-                'print_mapping_claim_missing',
-                'This meaning has no Print mapping claim in the active binding artifact.'
-            );
-        }
 
         $next['provenance']['producer'] = 'Gravity Presentation Profiles admin print option confirmation';
         if ( ! in_array( $ref, $next['provenance']['evidence_refs'], true ) ) {
             $next['provenance']['evidence_refs'][] = $ref;
         }
-
         EnvironmentBindingSet::validate( $next );
 
-        $gate      = new RepairBindingEvidenceGate(
+        $gate = new RepairBindingEvidenceGate(
             $this->evidence_store,
             $next,
             $artifact,
@@ -282,17 +327,7 @@ final class BindingRepairService {
         $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
         $lifecycle->import( $next );
         $this->evidence_store->recordConfirmation( $next, $request['semantic_slot_key'], $source, $discriminator );
-        $lifecycle->activateIfCurrent(
-            array(
-                'context' => $next['context'],
-                'binding_set_id' => $next['binding_set_id'],
-                'binding_set_version' => $next['binding_set_version'],
-                'expected_current_activation' => array(
-                    'binding_set_id' => $request['binding_set_id'],
-                    'binding_set_version' => $request['binding_set_version'],
-                ),
-            )
-        );
+        $this->activateNext( $lifecycle, $next, $request );
 
         return array(
             'status' => 'PRINT_OPTION_CONFIRMED',
@@ -301,6 +336,109 @@ final class BindingRepairService {
             'binding_set_version' => $next['binding_set_version'],
             'semantic_slot_key' => $request['semantic_slot_key'],
             'canonical_option' => $discriminator['canonical_option'],
+        );
+    }
+
+    /**
+     * Removes one canonical Print confirmation without changing the field source.
+     * Other confirmed canonical options remain explicit and are re-evidenced as
+     * the resulting map for the new immutable binding-set version.
+     */
+    public function clearPrintOption( $request ) {
+        $this->requireKeys(
+            $request,
+            array( 'context_key', 'binding_set_id', 'binding_set_version', 'semantic_slot_key', 'canonical_option' ),
+            'print option clear request'
+        );
+        $this->requireCanonicalPrintOption( $request['semantic_slot_key'], $request['canonical_option'] );
+
+        $snapshot = $this->snapshot();
+        $current = $this->currentRecord( $snapshot, $request );
+        $artifact = $current['artifact'];
+        $source = $this->boundFieldSource( $artifact, $request['semantic_slot_key'] );
+        $claim = $this->printMappingClaim( $artifact, $request['semantic_slot_key'] );
+        if ( null === $claim ) {
+            throw new LifecycleException( 'print_mapping_claim_missing', 'This meaning has no Print mapping claim in the active binding artifact.' );
+        }
+
+        $canonical_option = (string) $request['canonical_option'];
+        $current_map = $this->printOptionMap( $claim );
+        if ( 'PROVEN' !== $claim['evidence_state'] || ! array_key_exists( $canonical_option, $current_map ) ) {
+            return array(
+                'status' => 'UNCHANGED',
+                'binding_set_id' => $artifact['binding_set_id'],
+                'previous_version' => $artifact['binding_set_version'],
+                'binding_set_version' => $artifact['binding_set_version'],
+                'semantic_slot_key' => $request['semantic_slot_key'],
+                'canonical_option' => $canonical_option,
+            );
+        }
+
+        unset( $current_map[ $canonical_option ] );
+        $next = $artifact;
+        $next['schema_version'] = EnvironmentBindingSet::SCHEMA_VERSION_1_1;
+        $next['binding_set_version'] = $this->nextVersion( $snapshot, $artifact['binding_set_id'], $artifact['binding_set_version'] );
+        $ref = null;
+        $discriminator = null;
+
+        if ( array() !== $current_map ) {
+            $discriminator = array(
+                'claim' => 'print_mapping',
+                'action' => 'remove_canonical_option',
+                'canonical_option' => $canonical_option,
+                'remaining_map' => $current_map,
+            );
+            $ref = $this->evidence_store->confirmationRef( $next, $request['semantic_slot_key'], $source, $discriminator );
+        }
+
+        foreach ( $next['runtime_claims'] as &$next_claim ) {
+            if ( $next_claim['semantic_slot_key'] !== $request['semantic_slot_key'] || 'print_mapping' !== $next_claim['claim'] ) {
+                continue;
+            }
+
+            if ( array() === $current_map ) {
+                $next_claim['evidence_state'] = 'NOT_PROVEN';
+                $next_claim['evidence_refs'] = array();
+                unset( $next_claim['print_option_map'] );
+            } else {
+                $pairs = array();
+                foreach ( $current_map as $option => $raw ) {
+                    $pairs[] = array( 'canonical_option' => $option, 'host_raw_value' => $raw );
+                }
+                $next_claim['print_option_map'] = $pairs;
+                $next_claim['evidence_state'] = 'PROVEN';
+                $next_claim['evidence_refs'] = array( $ref );
+            }
+            break;
+        }
+        unset( $next_claim );
+
+        $next['provenance']['producer'] = 'Gravity Presentation Profiles admin print option removal';
+        if ( null !== $ref && ! in_array( $ref, $next['provenance']['evidence_refs'], true ) ) {
+            $next['provenance']['evidence_refs'][] = $ref;
+        }
+        EnvironmentBindingSet::validate( $next );
+
+        $gate = new RepairBindingEvidenceGate(
+            $this->evidence_store,
+            $next,
+            $artifact,
+            new EvidenceReferenceGate( $this->fallback_refs )
+        );
+        $lifecycle = new BindingSetLifecycle( $this->binding_store, $gate );
+        $lifecycle->import( $next );
+        if ( null !== $ref ) {
+            $this->evidence_store->recordConfirmation( $next, $request['semantic_slot_key'], $source, $discriminator );
+        }
+        $this->activateNext( $lifecycle, $next, $request );
+
+        return array(
+            'status' => 'PRINT_OPTION_CLEARED',
+            'binding_set_id' => $next['binding_set_id'],
+            'previous_version' => $artifact['binding_set_version'],
+            'binding_set_version' => $next['binding_set_version'],
+            'semantic_slot_key' => $request['semantic_slot_key'],
+            'canonical_option' => $canonical_option,
         );
     }
 
@@ -374,6 +512,93 @@ final class BindingRepairService {
             throw new LifecycleException( 'repair_context_mismatch', 'The active binding context does not match its immutable artifact.' );
         }
         return $record;
+    }
+
+    private function bindingForSlot( $artifact, $semantic_slot_key ) {
+        foreach ( $artifact['bindings'] as $binding ) {
+            if ( $binding['semantic_slot_key'] === $semantic_slot_key ) {
+                return $binding;
+            }
+        }
+        throw new LifecycleException( 'repair_slot_missing', 'The selected semantic slot is not present in the active binding artifact.' );
+    }
+
+    private function boundFieldSource( $artifact, $semantic_slot_key ) {
+        $binding = $this->bindingForSlot( $artifact, $semantic_slot_key );
+        if ( 'PROVEN' !== $binding['state'] || null === $binding['source_ref'] || 'gravity_forms.field' !== $binding['source_ref']['type'] ) {
+            throw new LifecycleException(
+                'print_option_source_not_bound',
+                'Bind this meaning to a Gravity Forms field before confirming what its values mean for Print.'
+            );
+        }
+        return $binding['source_ref'];
+    }
+
+    private function sameSource( $left, $right ) {
+        return is_array( $left )
+            && isset( $left['type'], $left['field_id'] )
+            && $left['type'] === $right['type']
+            && (string) $left['field_id'] === (string) $right['field_id'];
+    }
+
+    private function invalidateRuntimeClaims( &$artifact, $semantic_slot_key ) {
+        foreach ( $artifact['runtime_claims'] as &$claim ) {
+            if ( $claim['semantic_slot_key'] !== $semantic_slot_key ) {
+                continue;
+            }
+            if ( 'PROVEN' === $claim['evidence_state'] ) {
+                $claim['evidence_state'] = 'NOT_PROVEN';
+                $claim['evidence_refs'] = array();
+            }
+            unset( $claim['print_option_map'] );
+        }
+        unset( $claim );
+    }
+
+    private function printMappingClaim( $artifact, $semantic_slot_key ) {
+        foreach ( $artifact['runtime_claims'] as $claim ) {
+            if ( $claim['semantic_slot_key'] === $semantic_slot_key && 'print_mapping' === $claim['claim'] ) {
+                return $claim;
+            }
+        }
+        return null;
+    }
+
+    private function printOptionMap( $claim ) {
+        if ( ! is_array( $claim ) || empty( $claim['print_option_map'] ) || ! is_array( $claim['print_option_map'] ) ) {
+            return array();
+        }
+        $result = array();
+        foreach ( $claim['print_option_map'] as $pair ) {
+            if ( is_array( $pair ) && isset( $pair['canonical_option'], $pair['host_raw_value'] ) ) {
+                $result[ (string) $pair['canonical_option'] ] = (string) $pair['host_raw_value'];
+            }
+        }
+        return $result;
+    }
+
+    private function requireCanonicalPrintOption( $semantic_slot_key, $canonical_option ) {
+        $groups = PrintDossierValueResolver::optionGroups();
+        if ( ! isset( $groups[ $semantic_slot_key ] ) || ! in_array( (string) $canonical_option, $groups[ $semantic_slot_key ], true ) ) {
+            throw new LifecycleException(
+                'print_option_canonical_not_admitted',
+                'That canonical Print option is not admitted for this semantic meaning.'
+            );
+        }
+    }
+
+    private function activateNext( BindingSetLifecycle $lifecycle, $next, $request ) {
+        $lifecycle->activateIfCurrent(
+            array(
+                'context' => $next['context'],
+                'binding_set_id' => $next['binding_set_id'],
+                'binding_set_version' => $next['binding_set_version'],
+                'expected_current_activation' => array(
+                    'binding_set_id' => $request['binding_set_id'],
+                    'binding_set_version' => $request['binding_set_version'],
+                ),
+            )
+        );
     }
 
     private function nextVersion( $snapshot, $binding_set_id, $current_version ) {
