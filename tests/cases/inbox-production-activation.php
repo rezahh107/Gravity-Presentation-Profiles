@@ -134,10 +134,41 @@ $evidence_store = new Pr4MemoryStateStore();
 $operations = pr4_operations_service( $visual_store, $binding_store );
 
 $print_setup = $operations->initialize( array( 'form_id' => 77 ) );
-gpp_assert_same( OperationsSetupService::STATUS_COMPLETED, $print_setup['status'], 'Existing Print setup must complete before Inbox adoption.' );
+gpp_assert_same( OperationsSetupService::STATUS_COMPLETED, $print_setup['status'], 'Current Print setup must complete before Inbox adoption.' );
 $visual = new VisualPackageLifecycle( $visual_store );
+$fresh_print = $visual->resolve( 'print.dossier' );
+gpp_assert_same( '1.0.1', $fresh_print['package_version'], 'Fresh Operations setup uses the current shipped package version.' );
+
+// Model an upgraded installation that already had the immutable 1.0.0 Print
+// package active. The legacy artifact is reconstructed through the production
+// lifecycle from the exact predecessor semantic delta: version 1.0.0 and Due
+// required for Inbox. PR4 must not migrate this existing Print activation.
+$legacy_package = $operations->packageArtifact();
+$legacy_package['package_version'] = '1.0.0';
+foreach ( $legacy_package['semantic_slots'] as &$slot ) {
+    if ( 'workflow.due_at' !== $slot['semantic_slot_key'] ) {
+        continue;
+    }
+    foreach ( $slot['surface_usage'] as &$usage ) {
+        if ( 'gravity_flow.inbox' === $usage['surface'] ) {
+            $usage['required'] = true;
+        }
+    }
+    unset( $usage );
+}
+unset( $slot );
+$visual->import( $legacy_package );
+$visual->activateIfCurrent(
+    array(
+        'surface' => 'print.dossier',
+        'package_id' => $legacy_package['package_id'],
+        'package_version' => $legacy_package['package_version'],
+        'profile_id' => $fresh_print['profile_id'],
+        'expected_current_activation' => $fresh_print,
+    )
+);
 $print_before = $visual->resolve( 'print.dossier' );
-gpp_assert_same( '1.0.0', $print_before['package_version'], 'Existing Print activation remains on the legacy shipped package version.' );
+gpp_assert_same( '1.0.0', $print_before['package_version'], 'Legacy Print activation is established as the upgrade precondition.' );
 gpp_assert_same( null, $visual->resolve( 'gravity_flow.inbox' ), 'Inbox must be inactive before the explicit Inbox action.' );
 
 $context = $operations->bindingContext( 77 );
@@ -167,7 +198,7 @@ gpp_assert_same( null, $full_name_binding['source_ref'], 'student.full_name must
 
 $inbox = pr4_inbox_service( $visual_store, $binding_store, $evidence_store );
 $inbox_package = $inbox->packageArtifact();
-gpp_assert_same( '1.0.1', $inbox_package['package_version'], 'Inbox must consume the deterministic successor of the shipped Operations Package.' );
+gpp_assert_same( '1.0.1', $inbox_package['package_version'], 'Inbox must consume the current shipped Operations Package.' );
 $due_required = null;
 foreach ( $inbox_package['semantic_slots'] as $slot ) {
     if ( 'workflow.due_at' !== $slot['semantic_slot_key'] ) {
