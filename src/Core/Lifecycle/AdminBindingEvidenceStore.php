@@ -16,15 +16,15 @@ final class AdminBindingEvidenceStore {
         $this->store = $store;
     }
 
-    public function confirmationRef( $artifact, $semantic_slot_key, $source_ref ) {
-        $subject = $this->subject( $artifact, $semantic_slot_key, $source_ref );
+    public function confirmationRef( $artifact, $semantic_slot_key, $source_ref, $discriminator = null ) {
+        $subject = $this->subject( $artifact, $semantic_slot_key, $source_ref, $discriminator );
         return 'gpp-admin-binding:' . CanonicalJson::hash( $subject );
     }
 
-    public function recordConfirmation( $artifact, $semantic_slot_key, $source_ref ) {
+    public function recordConfirmation( $artifact, $semantic_slot_key, $source_ref, $discriminator = null ) {
         EnvironmentBindingSet::validate( $artifact );
-        $ref = $this->confirmationRef( $artifact, $semantic_slot_key, $source_ref );
-        $subject = $this->subject( $artifact, $semantic_slot_key, $source_ref );
+        $ref = $this->confirmationRef( $artifact, $semantic_slot_key, $source_ref, $discriminator );
+        $subject = $this->subject( $artifact, $semantic_slot_key, $source_ref, $discriminator );
         $state = $this->loadState();
 
         if ( isset( $state['events'][ $ref ] ) ) {
@@ -64,7 +64,13 @@ final class AdminBindingEvidenceStore {
         return $this->loadState();
     }
 
-    private function subject( $artifact, $semantic_slot_key, $source_ref ) {
+    /**
+     * `$discriminator` distinguishes different confirmations about the same
+     * slot and source, such as a Print option confirmation. It is omitted
+     * entirely when null, so existing source-confirmation identities are
+     * unchanged.
+     */
+    private function subject( $artifact, $semantic_slot_key, $source_ref, $discriminator = null ) {
         if ( ! is_array( $artifact ) || ! isset( $artifact['binding_set_id'], $artifact['binding_set_version'], $artifact['context'] ) ) {
             throw new LifecycleException( 'invalid_admin_evidence_artifact', 'Administrator evidence requires binding artifact identity and context.' );
         }
@@ -77,7 +83,7 @@ final class AdminBindingEvidenceStore {
         } catch ( ContractViolation $exception ) {
             throw new LifecycleException( 'invalid_admin_evidence_subject', $exception->getMessage() );
         }
-        return array(
+        $subject = array(
             'event' => 'ADMIN_CONFIRMED_BINDING_SOURCE',
             'binding_set_id' => $artifact['binding_set_id'],
             'binding_set_version' => $artifact['binding_set_version'],
@@ -85,6 +91,19 @@ final class AdminBindingEvidenceStore {
             'semantic_slot_key' => $semantic_slot_key,
             'source_ref_hash' => $source_hash,
         );
+
+        if ( null === $discriminator ) {
+            return $subject;
+        }
+
+        if ( ! is_array( $discriminator ) ) {
+            throw new LifecycleException( 'invalid_admin_evidence_subject', 'Administrator evidence discriminator must be an object.' );
+        }
+
+        $subject['event'] = 'ADMIN_CONFIRMED_BINDING_DETAIL';
+        $subject['detail'] = $discriminator;
+
+        return $subject;
     }
 
     private function loadState() {

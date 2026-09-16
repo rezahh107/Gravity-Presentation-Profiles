@@ -115,10 +115,11 @@ await test('CORE-SPINE-001', 'happy path carries one authoritative entry through
   await page.waitForSelector('.gpp-print-dossier', { timeout: 30000 });
   const print = await printState(page);
   if (print.state !== 'ready' || print.profile !== 'shared.print.v1' || JSON.stringify(print.pages) !== JSON.stringify(['front', 'back'])) throw new Error(`Print did not reach canonical Front/Back ready state: ${JSON.stringify(print)}`);
+  if (!traceHas(print, 'PRINT_BINDINGS_EVALUATED', 'full_name_derived')) throw new Error('Print did not exercise the current derived full-name contract.');
   if (entry.full_name !== print.full_name || entry.national_id !== print.national_id) throw new Error('Cross-surface semantic values diverged on the same entry.');
   if (!traceHas(print, 'PRINT_COMPOSITION_READY', 'ready_two_pages')) throw new Error('Print decision trace did not reach ready_two_pages.');
   happySemantics = { full_name: entry.full_name, national_id: entry.national_id };
-  return { form_id: Number(alpha.form_id), entry_id: Number(alpha.entry_id), entry_profile: entry.profile, print_profile: print.profile, same_entry_continuity: true, cross_surface_semantic_consistency: true, print_pages: print.pages };
+  return { form_id: Number(alpha.form_id), entry_id: Number(alpha.entry_id), entry_profile: entry.profile, print_profile: print.profile, same_entry_continuity: true, cross_surface_semantic_consistency: true, print_full_name_derived: true, print_pages: print.pages };
 });
 
 await test('CORE-SPINE-002', 'schema drift never guesses a similar replacement and explicit remap repairs both consumers', async () => {

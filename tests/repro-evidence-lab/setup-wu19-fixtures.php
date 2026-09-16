@@ -80,6 +80,20 @@ function wu19_populate( $entry_id, $ids, $prefix ) {
     }
 }
 
+function wu19_align_legacy_full_name_fixture( $entry_id, $legacy_full_name_field_id, $wu18_fields ) {
+    $entry = GFAPI::get_entry( $entry_id );
+    if ( is_wp_error( $entry ) ) throw new RuntimeException( $entry->get_error_message() );
+
+    $first_key = (string) $wu18_fields['student.first_name'];
+    $last_key = (string) $wu18_fields['student.last_name'];
+    $first = isset( $entry[ $first_key ] ) ? trim( (string) $entry[ $first_key ] ) : '';
+    $last = isset( $entry[ $last_key ] ) ? trim( (string) $entry[ $last_key ] ) : '';
+    if ( '' === $first || '' === $last ) throw new RuntimeException( 'WU19 derived full-name components are unavailable.' );
+
+    $result = GFAPI::update_entry_field( $entry_id, $legacy_full_name_field_id, $first . ' ' . $last );
+    if ( is_wp_error( $result ) ) throw new RuntimeException( $result->get_error_message() );
+}
+
 $alpha_form_id = (int) $wu18['alpha']['form_id'];
 $beta_form_id = (int) $wu18['beta']['form_id'];
 $alpha_entry_id = (int) $wu18['alpha']['entry_id'];
@@ -95,6 +109,8 @@ $alpha_fields = $wu18['alpha']['fields'];
 $beta_fields = $wu18['beta']['fields'];
 GFAPI::update_entry_field( $alpha_entry_id, $alpha_fields['student.gender'], '0' );
 GFAPI::update_entry_field( $beta_entry_id, $beta_fields['student.gender'], '1' );
+wu19_align_legacy_full_name_fixture( $alpha_entry_id, $alpha_base['name_field_id'], $alpha_fields );
+wu19_align_legacy_full_name_fixture( $beta_entry_id, $beta_base['name_field_id'], $beta_fields );
 
 $visual_path = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/fixtures/wu09-visual-package.json';
 $visual_package = json_decode( file_get_contents( $visual_path ), true );
@@ -114,7 +130,8 @@ function wu19_binding_set( $id, $form_id, $base_meta, $wu18_fields, $extra ) {
     $proven = array( 'wu19:synthetic-fixture', 'wu19:pinned-runtime' );
     $negative = array( 'wu19:negative-control' );
     $proven_fields = array(
-        'student.full_name' => $base_meta['name_field_id'],
+        'student.first_name' => $wu18_fields['student.first_name'],
+        'student.last_name' => $wu18_fields['student.last_name'],
         'student.national_id' => $base_meta['national_id_field_id'],
         'student.father_name' => $wu18_fields['student.father_name'],
         'student.gender' => $wu18_fields['student.gender'],

@@ -308,6 +308,17 @@ final class BindingSetLifecycle {
     }
 
     private function requireExpectedCurrentActivation( $state, $context_key, $expected ) {
+        if ( null === $expected ) {
+            if ( isset( $state['activations'][ $context_key ] ) ) {
+                throw new LifecycleException(
+                    'stale_binding_management_action',
+                    'The active binding changed after this action was prepared. Refresh the page and try again.'
+                );
+            }
+
+            return;
+        }
+
         $this->requireExactKeys(
             $expected,
             array( 'binding_set_id', 'binding_set_version' ),

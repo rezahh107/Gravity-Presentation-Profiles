@@ -18,6 +18,7 @@ $cases = array(
     'binding-health-management.php',
     'binding-health-compound-input.php',
     'binding-activation-cas.php',
+    'pr25-root-repairs.php',
     'runtime-diagnostics.php',
     'package-lifecycle-v11.php',
     'reserved-extension-seam-lifecycle.php',
@@ -27,6 +28,8 @@ $cases = array(
     'inbox-manual-refresh.php',
     'entry-detail-presentation-model.php',
     'print-dossier-presentation-model.php',
+    'print-dossier-data-path.php',
+    'operations-setup-production-path.php',
 );
 
 foreach ( $cases as $case ) {

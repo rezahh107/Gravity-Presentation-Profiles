@@ -78,5 +78,8 @@ assets/css/srwf-gravity-flow-print-dossier.css
 assets/js/gravity-flow-inbox-manual-refresh.js
 profiles/srwf/registration/profile.css
 profiles/srwf/registration/profile-package-v1.1.json
+profiles/srwf/operations/operations-package-v1.json
+assets/images/print/razavi-complex-approved.png
+assets/images/print/kanoon-approved.png
 FILES
 }

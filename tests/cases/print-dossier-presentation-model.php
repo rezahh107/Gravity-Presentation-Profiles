@@ -17,8 +17,12 @@ function wu19_binding( $id, $form_id, $phone_state = 'UNBOUND', $phone_mapping =
     $proven = array( 'fixture:wu19:semantic', 'fixture:wu19:print-mapping' );
     $negative = array( 'fixture:wu19:negative' );
     $bindings = array(
-        array( 'semantic_slot_key' => 'student.full_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 1 ), 'evidence_refs' => $proven ),
-        array( 'semantic_slot_key' => 'student.gender', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 2 ), 'evidence_refs' => $proven ),
+        // student.full_name is a presentation derivation from these two
+        // canonical components; it deliberately carries no host source itself.
+        array( 'semantic_slot_key' => 'student.first_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 1 ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'student.last_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 2 ), 'evidence_refs' => $proven ),
+        array( 'semantic_slot_key' => 'student.full_name', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => $negative ),
+        array( 'semantic_slot_key' => 'student.gender', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 5 ), 'evidence_refs' => $proven ),
         array( 'semantic_slot_key' => 'print.phone_2', 'state' => $phone_state, 'source_ref' => 'PROVEN' === $phone_state ? array( 'type' => 'gravity_forms.field', 'field_id' => $phone_field_id ) : null, 'evidence_refs' => 'PROVEN' === $phone_state ? $proven : $negative ),
         array( 'semantic_slot_key' => 'print.financial_date', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => $negative ),
     );
@@ -50,7 +54,14 @@ $entry = array( 'id' => 1001, 'form_id' => 101 );
 
 gpp_assert_same( 'shared.print.v1', $model->profileId(), 'One shared print visual profile remains independent of target form identity.' );
 gpp_assert_same( 'ready', $model->bindingContextStatus( $entry ), 'A unique active print binding context is structurally ready.' );
-gpp_assert_true( $model->fieldDecision( $entry, 'student.full_name' )['populate'], 'Same-meaning canonical text may populate from its PROVEN semantic binding.' );
+$direct_full_name = $model->fieldDecision( $entry, 'student.full_name' );
+gpp_assert_true( ! $direct_full_name['populate'], 'A derived presentation slot is never read as a direct host source.' );
+gpp_assert_same( 'derived_slot_requires_derivation', $direct_full_name['reason'], 'Direct reads of a derived slot are refused explicitly.' );
+$derived_full_name = $model->derivedDecision( $entry, 'student.full_name' );
+gpp_assert_true( $derived_full_name['populate'], 'Full name derives from separately bound first and last name components.' );
+gpp_assert_same( 2, count( $derived_full_name['component_source_refs'] ), 'Both canonical name components contribute to the derivation.' );
+gpp_assert_same( 1, $derived_full_name['component_source_refs'][0]['field_id'], 'First name resolves from its own explicit host field.' );
+gpp_assert_same( 2, $derived_full_name['component_source_refs'][1]['field_id'], 'Last name resolves from its own explicit host field.' );
 gpp_assert_true( $model->fieldDecision( $entry, 'student.gender' )['populate'], 'Option source requires and receives independent PROVEN print_mapping evidence.' );
 $phone = $model->fieldDecision( $entry, 'print.phone_2' );
 gpp_assert_true( ! $phone['populate'], 'UNBOUND historical Phone 2 remains blank.' );

@@ -123,8 +123,22 @@ final class VisualPackageLifecycle {
         return $this->changeActivation( $request, 'VISUAL_ACTIVATE' );
     }
 
+    /**
+     * Compare-and-set activation. `expected_current_activation` is null when the
+     * caller expects the surface to be unactivated, or the exact identity it
+     * observed. A different current activation is left intact and reported, so an
+     * unattended setup path can never silently replace another surface decision.
+     */
+    public function activateIfCurrent( $request ) {
+        return $this->changeActivation( $request, 'VISUAL_ACTIVATE', true );
+    }
+
     public function rollback( $request ) {
         return $this->changeActivation( $request, 'VISUAL_ROLLBACK' );
+    }
+
+    public function rollbackIfCurrent( $request ) {
+        return $this->changeActivation( $request, 'VISUAL_ROLLBACK', true );
     }
 
     public function deactivate( $request ) {
@@ -225,12 +239,12 @@ final class VisualPackageLifecycle {
         return $this->loadState();
     }
 
-    private function changeActivation( $request, $event ) {
-        $this->requireExactKeys(
-            $request,
-            array( 'surface', 'package_id', 'package_version', 'profile_id' ),
-            'visual activation request'
-        );
+    private function changeActivation( $request, $event, $require_expected_current = false ) {
+        $expected_keys = array( 'surface', 'package_id', 'package_version', 'profile_id' );
+        if ( $require_expected_current ) {
+            $expected_keys[] = 'expected_current_activation';
+        }
+        $this->requireExactKeys( $request, $expected_keys, 'visual activation request' );
 
         $surface         = $request['surface'];
         $package_id      = $request['package_id'];
@@ -238,7 +252,12 @@ final class VisualPackageLifecycle {
         $profile_id      = $request['profile_id'];
 
         $this->requireSurface( $surface );
-        $state  = $this->loadState();
+        $state = $this->loadState();
+
+        if ( $require_expected_current ) {
+            $this->requireExpectedCurrentActivation( $state, $surface, $request['expected_current_activation'] );
+        }
+
         $record = $this->requireInstalled( $state, $package_id, $package_version );
         $match  = null;
 
@@ -280,6 +299,42 @@ final class VisualPackageLifecycle {
         $this->commitState( $state );
 
         return $state['activations'][ $surface ];
+    }
+
+    private function requireExpectedCurrentActivation( $state, $surface, $expected ) {
+        $current = isset( $state['activations'][ $surface ] ) ? $state['activations'][ $surface ] : null;
+
+        if ( null === $expected ) {
+            if ( null !== $current ) {
+                throw new LifecycleException(
+                    'visual_activation_conflict',
+                    'This surface already has a different active visual activation. The existing activation was left unchanged.'
+                );
+            }
+            return;
+        }
+
+        $this->requireExactKeys(
+            $expected,
+            array( 'package_id', 'package_version', 'profile_id' ),
+            'expected current visual activation'
+        );
+
+        foreach ( array( 'package_id', 'package_version', 'profile_id' ) as $key ) {
+            if ( ! is_string( $expected[ $key ] ) ) {
+                throw new LifecycleException( 'invalid_visual_identity', 'Expected current visual identity values must be strings.' );
+            }
+        }
+
+        if ( null === $current
+            || $current['package_id'] !== $expected['package_id']
+            || $current['package_version'] !== $expected['package_version']
+            || $current['profile_id'] !== $expected['profile_id'] ) {
+            throw new LifecycleException(
+                'visual_activation_conflict',
+                'The active visual profile changed after this action was prepared. The existing activation was left unchanged.'
+            );
+        }
     }
 
     private function loadState() {

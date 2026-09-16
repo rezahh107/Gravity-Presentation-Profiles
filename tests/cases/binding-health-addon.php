@@ -88,6 +88,7 @@ final class GppBindingHealthAddonFakeHealth {
                     'form_title' => 'Registration Form',
                 ),
             ),
+            'print_options' => array(),
         );
     }
 }
@@ -130,6 +131,17 @@ foreach ( array( 'binding_health_service' => $health_fake, 'binding_repair_servi
     $reflection->setValue( $addon, $value );
 }
 
+$contract_warnings = array();
+set_error_handler(
+    static function ( $severity, $message ) use ( &$contract_warnings ) {
+        if ( E_WARNING === $severity && ( false !== strpos( $message, 'print_options' ) || false !== strpos( $message, 'foreach' ) ) ) {
+            $contract_warnings[] = $message;
+            return true;
+        }
+        return false;
+    }
+);
+
 $sections = $addon->plugin_settings_fields();
 $binding_section = null;
 foreach ( $sections as $section ) {
@@ -151,6 +163,8 @@ gpp_assert_true( false !== strpos( $action_field['choices'][1]['label'], 'Field 
 ob_start();
 $addon->settings_gpp_binding_health( null );
 $markup = ob_get_clean();
+restore_error_handler();
+gpp_assert_same( array(), $contract_warnings, 'Current managementCandidates fake shape must not emit undefined print_options or foreach warnings.' );
 gpp_assert_true( false !== strpos( $markup, 'student full name' ), 'Health table must show human-readable authoritative semantic meaning.' );
 gpp_assert_true( false !== strpos( $markup, 'Stale / source missing' ), 'Health table must make stale source identity visible to a non-technical administrator.' );
 gpp_assert_true( false !== strpos( $markup, 'Field ID' ), 'Technical source identity must remain available as secondary diagnostic detail.' );

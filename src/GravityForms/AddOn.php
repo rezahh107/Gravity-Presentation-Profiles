@@ -68,6 +68,26 @@ final class AddOn extends \GFAddOn {
                 ),
             ),
             array(
+                'title'       => esc_html__( 'Operations Setup (Print)', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Prepare the operational presentation surfaces for one real Gravity Forms form. GPP installs the shipped operations package, adopts the Print presentation profile, and creates the environment binding context with every canonical meaning left explicitly unmapped. GPP never guesses a field from its label, name or position: you map fields yourself below. Re-running this is safe; existing activations and repaired mappings are preserved, and a different existing activation is reported instead of replaced.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'  => 'operations_readiness',
+                        'label' => esc_html__( 'Configuration readiness', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_operations_readiness',
+                    ),
+                    array(
+                        'name'                => 'operations_setup_action',
+                        'label'               => esc_html__( 'Initialize operations presentation', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose the exact form this installation uses, then save settings. The default performs no change.', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'choices'             => $this->operationsSetupChoices(),
+                        'validation_callback' => array( $this, 'validate_operations_setup_action' ),
+                        'save_callback'       => array( $this, 'discard_operations_setup_action' ),
+                    ),
+                ),
+            ),
+            array(
                 'title'       => esc_html__( 'Mapping & Binding Health', 'gravity-presentation-profiles' ),
                 'description' => esc_html__( 'Review each canonical semantic meaning against the currently active binding artifact and the current Gravity Forms field inventory. Repairs are explicit: select one action and save settings. GPP creates and activates a new immutable binding version; it never guesses a replacement field.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
@@ -231,6 +251,22 @@ final class AddOn extends \GFAddOn {
                 return;
             }
 
+            if ( 'print_option' === $action['action'] ) {
+                // Confirming what a host value means for Print is separate from
+                // binding the field, and is never a permission decision.
+                $this->bindingRepairService()->confirmPrintOption(
+                    array(
+                        'context_key' => $action['context_key'],
+                        'binding_set_id' => $action['binding_set_id'],
+                        'binding_set_version' => $action['binding_set_version'],
+                        'semantic_slot_key' => $action['semantic_slot_key'],
+                        'canonical_option' => $action['canonical_option'],
+                        'host_raw_value' => $action['host_raw_value'],
+                    )
+                );
+                return;
+            }
+
             if ( 'rollback' === $action['action'] ) {
                 $this->bindingRepairService()->rollback(
                     array(
@@ -283,6 +319,158 @@ final class AddOn extends \GFAddOn {
             echo '<td><code>' . esc_html( $item['profile_id'] ) . '</code></td></tr>';
         }
         echo '</tbody></table>';
+    }
+
+    /**
+     * One explicit choice per real Gravity Forms form. There is no "detect my
+     * form" option: an operator names the form, and nothing is inferred.
+     */
+    private function operationsSetupChoices() {
+        $choices = array(
+            array(
+                'label' => esc_html__( 'No setup change', 'gravity-presentation-profiles' ),
+                'value' => '',
+            ),
+        );
+
+        if ( ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_forms' ) ) {
+            return $choices;
+        }
+
+        try {
+            $forms = \GFAPI::get_forms();
+        } catch ( \Throwable $exception ) {
+            return $choices;
+        }
+
+        if ( ! is_array( $forms ) ) {
+            return $choices;
+        }
+
+        foreach ( $forms as $form ) {
+            if ( ! is_array( $form ) || empty( $form['id'] ) ) {
+                continue;
+            }
+
+            $title = isset( $form['title'] ) && is_string( $form['title'] ) && '' !== trim( $form['title'] )
+                ? trim( $form['title'] )
+                : 'Form ' . $form['id'];
+
+            $choices[] = array(
+                'label' => sprintf(
+                    __( 'Initialize for: %1$s (Form %2$d)', 'gravity-presentation-profiles' ),
+                    $title,
+                    (int) $form['id']
+                ),
+                'value' => 'form:' . (int) $form['id'],
+            );
+        }
+
+        return $choices;
+    }
+
+    /**
+     * Gravity Forms runs this only on its own settings save, which is a POST
+     * that the Add-On Framework has already capability-checked and nonce-checked.
+     * No state-changing GET path is introduced.
+     */
+    public function validate_operations_setup_action( $field, $value ) {
+        if ( ! is_string( $value ) || '' === trim( $value ) ) {
+            return;
+        }
+
+        if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
+            $this->setSettingsFieldError( $field, 'The selected operations setup action is invalid. Refresh the page and try again.' );
+            return;
+        }
+
+        try {
+            $result = OperationsSetupService::forWordPress()->initialize( array( 'form_id' => (int) $matches[1] ) );
+        } catch ( LifecycleException $exception ) {
+            $this->setSettingsFieldError( $field, $exception->getMessage() );
+            return;
+        } catch ( \Throwable $exception ) {
+            $this->setSettingsFieldError( $field, 'Operations setup failed before any presentation state was changed.' );
+            return;
+        }
+
+        if ( OperationsSetupService::STATUS_COMPLETED !== $result['status'] ) {
+            // Partial completion is never reported as success. Name the step that
+            // stopped so the operator can make the explicit decision it needs.
+            $this->setSettingsFieldError( $field, $this->operationsSetupFailureMessage( $result ) );
+        }
+    }
+
+    public function discard_operations_setup_action( $field, $value ) {
+        unset( $field, $value );
+        return '';
+    }
+
+    private function operationsSetupFailureMessage( $result ) {
+        foreach ( $result['steps'] as $name => $step ) {
+            if ( in_array( $step['outcome'], array( 'conflict', 'failed' ), true ) ) {
+                $detail = ! empty( $step['message'] ) ? $step['message'] : $step['reason'];
+                return sprintf(
+                    __( 'Operations setup stopped at %1$s and changed nothing there: %2$s', 'gravity-presentation-profiles' ),
+                    $name,
+                    $detail
+                );
+            }
+        }
+
+        return __( 'Operations setup did not complete.', 'gravity-presentation-profiles' );
+    }
+
+    public function settings_gpp_operations_readiness( $field ) {
+        unset( $field );
+
+        echo '<div data-gpp-operations-readiness="configuration">';
+        echo '<p>' . esc_html__( 'These are configuration facts only. They never state that a person may print. Gravity Flow decides Print authorization for this user, this entry, this workflow step and this request, every request.', 'gravity-presentation-profiles' ) . '</p>';
+
+        try {
+            $facts = OperationsSetupService::forWordPress()->readiness();
+        } catch ( \Throwable $exception ) {
+            echo '<p>' . esc_html__( 'Operations readiness is unavailable because the authoritative lifecycle state could not be read.', 'gravity-presentation-profiles' ) . '</p></div>';
+            return;
+        }
+
+        $activation_labels = array(
+            'not_activated' => __( 'Not activated yet', 'gravity-presentation-profiles' ),
+            'active_operations_profile' => __( 'Active (operations Print profile)', 'gravity-presentation-profiles' ),
+            'active_other_profile' => __( 'Active (a different profile; setup will not replace it)', 'gravity-presentation-profiles' ),
+        );
+        $activation = isset( $activation_labels[ $facts['print_surface_activation'] ] )
+            ? $activation_labels[ $facts['print_surface_activation'] ]
+            : $facts['print_surface_activation'];
+
+        echo '<table class="widefat striped"><tbody>';
+        $this->readinessRow( __( 'Operations package present', 'gravity-presentation-profiles' ), $facts['operations_package_present'] );
+        echo '<tr><td>' . esc_html__( 'Print surface activation', 'gravity-presentation-profiles' ) . '</td>';
+        echo '<td>' . esc_html( $activation ) . '</td></tr>';
+        echo '<tr><td>' . esc_html__( 'Required Print assets', 'gravity-presentation-profiles' ) . '</td><td>';
+        if ( ! empty( $facts['print_assets']['ready'] ) ) {
+            echo esc_html__( 'Present and unmodified', 'gravity-presentation-profiles' );
+        } else {
+            echo '<code>' . esc_html( (string) $facts['print_assets']['reason'] ) . '</code>';
+            foreach ( $facts['print_assets']['assets'] as $name => $asset ) {
+                echo '<br><small><code>' . esc_html( $name . ': ' . $asset['status'] ) . '</code></small>';
+            }
+        }
+        echo '</td></tr>';
+        echo '<tr><td>' . esc_html__( 'Print request authorization', 'gravity-presentation-profiles' ) . '</td>';
+        echo '<td>' . esc_html__( 'Checked by Gravity Flow on every request; never cached here.', 'gravity-presentation-profiles' ) . '</td></tr>';
+        echo '</tbody></table>';
+
+        foreach ( $facts['notes'] as $note ) {
+            echo '<p><small><code>' . esc_html( $note ) . '</code></small></p>';
+        }
+        echo '</div>';
+    }
+
+    private function readinessRow( $label, $value ) {
+        echo '<tr><td>' . esc_html( $label ) . '</td><td>';
+        echo esc_html( $value ? __( 'Yes', 'gravity-presentation-profiles' ) : __( 'No', 'gravity-presentation-profiles' ) );
+        echo '</td></tr>';
     }
 
     public function settings_gpp_binding_health( $field ) {
@@ -674,6 +862,37 @@ final class AddOn extends \GFAddOn {
                     );
                 }
             }
+            foreach ( $candidates['print_options'] as $group ) {
+                $form_name = ! empty( $group['form_title'] ) ? $group['form_title'] : 'Form ' . $group['form_id'];
+                foreach ( $group['canonical_options'] as $canonical_option ) {
+                    foreach ( $group['choices'] as $choice ) {
+                        if ( isset( $group['confirmed'][ $canonical_option ] ) && $group['confirmed'][ $canonical_option ] === $choice['value'] ) {
+                            continue;
+                        }
+                        $choices[] = array(
+                            'label' => sprintf(
+                                __( 'Print option: %1$s — %2$s — “%3$s” (%4$s) means %5$s', 'gravity-presentation-profiles' ),
+                                $form_name,
+                                $group['field_label'],
+                                $choice['text'],
+                                $choice['value'],
+                                $canonical_option
+                            ),
+                            'value' => $this->encodeBindingManagementAction(
+                                array(
+                                    'action' => 'print_option',
+                                    'context_key' => $group['context_key'],
+                                    'binding_set_id' => $group['binding_set_id'],
+                                    'binding_set_version' => $group['binding_set_version'],
+                                    'semantic_slot_key' => $group['semantic_slot_key'],
+                                    'canonical_option' => $canonical_option,
+                                    'host_raw_value' => $choice['value'],
+                                )
+                            ),
+                        );
+                    }
+                }
+            }
             foreach ( $candidates['rollbacks'] as $rollback ) {
                 $form_name = ! empty( $rollback['form_title'] ) ? $rollback['form_title'] : 'Form ' . $rollback['form_id'];
                 $choices[] = array(
@@ -722,9 +941,13 @@ final class AddOn extends \GFAddOn {
         if ( ! is_array( $payload ) || empty( $payload['action'] ) ) {
             return null;
         }
-        $expected = 'repair' === $payload['action']
-            ? array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' )
-            : array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
+        if ( 'repair' === $payload['action'] ) {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' );
+        } elseif ( 'print_option' === $payload['action'] ) {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'host_raw_value', 'semantic_slot_key' );
+        } else {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
+        }
         $actual = array_keys( $payload );
         sort( $actual, SORT_STRING );
         sort( $expected, SORT_STRING );

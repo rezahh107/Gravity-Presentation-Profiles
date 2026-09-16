@@ -6,6 +6,26 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+### Added
+
+- Production SRWF operations profile package at `profiles/srwf/operations/operations-package-v1.json`, covering the `gravity_flow.inbox`, `gravity_flow.entry_detail`, and `print.dossier` surfaces and shipped in the installable ZIP.
+- Bounded operations setup path in Gravity Forms plugin settings that installs the shipped operations package, adopts the Print presentation profile, and creates the environment binding context for one explicitly selected form.
+- Compare-and-set visual activation (`VisualPackageLifecycle::activateIfCurrent()`), so an unattended setup path cannot replace a different existing surface activation.
+- Environment binding-set schema `1.1.0`, an additive revision whose only change is an optional `print_option_map` on a `print_mapping` runtime claim, letting an environment declare what its own Gravity Forms raw choice values mean for the canonical Print option vocabulary.
+- Explicit Print option confirmation (`BindingRepairService::confirmPrintOption()`), offered through the existing Mapping & Binding Health action rather than a second mapping UI. An administrator states what one real host choice value means for one canonical Print option, and the value must already exist in the bound field's own choice list.
+- Configuration-readiness projection in plugin settings, reported strictly as configuration facts and never as a claim that any user may print.
+- Per-asset Print asset integrity reporting that distinguishes a missing required asset from one whose bytes no longer match the declared release identity.
+- Automated coverage for the operator setup path, seed semantics, activation-conflict handling, rerun preservation, stale Print-proof invalidation, raw-versus-display reads, canonical choice mapping, and the two-page composition.
+
+### Changed
+
+- `student.full_name` is now derived read-only from the separately bound `student.first_name` and `student.last_name` slots, matching the authoritative binding matrix. A derived slot can no longer be read as a direct host source, and an unresolved component leaves the field blank instead of printing a half-composed identity.
+- `BoundHostValueReader` exposes separate `readRaw()` and `readDisplay()` entry points instead of one ambiguous `read()`. Print option selection compares authoritative raw host values; presentation text uses the host display label.
+- `BoundHostValueReader` now passes Gravity Forms' `get_value_entry_detail()` arguments in their documented positions; the entry array was previously passed where the currency code belongs.
+- Print option selection is driven by the active binding set's declared option map rather than raw choice values assumed by the adapter.
+- Print setup and model-resolution failures report distinct reasons (`print_surface_not_activated`, `activated_package_unresolved`, `semantic_package_unusable`, `required_asset_missing`, `required_asset_modified`, `runtime_exception`) instead of collapsing into `profile_not_active`.
+- Explicit binding repair now also drops a Print option map that described the previous source's raw values, alongside the runtime proof it invalidates.
+
 ## [0.1.0] - 2026-09-15
 
 ### Added

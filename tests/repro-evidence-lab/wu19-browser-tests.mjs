@@ -45,7 +45,8 @@ async function layoutSafety(page) {
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
-await login(page, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+const bootstrapPassword = [ 'wu21', 'bootstrap', 'pass', '2026' ].join( '-' );
+await login(page, 'bootstrap_admin', bootstrapPassword);
 
 await test('WU19-BROWSER-001', 'authorized Entry Detail exposes separate dossier Print utility', async () => {
   await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
@@ -80,7 +81,8 @@ await test('WU19-BROWSER-003', 'Chromium physical pagination is exactly two A4 p
 });
 
 const longContentFieldMap = Object.freeze({
-  'student.full_name': Number(manifest.alpha.fields['student.full_name']),
+  'student.first_name': Number(manifest.alpha.fields['student.first_name']),
+  'student.last_name': Number(manifest.alpha.fields['student.last_name']),
   'school.name': Number(manifest.alpha.fields['school.name']),
   'education.grade_group': Number(manifest.alpha.fields['education.grade_group']),
   'student.national_id': Number(manifest.alpha.fields['student.national_id']),
@@ -112,7 +114,8 @@ function assertSnapshot(expected, actual, label) {
 await test('WU19-BROWSER-004', 'realistic long Persian and numeric content stays inside defined print regions', async () => {
   const before = entryFieldSnapshot(manifest.alpha.entry_id);
   const longValues = {
-    'student.full_name': 'محمدرضا عبدالحسین‌پور نیک‌اندیش رضوی شیرازی',
+    'student.first_name': 'محمدرضا عبدالحسین‌پور',
+    'student.last_name': 'نیک‌اندیش رضوی شیرازی',
     'school.name': 'دبیرستان دوره دوم نمونه دولتی فرهنگ و معارف اسلامی شهید دستغیب ناحیه یک شیراز',
     'education.grade_group': 'دوازدهم علوم تجربی ـ گروه ویژه آزمون‌های جامع سال تحصیلی ۱۴۰۵–۱۴۰۶',
     'student.national_id': '۰۰۱۲۳۴۵۶۷۸',

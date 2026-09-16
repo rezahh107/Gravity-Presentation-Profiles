@@ -106,6 +106,33 @@ Each type has an exact key shape and bounded identifier/value rules. Raw selecto
 
 `runtime_claims` separately records evidence for `host_seam`, `availability`, `editability`, `authorization`, `action_permission` or `print_mapping`. Structural `BINDING_VALID` therefore never promotes these runtime claims. A runtime claim with evidence state `PROVEN` requires its own evidence refs.
 
+### Binding schema 1.1.0 — additive Print option map
+
+Schema `1.0.0` remains frozen and keeps its exact accepted meaning. Schema `1.1.0` adds exactly one optional field and nothing else:
+
+```yaml
+runtime_claims:
+  - semantic_slot_key: student.gender
+    claim: print_mapping
+    evidence_state: PROVEN
+    evidence_refs: [ ... ]
+    print_option_map:
+      - canonical_option: female
+        host_raw_value: "F"
+      - canonical_option: male
+        host_raw_value: "M"
+```
+
+`print_option_map` is admitted only on a `print_mapping` claim. It is declarative environment evidence: the exact raw value a host stores, paired with the canonical Print option identity that value means in this environment. Both `canonical_option` and `host_raw_value` must be unique within a map, so one raw value can never satisfy two canonical options.
+
+This closes a real defect rather than adding a feature. The Print adapter previously embedded environment-specific raw choice assumptions (`0`, `1`, `2`, `reg_normal`, `pay_cash` and similar), which silently decided what a production Gravity Forms choice value meant. Canonical option identities belong to the locked Print visual contract and stay in the presentation layer; what a real host value means is environment evidence and now lives in the binding artifact that already owns environment truth. No second configuration store is introduced.
+
+The map is bound to the exact binding-set identity and version that resolved the slot's source. Explicit repair publishes a new binding version with the runtime claim reset to `NOT_PROVEN` and the map dropped, so a map describing a previous field's raw values is never silently reused. An absent or unproven map fails closed: the whole option group stays blank.
+
+Label similarity, choice ordering and any other inference remain prohibited. An administrator declares the mapping explicitly or it does not exist.
+
+The declaration path is `BindingRepairService::confirmPrintOption()`, reached from the existing Mapping & Binding Health action rather than from a second mapping UI. It reuses the same immutable-version, compare-and-set activation and administrator-evidence machinery as field repair. The raw value must already exist in the bound field's own current choice list, so an administrator confirms a value the form actually defines rather than typing one. Confirming a field source and confirming what its values mean for Print stay separate operations, and neither is ever a permission decision.
+
 ## Independent resolvers
 
 `VisualProfileResolver` accepts an admitted surface and returns the one shared default profile. Supplying environment context is rejected.
