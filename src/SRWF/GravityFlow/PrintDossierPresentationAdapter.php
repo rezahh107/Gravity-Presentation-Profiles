@@ -19,7 +19,8 @@ final class PrintDossierPresentationAdapter {
     const SURFACE = 'print.dossier';
     const INTENT_KEY = 'gpp_presentation';
     const INTENT_VALUE = 'dossier';
-    const STYLE_VERSION = '1.0.0';
+    const STYLE_VERSION = '1.0.1';
+    const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
 
     private static $model_loaded = false;
     private static $model_resolution = null;
@@ -39,6 +40,55 @@ final class PrintDossierPresentationAdapter {
         // Deliberately no gravityflow_print_entry_header callback: that hook is
         // pre-permission in Gravity Flow 3.1.0 and must never expose Entry data.
         add_action( 'gravityflow_print_entry_footer', array( __CLASS__, 'renderPrintDossier' ), 20, 2 );
+
+        // Gravity Flow owns its isolated Print stylesheet list. Reuse Vazir's
+        // public loader only for explicit dossier intent so Vazir keeps font-file
+        // ownership while its already-admitted self-hosted @font-face reaches
+        // the Print document through the host's documented stylesheet seam.
+        if ( function_exists( 'add_filter' ) ) {
+            add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeVazirPrintStyle' ), 20, 2 );
+        }
+    }
+
+    /**
+     * Bridge the existing Vazir frontend delivery handle into Gravity Flow's
+     * isolated Print document without copying or regenerating font-face CSS.
+     * If the host plugin or its configured frontend delivery is unavailable,
+     * leave Gravity Flow's stylesheet list unchanged; target font acceptance
+     * then remains unproven rather than being simulated by GPP.
+     */
+    public static function includeVazirPrintStyle( $styles, $entry_ids ) {
+        unset( $entry_ids );
+
+        if ( ! self::isDossierIntent() ) {
+            return $styles;
+        }
+
+        if ( ! class_exists( '\VazirFont_Loader' ) || ! method_exists( '\VazirFont_Loader', 'get_instance' ) ) {
+            return $styles;
+        }
+
+        $loader = \VazirFont_Loader::get_instance();
+        if ( ! is_object( $loader ) || ! method_exists( $loader, 'enqueue_frontend_fonts' ) ) {
+            return $styles;
+        }
+
+        // The Vazir plugin remains the only owner of the font files and its
+        // @font-face declarations. This public method respects that plugin's
+        // existing frontend enablement setting and registers/enqueues its own
+        // stylesheet handle when delivery is admitted for the site.
+        $loader->enqueue_frontend_fonts();
+
+        if ( ! function_exists( 'wp_style_is' ) || ! wp_style_is( self::VAZIR_STYLE_HANDLE, 'registered' ) ) {
+            return $styles;
+        }
+
+        $styles = is_array( $styles ) ? $styles : array();
+        if ( ! in_array( self::VAZIR_STYLE_HANDLE, $styles, true ) ) {
+            $styles[] = self::VAZIR_STYLE_HANDLE;
+        }
+
+        return $styles;
     }
 
     public static function resetRuntimeCache() {

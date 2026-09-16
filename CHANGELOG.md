@@ -19,6 +19,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ### Changed
 
+- Mapping & Binding Health repair choices now expose the exact stable semantic slot key and Gravity Forms field ID carried by the actionable payload, so descriptive meaning text cannot present a different repair identity from the immutable binding mutation that will execute.
+- SRWF dossier Print typography now selects the admitted `Vazir` family first and reuses the existing Vazir plugin's self-hosted delivery through Gravity Flow's Print stylesheet seam; GPP still owns no font binaries or independent font loader.
 - `student.full_name` is now derived read-only from the separately bound `student.first_name` and `student.last_name` slots, matching the authoritative binding matrix. A derived slot can no longer be read as a direct host source, and an unresolved component leaves the field blank instead of printing a half-composed identity.
 - `BoundHostValueReader` exposes separate `readRaw()` and `readDisplay()` entry points instead of one ambiguous `read()`. Print option selection compares authoritative raw host values; presentation text uses the host display label.
 - `BoundHostValueReader` now passes Gravity Forms' `get_value_entry_detail()` arguments in their documented positions; the entry array was previously passed where the currency code belongs.
