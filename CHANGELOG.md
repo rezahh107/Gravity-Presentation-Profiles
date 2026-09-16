@@ -19,6 +19,7 @@ The project intends to follow Semantic Versioning once production releases begin
 - Configuration-readiness projection in plugin settings, reported strictly as configuration facts and never as a claim that any user may print.
 - Per-asset Print asset integrity reporting that distinguishes a missing required asset from one whose bytes no longer match the declared release identity.
 - Automated coverage for the operator setup path, seed semantics, activation-conflict handling, rerun preservation, stale Print-proof invalidation, raw-versus-display reads, canonical choice mapping, and the two-page composition.
+- Authentic disposable WordPress admin-browser qualification for row-level stale-binding repair, fresh immutable-version rollback availability, and post-rollback health re-evaluation through the real Gravity Forms Add-On settings form.
 
 ### Changed
 
