@@ -99,7 +99,7 @@ final class AddOn extends \GFAddOn {
                     array(
                         'name'                => 'binding_management_action',
                         'label'               => esc_html__( 'Explicit repair or rollback', 'gravity-presentation-profiles' ),
-                        'description'         => esc_html__( 'Choose one repair or rollback action, then save settings. The default performs no binding change. Technical IDs are shown only as secondary diagnostics.', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose one repair or rollback action, then save settings. The default performs no binding change. Exact semantic slot keys and Gravity Forms field IDs are shown so the selected action identity is explicit.', 'gravity-presentation-profiles' ),
                         'type'                => 'select',
                         'choices'             => $this->bindingManagementChoices(),
                         'validation_callback' => array( $this, 'validate_binding_management_action' ),
@@ -430,7 +430,7 @@ final class AddOn extends \GFAddOn {
         try {
             $facts = OperationsSetupService::forWordPress()->readiness();
         } catch ( \Throwable $exception ) {
-            echo '<p>' . esc_html__( 'Operations readiness is unavailable because the authoritative lifecycle state could not be read.', 'gravity-presentation-profiles' ) . '</p></div>';
+            echo '<p>' . esc_html__( 'Operations readiness is unavailable because the authoritative lifecycle or host field inventory could not be read.', 'gravity-presentation-profiles' ) . '</p></div>';
             return;
         }
 
@@ -852,11 +852,12 @@ final class AddOn extends \GFAddOn {
                     );
                     $choices[] = array(
                         'label' => sprintf(
-                            __( 'Repair: %1$s — %2$s → %3$s (Field %4$s)', 'gravity-presentation-profiles' ),
+                            __( 'Repair: %1$s — %2$s / %3$s → %4$s (Field %5$s)', 'gravity-presentation-profiles' ),
                             $form_name,
+                            $payload['semantic_slot_key'],
                             $repair['meaning'],
                             $host_field['label'],
-                            $host_field['field_id']
+                            $payload['field_id']
                         ),
                         'value' => $this->encodeBindingManagementAction( $payload ),
                     );
