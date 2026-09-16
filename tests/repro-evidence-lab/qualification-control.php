@@ -16,18 +16,33 @@ if ( ! is_string( $action ) || '' === $action || ! is_array( $manifest ) ) {
 function gppq_json( $value ) {
     echo wp_json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 }
-function gppq_binding_lifecycle() {
+function gppq_binding_lifecycle( $additional_refs = array() ) {
+    $admitted = array(
+        'wu21:synthetic-fixture', 'wu21:reproducible-simulation', 'wu21:fail-closed-negative-control',
+        'wu18:synthetic-fixture', 'wu18:pinned-runtime', 'wu18:negative-control',
+        'wu19:synthetic-fixture', 'wu19:pinned-runtime', 'wu19:negative-control',
+        'qualification:stateful-core-spine', 'qualification:negative-control'
+    );
+    foreach ( $additional_refs as $ref ) {
+        if ( is_string( $ref ) && '' !== trim( $ref ) ) {
+            $admitted[] = $ref;
+        }
+    }
     return new BindingSetLifecycle(
         new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
-        new EvidenceReferenceGate(
-            array(
-                'wu21:synthetic-fixture', 'wu21:reproducible-simulation', 'wu21:fail-closed-negative-control',
-                'wu18:synthetic-fixture', 'wu18:pinned-runtime', 'wu18:negative-control',
-                'wu19:synthetic-fixture', 'wu19:pinned-runtime', 'wu19:negative-control',
-                'qualification:stateful-core-spine', 'qualification:negative-control'
-            )
-        )
+        new EvidenceReferenceGate( array_values( array_unique( $admitted ) ) )
     );
+}
+function gppq_binding_evidence_refs( $artifact ) {
+    $refs = array();
+    if ( ! is_array( $artifact ) || empty( $artifact['bindings'] ) ) return $refs;
+    foreach ( $artifact['bindings'] as $binding ) {
+        if ( ! is_array( $binding ) || 'PROVEN' !== ( isset( $binding['state'] ) ? $binding['state'] : null ) || empty( $binding['evidence_refs'] ) ) continue;
+        foreach ( $binding['evidence_refs'] as $ref ) {
+            if ( is_string( $ref ) && '' !== trim( $ref ) ) $refs[] = $ref;
+        }
+    }
+    return array_values( array_unique( $refs ) );
 }
 function gppq_reset_caches() {
     EntryDetailPresentationAdapter::resetRuntimeCache();
@@ -88,7 +103,10 @@ function gppq_activate_clone( $source, $id, $version, $entry_id = null ) {
     $artifact['binding_set_version'] = $version;
     $artifact['context']['entry_source_ref'] = null === $entry_id ? null : array( 'type' => 'gravity_forms.entry', 'entry_id' => (int) $entry_id );
     $artifact['provenance'] = array( 'producer' => 'Stateful Core Spine Qualification', 'evidence_refs' => array( 'qualification:stateful-core-spine' ) );
-    $lifecycle = gppq_binding_lifecycle();
+    // Preserve the exact admitted source evidence carried by the product-created
+    // artifact. Qualification adds only its own refs for bindings it mutates;
+    // it does not replace or bypass the EvidenceReferenceGate.
+    $lifecycle = gppq_binding_lifecycle( gppq_binding_evidence_refs( $artifact ) );
     $lifecycle->import( $artifact );
     $lifecycle->activate( array( 'context' => $artifact['context'], 'binding_set_id' => $id, 'binding_set_version' => $version ) );
     gppq_reset_caches();
@@ -197,10 +215,17 @@ if ( 'lifecycle-deactivate' === $action ) {
     gppq_backup_binding_state( 'lifecycle' );
     $lifecycle = gppq_binding_lifecycle();
     $deactivated = array();
+    $contexts = array();
+    // One Operations binding may legitimately govern both surfaces. Capture all
+    // contexts first, then deactivate each unique context once so the first
+    // mutation cannot make the second surface lookup disappear mid-control.
     foreach ( array( 'gravity_flow.entry_detail', 'print.dossier' ) as $surface ) {
         $artifact = gppq_active_general_artifact( $surface, $form_id );
-        $lifecycle->deactivate( array( 'context' => $artifact['context'] ) );
+        $contexts[ $lifecycle->contextKey( $artifact['context'] ) ] = $artifact['context'];
         $deactivated[] = $surface;
+    }
+    foreach ( $contexts as $context ) {
+        $lifecycle->deactivate( array( 'context' => $context ) );
     }
     gppq_reset_caches();
     gppq_json( array( 'state' => 'deactivated', 'surfaces' => $deactivated ) ); return;
