@@ -142,7 +142,11 @@ final class BindingHealthService {
                     'form_id' => $context['form_id'],
                     'form_title' => $context['form_title'],
                     'semantic_slot_key' => $fact['semantic_slot_key'],
-                    'meaning' => $fact['meaning'],
+                    // The Add-On renders this field as the visible repair identity.
+                    // Prefix it with the same stable slot key carried separately in
+                    // the actionable payload so descriptive package metadata can
+                    // never present one slot while the submitted payload names another.
+                    'meaning' => $this->managementIdentityLabel( $fact ),
                     'status' => $fact['status'],
                     'fields' => array_values( $context['fields'] ),
                 );
@@ -154,6 +158,17 @@ final class BindingHealthService {
             'rollbacks' => $this->rollbackCandidates(),
             'print_options' => $this->printOptionCandidates( $health ),
         );
+    }
+
+    private function managementIdentityLabel( $fact ) {
+        $slot = isset( $fact['semantic_slot_key'] ) && is_string( $fact['semantic_slot_key'] )
+            ? $fact['semantic_slot_key']
+            : '';
+        $meaning = isset( $fact['meaning'] ) && is_string( $fact['meaning'] )
+            ? trim( $fact['meaning'] )
+            : '';
+
+        return '' === $meaning ? $slot : $slot . ' / ' . $meaning;
     }
 
     /**
