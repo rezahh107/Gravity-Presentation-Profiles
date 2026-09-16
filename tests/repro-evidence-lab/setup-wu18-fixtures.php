@@ -11,7 +11,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $base = get_option( 'gpp_wu21_fixture_manifest' );
-if ( ! $artifact_dir || ! is_array( $base ) || empty( $base['forms'] ) || empty( $base['entry_records'] ) ) throw new RuntimeException( 'WU18 requires WU21 fixtures.' );
+if ( ! $artifact_dir || ! is_array( $base ) || empty( $base['forms'] ) || empty( $base['entry_records'] ) || empty( $base['installation_id'] ) ) throw new RuntimeException( 'WU18 requires WU21 fixtures.' );
 
 function wu18_form_meta( $base, $key ) {
     foreach ( $base['forms'] as $form ) if ( $form['key'] === $key ) return $form;
@@ -110,7 +110,7 @@ $visual_lifecycle = new VisualPackageLifecycle( new WordPressOptionStateStore( V
 $visual_lifecycle->import( $visual_package );
 $visual_lifecycle->activate( array( 'surface' => 'gravity_flow.entry_detail', 'package_id' => $visual_package['package_id'], 'package_version' => $visual_package['package_version'], 'profile_id' => $profile['profile_id'] ) );
 
-function wu18_binding_set( $id, $form_meta, $fields, $entry_ref = null, $negative_required = false ) {
+function wu18_binding_set( $id, $installation_id, $form_meta, $fields, $entry_ref, $negative_required = false ) {
     $proven = array( 'wu18:synthetic-fixture', 'wu18:pinned-runtime' ); $negative = array( 'wu18:negative-control' );
     $field_map = array(
         'student.first_name' => $fields['student.first_name'], 'student.last_name' => $fields['student.last_name'], 'student.full_name' => $form_meta['name_field_id'],
@@ -141,12 +141,16 @@ function wu18_binding_set( $id, $form_meta, $fields, $entry_ref = null, $negativ
     $claims[] = array( 'semantic_slot_key' => 'review.reason', 'claim' => 'editability', 'evidence_state' => 'PROVEN', 'evidence_refs' => $proven );
     return array(
         'artifact_type' => 'gpp.environment_binding_set', 'schema_version' => '1.0.0', 'binding_set_id' => $id, 'binding_set_version' => '1.0.0',
-        'context' => array( 'installation_source_ref' => array( 'type' => 'wordpress.installation', 'installation_id' => 'wu21-sim-installation' ), 'form_source_ref' => array( 'type' => 'gravity_forms.form', 'form_id' => (int) $form_meta['form_id'] ), 'entry_source_ref' => null === $entry_ref ? null : array( 'type' => 'gravity_forms.entry', 'entry_id' => (int) $entry_ref ), 'surfaces' => array( 'gravity_flow.entry_detail' ) ),
+        'context' => array( 'installation_source_ref' => array( 'type' => 'wordpress.installation', 'installation_id' => $installation_id ), 'form_source_ref' => array( 'type' => 'gravity_forms.form', 'form_id' => (int) $form_meta['form_id'] ), 'entry_source_ref' => array( 'type' => 'gravity_forms.entry', 'entry_id' => (int) $entry_ref ), 'surfaces' => array( 'gravity_flow.entry_detail' ) ),
         'provenance' => array( 'producer' => 'WU18 pinned Evidence Lab fixture', 'evidence_refs' => $proven ), 'bindings' => $bindings, 'runtime_claims' => $claims,
     );
 }
 
-$bindings = array( wu18_binding_set( 'wu18.sim.alpha.v1', $alpha_form, $alpha_fields ), wu18_binding_set( 'wu18.sim.beta.v1', $beta_form, $beta_fields ), wu18_binding_set( 'wu18.sim.alpha.negative.v1', $alpha_form, $alpha_fields, $negative_entry['entry_id'], true ) );
+$bindings = array(
+    wu18_binding_set( 'wu18.sim.alpha.v1', $base['installation_id'], $alpha_form, $alpha_fields, $alpha_entry['entry_id'] ),
+    wu18_binding_set( 'wu18.sim.beta.v1', $base['installation_id'], $beta_form, $beta_fields, $beta_entry['entry_id'] ),
+    wu18_binding_set( 'wu18.sim.alpha.negative.v1', $base['installation_id'], $alpha_form, $alpha_fields, $negative_entry['entry_id'], true ),
+);
 foreach ( $bindings as $binding ) EnvironmentBindingSet::validate( $binding );
 $binding_lifecycle = new BindingSetLifecycle( new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ), new EvidenceReferenceGate( array( 'wu21:synthetic-fixture', 'wu21:reproducible-simulation', 'wu21:fail-closed-negative-control', 'wu18:synthetic-fixture', 'wu18:pinned-runtime', 'wu18:negative-control' ) ) );
 foreach ( $bindings as $binding ) {
