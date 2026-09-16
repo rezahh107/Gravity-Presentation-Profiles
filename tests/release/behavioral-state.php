@@ -10,6 +10,7 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
 use GravityPresentationProfiles\GravityForms\OperationsSetupService;
 use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
+use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPolicy;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationModel;
 
 $artifact_dir = getenv( 'GPP_BEHAVIOR_ARTIFACT_DIR' );
@@ -49,10 +50,13 @@ if ( is_array( $activation ) ) {
 }
 
 $binding_by_slot = array();
+$binding_kinds   = array();
 $claims_by_slot  = array();
 if ( is_array( $artifact ) ) {
     foreach ( $artifact['bindings'] as $binding ) {
-        $binding_by_slot[ $binding['semantic_slot_key'] ] = $binding;
+        $slot                     = $binding['semantic_slot_key'];
+        $binding_by_slot[ $slot ] = $binding;
+        $binding_kinds[ $slot ]   = OperationsBindingManagementPolicy::kind( $slot );
     }
     foreach ( $artifact['runtime_claims'] as $claim ) {
         if ( ! isset( $claims_by_slot[ $claim['semantic_slot_key'] ] ) ) {
@@ -61,6 +65,7 @@ if ( is_array( $artifact ) ) {
         $claims_by_slot[ $claim['semantic_slot_key'] ][] = $claim;
     }
 }
+ksort( $binding_kinds );
 
 $print_activation = $visual->resolve( 'print.dossier' );
 $inbox_activation = $visual->resolve( 'gravity_flow.inbox' );
@@ -68,6 +73,15 @@ $entry_activation = $visual->resolve( 'gravity_flow.entry_detail' );
 $package_record    = isset( $visual_snapshot['installed']['srwf.operations.presentation']['1.0.0'] )
     ? $visual_snapshot['installed']['srwf.operations.presentation']['1.0.0']
     : null;
+$semantic_catalogue_keys = array();
+if ( is_array( $package_record ) && isset( $package_record['artifact']['semantic_slots'] ) ) {
+    foreach ( $package_record['artifact']['semantic_slots'] as $slot ) {
+        if ( isset( $slot['semantic_slot_key'] ) ) {
+            $semantic_catalogue_keys[] = $slot['semantic_slot_key'];
+        }
+    }
+    sort( $semantic_catalogue_keys );
+}
 
 $installed_artifact_hashes = array();
 if ( is_array( $activation ) && isset( $binding_snapshot['installed'][ $activation['binding_set_id'] ] ) ) {
@@ -103,6 +117,7 @@ $state = array(
         'print_activation' => $print_activation,
         'inbox_activation' => $inbox_activation,
         'entry_detail_activation' => $entry_activation,
+        'semantic_catalogue_keys' => $semantic_catalogue_keys,
     ),
     'binding' => array(
         'revision' => isset( $binding_snapshot['revision'] ) ? $binding_snapshot['revision'] : 0,
@@ -112,6 +127,7 @@ $state = array(
         'installed_artifact_hashes' => $installed_artifact_hashes,
         'student_first_name' => isset( $binding_by_slot['student.first_name'] ) ? $binding_by_slot['student.first_name'] : null,
         'semantic_count' => count( $binding_by_slot ),
+        'management_kinds' => $binding_kinds,
         'runtime_claims' => $claims_by_slot,
     ),
 );
