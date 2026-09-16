@@ -19,7 +19,7 @@
   --paper-fill-section: #efefef;
   --paper-fill-table: #f0f0f0;
   --paper-fill-table-subtle: #f7f7f7;
-  --font: Tahoma, Arial, sans-serif;
+  --font: 'Vazir', Tahoma, Arial, sans-serif;
   direction: rtl;
   color: var(--paper-ink);
   background: #fff;
