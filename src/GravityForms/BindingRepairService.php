@@ -89,11 +89,19 @@ final class BindingRepairService {
             throw new LifecycleException( 'repair_slot_missing', 'The selected semantic slot is not present in the active binding artifact.' );
         }
 
+        // Changing the source for a slot invalidates every runtime claim that
+        // depended on the previous source. A declared Print option map described
+        // the previous field's raw values, so it is dropped with the proof rather
+        // than silently surviving into the new binding version.
         foreach ( $next['runtime_claims'] as &$claim ) {
-            if ( $claim['semantic_slot_key'] === $request['semantic_slot_key'] && 'PROVEN' === $claim['evidence_state'] ) {
+            if ( $claim['semantic_slot_key'] !== $request['semantic_slot_key'] ) {
+                continue;
+            }
+            if ( 'PROVEN' === $claim['evidence_state'] ) {
                 $claim['evidence_state'] = 'NOT_PROVEN';
                 $claim['evidence_refs'] = array();
             }
+            unset( $claim['print_option_map'] );
         }
         unset( $claim );
 

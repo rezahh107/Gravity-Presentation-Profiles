@@ -27,6 +27,8 @@ $cases = array(
     'inbox-manual-refresh.php',
     'entry-detail-presentation-model.php',
     'print-dossier-presentation-model.php',
+    'print-dossier-data-path.php',
+    'operations-setup-production-path.php',
 );
 
 foreach ( $cases as $case ) {

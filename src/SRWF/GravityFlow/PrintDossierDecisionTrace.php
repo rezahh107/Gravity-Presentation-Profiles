@@ -26,14 +26,27 @@ final class PrintDossierDecisionTrace {
         'post_permission_seam_reached',
         'profile_resolved',
         'bindings_evaluated',
+        'full_name_derived',
         'unsupported_request_cardinality',
+        // Retained so historical Print evidence stays readable. Setup and model
+        // resolution failures now emit the specific outcomes below instead of
+        // collapsing into this one public meaning.
         'profile_not_active',
+        'print_surface_not_activated',
+        'activated_package_unresolved',
+        'semantic_package_unusable',
+        'print_configuration_incomplete',
         'binding_context_missing',
         'binding_context_ambiguous',
         'binding_not_proven',
         'print_mapping_not_proven',
+        'print_option_map_not_declared',
+        'derivation_component_unresolved',
         'source_unavailable',
         'required_asset_unavailable',
+        'required_asset_missing',
+        'required_asset_modified',
+        'runtime_exception',
         'composition_not_safe',
         'ready_two_pages',
     );
@@ -85,6 +98,7 @@ final class PrintDossierDecisionTrace {
             'intent_admitted',
             'profile_resolved',
             'bindings_evaluated',
+            'full_name_derived',
             'ready_two_pages',
         );
         if ( in_array( $outcome, $pass, true ) ) {
@@ -97,7 +111,16 @@ final class PrintDossierDecisionTrace {
                 'fallback' => 'host_authorization_preserved',
             );
         }
-        if ( in_array( $outcome, array( 'binding_not_proven', 'print_mapping_not_proven', 'source_unavailable' ), true ) ) {
+        // A single unresolved slot leaves that value blank; it never fails the
+        // whole dossier, which stays physically usable for manual completion.
+        $blank_value = array(
+            'binding_not_proven',
+            'print_mapping_not_proven',
+            'print_option_map_not_declared',
+            'derivation_component_unresolved',
+            'source_unavailable',
+        );
+        if ( in_array( $outcome, $blank_value, true ) ) {
             return array(
                 'result' => RuntimeDecisionTrace::RESULT_SKIP,
                 'reason_code' => $outcome,

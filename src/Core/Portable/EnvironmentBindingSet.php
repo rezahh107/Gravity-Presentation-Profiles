@@ -6,6 +6,20 @@ final class EnvironmentBindingSet {
     const ARTIFACT_TYPE  = 'gpp.environment_binding_set';
     const SCHEMA_VERSION = '1.0.0';
 
+    /**
+     * Additive schema. `1.0.0` keeps its exact frozen meaning; `1.1.0` adds only
+     * the optional `print_option_map` on a `print_mapping` runtime claim, so an
+     * environment can declare what its own Gravity Forms raw choice values mean
+     * for the canonical Print option vocabulary instead of a presentation
+     * adapter silently defining that for every installation.
+     */
+    const SCHEMA_VERSION_1_1 = '1.1.0';
+
+    private const SCHEMA_VERSIONS = array( '1.0.0', '1.1.0' );
+
+    private const CANONICAL_OPTION_PATTERN = '/^[a-z][a-z0-9_]*$/';
+    private const HOST_RAW_VALUE_MAX_LENGTH = 255;
+
     private const BINDING_STATES = array(
         'PROVEN',
         'UNBOUND',
@@ -52,13 +66,17 @@ final class EnvironmentBindingSet {
         );
 
         self::requireSame( self::ARTIFACT_TYPE, $artifact['artifact_type'], 'Unexpected binding artifact_type.' );
-        self::requireSame( self::SCHEMA_VERSION, $artifact['schema_version'], 'Unsupported binding schema_version.' );
+
+        if ( ! is_string( $artifact['schema_version'] ) || ! in_array( $artifact['schema_version'], self::SCHEMA_VERSIONS, true ) ) {
+            throw new ContractViolation( 'Unsupported binding schema_version.' );
+        }
+
         self::requireIdentifier( $artifact['binding_set_id'], 'binding_set_id' );
         self::requireVersion( $artifact['binding_set_version'], 'binding_set_version' );
         self::validateContext( $artifact['context'] );
         self::validateProvenance( $artifact['provenance'] );
         $binding_slots = self::validateBindings( $artifact['bindings'] );
-        self::validateRuntimeClaims( $artifact['runtime_claims'], $binding_slots );
+        self::validateRuntimeClaims( $artifact['runtime_claims'], $binding_slots, $artifact['schema_version'] );
         self::rejectDangerousStructure( $artifact, 'binding set' );
 
         return true;
@@ -106,6 +124,10 @@ final class EnvironmentBindingSet {
 
     public static function admittedSurfaces() {
         return self::SURFACES;
+    }
+
+    public static function admittedSchemaVersions() {
+        return self::SCHEMA_VERSIONS;
     }
 
     private static function validateContext( $context ) {
@@ -216,16 +238,22 @@ final class EnvironmentBindingSet {
         return $seen;
     }
 
-    private static function validateRuntimeClaims( $claims, $binding_slots ) {
+    private static function validateRuntimeClaims( $claims, $binding_slots, $schema_version ) {
         self::requireList( $claims, 'runtime_claims' );
         $seen = array();
+        $base_keys = array( 'semantic_slot_key', 'claim', 'evidence_state', 'evidence_refs' );
 
         foreach ( $claims as $index => $claim ) {
             $path = 'runtime_claims[' . $index . ']';
             self::requireArray( $claim, $path . ' must be an object.' );
+
+            $carries_option_map = self::SCHEMA_VERSION_1_1 === $schema_version
+                && is_array( $claim )
+                && array_key_exists( 'print_option_map', $claim );
+
             self::requireExactKeys(
                 $claim,
-                array( 'semantic_slot_key', 'claim', 'evidence_state', 'evidence_refs' ),
+                $carries_option_map ? array_merge( $base_keys, array( 'print_option_map' ) ) : $base_keys,
                 $path
             );
             self::requireSlotKey( $claim['semantic_slot_key'], $path . '.semantic_slot_key' );
@@ -248,12 +276,66 @@ final class EnvironmentBindingSet {
                 throw new ContractViolation( $path . ' PROVEN runtime claim requires evidence provenance.' );
             }
 
+            if ( $carries_option_map ) {
+                if ( 'print_mapping' !== $claim['claim'] ) {
+                    throw new ContractViolation( $path . '.print_option_map is admitted only for a print_mapping claim.' );
+                }
+                self::validatePrintOptionMap( $claim['print_option_map'], $path . '.print_option_map' );
+            }
+
             $claim_key = $claim['semantic_slot_key'] . '|' . $claim['claim'];
             if ( isset( $seen[ $claim_key ] ) ) {
                 throw new ContractViolation( 'Duplicate runtime claim: ' . $claim_key );
             }
 
             $seen[ $claim_key ] = true;
+        }
+    }
+
+    /**
+     * A declarative, environment-scoped mapping from the real host raw value to a
+     * canonical Print option. It is evidence, not executable configuration: there
+     * is no label-similarity inference and no defaulting. Both sides must be
+     * unique so one raw value can never silently satisfy two canonical options.
+     */
+    private static function validatePrintOptionMap( $map, $path ) {
+        self::requireList( $map, $path );
+
+        if ( array() === $map ) {
+            throw new ContractViolation( $path . ' must not be empty when present.' );
+        }
+
+        $seen_options = array();
+        $seen_values  = array();
+
+        foreach ( $map as $index => $entry ) {
+            $entry_path = $path . '[' . $index . ']';
+            self::requireArray( $entry, $entry_path . ' must be an object.' );
+            self::requireExactKeys( $entry, array( 'canonical_option', 'host_raw_value' ), $entry_path );
+
+            if ( ! is_string( $entry['canonical_option'] ) || 1 !== preg_match( self::CANONICAL_OPTION_PATTERN, $entry['canonical_option'] ) ) {
+                throw new ContractViolation( $entry_path . '.canonical_option must be a stable lowercase option identifier.' );
+            }
+
+            if ( ! is_string( $entry['host_raw_value'] ) || '' === $entry['host_raw_value'] ) {
+                throw new ContractViolation( $entry_path . '.host_raw_value must be the exact non-empty host raw value as text.' );
+            }
+
+            if ( strlen( $entry['host_raw_value'] ) > self::HOST_RAW_VALUE_MAX_LENGTH ) {
+                throw new ContractViolation( $entry_path . '.host_raw_value exceeds the admitted length bound.' );
+            }
+
+            self::rejectExecutableString( $entry['host_raw_value'], $entry_path . '.host_raw_value' );
+
+            if ( isset( $seen_options[ $entry['canonical_option'] ] ) ) {
+                throw new ContractViolation( $entry_path . ' repeats canonical_option: ' . $entry['canonical_option'] );
+            }
+            if ( isset( $seen_values[ $entry['host_raw_value'] ] ) ) {
+                throw new ContractViolation( $entry_path . ' repeats host_raw_value.' );
+            }
+
+            $seen_options[ $entry['canonical_option'] ] = true;
+            $seen_values[ $entry['host_raw_value'] ]    = true;
         }
     }
 

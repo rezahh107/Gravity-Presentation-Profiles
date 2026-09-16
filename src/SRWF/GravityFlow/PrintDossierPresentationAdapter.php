@@ -5,8 +5,10 @@ namespace GravityPresentationProfiles\SRWF\GravityFlow;
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
+use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
+use GravityPresentationProfiles\Core\Portable\ContractViolation;
 
 /**
  * Presentation-only consumer of Gravity Flow 3.1.0's native Print lifecycle.
@@ -20,7 +22,7 @@ final class PrintDossierPresentationAdapter {
     const STYLE_VERSION = '1.0.0';
 
     private static $model_loaded = false;
-    private static $model = null;
+    private static $model_resolution = null;
     private static $print_rendered = false;
     private static $last_trace = null;
 
@@ -41,7 +43,7 @@ final class PrintDossierPresentationAdapter {
 
     public static function resetRuntimeCache() {
         self::$model_loaded = false;
-        self::$model = null;
+        self::$model_resolution = null;
         self::$print_rendered = false;
         self::$last_trace = null;
     }
@@ -97,10 +99,11 @@ final class PrintDossierPresentationAdapter {
             return;
         }
 
-        $model = self::model();
+        $resolution = self::modelResolution();
+        $model      = $resolution['model'];
         if ( null === $model ) {
-            $trace->record( 'PRINT_PROFILE_RESOLVED', 'profile_not_active' );
-            self::renderFailure( 'profile_not_active', $trace );
+            $trace->record( 'PRINT_PROFILE_RESOLVED', $resolution['reason'] );
+            self::renderFailure( $resolution['reason'], $trace );
             return;
         }
         $trace->record( 'PRINT_PROFILE_RESOLVED', 'profile_resolved' );
@@ -115,38 +118,16 @@ final class PrintDossierPresentationAdapter {
             return;
         }
 
-        if ( ! PrintDossierAssets::isReady() ) {
-            $trace->record( 'PRINT_COMPOSITION_READY', 'required_asset_unavailable' );
-            self::renderFailure( 'required_asset_unavailable', $trace );
+        $assets = PrintDossierAssets::integrity();
+        if ( empty( $assets['ready'] ) ) {
+            $trace->record( 'PRINT_COMPOSITION_READY', $assets['reason'] );
+            self::renderFailure( $assets['reason'], $trace );
             return;
         }
 
-        $reader = new BoundHostValueReader();
-        $values = array();
-        foreach ( self::valueSlots() as $slot ) {
-            $values[ $slot ] = self::readSlotText( $model, $reader, $form, $entry, $slot, $trace );
-        }
-
-        $options = array(
-            'female' => self::optionChecked( $model, $reader, $form, $entry, 'student.gender', '0', $trace ),
-            'male' => self::optionChecked( $model, $reader, $form, $entry, 'student.gender', '1', $trace ),
-            'graduated' => self::optionChecked( $model, $reader, $form, $entry, 'education.graduation_status', '0', $trace ),
-            'loc_central' => self::optionChecked( $model, $reader, $form, $entry, 'registration.center', '0', $trace ),
-            'loc_golestan' => self::optionChecked( $model, $reader, $form, $entry, 'registration.center', '1', $trace ),
-            'loc_sadra' => self::optionChecked( $model, $reader, $form, $entry, 'registration.center', '2', $trace ),
-            'reg_normal' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_normal', $trace ),
-            'reg_school' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_school', $trace ),
-            'reg_shaheed' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_shaheed', $trace ),
-            'reg_komite' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_komite', $trace ),
-            'reg_behzisti' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_behzisti', $trace ),
-            'reg_maskan' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_type', 'reg_maskan', $trace ),
-            'time_early' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_timing', 'time_early', $trace ),
-            'time_continue' => self::optionChecked( $model, $reader, $form, $entry, 'print.registration_timing', 'time_continue', $trace ),
-            'pay_cash' => self::optionChecked( $model, $reader, $form, $entry, 'print.payment_mode', 'pay_cash', $trace ),
-            'pay_installment' => self::optionChecked( $model, $reader, $form, $entry, 'print.payment_mode', 'pay_installment', $trace ),
-            'former_kanoon' => self::optionChecked( $model, $reader, $form, $entry, 'print.former_kanoon_status', 'kanoon', $trace ),
-            'former_non_kanoon' => self::optionChecked( $model, $reader, $form, $entry, 'print.former_kanoon_status', 'non_kanoon', $trace ),
-        );
+        $resolved = ( new PrintDossierValueResolver( $model ) )->resolve( $form, $entry, $trace );
+        $values   = $resolved['values'];
+        $options  = $resolved['options'];
         $trace->record( 'PRINT_BINDINGS_EVALUATED', 'bindings_evaluated' );
 
         if ( ! self::valuesFitContract( $values ) ) {
@@ -160,17 +141,6 @@ final class PrintDossierPresentationAdapter {
         $trace->record( 'PRINT_COMPOSITION_READY', 'ready_two_pages' );
         self::renderTrace( $trace );
         self::emitTrace( $trace );
-    }
-
-    private static function valueSlots() {
-        return array(
-            'registration.counter', 'student.national_id', 'student.full_name', 'student.father_name',
-            'education.grade_group', 'print.academic_year_start', 'print.academic_year_end', 'school.name',
-            'print.sub_office', 'print.first_exam_date', 'student.mobile', 'print.phone_2',
-            'print.financial_date', 'finance.tuition_amount', 'finance.discount_amount',
-            'finance.net_payable_amount', 'finance.discount_title', 'print.received_amount_words',
-            'print.received_amount_number', 'print.referrer', 'print.exam_count',
-        );
     }
 
     private static function isDossierIntent() {
@@ -193,53 +163,6 @@ final class PrintDossierPresentationAdapter {
         }
 
         return array_values( array_unique( array_map( 'intval', explode( ',', $raw ) ) ) );
-    }
-
-    private static function readSlotText( PrintDossierPresentationModel $model, BoundHostValueReader $reader, $form, $entry, $slot, PrintDossierDecisionTrace $trace ) {
-        $decision = $model->fieldDecision( $entry, $slot );
-        if ( empty( $decision['populate'] ) ) {
-            self::recordBlankReason( $trace, $decision['reason'] );
-            return '';
-        }
-
-        $value = $reader->read( $decision['source_ref'], $form, $entry );
-        if ( is_int( $value ) || is_float( $value ) ) {
-            return (string) $value;
-        }
-        if ( ! is_scalar( $value ) ) {
-            $trace->record( 'PRINT_BINDINGS_EVALUATED', 'source_unavailable' );
-            return '';
-        }
-
-        $value = trim( wp_strip_all_tags( (string) $value ) );
-        if ( '' === $value ) {
-            $trace->record( 'PRINT_BINDINGS_EVALUATED', 'source_unavailable' );
-        }
-        return $value;
-    }
-
-    private static function optionChecked( PrintDossierPresentationModel $model, BoundHostValueReader $reader, $form, $entry, $slot, $expected, PrintDossierDecisionTrace $trace ) {
-        $decision = $model->fieldDecision( $entry, $slot );
-        if ( empty( $decision['populate'] ) ) {
-            self::recordBlankReason( $trace, $decision['reason'] );
-            return false;
-        }
-
-        $value = $reader->read( $decision['source_ref'], $form, $entry );
-        if ( ! is_scalar( $value ) ) {
-            $trace->record( 'PRINT_BINDINGS_EVALUATED', 'source_unavailable' );
-            return false;
-        }
-
-        return (string) $value === (string) $expected;
-    }
-
-    private static function recordBlankReason( PrintDossierDecisionTrace $trace, $reason ) {
-        if ( in_array( $reason, array( 'binding_context_missing', 'binding_context_ambiguous', 'print_mapping_not_proven' ), true ) ) {
-            $trace->record( 'PRINT_BINDINGS_EVALUATED', $reason );
-            return;
-        }
-        $trace->record( 'PRINT_BINDINGS_EVALUATED', 'binding_not_proven' );
     }
 
     private static function valuesFitContract( $values ) {
@@ -293,45 +216,81 @@ final class PrintDossierPresentationAdapter {
         }
     }
 
-    private static function model() {
+    /**
+     * Resolved Print model plus, on failure, the specific reason.
+     *
+     * The distinct setup failures below have materially different operator
+     * remedies, so they are never collapsed into one public meaning.
+     *
+     * @return array{model: ?PrintDossierPresentationModel, reason: ?string}
+     */
+    private static function modelResolution() {
         if ( self::$model_loaded ) {
-            return self::$model;
+            return self::$model_resolution;
         }
-        self::$model_loaded = true;
 
+        self::$model_loaded     = true;
+        self::$model_resolution = self::resolveModel();
+
+        return self::$model_resolution;
+    }
+
+    private static function resolveModel() {
         try {
-            $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
+            $visual     = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
             $activation = $visual->resolve( self::SURFACE );
             if ( null === $activation ) {
-                return null;
+                return self::unresolvedModel( 'print_surface_not_activated' );
             }
-            $profile = $visual->effectiveProfile( self::SURFACE );
+
             $package = self::activeVisualPackage( $visual->snapshot(), $activation );
-            if ( null === $profile || null === $package ) {
-                return null;
+            if ( null === $package ) {
+                return self::unresolvedModel( 'activated_package_unresolved' );
+            }
+
+            $profile = $visual->effectiveProfile( self::SURFACE );
+            if ( null === $profile ) {
+                return self::unresolvedModel( 'semantic_package_unusable' );
             }
 
             $bindings = new BindingSetLifecycle(
                 new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
                 new EvidenceReferenceGate( array() )
             );
-            self::$model = new PrintDossierPresentationModel(
-                $profile,
-                self::activeBindingSets( $bindings->snapshot() ),
-                $package['semantic_slots']
+
+            return array(
+                'model' => new PrintDossierPresentationModel(
+                    $profile,
+                    self::activeBindingSets( $bindings->snapshot() ),
+                    $package['semantic_slots']
+                ),
+                'reason' => null,
             );
+        } catch ( ContractViolation $exception ) {
+            return self::unresolvedModel( 'semantic_package_unusable', $exception );
+        } catch ( LifecycleException $exception ) {
+            $reason = 'activation_state_corrupt' === $exception->reasonCode()
+                ? 'semantic_package_unusable'
+                : 'activated_package_unresolved';
+
+            return self::unresolvedModel( $reason, $exception );
         } catch ( \Throwable $exception ) {
+            return self::unresolvedModel( 'runtime_exception', $exception );
+        }
+    }
+
+    private static function unresolvedModel( $reason, \Throwable $exception = null ) {
+        if ( null !== $exception ) {
             RuntimeDiagnostics::recordException(
                 self::SURFACE,
                 'PRINT_PROFILE_RESOLVED',
-                'runtime_exception',
+                $reason,
                 'dossier_not_rendered',
                 $exception
             );
-            self::$model = null;
         }
 
-        return self::$model;
+        return array( 'model' => null, 'reason' => $reason );
     }
 
     private static function activeVisualPackage( $snapshot, $activation ) {

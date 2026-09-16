@@ -8,6 +8,33 @@ WU17 is now a real production reader of the lifecycle state for the native `grav
 
 `SettingsLifecycleWorkflow` remains an intentionally non-rooted import/settings orchestration helper: it is covered by lifecycle tests and retained for the admitted lifecycle contract, but no current production bootstrap, hook, or settings UI invokes it. This status does not activate Entry Detail or Print and does not change host-owned workflow semantics.
 
+## Operations setup path
+
+`GravityForms\OperationsSetupService` is the product setup path for the operational surfaces. It is reached from the Gravity Forms plugin-settings save action, which the Add-On Framework has already capability-checked and nonce-checked; no state-changing GET path exists. It composes the existing lifecycle APIs only and creates no new store.
+
+For one explicitly selected form it:
+
+1. imports the shipped production operations package through `VisualPackageLifecycle::import()`;
+2. adopts `print.dossier` through `VisualPackageLifecycle::activateIfCurrent()`;
+3. creates and activates an `EnvironmentBindingSet` for the host-reported installation and that form, seeding every canonical semantic slot as `UNBOUND` with `source_ref: null`, and every Print-mapping-required slot as a `NOT_PROVEN` `print_mapping` claim.
+
+The setup path never infers a field from a label, name, ordering, similarity or any previous fixture. Field binding remains the existing explicit Mapping & Binding Health repair path.
+
+Packaging a surface is not activating it. The package defines Inbox, Entry Detail and Print, but only `print.dossier` is activated in this batch; Inbox and Entry Detail activation is unchanged and remains their own readiness work. Listing a surface in a seeded binding context is shared binding foundation only, because each presentation surface still requires its own visual activation before it renders.
+
+### Visual activation compare-and-set
+
+`VisualPackageLifecycle::activateIfCurrent()` and `rollbackIfCurrent()` mirror the existing binding-class guard. `expected_current_activation` is `null` when the caller expects the surface to be unactivated, or the exact identity the caller observed. A mismatch raises `visual_activation_conflict`, leaves the existing activation completely intact, and is reported for an explicit later decision. This is what makes an unattended setup re-run non-destructive.
+
+### Re-run behavior
+
+Re-running setup is detect-and-preserve, not destructive re-seeding:
+
+- identical package content re-imports idempotently;
+- a valid existing Print activation is preserved rather than re-activated;
+- an existing active binding context is preserved rather than re-seeded, so mappings repaired after seeding are never rolled back to the `UNBOUND` seed;
+- a different existing activation, or an identity/version conflict, stops that step, changes nothing there, and is reported. Partial completion is never reported as success.
+
 ## Artifact-class separation
 
 Visual-profile packages and environment binding sets use different stores, registries, operations and audit records.

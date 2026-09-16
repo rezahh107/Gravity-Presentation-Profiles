@@ -288,7 +288,9 @@ final class EntryDetailPresentationAdapter {
     }
 
     private static function readSourceValue( $source, $form, $entry ) {
-        return ( new BoundHostValueReader() )->read( $source, $form, $entry );
+        // Entry Detail renders human-readable presentation text only; it never
+        // performs raw option-selection comparisons.
+        return ( new BoundHostValueReader() )->readDisplay( $source, $form, $entry );
     }
 
     private static function documentForSlot( EntryDetailPresentationModel $model, $form, $entry, $slot ) {

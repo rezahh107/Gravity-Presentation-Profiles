@@ -38,6 +38,17 @@ final class PrintDossierPresentationModel {
         'print.utility',
     );
 
+    /**
+     * Presentation derivations. The authoritative Binding Matrix defines
+     * `student.full_name` as a presentation composition of two canonical slots,
+     * not as its own host field. GPP therefore derives it read-only from the
+     * resolved components and never creates, writes or reads a duplicate
+     * full-name field in Gravity Forms.
+     */
+    private const DERIVED_SLOTS = array(
+        'student.full_name' => array( 'student.first_name', 'student.last_name' ),
+    );
+
     private $profile;
     private $binding_sets;
     private $resolver;
@@ -92,18 +103,61 @@ final class PrintDossierPresentationModel {
     }
 
     public function requiresPrintMapping( $slot_key ) {
+        return self::requiresPrintMappingSlot( $slot_key );
+    }
+
+    /**
+     * Slots whose Print meaning needs its own proof, independent of whichever
+     * host field an administrator binds to them. Exposed statically so the
+     * product setup path seeds exactly these claims as NOT_PROVEN.
+     */
+    public static function requiresPrintMappingSlot( $slot_key ) {
         return in_array( $slot_key, self::PRINT_MAPPING_REQUIRED, true );
     }
 
+    public static function printMappingRequiredSlots() {
+        return self::PRINT_MAPPING_REQUIRED;
+    }
+
     public function printMappingIsProven( $entry, $slot_key ) {
+        return null !== $this->provenPrintMappingClaim( $entry, $slot_key );
+    }
+
+    /**
+     * Environment-declared mapping from a real host raw value to a canonical
+     * Print option, as `canonical_option => host_raw_value`.
+     *
+     * The map is read only from the exact binding-set identity/version that also
+     * resolved this slot's source and whose print_mapping claim is PROVEN. A
+     * repair that changes the source publishes a new binding version with the
+     * claim reset, so proof and map for the previous source are never reused.
+     * An empty result means fail closed: no canonical option may be selected.
+     */
+    public function printOptionMap( $entry, $slot_key ) {
+        $claim = $this->provenPrintMappingClaim( $entry, $slot_key );
+        if ( null === $claim || empty( $claim['print_option_map'] ) || ! is_array( $claim['print_option_map'] ) ) {
+            return array();
+        }
+
+        $map = array();
+        foreach ( $claim['print_option_map'] as $pair ) {
+            if ( is_array( $pair ) && isset( $pair['canonical_option'], $pair['host_raw_value'] ) ) {
+                $map[ $pair['canonical_option'] ] = (string) $pair['host_raw_value'];
+            }
+        }
+
+        return $map;
+    }
+
+    private function provenPrintMappingClaim( $entry, $slot_key ) {
         $resolved = $this->resolve( $entry, $slot_key );
         if ( empty( $resolved['resolved'] ) || empty( $resolved['binding_set_id'] ) || empty( $resolved['binding_set_version'] ) ) {
-            return false;
+            return null;
         }
 
         $selection = $this->selectBindingContext( $entry );
         if ( 'ready' !== $selection['status'] ) {
-            return false;
+            return null;
         }
 
         foreach ( $this->binding_sets as $binding_set ) {
@@ -119,15 +173,81 @@ final class PrintDossierPresentationModel {
 
             foreach ( $binding_set['runtime_claims'] as $claim ) {
                 if ( $slot_key === $claim['semantic_slot_key'] && 'print_mapping' === $claim['claim'] ) {
-                    return 'PROVEN' === $claim['evidence_state'];
+                    return 'PROVEN' === $claim['evidence_state'] ? $claim : null;
                 }
             }
         }
 
-        return false;
+        return null;
+    }
+
+    public function isDerivedSlot( $slot_key ) {
+        return isset( self::DERIVED_SLOTS[ $slot_key ] );
+    }
+
+    public function derivationComponents( $slot_key ) {
+        return isset( self::DERIVED_SLOTS[ $slot_key ] ) ? self::DERIVED_SLOTS[ $slot_key ] : array();
+    }
+
+    /**
+     * Read-only presentation derivation decision.
+     *
+     * Every component must resolve to a PROVEN host source. A partially resolved
+     * composition would print an incomplete identity on an official dossier, so
+     * it fails closed and the field stays blank for manual completion.
+     */
+    public function derivedDecision( $entry, $slot_key ) {
+        if ( ! $this->isDerivedSlot( $slot_key ) ) {
+            return array(
+                'populate' => false,
+                'reason' => 'slot_is_not_derived',
+                'component_source_refs' => array(),
+                'binding_set_id' => null,
+            );
+        }
+
+        $sources        = array();
+        $binding_set_id = null;
+
+        foreach ( self::DERIVED_SLOTS[ $slot_key ] as $component ) {
+            $decision = $this->fieldDecision( $entry, $component );
+            if ( null === $binding_set_id ) {
+                $binding_set_id = $decision['binding_set_id'];
+            }
+
+            if ( empty( $decision['populate'] ) ) {
+                return array(
+                    'populate' => false,
+                    'reason' => 'derivation_component_unresolved',
+                    'component_source_refs' => array(),
+                    'binding_set_id' => $binding_set_id,
+                );
+            }
+
+            $sources[] = $decision['source_ref'];
+        }
+
+        return array(
+            'populate' => true,
+            'reason' => null,
+            'component_source_refs' => $sources,
+            'binding_set_id' => $binding_set_id,
+        );
     }
 
     public function fieldDecision( $entry, $slot_key ) {
+        // A derived presentation slot has no host source of its own. Refusing it
+        // here keeps a duplicate full-name field from ever being read as though
+        // it were authoritative, even if an environment declared one.
+        if ( $this->isDerivedSlot( $slot_key ) ) {
+            return array(
+                'populate' => false,
+                'reason' => 'derived_slot_requires_derivation',
+                'source_ref' => null,
+                'binding_set_id' => null,
+            );
+        }
+
         $resolved = $this->resolve( $entry, $slot_key );
         if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
             $reason = isset( $resolved['reason'] ) && is_string( $resolved['reason'] )
