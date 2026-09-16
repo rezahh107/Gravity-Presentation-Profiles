@@ -47,12 +47,33 @@ final class SetupStubField {
     public $id;
     public $label;
     public $type;
+    public $choices;
 
-    public function __construct( $id, $label, $type ) {
-        $this->id    = $id;
-        $this->label = $label;
-        $this->type  = $type;
+    public function __construct( $id, $label, $type, $choices = array() ) {
+        $this->id      = $id;
+        $this->label   = $label;
+        $this->type    = $type;
+        $this->choices = $choices;
     }
+
+    public function get_value_entry_detail( $value, $currency = '', $use_text = false, $format = 'html', $media = 'screen' ) {
+        if ( ! is_string( $currency ) ) {
+            throw new \InvalidArgumentException( 'currency argument must be a currency code string' );
+        }
+        if ( ! $use_text ) {
+            return (string) $value;
+        }
+        foreach ( $this->choices as $choice ) {
+            if ( (string) $choice['value'] === (string) $value ) {
+                return $choice['text'];
+            }
+        }
+        return (string) $value;
+    }
+}
+
+function wp_strip_all_tags( $value ) {
+    return strip_tags( (string) $value );
 }
 
 final class GFAPI {
@@ -79,8 +100,14 @@ GFAPI::$form = array(
         new SetupStubField( 11, 'First name', 'text' ),
         new SetupStubField( 12, 'Last name', 'text' ),
         new SetupStubField( 13, 'School', 'text' ),
-        new SetupStubField( 14, 'Gender', 'radio' ),
-        new SetupStubField( 15, 'Gender (revised)', 'radio' ),
+        new SetupStubField( 14, 'Gender', 'radio', array(
+            array( 'text' => 'دختر', 'value' => 'F' ),
+            array( 'text' => 'پسر', 'value' => 'M' ),
+        ) ),
+        new SetupStubField( 15, 'Gender (revised)', 'radio', array(
+            array( 'text' => 'دختر', 'value' => 'girl' ),
+            array( 'text' => 'پسر', 'value' => 'boy' ),
+        ) ),
     ),
 );
 
@@ -370,5 +397,100 @@ $moved_claim    = $moved_artifact['runtime_claims'][0];
 gpp_assert_same( 'NOT_PROVEN', $moved_claim['evidence_state'], 'Changing the mapped source invalidates the Print proof that depended on it.' );
 gpp_assert_same( array(), $moved_claim['evidence_refs'], 'Invalidated proof keeps no evidence provenance.' );
 gpp_assert_true( ! array_key_exists( 'print_option_map', $moved_claim ), 'The option map describing the previous field raw values is dropped with the proof.' );
+
+// ---------------------------------------------------------------------------
+// Full operator loop on the state this setup path created: map the choice
+// field, confirm what one real host value means for Print, and prove the
+// canonical option is then selected from the stored raw value.
+// ---------------------------------------------------------------------------
+
+$loop_repair  = new BindingRepairService( $binding_store, $evidence_store, new GravityFormsFieldInventory() );
+$loop_current = $bindings->resolve( $context );
+
+$gender_bound = $loop_repair->repairField(
+    array(
+        'context_key' => $context_key,
+        'binding_set_id' => $loop_current['binding_set_id'],
+        'binding_set_version' => $loop_current['binding_set_version'],
+        'semantic_slot_key' => 'student.gender',
+        'field_id' => '14',
+    )
+);
+
+// Binding the field must not, by itself, make the Print meaning proven.
+$package_artifact = $service->packageArtifact();
+$print_profile    = null;
+foreach ( $package_artifact['surface_profiles'] as $candidate ) {
+    if ( 'print.dossier' === $candidate['surface'] ) {
+        $print_profile = $candidate;
+    }
+}
+
+$entry = array( 'id' => 5001, 'form_id' => 77, '11' => 'زهرا', '12' => 'رضایی', '14' => 'F' );
+
+function setup_print_options( $binding_store, $context, $print_profile, $package_artifact, $entry ) {
+    $lifecycle = new BindingSetLifecycle( $binding_store, new EvidenceReferenceGate( array() ) );
+    $active    = $lifecycle->resolve( $context );
+    $snapshot  = $lifecycle->snapshot();
+    $artifact  = $snapshot['installed'][ $active['binding_set_id'] ][ $active['binding_set_version'] ]['artifact'];
+    $model     = new PrintDossierPresentationModel( $print_profile, array( $artifact ), $package_artifact['semantic_slots'] );
+
+    return ( new GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierValueResolver( $model ) )
+        ->resolve( GFAPI::$form, $entry, new GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierDecisionTrace() );
+}
+
+$before_confirmation = setup_print_options( $binding_store, $context, $print_profile, $package_artifact, $entry );
+gpp_assert_true( ! $before_confirmation['options']['female'], 'Binding a choice field does not by itself prove what its values mean for Print.' );
+
+$confirmed = $loop_repair->confirmPrintOption(
+    array(
+        'context_key' => $context_key,
+        'binding_set_id' => $gender_bound['binding_set_id'],
+        'binding_set_version' => $gender_bound['binding_set_version'],
+        'semantic_slot_key' => 'student.gender',
+        'canonical_option' => 'female',
+        'host_raw_value' => 'F',
+    )
+);
+gpp_assert_same( 'PRINT_OPTION_CONFIRMED', $confirmed['status'], 'Print option confirmation is its own explicit operation.' );
+
+$after_confirmation = setup_print_options( $binding_store, $context, $print_profile, $package_artifact, $entry );
+gpp_assert_true( $after_confirmation['options']['female'], 'The confirmed raw value selects its canonical Print option.' );
+gpp_assert_true( ! $after_confirmation['options']['male'], 'An unconfirmed canonical option stays unselected.' );
+
+// A value the bound field does not define cannot be confirmed.
+setup_throws(
+    'print_option_value_not_in_form',
+    static function () use ( $loop_repair, $context_key, $confirmed ) {
+        $loop_repair->confirmPrintOption(
+            array(
+                'context_key' => $context_key,
+                'binding_set_id' => $confirmed['binding_set_id'],
+                'binding_set_version' => $confirmed['binding_set_version'],
+                'semantic_slot_key' => 'student.gender',
+                'canonical_option' => 'male',
+                'host_raw_value' => 'not-a-real-choice',
+            )
+        );
+    },
+    'A raw value absent from the form choices must be rejected rather than recorded.'
+);
+
+// Moving the mapping to a different field invalidates the proof that described
+// the previous field, and the canonical option stops being selected.
+$moved_gender = $loop_repair->repairField(
+    array(
+        'context_key' => $context_key,
+        'binding_set_id' => $confirmed['binding_set_id'],
+        'binding_set_version' => $confirmed['binding_set_version'],
+        'semantic_slot_key' => 'student.gender',
+        'field_id' => '15',
+    )
+);
+gpp_assert_same( 'REPAIRED_AND_ACTIVATED', $moved_gender['status'], 'The source may be moved to a different explicit field.' );
+
+$after_move = setup_print_options( $binding_store, $context, $print_profile, $package_artifact, array( 'id' => 5001, 'form_id' => 77, '15' => 'girl' ) );
+gpp_assert_true( ! $after_move['options']['female'], 'Print proof tied to the previous mapping is no longer treated as valid.' );
+gpp_assert_true( ! $after_move['options']['male'], 'No canonical option is selected until the new source is confirmed again.' );
 
 echo "OPERATIONS_SETUP_PRODUCTION_PATH_PASS\n";

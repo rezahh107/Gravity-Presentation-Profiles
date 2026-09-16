@@ -131,6 +131,8 @@ The map is bound to the exact binding-set identity and version that resolved the
 
 Label similarity, choice ordering and any other inference remain prohibited. An administrator declares the mapping explicitly or it does not exist.
 
+The declaration path is `BindingRepairService::confirmPrintOption()`, reached from the existing Mapping & Binding Health action rather than from a second mapping UI. It reuses the same immutable-version, compare-and-set activation and administrator-evidence machinery as field repair. The raw value must already exist in the bound field's own current choice list, so an administrator confirms a value the form actually defines rather than typing one. Confirming a field source and confirming what its values mean for Print stay separate operations, and neither is ever a permission decision.
+
 ## Independent resolvers
 
 `VisualProfileResolver` accepts an admitted surface and returns the one shared default profile. Supplying environment context is rejected.

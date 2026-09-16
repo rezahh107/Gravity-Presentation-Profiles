@@ -7,6 +7,7 @@ use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
+use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierValueResolver;
 
 final class BindingHealthService {
     private $bindings;
@@ -62,6 +63,7 @@ final class BindingHealthService {
                 'form_id' => $form_id,
                 'form_title' => $inventory['form_title'],
                 'fields' => $inventory['fields'],
+                'artifact' => $artifact,
                 'facts' => $this->evaluator->evaluate( $artifact, $meanings, $inventory ),
             );
         }
@@ -150,7 +152,78 @@ final class BindingHealthService {
         return array(
             'repairs' => $repairs,
             'rollbacks' => $this->rollbackCandidates(),
+            'print_options' => $this->printOptionCandidates( $health ),
         );
+    }
+
+    /**
+     * Candidate Print option confirmations for already field-bound option slots.
+     *
+     * Each candidate pairs one canonical Print option with one real choice the
+     * bound field currently defines. Every combination is offered so the
+     * administrator states the meaning; nothing is ranked, matched or
+     * pre-selected by label similarity.
+     */
+    private function printOptionCandidates( $health ) {
+        $candidates = array();
+
+        foreach ( $health['contexts'] as $context ) {
+            $artifact = $context['artifact'];
+
+            foreach ( PrintDossierValueResolver::optionGroups() as $slot_key => $canonical_options ) {
+                $source = null;
+                foreach ( $artifact['bindings'] as $binding ) {
+                    if ( $binding['semantic_slot_key'] === $slot_key && 'PROVEN' === $binding['state'] ) {
+                        $source = $binding['source_ref'];
+                        break;
+                    }
+                }
+
+                if ( null === $source || 'gravity_forms.field' !== $source['type'] ) {
+                    continue;
+                }
+
+                $field_id = (string) $source['field_id'];
+                if ( empty( $context['fields'][ $field_id ]['choices'] ) ) {
+                    continue;
+                }
+
+                $candidates[] = array(
+                    'context_key' => $context['context_key'],
+                    'binding_set_id' => $context['binding_set_id'],
+                    'binding_set_version' => $context['binding_set_version'],
+                    'form_id' => $context['form_id'],
+                    'form_title' => $context['form_title'],
+                    'semantic_slot_key' => $slot_key,
+                    'field_label' => $context['fields'][ $field_id ]['label'],
+                    'canonical_options' => $canonical_options,
+                    'choices' => $context['fields'][ $field_id ]['choices'],
+                    'confirmed' => $this->confirmedPrintOptions( $artifact, $slot_key ),
+                );
+            }
+        }
+
+        return $candidates;
+    }
+
+    private function confirmedPrintOptions( $artifact, $slot_key ) {
+        foreach ( $artifact['runtime_claims'] as $claim ) {
+            if ( $claim['semantic_slot_key'] !== $slot_key || 'print_mapping' !== $claim['claim'] ) {
+                continue;
+            }
+            if ( 'PROVEN' !== $claim['evidence_state'] || empty( $claim['print_option_map'] ) ) {
+                return array();
+            }
+
+            $confirmed = array();
+            foreach ( $claim['print_option_map'] as $pair ) {
+                $confirmed[ $pair['canonical_option'] ] = $pair['host_raw_value'];
+            }
+
+            return $confirmed;
+        }
+
+        return array();
     }
 
     private function diagnosticSource( $source ) {

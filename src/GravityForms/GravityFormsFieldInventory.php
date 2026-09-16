@@ -29,6 +29,7 @@ final class GravityFormsFieldInventory {
                 'field_id' => $this->normalizeFieldId( $id ),
                 'label' => $label,
                 'type' => $type,
+                'choices' => $this->choices( $field ),
             );
 
             // EnvironmentBindingSet deliberately admits Gravity Forms input IDs
@@ -53,6 +54,7 @@ final class GravityFormsFieldInventory {
                     'field_id' => $input_id,
                     'label' => $input_label,
                     'type' => $type,
+                    'choices' => $this->choices( $field ),
                 );
             }
         }
@@ -71,6 +73,40 @@ final class GravityFormsFieldInventory {
         }
         $field = \GFAPI::get_field( $form, $field_id );
         return is_object( $field ) ? $field : null;
+    }
+
+    /**
+     * The field's own authoritative choice list, as the host configured it.
+     *
+     * This is read so an administrator confirms a Print option against a raw
+     * value the form actually defines. It is never used to infer a mapping from
+     * a choice label.
+     */
+    private function choices( $field ) {
+        if ( ! isset( $field->choices ) || ! is_array( $field->choices ) ) {
+            return array();
+        }
+
+        $choices = array();
+        foreach ( $field->choices as $choice ) {
+            if ( ! is_array( $choice ) || ! isset( $choice['value'] ) || ! is_scalar( $choice['value'] ) ) {
+                continue;
+            }
+
+            $value = (string) $choice['value'];
+            if ( '' === $value ) {
+                continue;
+            }
+
+            $choices[] = array(
+                'value' => $value,
+                'text' => isset( $choice['text'] ) && is_scalar( $choice['text'] ) && '' !== trim( (string) $choice['text'] )
+                    ? trim( (string) $choice['text'] )
+                    : $value,
+            );
+        }
+
+        return $choices;
     }
 
     private function normalizeFieldId( $field_id ) {

@@ -251,6 +251,22 @@ final class AddOn extends \GFAddOn {
                 return;
             }
 
+            if ( 'print_option' === $action['action'] ) {
+                // Confirming what a host value means for Print is separate from
+                // binding the field, and is never a permission decision.
+                $this->bindingRepairService()->confirmPrintOption(
+                    array(
+                        'context_key' => $action['context_key'],
+                        'binding_set_id' => $action['binding_set_id'],
+                        'binding_set_version' => $action['binding_set_version'],
+                        'semantic_slot_key' => $action['semantic_slot_key'],
+                        'canonical_option' => $action['canonical_option'],
+                        'host_raw_value' => $action['host_raw_value'],
+                    )
+                );
+                return;
+            }
+
             if ( 'rollback' === $action['action'] ) {
                 $this->bindingRepairService()->rollback(
                     array(
@@ -846,6 +862,37 @@ final class AddOn extends \GFAddOn {
                     );
                 }
             }
+            foreach ( $candidates['print_options'] as $group ) {
+                $form_name = ! empty( $group['form_title'] ) ? $group['form_title'] : 'Form ' . $group['form_id'];
+                foreach ( $group['canonical_options'] as $canonical_option ) {
+                    foreach ( $group['choices'] as $choice ) {
+                        if ( isset( $group['confirmed'][ $canonical_option ] ) && $group['confirmed'][ $canonical_option ] === $choice['value'] ) {
+                            continue;
+                        }
+                        $choices[] = array(
+                            'label' => sprintf(
+                                __( 'Print option: %1$s — %2$s — “%3$s” (%4$s) means %5$s', 'gravity-presentation-profiles' ),
+                                $form_name,
+                                $group['field_label'],
+                                $choice['text'],
+                                $choice['value'],
+                                $canonical_option
+                            ),
+                            'value' => $this->encodeBindingManagementAction(
+                                array(
+                                    'action' => 'print_option',
+                                    'context_key' => $group['context_key'],
+                                    'binding_set_id' => $group['binding_set_id'],
+                                    'binding_set_version' => $group['binding_set_version'],
+                                    'semantic_slot_key' => $group['semantic_slot_key'],
+                                    'canonical_option' => $canonical_option,
+                                    'host_raw_value' => $choice['value'],
+                                )
+                            ),
+                        );
+                    }
+                }
+            }
             foreach ( $candidates['rollbacks'] as $rollback ) {
                 $form_name = ! empty( $rollback['form_title'] ) ? $rollback['form_title'] : 'Form ' . $rollback['form_id'];
                 $choices[] = array(
@@ -894,9 +941,13 @@ final class AddOn extends \GFAddOn {
         if ( ! is_array( $payload ) || empty( $payload['action'] ) ) {
             return null;
         }
-        $expected = 'repair' === $payload['action']
-            ? array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' )
-            : array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
+        if ( 'repair' === $payload['action'] ) {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' );
+        } elseif ( 'print_option' === $payload['action'] ) {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'host_raw_value', 'semantic_slot_key' );
+        } else {
+            $expected = array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' );
+        }
         $actual = array_keys( $payload );
         sort( $actual, SORT_STRING );
         sort( $expected, SORT_STRING );
