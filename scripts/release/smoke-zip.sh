@@ -32,7 +32,15 @@ FLOW_SIZE="$(json_value plugins.gravity_flow.size_bytes)"
 FLOW_VERSION="$(json_value plugins.gravity_flow.version)"
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+SERVER_PID=""
+cleanup() {
+    if [[ -n "$SERVER_PID" ]]; then
+        kill "$SERVER_PID" >/dev/null 2>&1 || true
+        wait "$SERVER_PID" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
 WPCLI="$WORK/wp-cli.phar"
 GF_ZIP="$WORK/gravityforms.zip"
 FLOW_ZIP="$WORK/gravityflow.zip"
@@ -68,4 +76,28 @@ if (!$profile || $profile->assetPath() !== "profiles/srwf/registration/profile.c
 echo "GPP_RELEASE_RUNTIME_ASSERT_PASS\n";
 '
 
+# Behavioral Production Reachability extends this exact installed-ZIP runtime.
+# The test harness remains outside the installed plugin and is forbidden from
+# manufacturing GPP lifecycle state directly.
+BEHAVIOR_DIR="$ROOT/build/release/behavioral-production-reachability"
+rm -rf "$BEHAVIOR_DIR"
+mkdir -p "$BEHAVIOR_DIR"
+php "$WPCLI" server --path="$WP_PATH" --host=127.0.0.1 --port=8090 >"$WORK/wp-server.log" 2>&1 &
+SERVER_PID=$!
+for i in $(seq 1 30); do
+    if curl -fsS "$BASE_URL/wp-login.php" >/dev/null; then
+        break
+    fi
+    if [[ "$i" -eq 30 ]]; then
+        cat "$WORK/wp-server.log" >&2
+        exit 1
+    fi
+    sleep 1
+done
+
+bash "$ROOT/tests/release/run-behavioral-production-reachability.sh" \
+    "$ROOT" "$ZIP" "$WPCLI" "$WP_PATH" "$BASE_URL" "$BEHAVIOR_DIR"
+cp "$BEHAVIOR_DIR/behavioral-production-reachability.json" "$ROOT/build/release/behavioral-production-reachability.json"
+
+echo "GPP_RELEASE_BEHAVIORAL_EVIDENCE=$ROOT/build/release/behavioral-production-reachability.json"
 printf 'GPP_RELEASE_ZIP_SMOKE_PASS wordpress=%s gravity_forms=%s gravity_flow=%s\n' "$WP_VERSION" "$GF_VERSION" "$FLOW_VERSION"
