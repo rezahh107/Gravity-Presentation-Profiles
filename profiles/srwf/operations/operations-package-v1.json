@@ -2,7 +2,7 @@
     "artifact_type": "gpp.visual_profile_package",
     "schema_version": "1.0.0",
     "package_id": "srwf.operations.presentation",
-    "package_version": "1.0.0",
+    "package_version": "1.0.1",
     "provenance": {
         "producer": "SRWF operations presentation package",
         "evidence_refs": [
@@ -38,622 +38,360 @@
             "semantic_slot_key": "student.photo",
             "meaning": "authoritative student image or media",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.first_name",
             "meaning": "student given name",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.last_name",
             "meaning": "student family name",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.full_name",
             "meaning": "presentation composition of authoritative first and last name",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.father_name",
             "meaning": "father name",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.national_id",
             "meaning": "canonical national identifier",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.birth_date_jalali",
             "meaning": "canonical Jalali date of birth",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.gender",
             "meaning": "canonical gender value",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.mobile",
             "meaning": "student mobile number",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.home_phone",
             "meaning": "home phone number",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.father_mobile",
             "meaning": "father or first contact mobile number",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "student.mother_mobile",
             "meaning": "mother or second contact mobile number",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "education.level",
             "meaning": "human readable education level",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "education.grade_group",
             "meaning": "human readable grade and group selection",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "education.graduation_status",
             "meaning": "student versus graduate status",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "school.name",
             "meaning": "authoritative school display name",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "registration.center",
             "meaning": "registration center or location",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "registration.counter",
             "meaning": "registration counter",
             "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "entry.created_at",
             "meaning": "canonical entry creation timestamp",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.current_step",
             "meaning": "current host workflow step or state label",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                },
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": true },
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.due_at",
             "meaning": "optional authoritative material due value",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.inbox",
-                    "required": true
-                }
+                { "surface": "gravity_flow.inbox", "required": false }
             ]
         },
         {
             "semantic_slot_key": "workflow.instructions",
             "meaning": "current task instructions region",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.approve_action",
             "meaning": "native approval action availability",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.reject_action",
             "meaning": "native reject action availability where configured",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.timeline",
             "meaning": "chronological workflow history",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "workflow.status",
             "meaning": "workflow status and current step metadata",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "navigation.backlink",
             "meaning": "native return navigation",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "documents.report_card",
             "meaning": "authoritative report card file",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "review.status",
             "meaning": "entry review overlay status, not workflow state",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "review.reason",
             "meaning": "entry review overlay reason",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "finance.status",
             "meaning": "finance status value",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true }
             ]
         },
         {
             "semantic_slot_key": "finance.tuition_amount",
             "meaning": "tuition amount in Rial",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "finance.discount_amount",
             "meaning": "discount amount in Rial",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "finance.discount_title",
             "meaning": "discount title",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "finance.net_payable_amount",
             "meaning": "authoritative system derived net payable amount",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         },
         {
             "semantic_slot_key": "print.academic_year_start",
             "meaning": "historical academic year start",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.academic_year_end",
             "meaning": "historical academic year end",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.sub_office",
             "meaning": "historical satellite office or city field",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.first_exam_date",
             "meaning": "historical first exam date",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.phone_2",
             "meaning": "historical second phone field",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.registration_type",
             "meaning": "historical registration type option group",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.registration_timing",
             "meaning": "historical early or continue timing option group",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.payment_mode",
             "meaning": "historical cash or installment option group",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.financial_date",
             "meaning": "dedicated financial back page date",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.receipt_rows",
             "meaning": "exactly five receipt or deposit rows",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.cheque_rows",
             "meaning": "exactly six cheque or installment rows",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.received_amount_words",
             "meaning": "received amount in words",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.received_amount_number",
             "meaning": "received amount numeric total",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.referrer",
             "meaning": "referrer or introduction field",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.former_kanoon_status",
             "meaning": "historical former membership status option group",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.exam_count",
             "meaning": "exam count",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.manual_approval_signature_stamp_notes",
             "meaning": "intentional physical region for handwriting, stamp, signature and manual notes",
-            "surface_usage": [
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
-            ]
+            "surface_usage": [ { "surface": "print.dossier", "required": true } ]
         },
         {
             "semantic_slot_key": "print.utility",
             "meaning": "presentation affordance to invoke an authorized browser print",
             "surface_usage": [
-                {
-                    "surface": "gravity_flow.entry_detail",
-                    "required": true
-                },
-                {
-                    "surface": "print.dossier",
-                    "required": true
-                }
+                { "surface": "gravity_flow.entry_detail", "required": true },
+                { "surface": "print.dossier", "required": true }
             ]
         }
     ],
@@ -662,148 +400,55 @@
             "surface": "gravity_flow.inbox",
             "profile_id": "srwf.operations.inbox.v1",
             "token_refs": [
-                "colors.page",
-                "colors.surface",
-                "colors.primary",
-                "colors.primary_pressed",
-                "colors.text_primary",
-                "colors.text_secondary",
-                "colors.text_muted",
-                "colors.control_border",
-                "colors.divider",
-                "colors.error",
-                "colors.success",
-                "font_weights.light",
-                "font_weights.regular",
-                "font_weights.medium",
-                "font_weights.strong",
-                "font_weights.heavy"
+                "colors.page", "colors.surface", "colors.primary", "colors.primary_pressed",
+                "colors.text_primary", "colors.text_secondary", "colors.text_muted", "colors.control_border",
+                "colors.divider", "colors.error", "colors.success", "font_weights.light", "font_weights.regular",
+                "font_weights.medium", "font_weights.strong", "font_weights.heavy"
             ],
             "semantic_slots": [
-                "student.photo",
-                "student.full_name",
-                "student.national_id",
-                "education.grade_group",
-                "school.name",
-                "entry.created_at",
-                "workflow.current_step",
-                "workflow.due_at"
+                "student.photo", "student.full_name", "student.national_id", "education.grade_group",
+                "school.name", "entry.created_at", "workflow.current_step", "workflow.due_at"
             ]
         },
         {
             "surface": "gravity_flow.entry_detail",
             "profile_id": "srwf.operations.entry-detail.v1",
             "token_refs": [
-                "colors.page",
-                "colors.surface",
-                "colors.primary",
-                "colors.primary_pressed",
-                "colors.text_primary",
-                "colors.text_secondary",
-                "colors.text_muted",
-                "colors.control_border",
-                "colors.divider",
-                "colors.error",
-                "colors.success",
-                "font_weights.light",
-                "font_weights.regular",
-                "font_weights.medium",
-                "font_weights.strong",
-                "font_weights.heavy"
+                "colors.page", "colors.surface", "colors.primary", "colors.primary_pressed",
+                "colors.text_primary", "colors.text_secondary", "colors.text_muted", "colors.control_border",
+                "colors.divider", "colors.error", "colors.success", "font_weights.light", "font_weights.regular",
+                "font_weights.medium", "font_weights.strong", "font_weights.heavy"
             ],
             "semantic_slots": [
-                "student.photo",
-                "student.first_name",
-                "student.last_name",
-                "student.full_name",
-                "student.father_name",
-                "student.national_id",
-                "student.birth_date_jalali",
-                "student.gender",
-                "student.mobile",
-                "student.home_phone",
-                "student.father_mobile",
-                "student.mother_mobile",
-                "education.level",
-                "education.grade_group",
-                "education.graduation_status",
-                "school.name",
-                "registration.center",
-                "entry.created_at",
-                "workflow.current_step",
-                "workflow.instructions",
-                "workflow.approve_action",
-                "workflow.reject_action",
-                "workflow.timeline",
-                "workflow.status",
-                "navigation.backlink",
-                "documents.report_card",
-                "review.status",
-                "review.reason",
-                "finance.status",
-                "finance.tuition_amount",
-                "finance.discount_amount",
-                "finance.discount_title",
-                "finance.net_payable_amount",
-                "print.utility"
+                "student.photo", "student.first_name", "student.last_name", "student.full_name", "student.father_name",
+                "student.national_id", "student.birth_date_jalali", "student.gender", "student.mobile", "student.home_phone",
+                "student.father_mobile", "student.mother_mobile", "education.level", "education.grade_group",
+                "education.graduation_status", "school.name", "registration.center", "entry.created_at",
+                "workflow.current_step", "workflow.instructions", "workflow.approve_action", "workflow.reject_action",
+                "workflow.timeline", "workflow.status", "navigation.backlink", "documents.report_card", "review.status",
+                "review.reason", "finance.status", "finance.tuition_amount", "finance.discount_amount",
+                "finance.discount_title", "finance.net_payable_amount", "print.utility"
             ]
         },
         {
             "surface": "print.dossier",
             "profile_id": "srwf.operations.print-dossier.v1",
             "token_refs": [
-                "colors.page",
-                "colors.surface",
-                "colors.primary",
-                "colors.primary_pressed",
-                "colors.text_primary",
-                "colors.text_secondary",
-                "colors.text_muted",
-                "colors.control_border",
-                "colors.divider",
-                "colors.error",
-                "colors.success",
-                "font_weights.light",
-                "font_weights.regular",
-                "font_weights.medium",
-                "font_weights.strong",
-                "font_weights.heavy"
+                "colors.page", "colors.surface", "colors.primary", "colors.primary_pressed",
+                "colors.text_primary", "colors.text_secondary", "colors.text_muted", "colors.control_border",
+                "colors.divider", "colors.error", "colors.success", "font_weights.light", "font_weights.regular",
+                "font_weights.medium", "font_weights.strong", "font_weights.heavy"
             ],
             "semantic_slots": [
-                "student.first_name",
-                "student.last_name",
-                "student.full_name",
-                "student.father_name",
-                "student.national_id",
-                "student.gender",
-                "student.mobile",
-                "education.grade_group",
-                "education.graduation_status",
-                "school.name",
-                "registration.center",
-                "registration.counter",
-                "finance.tuition_amount",
-                "finance.discount_amount",
-                "finance.discount_title",
-                "finance.net_payable_amount",
-                "print.academic_year_start",
-                "print.academic_year_end",
-                "print.sub_office",
-                "print.first_exam_date",
-                "print.phone_2",
-                "print.registration_type",
-                "print.registration_timing",
-                "print.payment_mode",
-                "print.financial_date",
-                "print.receipt_rows",
-                "print.cheque_rows",
-                "print.received_amount_words",
-                "print.received_amount_number",
-                "print.referrer",
-                "print.former_kanoon_status",
-                "print.exam_count",
-                "print.manual_approval_signature_stamp_notes",
-                "print.utility"
+                "student.first_name", "student.last_name", "student.full_name", "student.father_name",
+                "student.national_id", "student.gender", "student.mobile", "education.grade_group",
+                "education.graduation_status", "school.name", "registration.center", "registration.counter",
+                "finance.tuition_amount", "finance.discount_amount", "finance.discount_title", "finance.net_payable_amount",
+                "print.academic_year_start", "print.academic_year_end", "print.sub_office", "print.first_exam_date",
+                "print.phone_2", "print.registration_type", "print.registration_timing", "print.payment_mode",
+                "print.financial_date", "print.receipt_rows", "print.cheque_rows", "print.received_amount_words",
+                "print.received_amount_number", "print.referrer", "print.former_kanoon_status", "print.exam_count",
+                "print.manual_approval_signature_stamp_notes", "print.utility"
             ]
         }
     ],
