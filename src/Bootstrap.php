@@ -3,6 +3,7 @@
 namespace GravityPresentationProfiles;
 
 use GravityPresentationProfiles\GravityForms\BindingRowAdminController;
+use GravityPresentationProfiles\GravityForms\InboxSetupAdminController;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
@@ -42,6 +43,7 @@ final class Bootstrap {
 
         \GFAddOn::register( $addon_class );
         BindingRowAdminController::register();
+        InboxSetupAdminController::register();
 
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are

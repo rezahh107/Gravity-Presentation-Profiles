@@ -29,10 +29,13 @@ $cases = array(
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
     'inbox-manual-refresh.php',
+    'inbox-package-authority.php',
+    'inbox-production-activation.php',
     'entry-detail-presentation-model.php',
     'print-dossier-presentation-model.php',
     'print-dossier-data-path.php',
     'operations-setup-production-path.php',
+    'operations-setup-legacy-print-compat.php',
 );
 
 foreach ( $cases as $case ) {

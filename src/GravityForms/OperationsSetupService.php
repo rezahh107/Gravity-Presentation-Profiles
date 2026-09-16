@@ -43,6 +43,14 @@ final class OperationsSetupService {
     const STATUS_FAILED = 'FAILED';
 
     /**
+     * Package 1.0.1 changes only Inbox readiness: workflow.due_at becomes
+     * optional. A Print activation already pointing at the same Operations
+     * package/profile on 1.0.0 remains semantically valid and must not be
+     * upgraded or rejected merely because Inbox advanced the package version.
+     */
+    private const LEGACY_COMPATIBLE_PRINT_PACKAGE_VERSIONS = array( '1.0.0' );
+
+    /**
      * Binding surfaces seeded for the selected form. Listing a surface here is
      * shared binding foundation only; each presentation surface still requires
      * its own visual activation before it renders anything.
@@ -175,7 +183,7 @@ final class OperationsSetupService {
             $activation = $this->visual->resolve( self::PRINT_SURFACE );
             if ( null === $activation ) {
                 $facts['print_surface_activation'] = 'not_activated';
-            } elseif ( $this->sameVisualIdentity( $activation, $identity ) ) {
+            } elseif ( $this->compatiblePrintActivation( $activation, $identity ) ) {
                 $facts['print_surface_activation'] = 'active_operations_profile';
             } else {
                 $facts['print_surface_activation'] = 'active_other_profile';
@@ -284,7 +292,7 @@ final class OperationsSetupService {
         }
 
         if ( null !== $current ) {
-            if ( $this->sameVisualIdentity( $current, $identity ) ) {
+            if ( $this->compatiblePrintActivation( $current, $identity ) ) {
                 return array( 'outcome' => 'already_active', 'reason' => null );
             }
 
@@ -452,6 +460,18 @@ final class OperationsSetupService {
         return isset( $record['context_key'], $record['artifact'] ) && $record['context_key'] === $context_key
             ? $record['artifact']
             : null;
+    }
+
+    private function compatiblePrintActivation( $activation, $identity ) {
+        if ( $this->sameVisualIdentity( $activation, $identity ) ) {
+            return true;
+        }
+
+        return is_array( $activation )
+            && isset( $activation['package_id'], $activation['package_version'], $activation['profile_id'] )
+            && $activation['package_id'] === $identity['package_id']
+            && $activation['profile_id'] === $identity['profile_id']
+            && in_array( $activation['package_version'], self::LEGACY_COMPATIBLE_PRINT_PACKAGE_VERSIONS, true );
     }
 
     private function sameVisualIdentity( $activation, $identity ) {

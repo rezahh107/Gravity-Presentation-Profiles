@@ -4,166 +4,181 @@ require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/../../src/Autoloader.php';
 
 use GravityPresentationProfiles\Autoloader;
-use GravityPresentationProfiles\Core\Portable\VisualProfileResolver;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationModel;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeEvidence;
 use GravityPresentationProfiles\SRWF\GravityFlow\PersianDateFormatter;
 
 Autoloader::register();
 
-$package = json_decode( file_get_contents( __DIR__ . '/../fixtures/wu09-visual-package.json' ), true );
-$profile = ( new VisualProfileResolver( $package ) )->resolve( 'gravity_flow.inbox' );
-
-function wu17_binding( $id, $installation, $form_id, $name_field, $national_field, $photo_field, $photo_state ) {
-    $proven = array( 'fixture:wu17:semantic', 'fixture:wu17:runtime' );
-    $not_proven = array( 'fixture:wu17:negative' );
-    $bindings = array(
-        array( 'semantic_slot_key' => 'student.full_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => $name_field ), 'evidence_refs' => $proven ),
-        array( 'semantic_slot_key' => 'student.national_id', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => $national_field ), 'evidence_refs' => $proven ),
-        array( 'semantic_slot_key' => 'student.photo', 'state' => $photo_state, 'source_ref' => 'PROVEN' === $photo_state ? array( 'type' => 'gravity_forms.field', 'field_id' => $photo_field ) : null, 'evidence_refs' => 'PROVEN' === $photo_state ? $proven : $not_proven ),
-        array( 'semantic_slot_key' => 'entry.created_at', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ), 'evidence_refs' => $proven ),
-        array( 'semantic_slot_key' => 'workflow.current_step', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ), 'evidence_refs' => $proven ),
-        array( 'semantic_slot_key' => 'school.name', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => $not_proven ),
-        array( 'semantic_slot_key' => 'workflow.due_at', 'state' => 'NOT_PROVEN', 'source_ref' => null, 'evidence_refs' => $not_proven ),
+function pr4_inbox_profile() {
+    return array(
+        'surface' => 'gravity_flow.inbox',
+        'profile_id' => 'srwf.operations.inbox.v1',
+        'semantic_slots' => array(
+            'student.photo',
+            'student.full_name',
+            'student.national_id',
+            'education.grade_group',
+            'school.name',
+            'entry.created_at',
+            'workflow.current_step',
+            'workflow.due_at',
+        ),
     );
-    $claims = array();
-    foreach ( $bindings as $binding ) {
-        $state = 'PROVEN' === $binding['state'] ? 'PROVEN' : 'NOT_PROVEN';
-        $claims[] = array(
-            'semantic_slot_key' => $binding['semantic_slot_key'],
-            'claim' => 'availability',
-            'evidence_state' => $state,
-            'evidence_refs' => 'PROVEN' === $state ? $proven : $not_proven,
+}
+
+function pr4_inbox_declarations() {
+    $required = array(
+        'student.photo',
+        'student.full_name',
+        'student.national_id',
+        'education.grade_group',
+        'school.name',
+        'entry.created_at',
+        'workflow.current_step',
+    );
+    $all = array_merge( $required, array( 'student.first_name', 'student.last_name', 'workflow.due_at' ) );
+    $result = array();
+    foreach ( $all as $slot ) {
+        $usage = array();
+        if ( in_array( $slot, $required, true ) || 'workflow.due_at' === $slot ) {
+            $usage[] = array(
+                'surface' => 'gravity_flow.inbox',
+                'required' => in_array( $slot, $required, true ),
+            );
+        } else {
+            $usage[] = array( 'surface' => 'print.dossier', 'required' => true );
+        }
+        $result[] = array(
+            'semantic_slot_key' => $slot,
+            'meaning' => $slot,
+            'surface_usage' => $usage,
         );
     }
+    return $result;
+}
 
-    return array(
+function pr4_binding_set( $version = '1.0.0', $installation = 'fixture-installation', $form_id = 101 ) {
+    $bindings = array(
+        array( 'semantic_slot_key' => 'student.photo', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 2 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'student.first_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 1 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'student.last_name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 4 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'student.full_name', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => array() ),
+        array( 'semantic_slot_key' => 'student.national_id', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 3 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'education.grade_group', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 5 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'school.name', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.field', 'field_id' => 6 ), 'evidence_refs' => array( 'fixture:binding' ) ),
+        array( 'semantic_slot_key' => 'entry.created_at', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ), 'evidence_refs' => array( 'fixture:host' ) ),
+        array( 'semantic_slot_key' => 'workflow.current_step', 'state' => 'PROVEN', 'source_ref' => array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ), 'evidence_refs' => array( 'fixture:host' ) ),
+        array( 'semantic_slot_key' => 'workflow.due_at', 'state' => 'UNBOUND', 'source_ref' => null, 'evidence_refs' => array() ),
+    );
+    $artifact = array(
         'artifact_type' => 'gpp.environment_binding_set',
-        'schema_version' => '1.0.0',
-        'binding_set_id' => $id,
-        'binding_set_version' => '1.0.0',
+        'schema_version' => '1.1.0',
+        'binding_set_id' => 'pr4.inbox.fixture',
+        'binding_set_version' => $version,
         'context' => array(
             'installation_source_ref' => array( 'type' => 'wordpress.installation', 'installation_id' => $installation ),
             'form_source_ref' => array( 'type' => 'gravity_forms.form', 'form_id' => $form_id ),
             'entry_source_ref' => null,
-            'surfaces' => array( 'gravity_flow.inbox' ),
+            'surfaces' => array( 'gravity_flow.inbox', 'gravity_flow.entry_detail', 'print.dossier' ),
         ),
-        'provenance' => array( 'producer' => 'WU17 model test', 'evidence_refs' => $proven ),
+        'provenance' => array( 'producer' => 'PR4 model test', 'evidence_refs' => array( 'fixture:binding' ) ),
         'bindings' => $bindings,
-        'runtime_claims' => $claims,
+        'runtime_claims' => array(),
     );
+
+    foreach ( $bindings as $binding ) {
+        if ( 'PROVEN' !== $binding['state'] || 'student.full_name' === $binding['semantic_slot_key'] ) {
+            continue;
+        }
+        if ( 'workflow.due_at' === $binding['semantic_slot_key'] ) {
+            continue;
+        }
+        $artifact['runtime_claims'][] = array(
+            'semantic_slot_key' => $binding['semantic_slot_key'],
+            'claim' => 'availability',
+            'evidence_state' => 'PROVEN',
+            'evidence_refs' => array( InboxRuntimeEvidence::availabilityRef( $artifact, $binding['semantic_slot_key'], $binding['source_ref'] ) ),
+        );
+    }
+
+    return $artifact;
 }
 
-function wu17_required_from_package( $package ) {
-    $required = array();
-    foreach ( $package['semantic_slots'] as $slot ) {
-        foreach ( $slot['surface_usage'] as $usage ) {
-            if ( 'gravity_flow.inbox' === $usage['surface'] && true === $usage['required'] ) {
-                $required[] = $slot['semantic_slot_key'];
-            }
-        }
+$profile = pr4_inbox_profile();
+$declarations = pr4_inbox_declarations();
+$binding = pr4_binding_set();
+$model = new InboxPresentationModel( $profile, array( $binding ), $declarations );
+$entry = array( 'id' => 1001, 'form_id' => 101 );
+
+$required = $model->requiredSemanticSlotKeys();
+gpp_assert_true( in_array( 'student.full_name', $required, true ), 'Derived full name remains a required Inbox presentation semantic.' );
+gpp_assert_true( ! in_array( 'workflow.due_at', $required, true ), 'Owner-resolved optional Due must not be part of mandatory Inbox readiness.' );
+gpp_assert_true( in_array( 'student.first_name', $model->requiredSourceSemanticSlotKeys(), true ), 'Full-name readiness expands to authoritative first-name source.' );
+gpp_assert_true( in_array( 'student.last_name', $model->requiredSourceSemanticSlotKeys(), true ), 'Full-name readiness expands to authoritative last-name source.' );
+
+gpp_assert_true( $model->isPresentationReady( $entry ), 'All required source-bound semantics make the row presentation-ready even with Due unresolved.' );
+$derived = $model->derivedDecision( $entry, 'student.full_name' );
+gpp_assert_true( $derived['ready'], 'Full-name derivation resolves only through both canonical component slots.' );
+gpp_assert_same( 1, $derived['component_source_refs']['student.first_name']['field_id'], 'First-name source comes from the active binding set.' );
+gpp_assert_same( 4, $derived['component_source_refs']['student.last_name']['field_id'], 'Last-name source comes from the active binding set.' );
+$direct_full_name = $model->resolve( $entry, 'student.full_name' );
+gpp_assert_true( ! $direct_full_name['resolved'], 'Derived full name cannot resolve as an independent host field.' );
+gpp_assert_same( 'derived_slot_requires_derivation', $direct_full_name['reason'], 'Direct full-name resolution fails at the derivation boundary.' );
+
+$due = $model->resolve( $entry, 'workflow.due_at' );
+gpp_assert_true( ! $due['resolved'], 'Unbound optional Due remains absent.' );
+gpp_assert_true( $model->isPresentationReady( $entry ), 'Absent optional Due does not block Card Mode.' );
+
+$missing_component = $binding;
+foreach ( $missing_component['runtime_claims'] as &$claim ) {
+    if ( 'student.last_name' === $claim['semantic_slot_key'] && 'availability' === $claim['claim'] ) {
+        $claim['evidence_state'] = 'NOT_PROVEN';
+        $claim['evidence_refs'] = array();
     }
-    return $required;
 }
+unset( $claim );
+$missing_model = new InboxPresentationModel( $profile, array( $missing_component ), $declarations );
+$missing_decision = $missing_model->presentationReadiness( $entry );
+gpp_assert_true( ! $missing_decision['ready'], 'Missing required full-name component proof makes the row unready.' );
+gpp_assert_same( 'derivation_component_unresolved', $missing_decision['reason'], 'Derivation dependency failure is explicit.' );
 
-function wu17_set_slot_state( $binding_set, $slot_key, $state, $source_ref ) {
-    foreach ( $binding_set['bindings'] as &$binding ) {
-        if ( $slot_key === $binding['semantic_slot_key'] ) {
-            $binding['state'] = $state;
-            $binding['source_ref'] = $source_ref;
-            $binding['evidence_refs'] = 'PROVEN' === $state
-                ? array( 'fixture:wu17:semantic', 'fixture:wu17:runtime' )
-                : array( 'fixture:wu17:negative' );
-        }
+// Copying old PROVEN availability into a later immutable binding version is
+// stale by definition: exact version/source evidence must be re-qualified.
+$stale = $binding;
+$stale['binding_set_version'] = '1.0.1';
+$stale_model = new InboxPresentationModel( $profile, array( $stale ), $declarations );
+$stale_decision = $stale_model->presentationReadiness( $entry );
+gpp_assert_true( ! $stale_decision['ready'], 'Availability proof from a previous binding version must not survive version drift.' );
+gpp_assert_same( 'availability_not_proven', $stale_decision['reason'], 'Stale version-bound evidence fails explicitly.' );
+
+$unsupported_due = $binding;
+foreach ( $unsupported_due['bindings'] as &$item ) {
+    if ( 'workflow.due_at' === $item['semantic_slot_key'] ) {
+        $item['state'] = 'PROVEN';
+        $item['source_ref'] = array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' );
+        $item['evidence_refs'] = array( 'fixture:due-candidate' );
     }
-    unset( $binding );
-    foreach ( $binding_set['runtime_claims'] as &$claim ) {
-        if ( $slot_key === $claim['semantic_slot_key'] ) {
-            $claim['evidence_state'] = 'PROVEN' === $state ? 'PROVEN' : 'NOT_PROVEN';
-            $claim['evidence_refs'] = 'PROVEN' === $state
-                ? array( 'fixture:wu17:semantic', 'fixture:wu17:runtime' )
-                : array( 'fixture:wu17:negative' );
-        }
-    }
-    unset( $claim );
-    return $binding_set;
 }
-
-$alpha = wu17_binding( 'wu17.alpha', 'fixture-installation', 101, 1, 3, 2, 'PROVEN' );
-$beta = wu17_binding( 'wu17.beta', 'fixture-installation', 202, 7, 11, 9, 'NOT_PROVEN' );
-$model = new InboxPresentationModel( $profile, array( $alpha, $beta ), $package['semantic_slots'] );
-
-gpp_assert_same( 'shared.inbox.v1', $model->profileId(), 'One shared surface profile remains fixed across forms.' );
-gpp_assert_same( wu17_required_from_package( $package ), $model->requiredSemanticSlotKeys(), 'Required Inbox slots are derived from the active visual package declarations.' );
-
-$alpha_entry = array( 'id' => 1001, 'form_id' => 101 );
-$beta_entry = array( 'id' => 2001, 'form_id' => 202 );
-$unbound_entry = array( 'id' => 3001, 'form_id' => 303 );
-
-$alpha_name = $model->resolve( $alpha_entry, 'student.full_name' );
-$beta_name = $model->resolve( $beta_entry, 'student.full_name' );
-gpp_assert_true( $alpha_name['resolved'], 'Alpha name binding resolves.' );
-gpp_assert_true( $beta_name['resolved'], 'Beta name binding resolves.' );
-gpp_assert_same( 1, $alpha_name['source_ref']['field_id'], 'Alpha resolves only its own name field.' );
-gpp_assert_same( 7, $beta_name['source_ref']['field_id'], 'Beta resolves only its own name field.' );
-
-gpp_assert_same( 3, $model->resolve( $alpha_entry, 'student.national_id' )['source_ref']['field_id'], 'Alpha national ID binding is form-local.' );
-gpp_assert_same( 11, $model->resolve( $beta_entry, 'student.national_id' )['source_ref']['field_id'], 'Beta national ID binding is form-local.' );
-
-gpp_assert_true( $model->isPresentationReady( $alpha_entry ), 'Fully bound Alpha entry is presentation-ready.' );
-gpp_assert_true( $model->isPresentationReady( $beta_entry ), 'Optional NOT_PROVEN photo does not make Beta unready.' );
-gpp_assert_true( ! $model->isPresentationReady( $unbound_entry ), 'An unbound form is never presentation-ready.' );
-gpp_assert_true( ! ( new InboxPresentationModel( $profile, array(), $package['semantic_slots'] ) )->isPresentationReady( $alpha_entry ), 'Zero active binding sets are never presentation-ready.' );
-
-gpp_assert_true( $model->resolve( $alpha_entry, 'student.photo' )['resolved'], 'PROVEN Alpha photo resolves.' );
-$beta_photo = $model->resolve( $beta_entry, 'student.photo' );
-gpp_assert_true( ! $beta_photo['resolved'], 'NOT_PROVEN Beta photo fails closed.' );
-gpp_assert_same( 'NOT_PROVEN', $beta_photo['state'], 'Photo failure preserves NOT_PROVEN state.' );
-
-gpp_assert_true( ! $model->resolve( $alpha_entry, 'school.name' )['resolved'], 'UNBOUND School remains absent.' );
-gpp_assert_true( ! $model->resolve( $alpha_entry, 'workflow.due_at' )['resolved'], 'NOT_PROVEN Due remains absent.' );
-
-$required_not_proven = wu17_set_slot_state( $alpha, 'student.national_id', 'NOT_PROVEN', null );
-$required_not_proven_model = new InboxPresentationModel( $profile, array( $required_not_proven ), $package['semantic_slots'] );
-gpp_assert_true( ! $required_not_proven_model->isPresentationReady( $alpha_entry ), 'A NOT_PROVEN required semantic prevents card projection.' );
-
-$required_unsupported = wu17_set_slot_state(
-    $alpha,
-    'workflow.current_step',
-    'PROVEN',
-    array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' )
+unset( $item );
+$unsupported_due['runtime_claims'][] = array(
+    'semantic_slot_key' => 'workflow.due_at',
+    'claim' => 'availability',
+    'evidence_state' => 'PROVEN',
+    'evidence_refs' => array( InboxRuntimeEvidence::availabilityRef( $unsupported_due, 'workflow.due_at', array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' ) ) ),
 );
-$required_unsupported_model = new InboxPresentationModel( $profile, array( $required_unsupported ), $package['semantic_slots'] );
-$unsupported_result = $required_unsupported_model->resolve( $alpha_entry, 'workflow.current_step' );
-gpp_assert_true( ! $required_unsupported_model->isPresentationReady( $alpha_entry ), 'An unsupported adapter for a required semantic prevents card projection.' );
-gpp_assert_same( 'source_adapter_not_admitted', $unsupported_result['reason'], 'Unsupported required adapter fails explicitly at the admitted-source boundary.' );
+$unsupported_due_model = new InboxPresentationModel( $profile, array( $unsupported_due ), $declarations );
+$due_result = $unsupported_due_model->resolve( $entry, 'workflow.due_at' );
+gpp_assert_true( ! $due_result['resolved'], 'An unadmitted Due adapter stays fail-closed even when someone marks it PROVEN.' );
+gpp_assert_same( 'source_adapter_not_admitted', $due_result['reason'], 'Unsupported Due source is explicit.' );
+gpp_assert_true( $unsupported_due_model->isPresentationReady( $entry ), 'Unsupported optional Due still cannot disable an otherwise-ready row.' );
 
-// A semantic binding alone must never authorize a guessed Gravity Flow API.
-// Even a synthetically PROVEN due_at state binding stays closed until an
-// evidence unit admits a concrete runtime source adapter for it.
-$due_candidate = wu17_set_slot_state(
-    $alpha,
-    'workflow.due_at',
-    'PROVEN',
-    array( 'type' => 'gravity_flow.state', 'state_key' => 'due_at' )
-);
-$due_model = new InboxPresentationModel( $profile, array( $due_candidate ), $package['semantic_slots'] );
-$due_result = $due_model->resolve( $alpha_entry, 'workflow.due_at' );
-gpp_assert_true( ! $due_result['resolved'], 'Unadmitted Gravity Flow due_at state adapter must fail closed.' );
-gpp_assert_same( 'source_adapter_not_admitted', $due_result['reason'], 'Due state adapter failure must be explicit.' );
-gpp_assert_true( $due_model->isPresentationReady( $alpha_entry ), 'Unsupported optional Due does not disable an otherwise ready card.' );
+$ambiguous = pr4_binding_set( '1.0.0', 'other-installation', 101 );
+$ambiguous_model = new InboxPresentationModel( $profile, array( $binding, $ambiguous ), $declarations );
+$ambiguous_decision = $ambiguous_model->presentationReadiness( $entry );
+gpp_assert_true( ! $ambiguous_decision['ready'], 'Ambiguous active environment fails closed.' );
 
-$ambiguous = new InboxPresentationModel(
-    $profile,
-    array( $alpha, wu17_binding( 'wu17.alpha.other-install', 'other-installation', 101, 21, 23, 22, 'PROVEN' ) ),
-    $package['semantic_slots']
-);
-$ambiguous_name = $ambiguous->resolve( $alpha_entry, 'student.full_name' );
-gpp_assert_true( ! $ambiguous_name['resolved'], 'Ambiguous active installation identity fails closed.' );
-gpp_assert_same( 'missing_or_ambiguous_active_environment', $ambiguous_name['reason'], 'Ambiguous environment is explicit.' );
-gpp_assert_true( ! $ambiguous->isPresentationReady( $alpha_entry ), 'Ambiguous active environment disables card projection.' );
-
-gpp_assert_same( '۱۴۰۴/۰۱/۰۱، ۰۰:۰۰', PersianDateFormatter::formatDateTime( '2025-03-21 00:00:00' ), 'Nowruz converts to Jalali with Persian numerals.' );
-gpp_assert_same( '۱۴۰۴/۱۰/۱۱، ۰۰:۲۴', PersianDateFormatter::formatDateTime( '2026-01-01 00:24:00' ), 'Pinned WU21 fixture date converts deterministically.' );
-gpp_assert_same( '۰۰۱۲۳۴۵۶۷۸۹', PersianDateFormatter::persianDigits( '00123456789' ), 'Presentation-only Persian digit conversion is deterministic.' );
+gpp_assert_same( '۱۴۰۴/۰۱/۰۱، ۰۰:۰۰', PersianDateFormatter::formatDateTime( '2025-03-21 00:00:00' ), 'Jalali/Persian date presentation remains deterministic.' );
+gpp_assert_same( '۰۰۱۲۳۴۵۶۷۸۹', PersianDateFormatter::persianDigits( '00123456789' ), 'Persian digit conversion remains presentation-only.' );
 
 echo "INBOX_PRESENTATION_MODEL_PASS\n";

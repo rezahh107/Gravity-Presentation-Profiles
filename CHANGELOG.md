@@ -8,6 +8,10 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ### Added
 
+- Explicit production adoption for the shipped SRWF Gravity Flow Inbox profile, reusing the existing EnvironmentBindingSet and conflict-safe VisualPackageLifecycle rather than introducing a second mapping or activation authority.
+- Source/version-bound Inbox runtime availability qualification for mapped Gravity Forms fields, authentic `date_created` entry metadata, and Gravity Flow's current-step API, with authorization deliberately left to Gravity Flow on every request.
+- Frontend reachability for the existing manual `به‌روزرسانی کارهای من` recovery control on the supported Gravity Flow Inbox, retaining normal same-page reload behavior and native Live Refresh ownership.
+- Authentic WU21 PR4 qualification for explicit setup, semantic derivation, mixed-readiness fallback, frontend manual refresh, native search/sort/paging/navigation/Live Refresh preservation, responsive sizing, and Owner A/B evidence capture.
 - Production SRWF operations profile package at `profiles/srwf/operations/operations-package-v1.json`, covering the `gravity_flow.inbox`, `gravity_flow.entry_detail`, and `print.dossier` surfaces and shipped in the installable ZIP.
 - Bounded operations setup path in Gravity Forms plugin settings that installs the shipped operations package, adopts the Print presentation profile, and creates the environment binding context for one explicitly selected form.
 - Compare-and-set visual activation (`VisualPackageLifecycle::activateIfCurrent()`), so an unattended setup path cannot replace a different existing surface activation.
@@ -23,6 +27,9 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ### Changed
 
+- `workflow.due_at` remains in the SRWF Inbox semantic catalogue but is optional for Card Mode readiness; absent/unproven Due never fabricates a deadline and never makes an otherwise-ready row unready.
+- Inbox typography and content-relative spacing use `rem` while the WordPress `782px` breakpoint, avatar/media crop dimensions, AG Grid host-sensitive dimensions, 1px borders/accessibility pattern, and existing radii remain unchanged; no unproven production max-width or Container Query is introduced.
+- WU21 no longer uses a test-only semantic Inbox adapter to create Card data; fixtures now reach positive Inbox state through Operations setup, normal binding repair, explicit Inbox setup, and the production presentation adapter, while the MU-plugin remains diagnostics-only for native polling transport.
 - Mapping & Binding Health now uses stable semantic slot keys as row identity and keeps the global control for explicit immutable-version rollback only; ordinary field mapping and unmapping are performed on the exact row being changed.
 - Direct-field selectors show the live Gravity Forms Field ID, label, and field type without label guessing or compatibility heuristics; an unchanged exact mapping is a service-level no-op rather than an unnecessary new binding version.
 - Derived semantics such as `student.full_name` and host-managed/non-field Gravity Flow semantics are shown as such instead of being offered the arbitrary Gravity Forms field inventory.

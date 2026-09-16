@@ -2,7 +2,7 @@
     "artifact_type": "gpp.visual_profile_package",
     "schema_version": "1.0.0",
     "package_id": "srwf.operations.presentation",
-    "package_version": "1.0.0",
+    "package_version": "1.0.1",
     "provenance": {
         "producer": "SRWF operations presentation package",
         "evidence_refs": [
@@ -312,7 +312,7 @@
             "surface_usage": [
                 {
                     "surface": "gravity_flow.inbox",
-                    "required": true
+                    "required": false
                 }
             ]
         },

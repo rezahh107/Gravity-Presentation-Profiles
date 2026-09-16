@@ -123,14 +123,14 @@ async function submitRowMappingAction(page, formTitle, slot, action) {
 }
 
 function healthProjection(value) { return value?.observed?.binding_health || value; }
-function findBindingFact(value, formId, slot) {
+function findBindingContext(value, formId) {
   const contexts = healthProjection(value)?.contexts || [];
-  for (const context of contexts) {
-    if (Number(context.form_id) !== Number(formId)) continue;
-    const fact = (context.facts || []).find(item => item.semantic_slot_key === slot);
-    if (fact) return fact;
-  }
-  return null;
+  return contexts.find(context => Number(context.form_id) === Number(formId)) || null;
+}
+function findBindingFact(value, formId, slot) {
+  const context = findBindingContext(value, formId);
+  if (!context) return null;
+  return (context.facts || []).find(item => item.semantic_slot_key === slot) || null;
 }
 function assertBindingFact(fact, status, fieldId, label) {
   if (!fact || fact.status !== status || Number(fact?.source?.field_id) !== Number(fieldId)) {
@@ -148,6 +148,12 @@ let staleBundle = null;
 
 try {
   stale = control('stale-on');
+  const preRepairContext = findBindingContext(control('health'), stale.form_id);
+  if (!preRepairContext?.binding_set_id || !preRepairContext?.binding_set_version) {
+    throw new Error(`Pre-repair binding identity is unavailable: ${JSON.stringify(preRepairContext)}`);
+  }
+  stale.pre_repair_binding_set_id = preRepairContext.binding_set_id;
+  stale.pre_repair_binding_set_version = preRepairContext.binding_set_version;
 
   await test('GPP-DIAG-ADMIN-001', 'real Add-On settings renders the exact stale Mapping & Binding Health context and Diagnostics surface', async () => {
     await page.goto(settingsUrl, { waitUntil: 'networkidle' });
@@ -210,16 +216,28 @@ try {
 
   await test('GPP-DIAG-ADMIN-004', 'fresh real settings render exposes rollback and restores the previous immutable binding version', async () => {
     await page.goto(settingsUrl, { waitUntil: 'networkidle' });
-    const rollback = await findAction(page, ['Rollback:', stale.form_title, 'binding version 1.0.0']);
-    if (!rollback) throw new Error('Rollback to the previously authoritative immutable version is not available on a fresh settings render after repair.');
+    const rollback = await findAction(page, ['Rollback:', stale.form_title, `binding version ${stale.pre_repair_binding_set_version}`]);
+    if (!rollback) throw new Error(`Rollback to pre-repair binding version ${stale.pre_repair_binding_set_version} is not available on a fresh settings render after repair.`);
     await submitAction(page, rollback);
 
-    const fact = findBindingFact(control('health'), stale.form_id, 'student.national_id');
+    const health = control('health');
+    const restoredContext = findBindingContext(health, stale.form_id);
+    if (!restoredContext
+      || restoredContext.binding_set_id !== stale.pre_repair_binding_set_id
+      || restoredContext.binding_set_version !== stale.pre_repair_binding_set_version) {
+      throw new Error(`Rollback did not reactivate the exact pre-repair binding identity: ${JSON.stringify(restoredContext)}`);
+    }
+    const fact = findBindingFact(health, stale.form_id, 'student.national_id');
     assertBindingFact(fact, 'stale_source_missing', 11, 'Rollback did not reactivate the exact pre-repair source while field 11 remained absent');
     const row = await bindingRow(page, stale.form_title);
     const rowText = await row.innerText();
     if (!rowText.includes('Stale / source missing') || !rowText.includes('Field ID 11')) throw new Error(`Rollback UI did not show exact field 11 stale state: ${rowText}`);
-    return { rollback_option: rollback.label, restored_source_field_id: fact.source.field_id, stale_again_before_host_restore: true };
+    return {
+      rollback_option: rollback.label,
+      restored_binding_set_version: restoredContext.binding_set_version,
+      restored_source_field_id: fact.source.field_id,
+      stale_again_before_host_restore: true,
+    };
   });
 } finally {
   try {

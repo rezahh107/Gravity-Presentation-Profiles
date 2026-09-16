@@ -16,23 +16,42 @@ if ( ! is_string( $action ) || '' === $action || ! is_array( $manifest ) ) {
 function gppq_json( $value ) {
     echo wp_json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 }
-function gppq_binding_lifecycle() {
+
+function gppq_binding_lifecycle( $additional_refs = array() ) {
+    $admitted = array(
+        'wu21:synthetic-fixture', 'wu21:reproducible-simulation', 'wu21:fail-closed-negative-control',
+        'wu18:synthetic-fixture', 'wu18:pinned-runtime', 'wu18:negative-control',
+        'wu19:synthetic-fixture', 'wu19:pinned-runtime', 'wu19:negative-control',
+        'qualification:stateful-core-spine', 'qualification:negative-control'
+    );
+    foreach ( $additional_refs as $ref ) {
+        if ( is_string( $ref ) && '' !== trim( $ref ) ) {
+            $admitted[] = $ref;
+        }
+    }
     return new BindingSetLifecycle(
         new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
-        new EvidenceReferenceGate(
-            array(
-                'wu21:synthetic-fixture', 'wu21:reproducible-simulation', 'wu21:fail-closed-negative-control',
-                'wu18:synthetic-fixture', 'wu18:pinned-runtime', 'wu18:negative-control',
-                'wu19:synthetic-fixture', 'wu19:pinned-runtime', 'wu19:negative-control',
-                'qualification:stateful-core-spine', 'qualification:negative-control'
-            )
-        )
+        new EvidenceReferenceGate( array_values( array_unique( $admitted ) ) )
     );
 }
+
+function gppq_binding_evidence_refs( $artifact ) {
+    $refs = array();
+    if ( ! is_array( $artifact ) || empty( $artifact['bindings'] ) ) return $refs;
+    foreach ( $artifact['bindings'] as $binding ) {
+        if ( ! is_array( $binding ) || 'PROVEN' !== ( isset( $binding['state'] ) ? $binding['state'] : null ) || empty( $binding['evidence_refs'] ) ) continue;
+        foreach ( $binding['evidence_refs'] as $ref ) {
+            if ( is_string( $ref ) && '' !== trim( $ref ) ) $refs[] = $ref;
+        }
+    }
+    return array_values( array_unique( $refs ) );
+}
+
 function gppq_reset_caches() {
     EntryDetailPresentationAdapter::resetRuntimeCache();
     PrintDossierPresentationAdapter::resetRuntimeCache();
 }
+
 function gppq_backup_binding_state( $key ) {
     $option = 'gpp_qualification_' . $key . '_binding_backup';
     if ( false !== get_option( $option, false ) ) throw new RuntimeException( 'Qualification binding backup already exists: ' . $key );
@@ -41,6 +60,7 @@ function gppq_backup_binding_state( $key ) {
     update_option( $option, $state, false );
     return $state;
 }
+
 function gppq_restore_binding_state( $key ) {
     $option = 'gpp_qualification_' . $key . '_binding_backup';
     $state = get_option( $option, false );
@@ -49,21 +69,60 @@ function gppq_restore_binding_state( $key ) {
     delete_option( $option );
     gppq_reset_caches();
 }
-function gppq_active_general_artifact( $surface, $form_id ) {
+
+function gppq_state_artifact( $state, $identity ) {
+    $id = $identity['binding_set_id'];
+    $version = $identity['binding_set_version'];
+    return isset( $state['installed'][ $id ][ $version ]['artifact'] )
+        ? $state['installed'][ $id ][ $version ]['artifact']
+        : null;
+}
+
+function gppq_context_matches( $artifact, $surface, $form_id, $entry_id ) {
+    if ( ! is_array( $artifact ) || empty( $artifact['context'] ) ) return false;
+    $context = $artifact['context'];
+    if ( (string) $context['form_source_ref']['form_id'] !== (string) $form_id ) return false;
+    if ( ! in_array( $surface, $context['surfaces'], true ) ) return false;
+    $entry_ref = $context['entry_source_ref'];
+    return null === $entry_ref || (string) $entry_ref['entry_id'] === (string) $entry_id;
+}
+
+function gppq_governing_artifact_from_state( $state, $surface, $form_id, $entry_id ) {
+    $general = null;
+    foreach ( $state['activations'] as $identity ) {
+        $artifact = gppq_state_artifact( $state, $identity );
+        if ( ! gppq_context_matches( $artifact, $surface, $form_id, $entry_id ) ) continue;
+        if ( null !== $artifact['context']['entry_source_ref'] ) {
+            return $artifact;
+        }
+        $general = $artifact;
+    }
+    if ( is_array( $general ) ) return $general;
+    throw new RuntimeException( 'No governing binding artifact for ' . $surface );
+}
+
+function gppq_governing_artifact( $surface, $form_id, $entry_id ) {
     $state = get_option( BindingSetLifecycle::OPTION_NAME );
     if ( ! is_array( $state ) ) throw new RuntimeException( 'Binding lifecycle state unavailable.' );
-    foreach ( $state['activations'] as $context_key => $identity ) {
-        $id = $identity['binding_set_id']; $version = $identity['binding_set_version'];
-        if ( empty( $state['installed'][ $id ][ $version ]['artifact'] ) ) continue;
-        $artifact = $state['installed'][ $id ][ $version ]['artifact'];
-        $context = $artifact['context'];
-        if ( (string) $context['form_source_ref']['form_id'] !== (string) $form_id ) continue;
-        if ( ! in_array( $surface, $context['surfaces'], true ) ) continue;
-        if ( null !== $context['entry_source_ref'] ) continue;
-        return $artifact;
-    }
-    throw new RuntimeException( 'Active general binding artifact unavailable for ' . $surface );
+    return gppq_governing_artifact_from_state( $state, $surface, $form_id, $entry_id );
 }
+
+function gppq_applicable_contexts( $state, $surfaces, $form_id, $entry_id ) {
+    $lifecycle = gppq_binding_lifecycle();
+    $contexts = array();
+    foreach ( $state['activations'] as $identity ) {
+        $artifact = gppq_state_artifact( $state, $identity );
+        if ( ! is_array( $artifact ) ) continue;
+        foreach ( $surfaces as $surface ) {
+            if ( gppq_context_matches( $artifact, $surface, $form_id, $entry_id ) ) {
+                $contexts[ $lifecycle->contextKey( $artifact['context'] ) ] = $artifact['context'];
+                break;
+            }
+        }
+    }
+    return $contexts;
+}
+
 function gppq_set_binding_source( &$artifact, $slot, $field_id, $state = 'PROVEN' ) {
     foreach ( $artifact['bindings'] as &$binding ) {
         if ( $slot !== $binding['semantic_slot_key'] ) continue;
@@ -73,6 +132,7 @@ function gppq_set_binding_source( &$artifact, $slot, $field_id, $state = 'PROVEN
     }
     unset( $binding );
 }
+
 function gppq_set_claim_state( &$artifact, $slot, $claim_name, $state ) {
     foreach ( $artifact['runtime_claims'] as &$claim ) {
         if ( $slot === $claim['semantic_slot_key'] && $claim_name === $claim['claim'] ) {
@@ -82,18 +142,20 @@ function gppq_set_claim_state( &$artifact, $slot, $claim_name, $state ) {
     }
     unset( $claim );
 }
-function gppq_activate_clone( $source, $id, $version, $entry_id = null ) {
+
+function gppq_activate_clone( $source, $id, $version, $surface ) {
     $artifact = $source;
     $artifact['binding_set_id'] = $id;
     $artifact['binding_set_version'] = $version;
-    $artifact['context']['entry_source_ref'] = null === $entry_id ? null : array( 'type' => 'gravity_forms.entry', 'entry_id' => (int) $entry_id );
+    $artifact['context']['surfaces'] = array( $surface );
     $artifact['provenance'] = array( 'producer' => 'Stateful Core Spine Qualification', 'evidence_refs' => array( 'qualification:stateful-core-spine' ) );
-    $lifecycle = gppq_binding_lifecycle();
+    $lifecycle = gppq_binding_lifecycle( gppq_binding_evidence_refs( $artifact ) );
     $lifecycle->import( $artifact );
     $lifecycle->activate( array( 'context' => $artifact['context'], 'binding_set_id' => $id, 'binding_set_version' => $version ) );
     gppq_reset_caches();
     return $artifact;
 }
+
 function gppq_add_text_field( $form_id, $label, $value, $entry_id, $minimum_id = 0 ) {
     $form = GFAPI::get_form( $form_id );
     if ( ! is_array( $form ) ) throw new RuntimeException( 'Synthetic form unavailable.' );
@@ -107,13 +169,16 @@ function gppq_add_text_field( $form_id, $label, $value, $entry_id, $minimum_id =
     if ( is_wp_error( $result ) ) throw new RuntimeException( $result->get_error_message() );
     return $id;
 }
+
 function gppq_backup_form( $key, $form_id, $entry_id, $field_id ) {
     $option = 'gpp_qualification_' . $key . '_form_backup';
     if ( false !== get_option( $option, false ) ) throw new RuntimeException( 'Qualification form backup already exists: ' . $key );
-    $form = GFAPI::get_form( $form_id ); $entry = GFAPI::get_entry( $entry_id );
+    $form = GFAPI::get_form( $form_id );
+    $entry = GFAPI::get_entry( $entry_id );
     if ( ! is_array( $form ) || is_wp_error( $entry ) ) throw new RuntimeException( 'Unable to backup synthetic form/entry.' );
     update_option( $option, array( 'form' => $form, 'entry_id' => (int) $entry_id, 'field_id' => (int) $field_id, 'value' => isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : '' ), false );
 }
+
 function gppq_restore_form( $key ) {
     $option = 'gpp_qualification_' . $key . '_form_backup';
     $backup = get_option( $option, false );
@@ -143,22 +208,28 @@ if ( 'schema-drift-on' === $action ) {
     if ( $replacement_id === $national_id_field ) throw new RuntimeException( 'Schema-drift control reused the removed field identifier.' );
     update_option( 'gpp_qualification_schema_drift_replacement', array( 'field_id' => $replacement_id, 'value' => $replacement_value ), false );
     gppq_reset_caches();
-    gppq_json( array( 'state' => 'drifted', 'removed_field_id' => $national_id_field, 'replacement_field_id' => $replacement_id, 'replacement_value' => $replacement_value ) ); return;
+    gppq_json( array( 'state' => 'drifted', 'removed_field_id' => $national_id_field, 'replacement_field_id' => $replacement_id, 'replacement_value' => $replacement_value ) );
+    return;
 }
+
 if ( 'schema-drift-repair' === $action ) {
     $replacement = get_option( 'gpp_qualification_schema_drift_replacement', false );
     if ( ! is_array( $replacement ) ) throw new RuntimeException( 'Schema-drift replacement missing.' );
     foreach ( array( 'gravity_flow.entry_detail' => 'qual.schema.entry.v2', 'print.dossier' => 'qual.schema.print.v2' ) as $surface => $id ) {
-        $artifact = gppq_active_general_artifact( $surface, $form_id );
+        $artifact = gppq_governing_artifact( $surface, $form_id, $entry_id );
         gppq_set_binding_source( $artifact, 'student.national_id', (int) $replacement['field_id'] );
-        gppq_activate_clone( $artifact, $id, '2.0.0' );
+        gppq_activate_clone( $artifact, $id, '2.0.0', $surface );
     }
-    gppq_json( array( 'state' => 'repaired', 'replacement_field_id' => (int) $replacement['field_id'], 'replacement_value' => $replacement['value'] ) ); return;
+    gppq_json( array( 'state' => 'repaired', 'replacement_field_id' => (int) $replacement['field_id'], 'replacement_value' => $replacement['value'] ) );
+    return;
 }
+
 if ( 'schema-drift-off' === $action ) {
-    gppq_restore_form( 'schema_drift' ); gppq_restore_binding_state( 'schema_drift' );
+    gppq_restore_form( 'schema_drift' );
+    gppq_restore_binding_state( 'schema_drift' );
     delete_option( 'gpp_qualification_schema_drift_replacement' );
-    gppq_json( array( 'state' => 'restored' ) ); return;
+    gppq_json( array( 'state' => 'restored' ) );
+    return;
 }
 
 if ( 'ambiguity-on' === $action ) {
@@ -167,62 +238,70 @@ if ( 'ambiguity-on' === $action ) {
     $override_value = 'SYN-EXACT-ENTRY-NATIONAL-ID';
     $override_id = gppq_add_text_field( $form_id, 'Synthetic Exact Entry National ID', $override_value, $entry_id );
     foreach ( array( 'gravity_flow.entry_detail' => 'qual.ambiguity.entry.exact', 'print.dossier' => 'qual.ambiguity.print.exact' ) as $surface => $id ) {
-        $artifact = gppq_active_general_artifact( $surface, $form_id );
+        $artifact = gppq_governing_artifact( $surface, $form_id, $entry_id );
         gppq_set_binding_source( $artifact, 'student.national_id', $override_id );
-        gppq_activate_clone( $artifact, $id, '1.0.0', $entry_id );
+        gppq_activate_clone( $artifact, $id, '1.0.0', $surface );
     }
     update_option( 'gpp_qualification_ambiguity_value', $override_value, false );
-    gppq_json( array( 'state' => 'overlap_active', 'override_value' => $override_value, 'override_field_id' => $override_id ) ); return;
+    gppq_json( array( 'state' => 'overlap_active', 'override_value' => $override_value, 'override_field_id' => $override_id ) );
+    return;
 }
+
 if ( 'ambiguity-off' === $action ) {
-    gppq_restore_form( 'ambiguity' ); gppq_restore_binding_state( 'ambiguity' ); delete_option( 'gpp_qualification_ambiguity_value' );
-    gppq_json( array( 'state' => 'restored' ) ); return;
+    gppq_restore_form( 'ambiguity' );
+    gppq_restore_binding_state( 'ambiguity' );
+    delete_option( 'gpp_qualification_ambiguity_value' );
+    gppq_json( array( 'state' => 'restored' ) );
+    return;
 }
 
 if ( 'degradation-on' === $action ) {
     gppq_backup_binding_state( 'degradation' );
     foreach ( array( 'gravity_flow.entry_detail' => 'qual.degraded.entry.exact', 'print.dossier' => 'qual.degraded.print.exact' ) as $surface => $id ) {
-        $artifact = gppq_active_general_artifact( $surface, $form_id );
+        $artifact = gppq_governing_artifact( $surface, $form_id, $entry_id );
         gppq_set_binding_source( $artifact, 'student.national_id', 0, 'NOT_PROVEN' );
         if ( 'gravity_flow.entry_detail' === $surface ) gppq_set_claim_state( $artifact, 'student.national_id', 'availability', 'NOT_PROVEN' );
-        gppq_activate_clone( $artifact, $id, '1.0.0', $entry_id );
+        gppq_activate_clone( $artifact, $id, '1.0.0', $surface );
     }
-    gppq_json( array( 'state' => 'national_id_not_proven' ) ); return;
+    gppq_json( array( 'state' => 'national_id_not_proven' ) );
+    return;
 }
+
 if ( 'degradation-off' === $action ) {
-    gppq_restore_binding_state( 'degradation' ); gppq_json( array( 'state' => 'restored' ) ); return;
+    gppq_restore_binding_state( 'degradation' );
+    gppq_json( array( 'state' => 'restored' ) );
+    return;
 }
 
 if ( 'lifecycle-deactivate' === $action ) {
-    gppq_backup_binding_state( 'lifecycle' );
+    $state = gppq_backup_binding_state( 'lifecycle' );
     $lifecycle = gppq_binding_lifecycle();
-    $deactivated = array();
-    foreach ( array( 'gravity_flow.entry_detail', 'print.dossier' ) as $surface ) {
-        $artifact = gppq_active_general_artifact( $surface, $form_id );
-        $lifecycle->deactivate( array( 'context' => $artifact['context'] ) );
-        $deactivated[] = $surface;
+    $surfaces = array( 'gravity_flow.entry_detail', 'print.dossier' );
+    $contexts = gppq_applicable_contexts( $state, $surfaces, $form_id, $entry_id );
+    if ( array() === $contexts ) throw new RuntimeException( 'No applicable Core Spine binding contexts to deactivate.' );
+    foreach ( $contexts as $context ) {
+        $lifecycle->deactivate( array( 'context' => $context ) );
     }
     gppq_reset_caches();
-    gppq_json( array( 'state' => 'deactivated', 'surfaces' => $deactivated ) ); return;
+    gppq_json( array( 'state' => 'deactivated', 'context_count' => count( $contexts ), 'surfaces' => $surfaces ) );
+    return;
 }
+
 if ( 'lifecycle-replace' === $action ) {
     $backup = get_option( 'gpp_qualification_lifecycle_binding_backup', false );
     if ( ! is_array( $backup ) ) throw new RuntimeException( 'Lifecycle backup unavailable.' );
-    $source_by_surface = array();
-    foreach ( $backup['activations'] as $context_key => $identity ) {
-        $record = $backup['installed'][ $identity['binding_set_id'] ][ $identity['binding_set_version'] ];
-        $artifact = $record['artifact'];
-        if ( (string) $artifact['context']['form_source_ref']['form_id'] !== (string) $form_id || null !== $artifact['context']['entry_source_ref'] ) continue;
-        foreach ( array( 'gravity_flow.entry_detail', 'print.dossier' ) as $surface ) if ( in_array( $surface, $artifact['context']['surfaces'], true ) ) $source_by_surface[ $surface ] = $artifact;
-    }
     foreach ( array( 'gravity_flow.entry_detail' => 'qual.lifecycle.entry.v2', 'print.dossier' => 'qual.lifecycle.print.v2' ) as $surface => $id ) {
-        if ( empty( $source_by_surface[ $surface ] ) ) throw new RuntimeException( 'Lifecycle source artifact missing for ' . $surface );
-        gppq_activate_clone( $source_by_surface[ $surface ], $id, '2.0.0' );
+        $artifact = gppq_governing_artifact_from_state( $backup, $surface, $form_id, $entry_id );
+        gppq_activate_clone( $artifact, $id, '2.0.0', $surface );
     }
-    gppq_json( array( 'state' => 'replacement_active', 'binding_ids' => array( 'qual.lifecycle.entry.v2', 'qual.lifecycle.print.v2' ) ) ); return;
+    gppq_json( array( 'state' => 'replacement_active', 'binding_ids' => array( 'qual.lifecycle.entry.v2', 'qual.lifecycle.print.v2' ) ) );
+    return;
 }
+
 if ( 'lifecycle-off' === $action ) {
-    gppq_restore_binding_state( 'lifecycle' ); gppq_json( array( 'state' => 'restored' ) ); return;
+    gppq_restore_binding_state( 'lifecycle' );
+    gppq_json( array( 'state' => 'restored' ) );
+    return;
 }
 
 throw new RuntimeException( 'Unknown qualification control action: ' . $action );

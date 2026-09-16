@@ -23,14 +23,15 @@ final class InboxPresentationAdapter {
 
     private static $model_loaded = false;
     private static $model = null;
+    private static $form_cache = array();
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
             return;
         }
 
-        // These are the two exact Gravity Flow 3.1.0 Inbox extension seams
-        // admitted by WU21. Layout remains CSS-only; no guessed grid API hook.
+        // These are the exact Gravity Flow 3.1.0 Inbox extension seams admitted
+        // by the runtime lab. Layout remains CSS-only; no grid/query API is owned.
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
@@ -40,10 +41,12 @@ final class InboxPresentationAdapter {
     public static function resetRuntimeCache() {
         self::$model_loaded = false;
         self::$model = null;
+        self::$form_cache = array();
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
     public static function filterColumns( $columns, $args ) {
+        unset( $args );
         if ( null === self::model() || ! is_array( $columns ) ) {
             return $columns;
         }
@@ -55,11 +58,8 @@ final class InboxPresentationAdapter {
             $columns = array( 'id' => __( 'Entry ID', 'gravity-presentation-profiles' ) ) + $columns;
         }
 
-        // Keep the presentation column first. AG Grid virtualizes off-screen
-        // columns; if the card is appended after wide native support columns,
-        // narrow viewports may never create its cell in the DOM. Reordering via
-        // the admitted column filter keeps all host rowData while guaranteeing
-        // the one presentation cell remains available to the CSS readiness gate.
+        // Keep the presentation column first so AG Grid column virtualization
+        // cannot omit it on narrow viewports. No native data column is removed.
         unset( $columns[ self::CARD_COLUMN ] );
         $card = array(
             self::CARD_COLUMN => __( 'پرونده‌های دانش‌آموزان', 'gravity-presentation-profiles' ),
@@ -69,6 +69,7 @@ final class InboxPresentationAdapter {
     }
 
     public static function filterValue( $value, $form_id, $field_id, $entry ) {
+        unset( $form_id );
         if ( self::CARD_COLUMN !== $field_id ) {
             return $value;
         }
@@ -85,21 +86,7 @@ final class InboxPresentationAdapter {
             return '';
         }
         if ( ! is_array( $entry ) ) {
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'INBOX_BINDING_READINESS',
-                RuntimeDecisionTrace::RESULT_FAIL,
-                'invalid_entry',
-                'native_gravity_flow_inbox'
-            );
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'INBOX_PRESENTATION_OUTPUT',
-                RuntimeDecisionTrace::RESULT_SKIP,
-                'presentation_not_ready',
-                'native_gravity_flow_inbox'
-            );
-            return '';
+            return self::unreadyOutput( 'invalid_entry' );
         }
 
         return self::renderCard( $model, $entry );
@@ -244,31 +231,29 @@ final class InboxPresentationAdapter {
     private static function renderCard( InboxPresentationModel $model, $entry ) {
         $decision = $model->presentationReadiness( $entry );
         if ( ! $decision['ready'] ) {
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'INBOX_BINDING_READINESS',
-                RuntimeDecisionTrace::RESULT_FAIL,
-                $decision['reason'],
-                'native_gravity_flow_inbox'
-            );
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'INBOX_PRESENTATION_OUTPUT',
-                RuntimeDecisionTrace::RESULT_SKIP,
-                'presentation_not_ready',
-                'native_gravity_flow_inbox'
-            );
-            return self::readinessMarker( false );
+            return self::unreadyOutput( $decision['reason'] );
         }
+
+        $source_health = self::requiredSourcesStillAvailable( $model, $entry );
+        if ( ! $source_health['ready'] ) {
+            return self::unreadyOutput( $source_health['reason'] );
+        }
+
+        $full_name = self::derivedFullName( $model, $entry );
+        if ( ! $full_name['ready'] ) {
+            return self::unreadyOutput( $full_name['reason'] );
+        }
+
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'INBOX_BINDING_READINESS',
             RuntimeDecisionTrace::RESULT_PASS
         );
 
-        $name = self::slotValue( $model, $entry, 'student.full_name' );
+        $name = $full_name['value'];
         $national_id = self::slotValue( $model, $entry, 'student.national_id' );
         $photo = self::slotValue( $model, $entry, 'student.photo' );
+        $grade_group = self::slotValue( $model, $entry, 'education.grade_group' );
         $step = self::slotValue( $model, $entry, 'workflow.current_step' );
         $created = self::slotValue( $model, $entry, 'entry.created_at' );
         $school = self::slotValue( $model, $entry, 'school.name' );
@@ -282,10 +267,9 @@ final class InboxPresentationAdapter {
         $is_overdue = null !== $due_timestamp && $due_timestamp < time();
 
         // Keep native-searchable raw values in the host-owned row value. The
-        // text is visually hidden, but AG Grid's own quick filter remains the
-        // search authority; GPP does not build a second index.
+        // text is visually hidden; AG Grid remains the sole search authority.
         $search_values = array_filter(
-            array( $name, $national_id, $step, $created, $school, $due ),
+            array( $name, $national_id, $grade_group, $step, $created, $school, $due ),
             static function ( $item ) { return null !== $item && '' !== (string) $item; }
         );
 
@@ -294,15 +278,14 @@ final class InboxPresentationAdapter {
         $html .= '<article class="gpp-inbox-card" dir="rtl" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '">';
         $html .= '<div class="gpp-inbox-card__photo">' . self::photoMarkup( $photo, $name_display ) . '</div>';
         $html .= '<div class="gpp-inbox-card__identity">';
-        $html .= '<strong class="gpp-inbox-card__name">' . esc_html( null === $name_display ? '—' : $name_display ) . '</strong>';
+        $html .= '<strong class="gpp-inbox-card__name">' . esc_html( $name_display ) . '</strong>';
         $html .= '<span class="gpp-inbox-card__meta"><span class="gpp-inbox-card__label">' . esc_html__( 'کد ملی', 'gravity-presentation-profiles' ) . '</span><span class="gpp-inbox-card__national-id">' . esc_html( null === $national_display ? '—' : $national_display ) . '</span></span>';
         $html .= '</div>';
         $html .= '<dl class="gpp-inbox-card__details">';
+        $html .= self::detailMarkup( 'پایه / گروه', $grade_group, 'gpp-inbox-card__grade-group' );
+        $html .= self::detailMarkup( 'مدرسه', $school, 'gpp-inbox-card__school' );
         $html .= self::detailMarkup( 'مرحله جاری', $step, 'gpp-inbox-card__step' );
         $html .= self::detailMarkup( 'تاریخ ثبت', $created_display, 'gpp-inbox-card__created-at' );
-        if ( null !== $school ) {
-            $html .= self::detailMarkup( 'مدرسه', $school, 'gpp-inbox-card__school' );
-        }
         if ( null !== $due_display ) {
             $due_class = 'gpp-inbox-card__due' . ( $is_overdue ? ' gpp-inbox-card__due--overdue' : '' );
             $html .= self::detailMarkup( 'سررسید', $due_display, $due_class );
@@ -319,6 +302,59 @@ final class InboxPresentationAdapter {
         return $html;
     }
 
+    private static function unreadyOutput( $reason ) {
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'INBOX_BINDING_READINESS',
+            RuntimeDecisionTrace::RESULT_FAIL,
+            $reason,
+            'native_gravity_flow_inbox'
+        );
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'INBOX_PRESENTATION_OUTPUT',
+            RuntimeDecisionTrace::RESULT_SKIP,
+            'presentation_not_ready',
+            'native_gravity_flow_inbox'
+        );
+        return self::readinessMarker( false );
+    }
+
+    private static function requiredSourcesStillAvailable( InboxPresentationModel $model, $entry ) {
+        foreach ( $model->requiredSourceSemanticSlotKeys() as $slot_key ) {
+            $resolved = $model->resolve( $entry, $slot_key );
+            if ( empty( $resolved['resolved'] ) || empty( $resolved['source_ref'] ) ) {
+                return array( 'ready' => false, 'reason' => isset( $resolved['reason'] ) ? $resolved['reason'] : 'required_source_unresolved' );
+            }
+            if ( ! self::sourceStillExists( $resolved['source_ref'], $entry ) ) {
+                return array( 'ready' => false, 'reason' => 'source_configuration_stale' );
+            }
+        }
+        return array( 'ready' => true, 'reason' => null );
+    }
+
+    private static function derivedFullName( InboxPresentationModel $model, $entry ) {
+        $decision = $model->derivedDecision( $entry, 'student.full_name' );
+        if ( empty( $decision['ready'] ) || empty( $decision['component_source_refs'] ) ) {
+            return array( 'ready' => false, 'reason' => isset( $decision['reason'] ) ? $decision['reason'] : 'derivation_component_unresolved', 'value' => null );
+        }
+
+        $parts = array();
+        foreach ( array( 'student.first_name', 'student.last_name' ) as $component ) {
+            if ( empty( $decision['component_source_refs'][ $component ] ) ) {
+                return array( 'ready' => false, 'reason' => 'derivation_component_unresolved', 'value' => null );
+            }
+            $value = self::readSourceValue( $decision['component_source_refs'][ $component ], $entry );
+            $value = self::presentText( is_scalar( $value ) ? $value : null );
+            if ( null === $value || '' === $value ) {
+                return array( 'ready' => false, 'reason' => 'derivation_component_value_missing', 'value' => null );
+            }
+            $parts[] = $value;
+        }
+
+        return array( 'ready' => true, 'reason' => null, 'value' => implode( ' ', $parts ) );
+    }
+
     private static function readinessMarker( $ready ) {
         $state = $ready ? 'ready' : 'unready';
         return '<span hidden class="gpp-inbox-card__readiness gpp-inbox-card__readiness--' . $state . '" data-gpp-readiness="' . $state . '" aria-hidden="true"></span>';
@@ -330,8 +366,7 @@ final class InboxPresentationAdapter {
             return null;
         }
 
-        $source = $resolved['source_ref'];
-        $value = self::readSourceValue( $source, $entry );
+        $value = self::readSourceValue( $resolved['source_ref'], $entry );
 
         if ( is_int( $value ) || is_float( $value ) ) {
             return $value;
@@ -352,17 +387,15 @@ final class InboxPresentationAdapter {
         switch ( $source['type'] ) {
             case 'gravity_forms.field':
                 $key = (string) $source['field_id'];
-                return isset( $entry[ $key ] ) ? $entry[ $key ] : null;
+                return array_key_exists( $key, $entry ) ? $entry[ $key ] : null;
 
             case 'gravity_forms.entry_meta':
-                $key = $source['meta_key'];
-                if ( isset( $entry[ $key ] ) ) {
-                    return $entry[ $key ];
+                if ( ! isset( $source['meta_key'] ) || 'date_created' !== $source['meta_key'] ) {
+                    return null;
                 }
-                if ( function_exists( 'gform_get_meta' ) ) {
-                    return gform_get_meta( (int) $entry['id'], $key );
-                }
-                return null;
+                // date_created is Gravity Forms Entry metadata carried on the
+                // authoritative Entry object; never replace it with page time.
+                return array_key_exists( 'date_created', $entry ) ? $entry['date_created'] : null;
 
             case 'gravity_flow.state':
                 if ( ! isset( $source['state_key'] ) || 'current_step' !== $source['state_key'] || ! class_exists( 'Gravity_Flow_API' ) ) {
@@ -376,11 +409,52 @@ final class InboxPresentationAdapter {
         return null;
     }
 
+    private static function sourceStillExists( $source, $entry ) {
+        if ( ! is_array( $source ) || empty( $source['type'] ) ) {
+            return false;
+        }
+
+        if ( 'gravity_forms.field' === $source['type'] ) {
+            if ( ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_form' ) || ! method_exists( 'GFAPI', 'get_field' ) ) {
+                return false;
+            }
+            $form_id = (int) $entry['form_id'];
+            if ( ! array_key_exists( $form_id, self::$form_cache ) ) {
+                self::$form_cache[ $form_id ] = \GFAPI::get_form( $form_id );
+            }
+            $form = self::$form_cache[ $form_id ];
+            if ( ! is_array( $form ) ) {
+                return false;
+            }
+            $field_id = isset( $source['field_id'] ) ? $source['field_id'] : null;
+            $field = \GFAPI::get_field( $form, $field_id );
+            if ( is_object( $field ) ) {
+                return true;
+            }
+            if ( is_string( $field_id ) && false !== strpos( $field_id, '.' ) ) {
+                $parent_id = strstr( $field_id, '.', true );
+                return is_object( \GFAPI::get_field( $form, $parent_id ) );
+            }
+            return false;
+        }
+
+        if ( 'gravity_forms.entry_meta' === $source['type'] ) {
+            return isset( $source['meta_key'] ) && 'date_created' === $source['meta_key'];
+        }
+
+        return 'gravity_flow.state' === $source['type']
+            && isset( $source['state_key'] )
+            && 'current_step' === $source['state_key']
+            && class_exists( 'Gravity_Flow_API' )
+            && method_exists( 'Gravity_Flow_API', 'get_current_step' );
+    }
+
     private static function presentText( $value ) {
         if ( null === $value ) {
             return null;
         }
-        return trim( wp_strip_all_tags( (string) $value ) );
+        $value = trim( wp_strip_all_tags( (string) $value ) );
+        return '' === $value ? null : $value;
     }
 
     private static function photoMarkup( $photo, $name ) {

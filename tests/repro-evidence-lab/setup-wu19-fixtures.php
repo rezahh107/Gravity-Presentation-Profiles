@@ -12,7 +12,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $wu18 = get_option( 'gpp_wu18_fixture_manifest' );
 $base = get_option( 'gpp_wu21_fixture_manifest' );
-if ( ! $artifact_dir || ! is_array( $wu18 ) || ! is_array( $base ) ) {
+if ( ! $artifact_dir || ! is_array( $wu18 ) || ! is_array( $base ) || empty( $base['installation_id'] ) ) {
     throw new RuntimeException( 'WU19 requires WU18/WU21 fixtures.' );
 }
 
@@ -119,6 +119,9 @@ if ( ! is_array( $profile ) || 'shared.print.v1' !== $profile['profile_id'] ) {
     throw new RuntimeException( 'Shared print profile identity changed.' );
 }
 $visual_lifecycle = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
+// WU19 owns this legacy Print fixture profile; import it explicitly instead of
+// relying on WU21's old test-only package provisioning side effect.
+$visual_lifecycle->import( $visual_package );
 $visual_lifecycle->activate( array(
     'surface' => 'print.dossier',
     'package_id' => $visual_package['package_id'],
@@ -126,7 +129,7 @@ $visual_lifecycle->activate( array(
     'profile_id' => $profile['profile_id'],
 ) );
 
-function wu19_binding_set( $id, $form_id, $base_meta, $wu18_fields, $extra ) {
+function wu19_binding_set( $id, $installation_id, $form_id, $entry_id, $base_meta, $wu18_fields, $extra ) {
     $proven = array( 'wu19:synthetic-fixture', 'wu19:pinned-runtime' );
     $negative = array( 'wu19:negative-control' );
     $proven_fields = array(
@@ -184,9 +187,9 @@ function wu19_binding_set( $id, $form_id, $base_meta, $wu18_fields, $extra ) {
         'binding_set_id' => $id,
         'binding_set_version' => '1.0.0',
         'context' => array(
-            'installation_source_ref' => array( 'type' => 'wordpress.installation', 'installation_id' => 'wu21-sim-installation' ),
+            'installation_source_ref' => array( 'type' => 'wordpress.installation', 'installation_id' => $installation_id ),
             'form_source_ref' => array( 'type' => 'gravity_forms.form', 'form_id' => $form_id ),
-            'entry_source_ref' => null,
+            'entry_source_ref' => array( 'type' => 'gravity_forms.entry', 'entry_id' => $entry_id ),
             'surfaces' => array( 'print.dossier' ),
         ),
         'provenance' => array( 'producer' => 'WU19 pinned Evidence Lab fixture', 'evidence_refs' => $proven ),
@@ -200,8 +203,8 @@ $binding_lifecycle = new BindingSetLifecycle(
     new EvidenceReferenceGate( array( 'wu19:synthetic-fixture', 'wu19:pinned-runtime', 'wu19:negative-control' ) )
 );
 foreach ( array(
-    wu19_binding_set( 'wu19.sim.alpha.v1', $alpha_form_id, $alpha_base, $alpha_fields, $alpha_extra ),
-    wu19_binding_set( 'wu19.sim.beta.v1', $beta_form_id, $beta_base, $beta_fields, $beta_extra ),
+    wu19_binding_set( 'wu19.sim.alpha.v1', $base['installation_id'], $alpha_form_id, $alpha_entry_id, $alpha_base, $alpha_fields, $alpha_extra ),
+    wu19_binding_set( 'wu19.sim.beta.v1', $base['installation_id'], $beta_form_id, $beta_entry_id, $beta_base, $beta_fields, $beta_extra ),
 ) as $binding ) {
     EnvironmentBindingSet::validate( $binding );
     $binding_lifecycle->import( $binding );
