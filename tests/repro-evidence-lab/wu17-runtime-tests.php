@@ -246,7 +246,7 @@ wu17_test( 'WU17-RUNTIME-010', 'mixed-readiness gate and sizing contract stay na
     wu17_assert( false !== strpos( $css, ':not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready))' ), 'One-unready-row veto missing.' );
     wu17_assert( false !== strpos( $native_css, ':not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready))' ), 'Native-cell visibility veto missing.' );
     wu17_assert( false !== strpos( $css, '@media (max-width: 782px)' ), 'WordPress-aligned 782px breakpoint changed.' );
-    wu17_assert( false === strpos( $css, '@container' ) && false === strpos( $css, 'container-type' ) && false === strpos( $css, 'max-width:' ), 'Unproven production Container Query/max-width was introduced.' );
+    wu17_assert( false === strpos( $css, '@container' ) && false === strpos( $css, 'container-type' ) && 0 === preg_match( '/^\s*max-width\s*:/m', $css ), 'Unproven production Container Query/max-width property was introduced.' );
     wu17_assert( false !== strpos( $css, 'width: 56px;' ) && false !== strpos( $css, 'height: 56px;' ), 'Avatar crop dimensions must remain pixel-based.' );
     wu17_assert( false !== strpos( $css, 'font-size: 1rem;' ) && false !== strpos( $css, 'padding: 1rem;' ), 'Inbox typography/content spacing did not adopt rem sizing.' );
     return 'Ready-only projection, one-unready native fallback, bounded rem sizing, no unproven container cap/query.';
