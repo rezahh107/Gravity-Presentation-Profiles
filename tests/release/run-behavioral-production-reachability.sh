@@ -12,6 +12,7 @@ EVIDENCE_DIR="${6:-}"
   exit 1
 }
 mkdir -p "$EVIDENCE_DIR"
+EVIDENCE_DIR="$(cd "$EVIDENCE_DIR" && pwd -P)"
 SETTINGS_URL="$BASE_URL/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles"
 FIXTURE="$EVIDENCE_DIR/behavioral-host-fixture.json"
 COOKIES="$EVIDENCE_DIR/admin-cookies.txt"
@@ -25,15 +26,16 @@ bash "$ROOT/tests/release/assert-behavioral-artifact.sh" "$ZIP"
 # must be rejected by the artifact guard and is never installed or treated as a
 # release candidate.
 NEG_DIR="$EVIDENCE_DIR/negative-artifact"
+NEG_ZIP="$NEG_DIR/negative.zip"
 rm -rf "$NEG_DIR"
 mkdir -p "$NEG_DIR"
 unzip -q "$ZIP" -d "$NEG_DIR/tree"
 rm -f "$NEG_DIR/tree/gravity-presentation-profiles/profiles/srwf/operations/operations-package-v1.json"
 (
   cd "$NEG_DIR/tree"
-  zip -qr "$NEG_DIR/negative.zip" gravity-presentation-profiles
+  zip -qr "$NEG_ZIP" gravity-presentation-profiles
 )
-if bash "$ROOT/tests/release/assert-behavioral-artifact.sh" "$NEG_DIR/negative.zip" >/dev/null 2>&1; then
+if bash "$ROOT/tests/release/assert-behavioral-artifact.sh" "$NEG_ZIP" >/dev/null 2>&1; then
   echo 'Negative artifact without Operations Package was incorrectly accepted.' >&2
   exit 1
 fi
