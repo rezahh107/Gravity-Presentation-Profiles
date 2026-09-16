@@ -5,8 +5,6 @@ namespace GravityPresentationProfiles\GravityForms;
 use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\Core\Portable\ContractViolation;
-use GravityPresentationProfiles\Core\Portable\VisualProfilePackage;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeReadinessService;
 
 /**
@@ -19,7 +17,6 @@ use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeReadinessService;
  */
 final class InboxSetupService {
     const SURFACE = 'gravity_flow.inbox';
-    const PACKAGE_VERSION = '1.0.1';
 
     const STATUS_COMPLETED = 'COMPLETED';
     const STATUS_CONFLICT = 'CONFLICT';
@@ -52,34 +49,13 @@ final class InboxSetupService {
     }
 
     /**
-     * Build the Inbox-ready successor of the shipped Operations Package without
-     * changing the legacy Print package or creating a parallel package SSOT.
-     * Owner clarification: workflow.due_at is optional for Inbox readiness.
+     * Return the canonical shipped Operations Package unchanged.
+     *
+     * OperationsSetupService owns package loading and validation. Inbox setup
+     * may inspect that artifact but must not rewrite package-owned facts.
      */
     public function packageArtifact() {
-        $artifact = $this->operations->packageArtifact();
-        $artifact['package_version'] = self::PACKAGE_VERSION;
-
-        foreach ( $artifact['semantic_slots'] as &$slot ) {
-            if ( 'workflow.due_at' !== $slot['semantic_slot_key'] ) {
-                continue;
-            }
-            foreach ( $slot['surface_usage'] as &$usage ) {
-                if ( self::SURFACE === $usage['surface'] ) {
-                    $usage['required'] = false;
-                }
-            }
-            unset( $usage );
-        }
-        unset( $slot );
-
-        try {
-            VisualProfilePackage::validate( $artifact );
-        } catch ( ContractViolation $exception ) {
-            throw new LifecycleException( 'inbox_operations_package_invalid', $exception->getMessage() );
-        }
-
-        return $artifact;
+        return $this->operations->packageArtifact();
     }
 
     public function inboxProfileIdentity() {
