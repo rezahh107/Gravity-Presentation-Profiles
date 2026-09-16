@@ -34,6 +34,7 @@ $cases = array(
     'print-dossier-presentation-model.php',
     'print-dossier-data-path.php',
     'operations-setup-production-path.php',
+    'operations-setup-legacy-print-compat.php',
 );
 
 foreach ( $cases as $case ) {
