@@ -70,8 +70,8 @@ ksort( $binding_kinds );
 $print_activation = $visual->resolve( 'print.dossier' );
 $inbox_activation = $visual->resolve( 'gravity_flow.inbox' );
 $entry_activation = $visual->resolve( 'gravity_flow.entry_detail' );
-$package_record    = isset( $visual_snapshot['installed']['srwf.operations.presentation']['1.0.0'] )
-    ? $visual_snapshot['installed']['srwf.operations.presentation']['1.0.0']
+$package_record    = isset( $visual_snapshot['installed']['srwf.operations.presentation']['1.0.1'] )
+    ? $visual_snapshot['installed']['srwf.operations.presentation']['1.0.1']
     : null;
 $semantic_catalogue_keys = array();
 if ( is_array( $package_record ) && isset( $package_record['artifact']['semantic_slots'] ) ) {
