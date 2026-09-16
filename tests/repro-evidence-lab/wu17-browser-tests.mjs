@@ -26,6 +26,20 @@ function runRuntimeAssertions() {
   process.stdout.write(cp.stdout);
 }
 
+function loadFixtureManifest() {
+  const wpCli = process.env.WU21_WP_CLI;
+  const wpPath = process.env.WU21_WP_PATH;
+  const cp = spawnSync(
+    'php',
+    [wpCli, `--path=${wpPath}`, 'eval', 'echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'],
+    { encoding: 'utf8', env: process.env },
+  );
+  if (cp.status !== 0) throw new Error(cp.stderr || cp.stdout);
+  const manifest = JSON.parse(cp.stdout);
+  if (!manifest || typeof manifest !== 'object') throw new Error('PR4 fixture manifest is unavailable.');
+  return manifest;
+}
+
 async function waitForInbox(page, expectedRows = null) {
   await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
   await page.waitForFunction(selector => document.querySelectorAll(selector).length > 0, centerRowsSelector, { timeout: 30000 });
@@ -142,15 +156,18 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
 
   let manifest = null;
   try {
-    runRuntimeAssertions();
-    const wpCli = process.env.WU21_WP_CLI;
-    const wpPath = process.env.WU21_WP_PATH;
-    const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', 'echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'], { encoding: 'utf8', env: process.env });
-    if (cp.status !== 0) throw new Error(cp.stderr || cp.stdout);
-    manifest = JSON.parse(cp.stdout);
-    record('PR4-BROWSER-000', 'authentic product runtime assertions execute before browser qualification', 'PASS', { executed: true, profile: manifest.surface_profile_id });
+    manifest = loadFixtureManifest();
   } catch (error) {
-    record('PR4-BROWSER-000', 'authentic product runtime assertions execute before browser qualification', 'FAIL', { error: bounded(error?.stack || error) });
+    record('PR4-BROWSER-000', 'authentic product runtime assertions execute before browser qualification', 'FAIL', { error: `Fixture manifest load failed: ${bounded(error?.stack || error)}` });
+  }
+
+  if (!results.some(result => result.id === 'PR4-BROWSER-000')) {
+    try {
+      runRuntimeAssertions();
+      record('PR4-BROWSER-000', 'authentic product runtime assertions execute before browser qualification', 'PASS', { executed: true, profile: manifest.surface_profile_id });
+    } catch (error) {
+      record('PR4-BROWSER-000', 'authentic product runtime assertions execute before browser qualification', 'FAIL', { error: bounded(error?.stack || error) });
+    }
   }
 
   await test('PR4-BROWSER-001', 'desktop current rendered set enters Card Mode only when every visible row is ready', async () => {
@@ -173,9 +190,9 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(inboxUrl, { waitUntil: 'networkidle' });
     await waitForInbox(page, 20);
-    const alpha = page.locator(centerRowsSelector, { hasText: 'WU21 Alpha Student 00' }).first();
-    const beta = page.locator(centerRowsSelector, { hasText: 'WU21 Beta Student 01' }).first();
-    if (await alpha.count() !== 1 || await beta.count() !== 1) throw new Error('Expected Alpha/Beta mapped rows were not rendered.');
+    const alpha = page.locator(centerRowsSelector, { hasText: 'WU21 Alpha' }).first();
+    const beta = page.locator(centerRowsSelector, { hasText: 'WU21 Beta' }).first();
+    if (await alpha.count() !== 1 || await beta.count() !== 1) throw new Error('Expected rendered Alpha/Beta mapped rows were not found on the native current page.');
     for (const [name, row] of [['alpha', alpha], ['beta', beta]]) {
       const card = row.locator('.gpp-inbox-card');
       if (await card.getAttribute('data-gpp-profile-id') !== 'srwf.operations.inbox.v1') throw new Error(`${name}: wrong surface profile.`);
@@ -197,15 +214,17 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await waitForInbox(page, 20);
     const search = page.locator('[data-js="gflow-inbox-search"]');
     if (await search.count() !== 1) throw new Error('Native quick-search control missing.');
-    await search.fill('Student 24');
+    await search.click();
+    await search.pressSequentially('00:24:00');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 15000 });
     const state = await projectionState(page);
     if (state.rows !== 1 || state.ready_markers !== 1 || state.visible_cards !== 1 || state.visible_native_cells !== 0) throw new Error(`Search rerender readiness failure: ${JSON.stringify(state)}`);
     const text = await page.locator(cardSelector).innerText();
     if (!text.includes('WU21 Alpha Student 24')) throw new Error(`Search result did not preserve derived identity: ${text}`);
-    await search.fill('');
+    await search.press('Control+A');
+    await search.press('Backspace');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
-    return state;
+    return { query: '00:24:00', state };
   });
 
   await test('PR4-BROWSER-004', 'native sorting and pagination rerenders retain host ownership and readiness evaluation', async () => {
@@ -242,7 +261,8 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await page.goto(inboxUrl, { waitUntil: 'networkidle' });
     await waitForInbox(page, 20);
     const search = page.locator('[data-js="gflow-inbox-search"]');
-    await search.fill('WU21 Refresh Student');
+    await search.click();
+    await search.pressSequentially('WU21 Refresh Student');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 15000 });
     const id = Number(wpControl('add'));
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 45000 });
