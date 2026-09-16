@@ -74,7 +74,7 @@ async function submitAction(page, action) {
   await select.selectOption(action.value);
   const form = select.locator('xpath=ancestor::form[1]');
   if (await form.count() !== 1) throw new Error('Binding management select is not inside one settings form.');
-  const submit = form.locator('input[type="submit"], button[type="submit"]').first();
+  const submit = form.locator('input[type="submit"]:not([name="gpp_binding_row_action"]), button[type="submit"]:not([name="gpp_binding_row_action"])').first();
   if (await submit.count() !== 1) throw new Error('Gravity Forms settings submit control not found in the binding-management form.');
   await submit.click();
   await page.waitForLoadState('networkidle');
