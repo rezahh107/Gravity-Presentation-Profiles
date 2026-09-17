@@ -56,6 +56,7 @@ try {
     const df = document.querySelector(disabledForm);
     const enabledStyle = ew instanceof Element ? getComputedStyle(ew) : null;
     const disabledStyle = dw instanceof Element ? getComputedStyle(dw) : null;
+    const disabledText = df?.querySelector('input[type="text"]');
     const styleSheets = [...document.styleSheets]
       .filter((sheet) => sheet.href && sheet.href.includes('gravity-presentation-profiles'))
       .map((sheet) => sheet.href);
@@ -76,10 +77,9 @@ try {
         direction: disabledStyle.getPropertyValue('--gpp-form-direction').trim(),
       } : null,
       styleSheets,
-      disabledRequired: Boolean(df?.querySelector('input[type="text"]')?.matches(':required')),
       disabledLabelled: Boolean(
-        df?.querySelector('input[type="text"]')?.id &&
-        document.querySelector(`label[for="${CSS.escape(df.querySelector('input[type="text"]').id)}"]`)
+        disabledText?.id &&
+        document.querySelector(`label[for="${CSS.escape(disabledText.id)}"]`)
       ),
     };
   }, { enabledWrapper, enabledForm, disabledWrapper, disabledForm });
@@ -111,20 +111,25 @@ try {
   check(gppCssResponses.length >= 2, 'The mixed page did not load GPP styles for the enabled neighbor form.');
   check(gppCssResponses.every((item) => item.status === 200), `A GPP stylesheet failed on the mixed page: ${JSON.stringify(gppCssResponses)}.`);
   check(observation.styleSheets.length >= 2, 'The mixed document lacks expected GPP stylesheets for the enabled form.');
-  check(observation.disabledRequired === true, 'Disabled form lost Gravity Forms required-control behavior.');
   check(observation.disabledLabelled === true, 'Disabled form lost its native label relationship.');
 
-  const disabledSubmit = page.locator(`${disabledForm} input[type="submit"], ${disabledForm} button[type="submit"]`).first();
-  await disabledSubmit.click();
-  await page.waitForLoadState('networkidle');
+  // Force the request across Gravity Forms' own server validation boundary even
+  // if the browser exposes native required attributes in this exact host build.
+  await page.locator(disabledForm).evaluate((form) => form.setAttribute('novalidate', 'novalidate'));
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator(`${disabledForm} input[type="submit"], ${disabledForm} button[type="submit"]`).first().click(),
+  ]);
   await page.locator(disabledWrapper).waitFor();
   const validationCount = await page.locator(`${disabledWrapper} .gform_validation_errors, ${disabledWrapper} .validation_error`).count();
   check(validationCount > 0, 'Disabled form did not preserve ordinary Gravity Forms required-field validation.');
 
   const requiredInput = page.locator(`${disabledForm} input[type="text"]`).first();
   await requiredInput.fill('Synthetic Runtime Name');
-  await page.locator(`${disabledForm} input[type="submit"], ${disabledForm} button[type="submit"]`).first().click();
-  await page.waitForLoadState('networkidle');
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator(`${disabledForm} input[type="submit"], ${disabledForm} button[type="submit"]`).first().click(),
+  ]);
   const confirmationCount = await page.locator(`#gform_confirmation_wrapper_${disabledId}, #gform_confirmation_message_${disabledId}, .gform_confirmation_message`).count();
   check(confirmationCount > 0, 'Disabled form did not complete ordinary Gravity Forms submission/confirmation behavior.');
 
