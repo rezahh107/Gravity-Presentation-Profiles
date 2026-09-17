@@ -21,7 +21,7 @@
         box-sizing: border-box;
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
+        gap: 1.125rem;
         height: auto !important;
         min-height: 0 !important;
         width: 100% !important;
@@ -83,17 +83,21 @@
         "photo identity"
         "details details"
         "open open";
-    gap: 0.75rem 0.875rem;
+    gap: 0.875rem 0.9375rem;
     min-height: 208px;
     height: 100%;
-    padding: 1rem;
-    border: 1px solid #dcdcde;
+    padding: 1.375rem 1.5rem 1.125rem;
+    border: 1px solid #e4e7ec;
     border-radius: 10px;
     background: #fff;
-    color: #111827;
+    color: #172033;
     direction: rtl;
     text-align: right;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.85;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05);
 }
 
 .gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:focus .gpp-inbox-card,
@@ -115,8 +119,8 @@
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
-    background: #f0f6fc;
-    color: #1d4ed8;
+    background: #eef1f5;
+    color: #475467;
     font-size: 1.375rem;
     font-weight: 700;
 }
@@ -128,18 +132,22 @@
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__name {
     display: block;
-    margin-bottom: 0.3125rem;
+    margin-bottom: 0.1875rem;
     overflow-wrap: anywhere;
-    font-size: 1rem;
-    line-height: 1.5;
+    color: #172033;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.7;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
-    color: #50575e;
-    font-size: 0.8125rem;
+    gap: 0.5rem;
+    color: #475467;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.85;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__label::after {
@@ -150,30 +158,37 @@
     grid-area: details;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem 1rem;
+    gap: 0.375rem 1rem;
     margin: 0;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     min-width: 0;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dt {
-    margin: 0 0 0.125rem;
-    color: #646970;
-    font-size: 0.75rem;
+    margin: 0;
+    color: #475467;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.85;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dd {
     margin: 0;
     overflow-wrap: anywhere;
-    color: #1d2327;
-    font-size: 0.8125rem;
-    font-weight: 600;
+    color: #172033;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    line-height: 1.85;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__due--overdue dd {
-    color: #b32d2e;
+    color: #b42318;
     font-weight: 700;
 }
 
@@ -183,25 +198,45 @@
     justify-self: start;
     display: inline-flex;
     align-items: center;
-    min-height: 32px;
-    padding: 0 0.75rem;
+    min-height: 44px;
+    padding: 0.4375rem 1rem;
     border-radius: 6px;
     background: #1d4ed8;
     color: #fff;
-    font-size: 0.8125rem;
-    font-weight: 600;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    line-height: 1.8;
+}
+
+/*
+ * The native Gravity Flow quick-search control keeps its host width, identity,
+ * query behavior and existing radius. Only the admitted SRWF typography and
+ * palette are projected onto that host-owned control.
+ */
+.gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
+    height: auto;
+    min-height: 3rem;
+    padding-block: 0.625rem;
+    background: #fff;
+    border-color: #8690a1;
+    color: #172033;
+    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.85;
 }
 
 @media (max-width: 782px) {
     @supports selector(:has(*)) {
         .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
             grid-template-columns: minmax(0, 1fr);
+            gap: 0.875rem;
         }
     }
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
         grid-template-columns: 56px minmax(0, 1fr);
-        padding: 0.875rem;
+        padding: 1.125rem 1rem;
     }
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__details {
