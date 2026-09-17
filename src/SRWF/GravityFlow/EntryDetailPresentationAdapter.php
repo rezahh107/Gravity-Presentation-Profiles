@@ -334,7 +334,21 @@ final class EntryDetailPresentationAdapter {
 
         $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
         $files = $field->to_array( $raw );
-        if ( ! is_array( $files ) || empty( $files[0] ) || ! is_scalar( $files[0] ) ) {
+        $files = is_array( $files )
+            ? array_values(
+                array_filter(
+                    $files,
+                    static function ( $file ) {
+                        return is_scalar( $file ) && '' !== trim( (string) $file );
+                    }
+                )
+            )
+            : array();
+
+        // documents.report_card has one authoritative-file meaning. Multiple
+        // host files require an explicit authority selection rule; choosing the
+        // first would silently manufacture that rule.
+        if ( 1 !== count( $files ) ) {
             return null;
         }
 
