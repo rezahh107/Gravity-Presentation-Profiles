@@ -77,7 +77,7 @@ function assertVisualFidelity(actual, reference, label) {
   assertStyleEqual(actual.openAction, reference.action, 'fontWeight', `${label}: action must use admitted 500 weight.`);
   assertStyleEqual(actual.openAction, reference.action, 'backgroundColor', `${label}: action background must match A/B primary.`);
   assertStyleEqual(actual.openAction, reference.action, 'borderRadius', `${label}: action radius must match A/B.`);
-  assert.ok(actual.openAction.rect.height >= 44, `${label}: open action must retain the A/B minimum rendered height.`);
+  assertClose(actual.openAction.rect.height, reference.action.rect.height, 0.01, `${label}: action rendered height must match A/B`);
 
   assertStyleEqual(actual.photo, reference.photo, 'backgroundColor', `${label}: photo/fallback neutral surface must match A/B.`);
   assertStyleEqual(actual.photo, reference.photo, 'borderColor', `${label}: photo border must match A/B.`);
