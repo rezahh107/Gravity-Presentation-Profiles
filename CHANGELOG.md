@@ -8,6 +8,7 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ### Added
 
+- Explicit owner-facing semantics for the existing per-form GPP presentation `enabled` switch, preserving profile configuration while OFF and adding a non-blocking exact-token warning when `srwf-registration-theme` indicates a potential Gravity Theme Builder overlap.
 - Explicit production adoption for the shipped SRWF Gravity Flow Inbox profile, reusing the existing EnvironmentBindingSet and conflict-safe VisualPackageLifecycle rather than introducing a second mapping or activation authority.
 - Source/version-bound Inbox runtime availability qualification for mapped Gravity Forms fields, authentic `date_created` entry metadata, and Gravity Flow's current-step API, with authorization deliberately left to Gravity Flow on every request.
 - Frontend reachability for the existing manual `به‌روزرسانی کارهای من` recovery control on the supported Gravity Flow Inbox, retaining normal same-page reload behavior and native Live Refresh ownership.
