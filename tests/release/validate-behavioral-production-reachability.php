@@ -35,6 +35,16 @@ $binding_map = static function ( $artifact ) {
     }
     return $result;
 };
+$claim_map = static function ( $artifact ) {
+    $result = array();
+    foreach ( (array) ( $artifact['runtime_claims'] ?? array() ) as $claim ) {
+        if ( ! is_array( $claim ) || ! isset( $claim['semantic_slot_key'], $claim['claim'] ) ) {
+            continue;
+        }
+        $result[ $claim['semantic_slot_key'] . '|' . $claim['claim'] ] = $claim;
+    }
+    return $result;
+};
 $normalized_unrelated = static function ( $artifact ) use ( $binding_map ) {
     $bindings = $binding_map( $artifact );
     unset( $bindings['student.first_name'] );
@@ -47,6 +57,8 @@ $pre           = $load( 'preflight' );
 $setup         = $load( 'after-setup' );
 $repair        = $load( 'after-repair' );
 $rerun         = $load( 'after-rerun' );
+$inbox         = $load( 'after-inbox' );
+$inbox_rerun   = $load( 'after-inbox-rerun' );
 $runtime       = $load( 'runtime' );
 $artifact_meta = $load( 'artifact-identity' );
 
@@ -63,6 +75,7 @@ echo "GPP_BEHAVIORAL_STEP exact_zip_installed PASS\n";
 
 $assert( false === $pre['visual']['operations_package_installed'], 'Preflight found pre-installed GPP Operations Package state.' );
 $assert( null === $pre['visual']['print_activation'], 'Preflight found pre-existing Print activation.' );
+$assert( null === $pre['visual']['inbox_activation'], 'Preflight found pre-existing Inbox activation.' );
 $assert( null === $pre['binding']['activation'], 'Preflight found pre-existing active binding context.' );
 $assert( null === $pre['binding']['student_first_name'], 'Preflight found pre-repaired student.first_name.' );
 echo "GPP_BEHAVIORAL_STEP clean_state_observed PASS\n";
@@ -136,7 +149,46 @@ $assert( $rerun['binding']['artifact_hash'] === $repair['binding']['artifact_has
 $assert( $rerun['binding']['student_first_name'] === $repair['binding']['student_first_name'], 'Operations Setup rerun reset the explicit repaired mapping.' );
 $assert( $rerun['binding']['artifact'] === $repair['binding']['artifact'], 'Operations Setup rerun silently rewrote unrelated binding/runtime state.' );
 $assert( $rerun['visual']['print_activation'] === $repair['visual']['print_activation'], 'Operations Setup rerun changed compatible Print activation.' );
+$assert( null === $rerun['visual']['inbox_activation'], 'Print setup rerun silently activated Inbox.' );
 echo "GPP_BEHAVIORAL_STEP rerun_preservation_observed PASS\n";
+
+// The explicit Inbox settings action is exercised only after Print and mapping
+// are already established. It may legitimately publish one new immutable
+// binding version for host-managed source qualification, but it must preserve
+// the existing binding set identity, explicit field mapping, and Print state.
+$assert( 'srwf.operations.inbox.v1' === ( $inbox['visual']['inbox_activation']['profile_id'] ?? null ), 'Inbox settings action did not activate the shipped Inbox profile.' );
+$assert( '1.0.1' === ( $inbox['visual']['inbox_activation']['package_version'] ?? null ), 'Inbox settings action activated the wrong Operations Package version.' );
+$assert( $inbox['visual']['print_activation'] === $rerun['visual']['print_activation'], 'Inbox settings action changed the compatible Print activation.' );
+$assert( ( $inbox['binding']['activation']['binding_set_id'] ?? null ) === ( $rerun['binding']['activation']['binding_set_id'] ?? null ), 'Inbox qualification replaced the authoritative EnvironmentBindingSet identity.' );
+$assert( ( $inbox['binding']['activation']['binding_set_version'] ?? null ) !== ( $rerun['binding']['activation']['binding_set_version'] ?? null ), 'First Inbox qualification did not publish the legitimate host-source state change.' );
+$assert( $inbox['binding']['student_first_name'] === $rerun['binding']['student_first_name'], 'Inbox setup changed the explicit student.first_name mapping.' );
+
+$inbox_bindings = $binding_map( $inbox['binding']['artifact'] );
+$inbox_claims   = $claim_map( $inbox['binding']['artifact'] );
+$created        = $inbox_bindings['entry.created_at'] ?? null;
+$current_step   = $inbox_bindings['workflow.current_step'] ?? null;
+$assert( is_array( $created ) && 'PROVEN' === ( $created['state'] ?? null ), 'Inbox setup did not prove entry.created_at binding.' );
+$assert( 'gravity_forms.entry_meta' === ( $created['source_ref']['type'] ?? null ) && 'date_created' === ( $created['source_ref']['meta_key'] ?? null ), 'entry.created_at is not bound to admitted Gravity Forms date_created metadata.' );
+$assert( is_array( $current_step ) && 'PROVEN' === ( $current_step['state'] ?? null ), 'Inbox setup did not prove workflow.current_step binding.' );
+$assert( 'gravity_flow.state' === ( $current_step['source_ref']['type'] ?? null ) && 'current_step' === ( $current_step['source_ref']['state_key'] ?? null ), 'workflow.current_step is not bound to admitted Gravity Flow current_step state.' );
+foreach ( array( 'entry.created_at', 'workflow.current_step' ) as $slot ) {
+    $claim = $inbox_claims[ $slot . '|availability' ] ?? null;
+    $assert( is_array( $claim ) && 'PROVEN' === ( $claim['evidence_state'] ?? null ), 'Inbox setup did not prove source-bound availability for ' . $slot . '.' );
+    $assert( ! empty( $claim['evidence_refs'] ) && is_array( $claim['evidence_refs'] ), 'Inbox availability proof has no evidence reference for ' . $slot . '.' );
+}
+foreach ( (array) ( $inbox['binding']['artifact']['runtime_claims'] ?? array() ) as $claim ) {
+    $assert( 'authorization' !== ( $claim['claim'] ?? null ), 'Inbox readiness evidence attempted to own Gravity Flow authorization.' );
+}
+echo "GPP_BEHAVIORAL_STEP inbox_settings_activation_observed PASS\n";
+echo "GPP_BEHAVIORAL_STEP inbox_host_sources_qualified PASS\n";
+
+$assert( $inbox_rerun['visual']['inbox_activation'] === $inbox['visual']['inbox_activation'], 'Idempotent Inbox rerun changed compatible Inbox activation.' );
+$assert( $inbox_rerun['visual']['print_activation'] === $inbox['visual']['print_activation'], 'Idempotent Inbox rerun changed Print activation.' );
+$assert( $inbox_rerun['binding']['activation'] === $inbox['binding']['activation'], 'Idempotent Inbox rerun created unnecessary binding-version churn.' );
+$assert( $inbox_rerun['binding']['artifact_hash'] === $inbox['binding']['artifact_hash'], 'Idempotent Inbox rerun rewrote the active binding artifact.' );
+$assert( $inbox_rerun['binding']['artifact'] === $inbox['binding']['artifact'], 'Idempotent Inbox rerun changed mapping/readiness state.' );
+$assert( $inbox_rerun['binding']['student_first_name'] === $inbox['binding']['student_first_name'], 'Idempotent Inbox rerun regressed an explicit mapping.' );
+echo "GPP_BEHAVIORAL_STEP inbox_settings_idempotency_observed PASS\n";
 
 $assert( 'srwf.operations.print-dossier.v1' === ( $runtime['runtime']['print_profile_id'] ?? null ), 'Production Print profile resolver did not resolve the product-created profile.' );
 $assert( 'ready' === ( $runtime['runtime']['binding_context_status'] ?? null ), 'Production Print model did not resolve the persisted binding context.' );
@@ -156,7 +208,7 @@ echo "GPP_BEHAVIORAL_NEGATIVE_D_PASS real_binding_context_persistence_is_mandato
 echo "GPP_BEHAVIORAL_NEGATIVE_E_PASS repaired_mapping_preservation_is_mandatory\n";
 
 $summary = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'evidence_class' => 'BEHAVIORAL_SHIPPABLE_ARTIFACT',
     'artifact' => $artifact_meta,
     'host' => array(
@@ -171,11 +223,13 @@ $summary = array(
     'before_setup' => array(
         'operations_package_installed' => $pre['visual']['operations_package_installed'],
         'print_activation' => $pre['visual']['print_activation'],
+        'inbox_activation' => $pre['visual']['inbox_activation'],
         'binding_activation' => $pre['binding']['activation'],
     ),
     'after_setup' => array(
         'operations_package_installed' => $setup['visual']['operations_package_installed'],
         'print_activation' => $setup['visual']['print_activation'],
+        'inbox_activation' => $setup['visual']['inbox_activation'],
         'binding_activation' => $setup['binding']['activation'],
         'binding_artifact_hash' => $setup['binding']['artifact_hash'],
         'student_first_name' => $setup['binding']['student_first_name'],
@@ -189,9 +243,26 @@ $summary = array(
     ),
     'after_setup_rerun' => array(
         'print_activation' => $rerun['visual']['print_activation'],
+        'inbox_activation' => $rerun['visual']['inbox_activation'],
         'binding_activation' => $rerun['binding']['activation'],
         'binding_artifact_hash' => $rerun['binding']['artifact_hash'],
         'student_first_name' => $rerun['binding']['student_first_name'],
+    ),
+    'after_inbox_setup' => array(
+        'print_activation' => $inbox['visual']['print_activation'],
+        'inbox_activation' => $inbox['visual']['inbox_activation'],
+        'binding_activation' => $inbox['binding']['activation'],
+        'binding_artifact_hash' => $inbox['binding']['artifact_hash'],
+        'student_first_name' => $inbox['binding']['student_first_name'],
+        'entry_created_at' => $created,
+        'workflow_current_step' => $current_step,
+    ),
+    'after_inbox_rerun' => array(
+        'print_activation' => $inbox_rerun['visual']['print_activation'],
+        'inbox_activation' => $inbox_rerun['visual']['inbox_activation'],
+        'binding_activation' => $inbox_rerun['binding']['activation'],
+        'binding_artifact_hash' => $inbox_rerun['binding']['artifact_hash'],
+        'student_first_name' => $inbox_rerun['binding']['student_first_name'],
     ),
     'runtime' => $runtime['runtime'],
     'status' => array(
@@ -201,6 +272,9 @@ $summary = array(
         'real_persisted_setup_state' => 'PASS',
         'row_mapping_product_path' => 'PASS',
         'rerun_preservation' => 'PASS',
+        'inbox_settings_action' => 'PASS',
+        'inbox_host_source_qualification' => 'PASS',
+        'inbox_idempotent_rerun' => 'PASS',
         'runtime_resolution' => 'PASS',
         'behavioral_production_reachability' => 'PASS',
         'target_production_acceptance' => 'NOT_PROVEN',
