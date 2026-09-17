@@ -15,6 +15,7 @@ execFileSync(
 await import('./legacy-browser-tests.mjs');
 await import('./declarative-browser-tests.mjs');
 await import('./sparse-declarative-browser-tests.mjs');
+await import('./presentation-ownership-browser-tests.mjs');
 
 execFileSync(
   'php',
