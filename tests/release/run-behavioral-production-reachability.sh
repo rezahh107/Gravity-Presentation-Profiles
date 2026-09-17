@@ -106,6 +106,8 @@ curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-binary @"$EVIDENCE_DIR/inbox-payload.txt" \
   "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-inbox.html"
+grep -Fq 'data-gpp-inbox-setup-result="completed"' "$EVIDENCE_DIR/settings-after-inbox.html"
+grep -Fq 'Inbox setup/adoption completed for' "$EVIDENCE_DIR/settings-after-inbox.html"
 GPP_BEHAVIOR_STATE_COMMAND=after-inbox php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-inbox.json"
 
 # A second identical Inbox settings submission must preserve compatible state
@@ -116,6 +118,7 @@ curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-binary @"$EVIDENCE_DIR/inbox-rerun-payload.txt" \
   "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-inbox-rerun.html"
+grep -Fq 'data-gpp-inbox-setup-result="completed"' "$EVIDENCE_DIR/settings-after-inbox-rerun.html"
 GPP_BEHAVIOR_STATE_COMMAND=after-inbox-rerun php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-inbox-rerun.json"
 
 GPP_BEHAVIOR_STATE_COMMAND=runtime php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/runtime.json"
