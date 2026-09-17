@@ -58,6 +58,7 @@ $patterns = array(
     'approval_actions_method'            => 'function workflow_detail_status_box_actions',
     'approval_get_actions'               => 'function get_actions',
     'status_box_method'                  => 'function workflow_detail_status_box',
+    'user_input_step_class'               => 'class Gravity_Flow_Step_User_Input',
 );
 
 $occurrences = array();
@@ -129,7 +130,7 @@ foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_
 $selected_method_source = array();
 $selected_methods = array(
     'Gravity_Flow_API' => array( 'get_current_step', 'get_status', 'get_timeline' ),
-    'Gravity_Flow_Entry_Detail' => array( 'entry_detail', 'is_permission_granted', 'can_update', 'render_instructions' ),
+    'Gravity_Flow_Entry_Detail' => array( 'entry_detail', 'is_permission_granted', 'can_update', 'maybe_display_back_link', 'maybe_show_instructions', 'maybe_show_timeline' ),
     'Gravity_Flow_Step_Approval' => array( 'get_actions', 'workflow_detail_box', 'workflow_detail_status_box_actions', 'workflow_detail_status_box_status' ),
 );
 foreach ( $selected_methods as $class => $methods ) {
