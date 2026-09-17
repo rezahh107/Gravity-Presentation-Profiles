@@ -99,18 +99,38 @@ final class InboxPresentationAdapter {
             return;
         }
 
+        $presentation_path = 'assets/css/srwf-gravity-flow-inbox.css';
+        $native_path = 'assets/css/srwf-gravity-flow-inbox-native.css';
+        $plugin_root = dirname( GPP_PLUGIN_FILE );
+
         wp_enqueue_style(
             self::STYLE_HANDLE,
-            plugins_url( 'assets/css/srwf-gravity-flow-inbox.css', GPP_PLUGIN_FILE ),
+            plugins_url( $presentation_path, GPP_PLUGIN_FILE ),
             array(),
-            '1.0.0'
+            self::assetVersion( $plugin_root . '/' . $presentation_path )
         );
         wp_enqueue_style(
             self::NATIVE_STYLE_HANDLE,
-            plugins_url( 'assets/css/srwf-gravity-flow-inbox-native.css', GPP_PLUGIN_FILE ),
+            plugins_url( $native_path, GPP_PLUGIN_FILE ),
             array( self::STYLE_HANDLE ),
-            '1.0.0'
+            self::assetVersion( $plugin_root . '/' . $native_path )
         );
+    }
+
+    private static function assetVersion( $absolute_path ) {
+        if ( ! is_string( $absolute_path ) || '' === $absolute_path || ! is_file( $absolute_path ) || ! is_readable( $absolute_path ) ) {
+            return false;
+        }
+
+        if ( function_exists( 'hash_file' ) ) {
+            $hash = hash_file( 'sha256', $absolute_path );
+            if ( is_string( $hash ) && '' !== $hash ) {
+                return substr( $hash, 0, 16 );
+            }
+        }
+
+        $modified = filemtime( $absolute_path );
+        return false === $modified ? false : (string) $modified;
     }
 
     private static function model() {
