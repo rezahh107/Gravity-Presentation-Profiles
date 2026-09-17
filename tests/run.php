@@ -33,6 +33,7 @@ $cases = array(
     'inbox-production-activation.php',
     'inbox-settings-contract.php',
     'inbox-field-presentation.php',
+    'inbox-asset-versioning.php',
     'entry-detail-presentation-model.php',
     'entry-detail-production-activation.php',
     'print-dossier-presentation-model.php',
