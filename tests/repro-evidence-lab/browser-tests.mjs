@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 await import('./browser-tests-core.mjs');
+await import('./pr33-visual-fidelity-browser-tests.mjs');
 
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 if (artifactDir) {
-  for (const file of ['pr4-inbox-sizing-measurements.json', 'wu17-browser-results.json']) {
+  for (const file of ['pr4-inbox-sizing-measurements.json', 'wu17-browser-results.json', 'pr33-visual-baseline.json']) {
     const evidencePath = path.join(artifactDir, file);
     if (fs.existsSync(evidencePath)) {
       process.stdout.write(`PR4_EVIDENCE_${file.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}=${fs.readFileSync(evidencePath, 'utf8').trim()}\n`);
