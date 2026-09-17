@@ -24,6 +24,7 @@ final class InboxPresentationAdapter {
     private static $model_loaded = false;
     private static $model = null;
     private static $form_cache = array();
+    private static $presentation_resolver = null;
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
@@ -42,6 +43,7 @@ final class InboxPresentationAdapter {
         self::$model_loaded = false;
         self::$model = null;
         self::$form_cache = array();
+        self::$presentation_resolver = null;
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -251,25 +253,34 @@ final class InboxPresentationAdapter {
         );
 
         $name = $full_name['value'];
-        $national_id = self::slotValue( $model, $entry, 'student.national_id' );
-        $photo = self::slotValue( $model, $entry, 'student.photo' );
-        $grade_group = self::slotValue( $model, $entry, 'education.grade_group' );
+        $national_id = self::slotPresentation( $model, $entry, 'student.national_id' );
+        $photo = self::slotPhoto( $model, $entry, 'student.photo' );
+        $grade_group = self::slotPresentation( $model, $entry, 'education.grade_group' );
         $step = self::slotValue( $model, $entry, 'workflow.current_step' );
         $created = self::slotValue( $model, $entry, 'entry.created_at' );
-        $school = self::slotValue( $model, $entry, 'school.name' );
+        $school = self::slotPresentation( $model, $entry, 'school.name' );
         $due = self::slotValue( $model, $entry, 'workflow.due_at' );
 
         $name_display = self::presentText( $name );
-        $national_display = null === $national_id ? null : PersianDateFormatter::persianDigits( $national_id );
+        $national_display = null === $national_id['display_text'] ? null : PersianDateFormatter::persianDigits( $national_id['display_text'] );
         $created_display = null === $created ? null : PersianDateFormatter::formatDateTime( $created );
         $due_display = null === $due ? null : PersianDateFormatter::formatDateTime( $due );
         $due_timestamp = null === $due ? null : PersianDateFormatter::timestamp( $due );
         $is_overdue = null !== $due_timestamp && $due_timestamp < time();
 
-        // Keep native-searchable raw values in the host-owned row value. The
-        // text is visually hidden; AG Grid remains the sole search authority.
+        // The host-owned AG Grid quick filter still owns search. Enrich only
+        // this presentation cell with safe text: human display labels first,
+        // plus raw authoritative values where they are materially different.
         $search_values = array_filter(
-            array( $name, $national_id, $grade_group, $step, $created, $school, $due ),
+            array(
+                $name,
+                $national_id['search_text'],
+                $grade_group['search_text'],
+                $step,
+                $created,
+                $school['search_text'],
+                $due,
+            ),
             static function ( $item ) { return null !== $item && '' !== (string) $item; }
         );
 
@@ -282,8 +293,8 @@ final class InboxPresentationAdapter {
         $html .= '<span class="gpp-inbox-card__meta"><span class="gpp-inbox-card__label">' . esc_html__( 'کد ملی', 'gravity-presentation-profiles' ) . '</span><span class="gpp-inbox-card__national-id">' . esc_html( null === $national_display ? '—' : $national_display ) . '</span></span>';
         $html .= '</div>';
         $html .= '<dl class="gpp-inbox-card__details">';
-        $html .= self::detailMarkup( 'پایه / گروه', $grade_group, 'gpp-inbox-card__grade-group' );
-        $html .= self::detailMarkup( 'مدرسه', $school, 'gpp-inbox-card__school' );
+        $html .= self::detailMarkup( 'پایه / گروه', $grade_group['display_text'], 'gpp-inbox-card__grade-group' );
+        $html .= self::detailMarkup( 'مدرسه', $school['display_text'], 'gpp-inbox-card__school' );
         $html .= self::detailMarkup( 'مرحله جاری', $step, 'gpp-inbox-card__step' );
         $html .= self::detailMarkup( 'تاریخ ثبت', $created_display, 'gpp-inbox-card__created-at' );
         if ( null !== $due_display ) {
@@ -360,6 +371,38 @@ final class InboxPresentationAdapter {
         return '<span hidden class="gpp-inbox-card__readiness gpp-inbox-card__readiness--' . $state . '" data-gpp-readiness="' . $state . '" aria-hidden="true"></span>';
     }
 
+    private static function slotPresentation( InboxPresentationModel $model, $entry, $slot ) {
+        $empty = array( 'raw' => null, 'display_text' => null, 'raw_search_text' => null, 'search_text' => null );
+        $resolved = $model->resolve( $entry, $slot );
+        if ( empty( $resolved['resolved'] ) || empty( $resolved['source_ref'] ) ) {
+            return $empty;
+        }
+
+        $source = $resolved['source_ref'];
+        if ( 'gravity_forms.field' === $source['type'] ) {
+            $form = self::formForEntry( $entry );
+            if ( is_array( $form ) ) {
+                return self::presentationResolver()->resolveText( $source, $form, $entry );
+            }
+        }
+
+        $value = self::readSourceValue( $source, $entry );
+        $text = self::presentText( is_scalar( $value ) ? $value : null );
+        return array( 'raw' => $value, 'display_text' => $text, 'raw_search_text' => $text, 'search_text' => $text );
+    }
+
+    private static function slotPhoto( InboxPresentationModel $model, $entry, $slot ) {
+        $resolved = $model->resolve( $entry, $slot );
+        if ( empty( $resolved['resolved'] ) || empty( $resolved['source_ref'] ) ) {
+            return null;
+        }
+        $form = self::formForEntry( $entry );
+        if ( ! is_array( $form ) ) {
+            return null;
+        }
+        return self::presentationResolver()->resolvePhoto( $resolved['source_ref'], $form, $entry );
+    }
+
     private static function slotValue( InboxPresentationModel $model, $entry, $slot ) {
         $resolved = $model->resolve( $entry, $slot );
         if ( empty( $resolved['resolved'] ) || empty( $resolved['source_ref'] ) ) {
@@ -409,6 +452,24 @@ final class InboxPresentationAdapter {
         return null;
     }
 
+    private static function formForEntry( $entry ) {
+        if ( ! is_array( $entry ) || empty( $entry['form_id'] ) || ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_form' ) ) {
+            return null;
+        }
+        $form_id = (int) $entry['form_id'];
+        if ( ! array_key_exists( $form_id, self::$form_cache ) ) {
+            self::$form_cache[ $form_id ] = \GFAPI::get_form( $form_id );
+        }
+        return is_array( self::$form_cache[ $form_id ] ) ? self::$form_cache[ $form_id ] : null;
+    }
+
+    private static function presentationResolver() {
+        if ( null === self::$presentation_resolver ) {
+            self::$presentation_resolver = new InboxFieldPresentationResolver();
+        }
+        return self::$presentation_resolver;
+    }
+
     private static function sourceStillExists( $source, $entry ) {
         if ( ! is_array( $source ) || empty( $source['type'] ) ) {
             return false;
@@ -418,11 +479,7 @@ final class InboxPresentationAdapter {
             if ( ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_form' ) || ! method_exists( 'GFAPI', 'get_field' ) ) {
                 return false;
             }
-            $form_id = (int) $entry['form_id'];
-            if ( ! array_key_exists( $form_id, self::$form_cache ) ) {
-                self::$form_cache[ $form_id ] = \GFAPI::get_form( $form_id );
-            }
-            $form = self::$form_cache[ $form_id ];
+            $form = self::formForEntry( $entry );
             if ( ! is_array( $form ) ) {
                 return false;
             }
@@ -458,8 +515,8 @@ final class InboxPresentationAdapter {
     }
 
     private static function photoMarkup( $photo, $name ) {
-        if ( null !== $photo ) {
-            $url = esc_url( $photo );
+        if ( is_array( $photo ) && 'resolved' === ( isset( $photo['status'] ) ? $photo['status'] : null ) && ! empty( $photo['url'] ) ) {
+            $url = esc_url( $photo['url'] );
             if ( '' !== $url ) {
                 return '<img class="gpp-inbox-card__photo-image" src="' . $url . '" alt="" loading="lazy" />';
             }
