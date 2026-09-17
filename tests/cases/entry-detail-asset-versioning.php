@@ -43,11 +43,13 @@ gpp_assert_same( 1, count( $GLOBALS['gpp_entry_detail_asset_scripts'] ), 'Entry 
 
 $plugin_root = dirname( GPP_PLUGIN_FILE );
 $contracts = array(
-    $GLOBALS['gpp_entry_detail_asset_styles'][0] => 'assets/css/srwf-gravity-flow-entry-detail.css',
-    $GLOBALS['gpp_entry_detail_asset_scripts'][0] => 'assets/js/srwf-gravity-flow-entry-detail.js',
+    array( 'asset' => $GLOBALS['gpp_entry_detail_asset_styles'][0], 'path' => 'assets/css/srwf-gravity-flow-entry-detail.css' ),
+    array( 'asset' => $GLOBALS['gpp_entry_detail_asset_scripts'][0], 'path' => 'assets/js/srwf-gravity-flow-entry-detail.js' ),
 );
 
-foreach ( $contracts as $asset => $path ) {
+foreach ( $contracts as $contract ) {
+    $asset = $contract['asset'];
+    $path = $contract['path'];
     $hash = hash_file( 'sha256', $plugin_root . '/' . $path );
     gpp_assert_true( is_string( $hash ) && '' !== $hash, 'Entry Detail shipped asset hash must be readable.' );
     gpp_assert_same( substr( $hash, 0, 16 ), $asset['version'], 'Entry Detail cache key must derive from exact shipped bytes.' );
