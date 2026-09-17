@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,10 +32,6 @@ if (!manifest?.frontend_inbox_url) throw new Error('PR33 frontend Inbox fixture 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const observations = {};
-
-function rounded(value) {
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
-}
 
 async function waitForInbox(expectedRows = null) {
   await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
@@ -161,12 +158,21 @@ async function captureActual({ label, url, width, height = 1100, zoom200 = false
   return measurement;
 }
 
-async function measureReference(label, surface, width, height = 1100) {
-  await page.setViewportSize({ width, height });
-  await page.goto(pathToFileURL(referencePath).href, { waitUntil: 'load' });
+async function activateReferenceSurface(surface) {
   await page.locator(`[data-surface="${surface}"]`).click();
-  await page.evaluate(async () => { if (document.fonts?.ready) await document.fonts.ready; });
-  const measurement = await page.evaluate(labelText => {
+  await page.waitForFunction(expectedSurface => {
+    const control = document.querySelector(`[data-surface="${expectedSurface}"]`);
+    const inbox = document.querySelector('#inbox-view');
+    return control?.getAttribute('aria-pressed') === 'true' && inbox && !inbox.hidden;
+  }, surface);
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
+async function collectReferenceMeasurement(label) {
+  return page.evaluate(labelText => {
     const rect = element => {
       if (!element) return null;
       const r = element.getBoundingClientRect();
@@ -177,6 +183,7 @@ async function measureReference(label, surface, width, height = 1100) {
       const c = getComputedStyle(element);
       return {
         display: c.display,
+        visibility: c.visibility,
         gap: c.gap,
         gridTemplateColumns: c.gridTemplateColumns,
         paddingTop: c.paddingTop,
@@ -195,36 +202,118 @@ async function measureReference(label, surface, width, height = 1100) {
         minHeight: c.minHeight,
       };
     };
-    const describe = selector => {
-      const element = document.querySelector(selector);
-      return element ? { selector, rect: rect(element), style: style(element) } : null;
+    const isRenderedVisible = element => {
+      if (!element || !element.isConnected) return false;
+      let current = element;
+      while (current) {
+        const computed = getComputedStyle(current);
+        if (computed.display === 'none' || computed.visibility === 'hidden' || computed.visibility === 'collapse') return false;
+        current = current.parentElement;
+      }
+      const r = element.getBoundingClientRect();
+      return element.getClientRects().length > 0 && r.width > 0 && r.height > 0;
     };
-    const cards = [...document.querySelectorAll('#inbox-view .case-card')];
+    const describeElement = (element, selector = null) => element ? {
+      selector,
+      rect: rect(element),
+      style: style(element),
+      visible: isRenderedVisible(element),
+    } : null;
+    const describeGlobal = selector => describeElement(document.querySelector(selector), selector);
+
+    const allCards = [...document.querySelectorAll('#inbox-view .case-card')];
+    const visibleCards = allCards.filter(isRenderedVisible);
+    if (visibleCards.length === 0) throw new Error('VISIBLE_REFERENCE_CARD_NOT_FOUND');
+
+    const selectedCard = visibleCards[0];
+    const secondCard = visibleCards[1] || null;
+    const selectedIndex = allCards.indexOf(selectedCard);
+    const secondIndex = secondCard ? allCards.indexOf(secondCard) : null;
+    const owned = selector => {
+      const element = selectedCard.querySelector(selector);
+      if (!element) return null;
+      return {
+        ...describeElement(element, selector),
+        belongsToSelectedCard: element.closest('.case-card') === selectedCard,
+      };
+    };
+
     return {
       label: labelText,
       viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
-      stage: describe('.stage'),
-      inboxView: describe('#inbox-view'),
-      pageHeading: describe('#inbox-view .page-heading'),
-      searchRow: describe('#inbox-view .search-row'),
-      search: describe('#inbox-view input[type="search"]'),
-      grid: describe('#inbox-view .case-grid'),
-      card1: cards[0] ? { rect: rect(cards[0]), style: style(cards[0]) } : null,
-      card2: cards[1] ? { rect: rect(cards[1]), style: style(cards[1]) } : null,
-      photo: describe('#inbox-view .avatar'),
-      identity: describe('#inbox-view .identity-mini'),
-      name: describe('#inbox-view .identity-mini h2'),
-      identifier: describe('#inbox-view .identity-mini .idline'),
-      meta: describe('#inbox-view .card-meta'),
-      detailRow: describe('#inbox-view .card-meta > div'),
-      detailLabel: describe('#inbox-view .card-meta dt'),
-      detailValue: describe('#inbox-view .card-meta dd'),
-      action: describe('#inbox-view .card-footer .btn'),
+      selection: {
+        allCardCount: allCards.length,
+        visibleCardCount: visibleCards.length,
+        domFirstCase: allCards[0]?.dataset.case ?? null,
+        domFirstVisible: isRenderedVisible(allCards[0]),
+        primaryCase: selectedCard.dataset.case ?? null,
+        primaryDomIndex: selectedIndex,
+        primaryVisible: isRenderedVisible(selectedCard),
+        hiddenCardsBeforePrimary: allCards.slice(0, selectedIndex).filter(card => !isRenderedVisible(card)).length,
+        secondCase: secondCard?.dataset.case ?? null,
+        secondDomIndex: secondIndex,
+        secondVisible: secondCard ? isRenderedVisible(secondCard) : null,
+      },
+      stage: describeGlobal('.stage'),
+      inboxView: describeGlobal('#inbox-view'),
+      pageHeading: describeGlobal('#inbox-view .page-heading'),
+      searchRow: describeGlobal('#inbox-view .search-row'),
+      search: describeGlobal('#inbox-view input[type="search"]'),
+      grid: describeGlobal('#inbox-view .case-grid'),
+      card1: describeElement(selectedCard, '#inbox-view .case-card:visible-primary'),
+      card2: describeElement(secondCard, '#inbox-view .case-card:visible-secondary'),
+      photo: owned('.avatar'),
+      identity: owned('.identity-mini'),
+      name: owned('.identity-mini h2'),
+      identifier: owned('.identity-mini .idline'),
+      meta: owned('.card-meta'),
+      detailRow: owned('.card-meta > div'),
+      detailLabel: owned('.card-meta dt'),
+      detailValue: owned('.card-meta dd'),
+      action: owned('.card-footer .btn'),
     };
   }, label);
+}
+
+async function measureReference(label, surface, width, height = 1100) {
+  await page.setViewportSize({ width, height });
+  await page.goto(pathToFileURL(referencePath).href, { waitUntil: 'load' });
+  await activateReferenceSurface(surface);
+  const measurement = await collectReferenceMeasurement(label);
   observations[label] = measurement;
   await page.screenshot({ path: path.join(artifactDir, `pr33-${label}.png`), fullPage: true });
   return measurement;
+}
+
+function assertReferenceGeometry(measurement, label) {
+  assert.equal(measurement.selection.primaryVisible, true, `${label} primary reference card must be visibly rendered.`);
+  assert.ok(measurement.card1?.rect?.width > 0, `${label} primary reference card width must be non-zero.`);
+  assert.ok(measurement.card1?.rect?.height > 0, `${label} primary reference card height must be non-zero.`);
+  for (const key of ['photo', 'identity', 'name', 'identifier', 'detailLabel', 'detailValue', 'action']) {
+    const value = measurement[key];
+    assert.ok(value, `${label} ${key} must exist in the selected reference card.`);
+    assert.equal(value.belongsToSelectedCard, true, `${label} ${key} must belong to the selected primary card.`);
+    assert.ok(value.rect.width > 0 && value.rect.height > 0, `${label} ${key} must have non-zero rendered geometry.`);
+  }
+  if (measurement.card2) {
+    assert.equal(measurement.selection.secondVisible, true, `${label} second reference card must come from the visible-card set.`);
+    assert.ok(measurement.card2.rect.width > 0 && measurement.card2.rect.height > 0, `${label} second reference card must have non-zero geometry.`);
+  }
+}
+
+async function assertNoVisibleReferenceCardFailsClosed(surface) {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(pathToFileURL(referencePath).href, { waitUntil: 'load' });
+  await activateReferenceSurface(surface);
+  await page.addStyleTag({ content: '#inbox-view .case-card { display: none !important; }' });
+  let thrown = null;
+  try {
+    await collectReferenceMeasurement('reference-no-visible-card');
+  } catch (error) {
+    thrown = error;
+  }
+  assert.ok(thrown, 'Reference measurement must fail when no visible card exists.');
+  assert.match(String(thrown.message || thrown), /VISIBLE_REFERENCE_CARD_NOT_FOUND/, 'No-visible-card failure must be explicit and bounded.');
 }
 
 try {
@@ -233,15 +322,28 @@ try {
   await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 
-  await captureActual({ label: 'baseline-admin-1440', url: inboxUrl, width: 1440, height: 1100, expectedRows: 20 });
-  await captureActual({ label: 'baseline-admin-414', url: inboxUrl, width: 414, height: 1100, expectedRows: 20 });
-  await captureActual({ label: 'baseline-admin-375', url: inboxUrl, width: 375, height: 1100, expectedRows: 20 });
-  await captureActual({ label: 'baseline-admin-320', url: inboxUrl, width: 320, height: 1100, expectedRows: 20 });
-  await captureActual({ label: 'baseline-admin-414-text-200', url: inboxUrl, width: 414, height: 1200, zoom200: true, expectedRows: 20 });
-  await captureActual({ label: 'baseline-frontend-2200', url: manifest.frontend_inbox_url, width: 2200, height: 1200 });
+  for (const actual of [
+    await captureActual({ label: 'baseline-admin-1440', url: inboxUrl, width: 1440, height: 1100, expectedRows: 20 }),
+    await captureActual({ label: 'baseline-admin-414', url: inboxUrl, width: 414, height: 1100, expectedRows: 20 }),
+    await captureActual({ label: 'baseline-admin-375', url: inboxUrl, width: 375, height: 1100, expectedRows: 20 }),
+    await captureActual({ label: 'baseline-admin-320', url: inboxUrl, width: 320, height: 1100, expectedRows: 20 }),
+    await captureActual({ label: 'baseline-admin-414-text-200', url: inboxUrl, width: 414, height: 1200, zoom200: true, expectedRows: 20 }),
+    await captureActual({ label: 'baseline-frontend-2200', url: manifest.frontend_inbox_url, width: 2200, height: 1200 }),
+  ]) {
+    assert.ok(actual.card1?.rect?.width > 0 && actual.card1?.rect?.height > 0, `${actual.label} actual-runtime card measurement must remain operational.`);
+  }
 
-  await measureReference('reference-A-1440', 'inbox-desktop', 1440, 1100);
-  await measureReference('reference-B-414', 'inbox-mobile', 414, 1100);
+  const referenceA = await measureReference('reference-A-1440', 'inbox-desktop', 1440, 1100);
+  const referenceB = await measureReference('reference-B-414', 'inbox-mobile', 414, 1100);
+  assertReferenceGeometry(referenceA, 'reference-A-1440');
+  assertReferenceGeometry(referenceB, 'reference-B-414');
+
+  assert.equal(referenceA.selection.domFirstVisible, false, 'Canonical fixture must retain a hidden DOM-first card for falsification coverage.');
+  assert.ok(referenceA.selection.primaryDomIndex > 0, 'Visible reference card must be selected after the hidden DOM-first card.');
+  assert.ok(referenceA.selection.hiddenCardsBeforePrimary > 0, 'At least one hidden card must precede the selected visible reference card.');
+  assert.notEqual(referenceA.selection.primaryCase, referenceA.selection.domFirstCase, 'Hidden DOM-first card must not be selected as the primary measurement target.');
+
+  await assertNoVisibleReferenceCardFailsClosed('inbox-desktop');
 
   const resultPath = path.join(artifactDir, 'pr33-visual-baseline.json');
   fs.writeFileSync(resultPath, JSON.stringify({
@@ -249,6 +351,7 @@ try {
     reference_fixture: path.relative(repoRoot, referencePath),
     observations,
   }, null, 2) + '\n');
+  process.stdout.write(`PR33_REFERENCE_HARNESS_PASS=${resultPath}\n`);
   process.stdout.write(`PR33_BASELINE_CAPTURE_PASS=${resultPath}\n`);
 } finally {
   await browser.close();
