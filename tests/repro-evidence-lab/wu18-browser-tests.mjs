@@ -61,12 +61,19 @@ await test('WU18-BROWSER-002', 'host editability and native Approval actions rem
   const reviewControl = page.locator(`#input_${formId}_${review}`);
   if (await reviewControl.count() !== 1 || !(await reviewControl.isVisible())) throw new Error('Host-authentic review control not exposed.');
   if (await page.locator(`#input_${formId}_${mobile}`).count() !== 0) throw new Error('Semantic editability claim manufactured mobile control.');
-  const actions = await page.locator('[data-gpp-section="current-task"] .gravityflow-action-buttons button').evaluateAll(buttons => buttons.map(b => ({ value: b.value, text: b.textContent.replace(/\s+/g, ' ').trim() })));
+  const actionContainer = page.locator('[data-gpp-section="current-task"] .gravityflow-action-buttons');
+  const ownership = await actionContainer.evaluate(node => ({
+    global_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+    in_native_form: Boolean(node.closest('form[id^="gform_"]')),
+    native_submit_names: [...node.querySelectorAll('button,input')].map(el => el.getAttribute('name')).filter(Boolean),
+  }));
+  if (ownership.global_containers !== 1 || !ownership.in_native_form) throw new Error(`Native action node was cloned or detached from its host form: ${JSON.stringify(ownership)}`);
+  const actions = await actionContainer.locator('button').evaluateAll(buttons => buttons.map(b => ({ value: b.value, text: b.textContent.replace(/\s+/g, ' ').trim() })));
   if (JSON.stringify(actions.map(v => v.value).sort()) !== JSON.stringify(['approved', 'rejected'])) throw new Error(`Unexpected Approval actions: ${JSON.stringify(actions)}`);
   if (!actions.find(v => v.value === 'approved')?.text.includes('تأیید پرونده') || !actions.find(v => v.value === 'rejected')?.text.includes('رد پرونده')) throw new Error('Persian native action labels missing.');
   if (await page.getByText(/Save Draft|Send Next|Return for Correction/, { exact: false }).count() !== 0) throw new Error('Invented action is visible.');
   if (await page.locator('[data-gpp-section="current-task"] .detail-view-print').count() !== 0 || await page.locator('form .detail-view-print').count() !== 1) throw new Error('Print utility crossed task-action boundary.');
-  return { host_editable_review_field: review, semantic_claim_without_host_control: mobile, native_actions: actions };
+  return { host_editable_review_field: review, semantic_claim_without_host_control: mobile, native_actions: actions, native_action_node_ownership: ownership };
 });
 
 await test('WU18-BROWSER-003', 'image preview supports Escape/backdrop/focus/scroll restoration', async () => {
@@ -98,7 +105,7 @@ await test('WU18-BROWSER-004', 'PDF is host-file open affordance and history is 
   const helper = (await page.locator('.gpp-entry-dossier__history-help').textContent()).trim();
   const timelineInDetails = await details.locator('.gravityflow-timeline').count();
   const timelineGlobal = await page.locator('form .gravityflow-timeline').count();
-  if (helper !== manifest.locked_history_helper || timelineInDetails !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
+  if (helper !== manifest.locked_history_helper || timelineInDetails !== 1 || timelineGlobal !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
   return { pdf_href: href, history_collapsed: true, native_timeline: true };
 });
 
