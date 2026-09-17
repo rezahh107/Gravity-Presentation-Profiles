@@ -1,6 +1,8 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit( 1 );
 
+use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
+
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu18_fixture_manifest' );
 $base_manifest = get_option( 'gpp_wu21_fixture_manifest' );
@@ -46,6 +48,21 @@ list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step ) = wu18_render_entry(
 list( $beta_html, $beta_form, $beta_entry ) = wu18_render_entry( $manifest['beta']['form_id'], $manifest['beta']['entry_id'] );
 list( $negative_html ) = wu18_render_entry( $manifest['negative']['form_id'], $manifest['negative']['entry_id'] );
 wu18_assert( $alpha_step && 'approval' === $alpha_step->get_type(), 'Alpha current step is not native Approval.' );
+
+$host_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
+$reader = new BoundHostValueReader();
+$bound_step = $reader->readRaw(
+    array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ),
+    $alpha_form,
+    $alpha_entry
+);
+$bound_status = $reader->readRaw(
+    array( 'type' => 'gravity_flow.state', 'state_key' => 'status' ),
+    $alpha_form,
+    $alpha_entry
+);
+wu18_assert( $alpha_step->get_name() === $bound_step, 'GPP current-step source diverged from Gravity_Flow_API::get_current_step().' );
+wu18_assert( $host_api->get_status( $alpha_entry ) === $bound_status, 'GPP workflow-status source diverged from Gravity_Flow_API::get_status().' );
 wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $alpha_entry, $alpha_form, $alpha_step ), 'Operator lost native Entry Detail permission.' );
 $editable = array_map( 'strval', $alpha_step->get_editable_fields() );
 $review_field = (string) $manifest['alpha']['fields']['review.reason']; $mobile_field = (string) $manifest['alpha']['fields']['student.mobile'];
@@ -111,6 +128,10 @@ $results = array(
     'negative_native_fallback' => true,
     'unauthorized_native_denial' => true,
     'native_approval_actions' => array( 'approved', 'rejected' ),
+    'authoritative_state_sources' => array(
+        'workflow.current_step' => 'Gravity_Flow_API::get_current_step',
+        'workflow.status' => 'Gravity_Flow_API::get_status',
+    ),
     'documents' => array(
         'alpha' => array( 'kind' => 'image_thumbnail', 'name' => $alpha_document['name'], 'host_download_url' => true ),
         'beta' => array( 'kind' => 'pdf_open_link', 'name' => $beta_document['name'], 'host_download_url' => true ),
