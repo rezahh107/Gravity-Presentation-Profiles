@@ -17,6 +17,11 @@
         overflow-x: hidden !important;
     }
 
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport {
+        background: #f6f8fb;
+    }
+
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
         box-sizing: border-box;
         display: grid !important;
@@ -26,6 +31,7 @@
         min-height: 0 !important;
         width: 100% !important;
         padding: 0.25rem;
+        background: #f6f8fb;
     }
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row {
@@ -78,17 +84,17 @@
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 62px minmax(0, 1fr);
     grid-template-areas:
         "photo identity"
         "details details"
         "open open";
     gap: 0.875rem 0.9375rem;
-    min-height: 208px;
+    min-height: 236px;
     height: 100%;
     padding: 1.375rem 1.5rem 1.125rem;
     border: 1px solid #e4e7ec;
-    border-radius: 10px;
+    border-radius: 14px;
     background: #fff;
     color: #172033;
     direction: rtl;
@@ -113,11 +119,13 @@
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-image,
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-fallback {
+    box-sizing: border-box;
     display: grid;
     place-items: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
+    width: 62px;
+    height: 62px;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
     object-fit: cover;
     background: #eef1f5;
     color: #475467;
@@ -200,7 +208,7 @@
     align-items: center;
     min-height: 44px;
     padding: 0.4375rem 1rem;
-    border-radius: 6px;
+    border-radius: 8px;
     background: #1d4ed8;
     color: #fff;
     font-size: 0.9375rem;
@@ -214,11 +222,15 @@
  * palette are projected onto that host-owned control.
  */
 .gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
+    box-sizing: border-box;
     height: auto;
     min-height: 3rem;
     padding-block: 0.625rem;
+    padding-right: 2.8125rem;
+    padding-left: 0.9375rem;
     background: #fff;
     border-color: #8690a1;
+    border-radius: 8px;
     color: #172033;
     font-family: 'Vazir', Tahoma, Arial, sans-serif;
     font-size: 1rem;
@@ -235,7 +247,8 @@
     }
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
-        grid-template-columns: 56px minmax(0, 1fr);
+        grid-template-columns: 62px minmax(0, 1fr);
+        min-height: 0;
         padding: 1rem;
         padding-block: 1.125rem;
     }
