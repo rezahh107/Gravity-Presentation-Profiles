@@ -201,6 +201,7 @@
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__open {
+    box-sizing: border-box;
     grid-area: open;
     align-self: end;
     justify-self: start;
@@ -217,9 +218,9 @@
 }
 
 /*
- * The native Gravity Flow quick-search control keeps its host width, identity,
- * query behavior and existing radius. Only the admitted SRWF typography and
- * palette are projected onto that host-owned control.
+ * The native Gravity Flow quick-search control keeps its host width, identity
+ * and query behavior. The admitted SRWF A/B typography, palette and local
+ * control geometry are projected onto that same host-owned input.
  */
 .gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
     box-sizing: border-box;
