@@ -236,7 +236,8 @@
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card {
         grid-template-columns: 56px minmax(0, 1fr);
-        padding: 1.125rem 1rem;
+        padding: 1rem;
+        padding-block: 1.125rem;
     }
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__details {
