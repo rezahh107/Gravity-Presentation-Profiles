@@ -173,23 +173,47 @@ final class EntryDetailPresentationAdapter {
             return;
         }
 
+        $plugin_root = dirname( GPP_PLUGIN_FILE );
+        $style_path = 'assets/css/srwf-gravity-flow-entry-detail.css';
+        $script_path = 'assets/js/srwf-gravity-flow-entry-detail.js';
+
         if ( function_exists( 'wp_enqueue_style' ) ) {
             wp_enqueue_style(
                 self::STYLE_HANDLE,
-                plugins_url( 'assets/css/srwf-gravity-flow-entry-detail.css', GPP_PLUGIN_FILE ),
+                plugins_url( $style_path, GPP_PLUGIN_FILE ),
                 array(),
-                '1.0.0'
+                self::assetVersion( $plugin_root . '/' . $style_path )
             );
         }
         if ( function_exists( 'wp_enqueue_script' ) ) {
             wp_enqueue_script(
                 self::SCRIPT_HANDLE,
-                plugins_url( 'assets/js/srwf-gravity-flow-entry-detail.js', GPP_PLUGIN_FILE ),
+                plugins_url( $script_path, GPP_PLUGIN_FILE ),
                 array(),
-                '1.0.0',
+                self::assetVersion( $plugin_root . '/' . $script_path ),
                 true
             );
         }
+    }
+
+    /**
+     * Content-derived cache key, matching the established Inbox asset contract.
+     * A missing/unreadable file deliberately returns false so WordPress does not
+     * receive a fabricated version identity.
+     */
+    private static function assetVersion( $absolute_path ) {
+        if ( ! is_string( $absolute_path ) || '' === $absolute_path || ! is_file( $absolute_path ) || ! is_readable( $absolute_path ) ) {
+            return false;
+        }
+
+        if ( function_exists( 'hash_file' ) ) {
+            $hash = hash_file( 'sha256', $absolute_path );
+            if ( is_string( $hash ) && '' !== $hash ) {
+                return substr( $hash, 0, 16 );
+            }
+        }
+
+        return false;
     }
 
     private static function renderIdentitySection( EntryDetailPresentationModel $model, $form, $entry ) {
