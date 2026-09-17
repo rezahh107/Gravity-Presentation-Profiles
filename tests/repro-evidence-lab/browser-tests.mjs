@@ -18,3 +18,4 @@ globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^
 await import('./authoring-prompt-admin-browser-tests.mjs');
 await import('./diagnostics-admin-row-browser-tests.mjs');
 await import('./diagnostics-bundle-validate.mjs');
+await import('./inbox-settings-admin-browser-tests.mjs');

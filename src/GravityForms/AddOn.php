@@ -20,6 +20,7 @@ final class AddOn extends \GFAddOn {
     private $visual_workflow = null;
     private $binding_health_service = null;
     private $binding_repair_service = null;
+    private $inbox_setup_result = null;
 
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
@@ -71,7 +72,7 @@ final class AddOn extends \GFAddOn {
             ),
             array(
                 'title'       => esc_html__( 'Operations Setup (Print)', 'gravity-presentation-profiles' ),
-                'description' => esc_html__( 'Prepare the operational presentation surfaces for one real Gravity Forms form. GPP installs the shipped operations package, adopts the Print presentation profile, and creates the environment binding context with every canonical meaning left explicitly unmapped. GPP never guesses a field from its label, name or position: you map fields yourself below. Re-running this is safe; existing activations and repaired mappings are preserved, and a different existing activation is reported instead of replaced.', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Prepare Print presentation for one real Gravity Forms form. GPP installs the shipped operations package, adopts only the Print presentation profile, and creates the environment binding context with every canonical meaning left explicitly unmapped. GPP never guesses a field from its label, name or position: you map fields yourself below. Re-running this is safe; existing activations and repaired mappings are preserved, and a different existing activation is reported instead of replaced.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
                     array(
                         'name'  => 'operations_readiness',
@@ -80,12 +81,32 @@ final class AddOn extends \GFAddOn {
                     ),
                     array(
                         'name'                => 'operations_setup_action',
-                        'label'               => esc_html__( 'Initialize operations presentation', 'gravity-presentation-profiles' ),
-                        'description'         => esc_html__( 'Choose the exact form this installation uses, then save settings. The default performs no change.', 'gravity-presentation-profiles' ),
+                        'label'               => esc_html__( 'Initialize Print presentation', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose the exact form this installation uses, then save settings. This action initializes Print only; the Inbox action below remains separate. The default performs no change.', 'gravity-presentation-profiles' ),
                         'type'                => 'select',
                         'choices'             => $this->operationsSetupChoices(),
                         'validation_callback' => array( $this, 'validate_operations_setup_action' ),
                         'save_callback'       => array( $this, 'discard_operations_setup_action' ),
+                    ),
+                ),
+            ),
+            array(
+                'title'       => esc_html__( 'Operations Setup (Inbox)', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Adopt the shipped SRWF Inbox presentation for one existing operations binding context. This action reuses the active EnvironmentBindingSet, verifies the admitted host sources, preserves Print, and never changes Gravity Flow assignment or authorization.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'                => 'inbox_setup_action',
+                        'label'               => esc_html__( 'Initialize / Adopt Inbox presentation', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose the exact existing operations form, then save settings. Required mappings are never guessed or auto-repaired. Re-running this action refreshes only legitimate source-bound readiness evidence and is idempotent when nothing changed.', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'choices'             => $this->operationsSetupChoices(),
+                        'validation_callback' => array( $this, 'validate_inbox_setup_action' ),
+                        'save_callback'       => array( $this, 'discard_inbox_setup_action' ),
+                    ),
+                    array(
+                        'name'  => 'inbox_setup_feedback',
+                        'label' => esc_html__( 'Inbox setup result', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_inbox_setup_feedback',
                     ),
                 ),
             ),
@@ -469,6 +490,108 @@ final class AddOn extends \GFAddOn {
         }
 
         return __( 'Operations setup did not complete.', 'gravity-presentation-profiles' );
+    }
+
+    /**
+     * Inbox setup uses the same Gravity Forms Add-On Framework settings-save
+     * boundary as Print. Gravity Forms owns the capability and nonce checks for
+     * this POST; GPP validates only the explicit selected-form action value.
+     */
+    public function validate_inbox_setup_action( $field, $value ) {
+        $this->inbox_setup_result = null;
+
+        if ( ! is_string( $value ) || '' === trim( $value ) ) {
+            return;
+        }
+
+        if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
+            $this->setSettingsFieldError( $field, 'The selected Inbox setup action is invalid. Refresh the page and try again.' );
+            return;
+        }
+
+        $form_id = (int) $matches[1];
+
+        try {
+            $result = InboxSetupService::forWordPress()->initialize( array( 'form_id' => $form_id ) );
+        } catch ( LifecycleException $exception ) {
+            $this->setSettingsFieldError( $field, $exception->getMessage() );
+            return;
+        } catch ( \Throwable $exception ) {
+            $this->setSettingsFieldError( $field, 'Inbox setup failed before presentation state could be safely completed.' );
+            return;
+        }
+
+        if ( InboxSetupService::STATUS_COMPLETED !== $result['status'] ) {
+            $this->setSettingsFieldError( $field, $this->inboxSetupFailureMessage( $result ) );
+            return;
+        }
+
+        $this->inbox_setup_result = array(
+            'form_id' => $form_id,
+            'form_label' => $this->setupFormLabel( $form_id ),
+            'result' => $result,
+        );
+    }
+
+    public function discard_inbox_setup_action( $field, $value ) {
+        unset( $field, $value );
+        return '';
+    }
+
+    public function settings_gpp_inbox_setup_feedback( $field ) {
+        unset( $field );
+
+        if ( ! is_array( $this->inbox_setup_result ) ) {
+            echo '<p><small>' . esc_html__( 'No Inbox setup action has completed in this settings request.', 'gravity-presentation-profiles' ) . '</small></p>';
+            return;
+        }
+
+        $label = $this->inbox_setup_result['form_label'];
+        echo '<div class="notice notice-success inline" data-gpp-inbox-setup-result="completed">';
+        echo '<p><strong>' . esc_html(
+            sprintf(
+                __( 'Inbox setup/adoption completed for %s.', 'gravity-presentation-profiles' ),
+                $label
+            )
+        ) . '</strong></p>';
+        echo '<p>' . esc_html__( 'The existing compatible EnvironmentBindingSet was reused, source-bound Inbox readiness was qualified where supported, and the current Print activation was preserved.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '</div>';
+    }
+
+    private function inboxSetupFailureMessage( $result ) {
+        if ( ! empty( $result['steps'] ) && is_array( $result['steps'] ) ) {
+            foreach ( $result['steps'] as $name => $step ) {
+                $outcome = isset( $step['outcome'] ) ? $step['outcome'] : '';
+                if ( ! in_array( $outcome, array( 'conflict', 'failed' ), true ) ) {
+                    continue;
+                }
+                $detail = ! empty( $step['message'] ) ? $step['message'] : ( isset( $step['reason'] ) ? $step['reason'] : '' );
+                if ( '' !== $detail ) {
+                    return sprintf(
+                        __( 'Inbox setup stopped at %1$s: %2$s', 'gravity-presentation-profiles' ),
+                        $name,
+                        $detail
+                    );
+                }
+            }
+        }
+
+        return __( 'Inbox presentation setup did not complete.', 'gravity-presentation-profiles' );
+    }
+
+    private function setupFormLabel( $form_id ) {
+        if ( class_exists( 'GFAPI' ) && method_exists( 'GFAPI', 'get_form' ) ) {
+            try {
+                $form = \GFAPI::get_form( $form_id );
+                if ( is_array( $form ) && isset( $form['title'] ) && is_string( $form['title'] ) && '' !== trim( $form['title'] ) ) {
+                    return sprintf( '%s (Form %d)', trim( $form['title'] ), $form_id );
+                }
+            } catch ( \Throwable $exception ) {
+                // The explicit form ID remains enough for safe bounded feedback.
+            }
+        }
+
+        return sprintf( __( 'Form %d', 'gravity-presentation-profiles' ), $form_id );
     }
 
     public function settings_gpp_operations_readiness( $field ) {

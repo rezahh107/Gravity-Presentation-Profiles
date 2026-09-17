@@ -6,8 +6,8 @@ if ( PHP_SAPI !== 'cli' ) {
 $mode      = isset( $argv[1] ) ? $argv[1] : '';
 $html_path = isset( $argv[2] ) ? $argv[2] : '';
 $fixture   = isset( $argv[3] ) ? json_decode( (string) file_get_contents( $argv[3] ), true ) : null;
-if ( ! in_array( $mode, array( 'setup', 'repair' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
-    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|repair> <settings.html> <fixture.json>\n" );
+if ( ! in_array( $mode, array( 'setup', 'inbox', 'repair' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
+    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|inbox|repair> <settings.html> <fixture.json>\n" );
     exit( 1 );
 }
 
@@ -65,15 +65,16 @@ foreach ( $xpath->query( './/select', $form ) as $select ) {
     $fields[ $name ] = $selected;
 }
 
-if ( 'setup' === $mode ) {
-    $wanted  = 'form:' . (int) $fixture['form_id'];
-    $matched = false;
-    foreach ( $xpath->query( './/select', $form ) as $select ) {
+if ( in_array( $mode, array( 'setup', 'inbox' ), true ) ) {
+    $wanted       = 'form:' . (int) $fixture['form_id'];
+    $field_suffix = 'setup' === $mode ? 'operations_setup_action' : 'inbox_setup_action';
+    $matched      = false;
+    foreach ( $xpath->query( './/select[contains(@name,"' . $field_suffix . '")]', $form ) as $select ) {
         foreach ( $xpath->query( './option', $select ) as $option ) {
             if ( $option->getAttribute( 'value' ) === $wanted ) {
                 $name = $select->getAttribute( 'name' );
                 if ( '' === $name ) {
-                    throw new RuntimeException( 'Operations Setup select has no submitted name.' );
+                    throw new RuntimeException( ucfirst( $mode ) . ' Setup select has no submitted name.' );
                 }
                 $fields[ $name ] = $wanted;
                 $matched = true;
@@ -82,7 +83,7 @@ if ( 'setup' === $mode ) {
         }
     }
     if ( ! $matched ) {
-        throw new RuntimeException( 'Exact synthetic form is not offered by Operations Setup.' );
+        throw new RuntimeException( 'Exact synthetic form is not offered by ' . ucfirst( $mode ) . ' Setup.' );
     }
     $submit = $xpath->query( './/input[@type="submit" and not(@name="gpp_binding_row_action")] | .//button[@type="submit" and not(@name="gpp_binding_row_action")]', $form )->item( 0 );
     if ( ! $submit ) {
