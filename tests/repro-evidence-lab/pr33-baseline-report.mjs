@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,13 +25,119 @@ const screenshots = fs.readdirSync(artifactDir)
     };
   });
 
+const obs = baseline.observations || {};
+const actualDesktop = obs['baseline-admin-1440'];
+const actualMobile = obs['baseline-admin-414'];
+const actualText200 = obs['baseline-admin-414-text-200'];
+const referenceA = obs['reference-A-1440'];
+const referenceB = obs['reference-B-414'];
+
+for (const [label, value] of Object.entries({ actualDesktop, actualMobile, actualText200, referenceA, referenceB })) {
+  assert.ok(value, `PR33 required measurement is missing: ${label}`);
+}
+
+const normalizeFamily = value => String(value || '').replace(/["']/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const numericPx = value => Number.parseFloat(String(value || '').replace('px', ''));
+const assertClose = (actual, expected, tolerance, message) => {
+  const a = Number(actual);
+  const e = Number(expected);
+  assert.ok(Number.isFinite(a) && Number.isFinite(e) && Math.abs(a - e) <= tolerance, `${message}: ${a} vs ${e}`);
+};
+const assertPxClose = (actual, expected, tolerance, message) => assertClose(numericPx(actual), numericPx(expected), tolerance, message);
+const assertStyleEqual = (actual, reference, property, message) => {
+  assert.equal(actual?.style?.[property], reference?.style?.[property], message);
+};
+
+function assertVisualFidelity(actual, reference, label) {
+  assert.ok(actual.card1?.rect?.width > 0 && actual.card1?.rect?.height > 0, `${label}: production card must render.`);
+  assert.ok(actual.name?.rect?.width > 0 && actual.openAction?.rect?.height > 0, `${label}: production card descendants must render.`);
+
+  for (const property of ['backgroundColor', 'borderColor', 'boxShadow']) {
+    assertStyleEqual(actual.card1, reference.card1, property, `${label}: card ${property} must follow locked A/B evidence.`);
+  }
+  assert.equal(normalizeFamily(actual.card1.style.fontFamily), normalizeFamily(reference.card1.style.fontFamily), `${label}: card font family must declare admitted Vazir stack.`);
+  assertStyleEqual(actual.card1, reference.card1, 'fontSize', `${label}: card base font size must follow locked A/B evidence.`);
+  assertStyleEqual(actual.card1, reference.card1, 'fontWeight', `${label}: card base font weight must follow locked A/B evidence.`);
+  assertStyleEqual(actual.card1, reference.card1, 'lineHeight', `${label}: card line height must follow locked A/B evidence.`);
+
+  for (const property of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']) {
+    assertStyleEqual(actual.card1, reference.card1, property, `${label}: card ${property} must follow locked A/B evidence.`);
+  }
+
+  assertStyleEqual(actual.name, reference.name, 'fontSize', `${label}: identity name size must match A/B.`);
+  assertStyleEqual(actual.name, reference.name, 'fontWeight', `${label}: identity name weight must match A/B.`);
+  assertStyleEqual(actual.name, reference.name, 'lineHeight', `${label}: identity name line height must match A/B.`);
+  assertStyleEqual(actual.identifier, reference.identifier, 'fontSize', `${label}: national-ID size must match A/B.`);
+  assertStyleEqual(actual.identifier, reference.identifier, 'fontWeight', `${label}: national-ID weight must match A/B.`);
+  assertStyleEqual(actual.detailLabel, reference.detailLabel, 'fontSize', `${label}: detail-label size must match A/B.`);
+  assertStyleEqual(actual.detailLabel, reference.detailLabel, 'fontWeight', `${label}: detail-label weight must match A/B.`);
+  assertStyleEqual(actual.detailValue, reference.detailValue, 'fontSize', `${label}: detail-value size must match A/B.`);
+  assertStyleEqual(actual.detailValue, reference.detailValue, 'fontWeight', `${label}: detail-value must use admitted 500 weight.`);
+  assertStyleEqual(actual.openAction, reference.action, 'fontSize', `${label}: action text size must match A/B.`);
+  assertStyleEqual(actual.openAction, reference.action, 'fontWeight', `${label}: action must use admitted 500 weight.`);
+  assertStyleEqual(actual.openAction, reference.action, 'backgroundColor', `${label}: action background must match A/B primary.`);
+  assert.ok(actual.openAction.rect.height >= 44, `${label}: open action must retain the A/B minimum rendered height.`);
+
+  assertStyleEqual(actual.photo, reference.photo, 'backgroundColor', `${label}: photo/fallback neutral surface must match A/B.`);
+
+  assertStyleEqual(actual.search, reference.search, 'backgroundColor', `${label}: native search surface must use the A/B white control surface.`);
+  assertStyleEqual(actual.search, reference.search, 'borderColor', `${label}: native search border must use the admitted control color.`);
+  assert.equal(normalizeFamily(actual.search.style.fontFamily), normalizeFamily(reference.search.style.fontFamily), `${label}: native search must declare the admitted Vazir stack.`);
+  assertStyleEqual(actual.search, reference.search, 'fontSize', `${label}: native search text size must match A/B.`);
+  assertStyleEqual(actual.search, reference.search, 'fontWeight', `${label}: native search weight must match A/B.`);
+  assertStyleEqual(actual.search, reference.search, 'lineHeight', `${label}: native search line height must match A/B.`);
+  assert.ok(actual.search.rect.height >= 48, `${label}: native search must retain a usable A/B-scale rendered height.`);
+}
+
+assertVisualFidelity(actualDesktop, referenceA, 'desktop-A');
+assertVisualFidelity(actualMobile, referenceB, 'mobile-B');
+
+assertPxClose(actualDesktop.grid.style.gap, referenceA.grid.style.gap, 0.01, 'desktop-A: two-column card gap must match A/B');
+assertPxClose(actualMobile.grid.style.gap, referenceB.grid.style.gap, 0.01, 'mobile-B: one-column card gap must match A/B');
+
+// Later authority deliberately preserves these existing production constraints
+// rather than copying the fixture literally. Keep them explicit so a future
+// visual pass cannot silently turn reference geometry into new runtime rules.
+assert.equal(actualDesktop.card1.style.borderRadius, '10px', 'desktop-A: existing GPP card radius must remain unchanged.');
+assert.equal(actualMobile.card1.style.borderRadius, '10px', 'mobile-B: existing GPP card radius must remain unchanged.');
+assert.equal(actualDesktop.photo.rect.width, 56, 'desktop-A: admitted production photo crop width must remain 56px.');
+assert.equal(actualDesktop.photo.rect.height, 56, 'desktop-A: admitted production photo crop height must remain 56px.');
+assert.equal(actualMobile.photo.rect.width, 56, 'mobile-B: admitted production photo crop width must remain 56px.');
+assert.equal(actualMobile.photo.rect.height, 56, 'mobile-B: admitted production photo crop height must remain 56px.');
+assert.equal(actualDesktop.openAction.style.borderRadius, '6px', 'desktop-A: existing action radius must remain unchanged.');
+assert.equal(actualMobile.openAction.style.borderRadius, '6px', 'mobile-B: existing action radius must remain unchanged.');
+assert.equal(actualDesktop.search.style.borderRadius, '3px', 'desktop-A: host search radius must remain host-owned and unchanged.');
+assert.equal(actualMobile.search.style.borderRadius, '3px', 'mobile-B: host search radius must remain host-owned and unchanged.');
+
+// Text-relative sizing must still scale under the existing 200% browser-text
+// scenario; fixed media crops/radii are intentionally not converted to rem.
+assertPxClose(actualText200.name.style.fontSize, 40, 0.01, '200%-text: identity name must scale from 20px to 40px');
+assertPxClose(actualText200.detailLabel.style.fontSize, 28, 0.01, '200%-text: detail label must scale from 14px to 28px');
+assertPxClose(actualText200.detailValue.style.fontSize, 30, 0.01, '200%-text: detail value must scale from 15px to 30px');
+assertPxClose(actualText200.openAction.style.fontSize, 30, 0.01, '200%-text: action text must scale from 15px to 30px');
+assert.equal(actualText200.photo.rect.width, 56, '200%-text: fixed photo crop remains 56px by contract.');
+assert.equal(actualText200.photo.rect.height, 56, '200%-text: fixed photo crop remains 56px by contract.');
+assert.ok(actualText200.card1.rect.scrollWidth <= actualText200.card1.rect.clientWidth + 1, '200%-text: card must not overflow horizontally.');
+
 browser.pr33_visual_baseline = {
   ...baseline,
   screenshots,
+  visual_fidelity_assertions: {
+    status: 'PASS',
+    compared_surfaces: ['A_1440', 'B_414'],
+    preserved_runtime_constraints: {
+      card_radius_px: 10,
+      photo_crop_px: 56,
+      action_radius_px: 6,
+      host_search_radius_px: 3,
+      breakpoint_px: 782,
+      max_width_added: false,
+      container_query_added: false,
+    },
+  },
 };
 fs.writeFileSync(browserPath, `${JSON.stringify(browser, null, 2)}\n`);
 
-const obs = baseline.observations || {};
 const compactActual = value => value ? {
   viewport: value.viewport,
   document_overflow: value.documentOverflow,
@@ -83,6 +190,7 @@ const compactReference = value => value ? {
 const summary = {
   repository_sha: baseline.repository_sha,
   screenshots,
+  visual_fidelity_assertions: browser.pr33_visual_baseline.visual_fidelity_assertions,
   actual: {
     admin_1440: compactActual(obs['baseline-admin-1440']),
     admin_414: compactActual(obs['baseline-admin-414']),
@@ -97,5 +205,6 @@ const summary = {
   },
 };
 
+process.stdout.write(`PR33_VISUAL_FIDELITY_ASSERTIONS_PASS=${baseline.repository_sha}\n`);
 process.stdout.write(`PR33_BASELINE_RETAINED=${browserPath}\n`);
 process.stdout.write(`PR33_BASELINE_SUMMARY=${JSON.stringify(summary)}\n`);
