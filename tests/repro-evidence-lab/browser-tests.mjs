@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-await import('./inbox-settings-admin-browser-tests.mjs');
 await import('./browser-tests-core.mjs');
 
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
@@ -19,3 +18,4 @@ globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^
 await import('./authoring-prompt-admin-browser-tests.mjs');
 await import('./diagnostics-admin-row-browser-tests.mjs');
 await import('./diagnostics-bundle-validate.mjs');
+await import('./inbox-settings-admin-browser-tests.mjs');
