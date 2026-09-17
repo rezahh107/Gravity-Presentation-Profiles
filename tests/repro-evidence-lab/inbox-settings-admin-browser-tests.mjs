@@ -7,15 +7,26 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
+const repoRoot = process.env.GITHUB_WORKSPACE;
 const settingsUrl = `${baseUrl}/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles`;
-const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'inbox-settings-fixture.json'), 'utf8'));
 const resultFile = path.join(artifactDir, 'inbox-settings-browser-results.json');
 
-function wpEval(code) {
-  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8' });
-  if (cp.status !== 0) throw new Error(`WP eval failed: ${cp.stderr}\n${cp.stdout}`);
+function wpCommand(args) {
+  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, ...args], {
+    encoding: 'utf8',
+    cwd: repoRoot,
+    env: process.env,
+  });
+  if (cp.status !== 0) throw new Error(`WP command failed: ${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
+
+function wpEval(code) {
+  return wpCommand(['eval', code]);
+}
+
+wpCommand(['eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/prepare-inbox-settings-fixture.php')]);
+const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'inbox-settings-fixture.json'), 'utf8'));
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
