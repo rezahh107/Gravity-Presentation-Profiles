@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+await import('./inbox-settings-admin-browser-tests.mjs');
 await import('./browser-tests-core.mjs');
 
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
