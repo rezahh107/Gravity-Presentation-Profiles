@@ -66,6 +66,7 @@ curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
   --data-urlencode 'testcookie=1' \
   "$BASE_URL/wp-login.php" -o "$EVIDENCE_DIR/settings-before.html"
 grep -Fq 'Operations Setup (Print)' "$EVIDENCE_DIR/settings-before.html"
+grep -Fq 'Operations Setup (Inbox)' "$EVIDENCE_DIR/settings-before.html"
 grep -Fq 'Mapping &amp; Binding Health' "$EVIDENCE_DIR/settings-before.html" || grep -Fq 'Mapping & Binding Health' "$EVIDENCE_DIR/settings-before.html"
 
 php "$ROOT/tests/release/behavioral-http-form.php" setup "$EVIDENCE_DIR/settings-before.html" "$FIXTURE" > "$EVIDENCE_DIR/setup-payload.txt"
@@ -85,8 +86,8 @@ curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
   "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-repair.html"
 GPP_BEHAVIOR_STATE_COMMAND=after-repair php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-repair.json"
 
-# Rerun Operations Setup through the same authentic Gravity Forms settings-save
-# request, never through OperationsSetupService directly.
+# Rerun Print setup through the authentic Gravity Forms settings-save request.
+# Inbox must still be unactivated at this point: Print remains Print-only.
 curl -fsS -b "$COOKIES" -c "$COOKIES" "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-before-rerun.html"
 php "$ROOT/tests/release/behavioral-http-form.php" setup "$EVIDENCE_DIR/settings-before-rerun.html" "$FIXTURE" > "$EVIDENCE_DIR/rerun-payload.txt"
 curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
@@ -94,6 +95,29 @@ curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
   --data-binary @"$EVIDENCE_DIR/rerun-payload.txt" \
   "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-rerun.html"
 GPP_BEHAVIOR_STATE_COMMAND=after-rerun php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-rerun.json"
+
+# Invoke Inbox through the same real GFAddOn settings form shipped in the exact
+# ZIP. This is the production mutation seam repaired by PR31; no direct service
+# invocation or option mutation is allowed here.
+curl -fsS -b "$COOKIES" -c "$COOKIES" "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-before-inbox.html"
+grep -Fq 'Operations Setup (Inbox)' "$EVIDENCE_DIR/settings-before-inbox.html"
+php "$ROOT/tests/release/behavioral-http-form.php" inbox "$EVIDENCE_DIR/settings-before-inbox.html" "$FIXTURE" > "$EVIDENCE_DIR/inbox-payload.txt"
+curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-binary @"$EVIDENCE_DIR/inbox-payload.txt" \
+  "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-inbox.html"
+GPP_BEHAVIOR_STATE_COMMAND=after-inbox php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-inbox.json"
+
+# A second identical Inbox settings submission must preserve compatible state
+# without unnecessary immutable-binding churn.
+curl -fsS -b "$COOKIES" -c "$COOKIES" "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-before-inbox-rerun.html"
+php "$ROOT/tests/release/behavioral-http-form.php" inbox "$EVIDENCE_DIR/settings-before-inbox-rerun.html" "$FIXTURE" > "$EVIDENCE_DIR/inbox-rerun-payload.txt"
+curl -fsS -L -b "$COOKIES" -c "$COOKIES" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-binary @"$EVIDENCE_DIR/inbox-rerun-payload.txt" \
+  "$SETTINGS_URL" -o "$EVIDENCE_DIR/settings-after-inbox-rerun.html"
+GPP_BEHAVIOR_STATE_COMMAND=after-inbox-rerun php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/after-inbox-rerun.json"
+
 GPP_BEHAVIOR_STATE_COMMAND=runtime php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/runtime.json"
 
 php "$ROOT/tests/release/validate-behavioral-production-reachability.php" "$EVIDENCE_DIR"
