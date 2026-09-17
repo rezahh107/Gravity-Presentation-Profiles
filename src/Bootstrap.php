@@ -4,10 +4,12 @@ namespace GravityPresentationProfiles;
 
 use GravityPresentationProfiles\GravityForms\BindingRowAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
+use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityForms\GtbCoexistenceGuard;
 
 final class Bootstrap {
     private static $initialized = false;
@@ -42,6 +44,8 @@ final class Bootstrap {
         }
 
         \GFAddOn::register( $addon_class );
+        FormPresentationOwnershipSettings::register();
+        GtbCoexistenceGuard::register();
         BindingRowAdminController::register();
         EntryDetailSetupAdminController::register();
 
