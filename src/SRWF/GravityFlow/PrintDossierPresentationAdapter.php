@@ -109,6 +109,14 @@ final class PrintDossierPresentationAdapter {
             return;
         }
 
+        // The affordance represents the existing GPP Print vertical slice, not
+        // a generic promise that printing must work. Expose it only when that
+        // slice is configured for this entry context. The Print request itself
+        // is still independently authorized by Gravity Flow.
+        if ( ! self::printUtilityAvailable( $entry ) ) {
+            return;
+        }
+
         $url = add_query_arg(
             array(
                 'action' => 'gravityflow_print_entries',
@@ -123,6 +131,20 @@ final class PrintDossierPresentationAdapter {
         echo ' onclick="if(typeof printPage===\'function\'){printPage(\'' . esc_js( $url ) . '\');}else{window.open(\'' . esc_js( $url ) . '\',\'_blank\',\'noopener\');}return false;">';
         echo esc_html__( 'چاپ پرونده (دو صفحهٔ A4)', 'gravity-presentation-profiles' );
         echo '</a></div>';
+    }
+
+    private static function printUtilityAvailable( $entry ) {
+        if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
+            return false;
+        }
+
+        $resolution = self::modelResolution();
+        if ( empty( $resolution['model'] ) || 'ready' !== $resolution['model']->bindingContextStatus( $entry ) ) {
+            return false;
+        }
+
+        $assets = PrintDossierAssets::integrity();
+        return ! empty( $assets['ready'] );
     }
 
     public static function renderPrintDossier( $form, $entry ) {
