@@ -3,6 +3,7 @@ import path from 'node:path';
 
 await import('./browser-tests-core.mjs');
 await import('./pr33-visual-fidelity-browser-tests.mjs');
+await import('./pr33-baseline-report.mjs');
 
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 if (artifactDir) {
