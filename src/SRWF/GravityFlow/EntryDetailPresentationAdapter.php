@@ -334,25 +334,10 @@ final class EntryDetailPresentationAdapter {
 
         $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
         $files = $field->to_array( $raw );
-        $files = is_array( $files )
-            ? array_values(
-                array_filter(
-                    $files,
-                    static function ( $file ) {
-                        return is_scalar( $file ) && '' !== trim( (string) $file );
-                    }
-                )
-            )
-            : array();
-
-        // documents.report_card has one authoritative-file meaning. Multiple
-        // host files require an explicit authority selection rule; choosing the
-        // first would silently manufacture that rule.
-        if ( 1 !== count( $files ) ) {
+        $stored_url = self::singleAuthoritativeFile( $files );
+        if ( null === $stored_url ) {
             return null;
         }
-
-        $stored_url = trim( (string) $files[0] );
         if ( '' === $stored_url ) {
             return null;
         }
@@ -377,6 +362,28 @@ final class EntryDetailPresentationAdapter {
         $extension = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
         $kind = in_array( $extension, array( 'jpg', 'jpeg', 'png', 'gif', 'webp' ), true ) ? 'image' : 'file';
         return array( 'kind' => $kind, 'url' => $url, 'name' => $name );
+    }
+
+    /**
+     * The semantic contract names one authoritative report card. Without a
+     * separate admitted selection rule, zero or multiple host files are not a
+     * safe single semantic value.
+     */
+    private static function singleAuthoritativeFile( $files ) {
+        if ( ! is_array( $files ) ) {
+            return null;
+        }
+
+        $candidates = array_values(
+            array_filter(
+                $files,
+                static function ( $file ) {
+                    return is_scalar( $file ) && '' !== trim( (string) $file );
+                }
+            )
+        );
+
+        return 1 === count( $candidates ) ? trim( (string) $candidates[0] ) : null;
     }
 
     private static function imageThumbnailMarkup( $document, $class_name ) {
