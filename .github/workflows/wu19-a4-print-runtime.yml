@@ -198,7 +198,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/normalize-wu19-visual-control-data.php
+          GPP_WU19_VISUAL_CONTROL_NORMALIZE=1 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/normalize-wu19-visual-control-data.php
           node tests/repro-evidence-lab/print-visual-contract-tests.mjs
           test -s "$WU21_ARTIFACT_DIR/print-visual-contract-results.json"
       - name: Build compact qualification evidence and enforce both gates
