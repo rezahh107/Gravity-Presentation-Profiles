@@ -11,6 +11,7 @@ on:
       - 'tests/cases/entry-detail-production-activation.php'
       - 'tests/cases/entry-detail-setup-conflict.php'
       - 'tests/cases/entry-detail-setup-diagnostics.php'
+      - 'tests/cases/entry-detail-settings-contract.php'
       - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
       - 'tests/repro-evidence-lab/create-wu18-unbound-form.php'
@@ -156,9 +157,9 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
           grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
 
-          # Independently load the actual Gravity Forms Add-On settings page in
-          # a real administrator session. The test-only observer records host API
-          # lifecycle facts from that request without changing production GPP.
+          # Load the actual Gravity Forms Add-On settings page in a real
+          # administrator session. The Entry Detail control must be present in
+          # this host-owned Settings API surface; admin_notices are not the UI.
           cookie_jar=/tmp/wu18-admin-cookies.txt
           settings_html=/tmp/wu18-gpp-settings.html
           curl -sS -c "$cookie_jar" "$WU21_BASE_URL/wp-login.php" >/dev/null
@@ -172,12 +173,16 @@ jobs:
           curl -fsS -b "$cookie_jar" -c "$cookie_jar" \
             "$WU21_BASE_URL/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles" \
             -o "$settings_html"
-          grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html" || grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html"
+          grep -Fq 'Operations Setup (Entry Detail)' "$settings_html"
+          grep -Fq 'Initialize / Adopt Entry Detail presentation' "$settings_html"
+          grep -Fq "form:$form_id" "$settings_html"
           test -s "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"gravity_flow_api_loaded_before_autoload_check": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"form_bound_api_constructible": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
 
           # Positive transition through the real admin-post controller chain.
+          # A separate settings-save proof is added after the host form shape is
+          # retained from this exact runtime.
           success_headers=/tmp/wu18-entry-detail-setup-success-headers.txt
           success_body=/tmp/wu18-entry-detail-setup-success-body.html
           success_http="$(curl -sS -D "$success_headers" -o "$success_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$form_id&expect=success")"
@@ -207,9 +212,10 @@ jobs:
           import sys
           out, unbound_id, failure_http, form_id, success_http, success_location, rerun_http, rerun_location = sys.argv[1:]
           payload = {
-              'schema_version': '2.0.0',
+              'schema_version': '2.1.0',
               'surface': 'gravity_flow.entry_detail',
               'settings_context': 'wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles',
+              'settings_ui_owner': 'gravity_forms_addon_settings_api',
               'request_path': 'wp-admin/admin-post.php',
               'failure_control': {
                   'form_id': int(unbound_id),
@@ -302,6 +308,7 @@ jobs:
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
+            /tmp/wu18-gpp-settings.html
             /tmp/wu18-setup-probe-server.log
             /tmp/wu18-wp-server.log
           if-no-files-found: warn
