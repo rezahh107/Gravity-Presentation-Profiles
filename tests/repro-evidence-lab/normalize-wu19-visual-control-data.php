@@ -6,7 +6,16 @@ if ( ! defined( 'ABSPATH' ) ) exit( 1 );
  * synthetic content envelope after WU18 moved to the current Operations
  * Package. This changes only test entry values; it does not install a visual
  * package, alter bindings, or create a direct student.full_name source.
+ *
+ * setup-wu19-fixtures.php loads this file while establishing the shared runtime.
+ * Do not mutate WU18/Core-Spine/Entry-visual data there. The workflow opts in
+ * explicitly only immediately before the historical Print E/F comparator.
  */
+if ( '1' !== getenv( 'GPP_WU19_VISUAL_CONTROL_NORMALIZE' ) ) {
+    echo "WU19 visual control normalization deferred to Print E/F gate.\n";
+    return;
+}
+
 $wu18 = get_option( 'gpp_wu18_fixture_manifest' );
 if ( ! is_array( $wu18 ) || empty( $wu18['alpha']['fields'] ) || empty( $wu18['beta']['fields'] ) ) {
     throw new RuntimeException( 'WU19 visual control normalization requires current WU18 fixtures.' );
