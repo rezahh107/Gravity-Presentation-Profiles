@@ -181,6 +181,18 @@ function gpp_pr3_set_private( $object, $property, $value ) {
     $reflection->setValue( $object, $value );
 }
 
+function gpp_pr3_settings_field( $section, $name ) {
+    if ( empty( $section['fields'] ) || ! is_array( $section['fields'] ) ) {
+        return null;
+    }
+    foreach ( $section['fields'] as $field ) {
+        if ( isset( $field['name'] ) && $name === $field['name'] ) {
+            return $field;
+        }
+    }
+    return null;
+}
+
 function gpp_pr3_row( $markup, $slot ) {
     $quoted = preg_quote( $slot, '/' );
     if ( 1 !== preg_match( '/<tr data-gpp-semantic-slot="' . $quoted . '">(.*?)<\/tr>/s', $markup, $matches ) ) {
@@ -231,8 +243,6 @@ $lifecycle->activate(
 $context_key = $lifecycle->contextKey( $initial['context'] );
 $repair = new BindingRepairService( $binding_store, $evidence_store, new GravityFormsFieldInventory(), array( 'unit:initial' ) );
 
-// B + C: explicit unmap changes only the requested slot and leaves the previous
-// immutable artifact installed byte-for-canonical-byte.
 $unmap = $repair->unmapField(
     array(
         'context_key' => $context_key,
@@ -254,7 +264,6 @@ gpp_assert_same( 102, gpp_pr3_binding( $unmapped_artifact, 'student.last_name' )
 gpp_assert_same( 'NOT_PROVEN', gpp_pr3_claim( $unmapped_artifact, 'student.photo', 'availability' )['evidence_state'], 'Unmapping must invalidate runtime proof tied to the removed source.' );
 gpp_assert_same( CanonicalJson::encode( $initial ), CanonicalJson::encode( $snapshot['installed'][ $initial['binding_set_id'] ]['1.0.0']['artifact'] ), 'Previous immutable binding artifact must remain installed and unchanged.' );
 
-// E: selecting the exact current mapping is a real no-op at the service boundary.
 $installed_before_noop = count( $snapshot['installed'][ $initial['binding_set_id'] ] );
 $noop = $repair->repairField(
     array(
@@ -270,7 +279,6 @@ $after_noop = gpp_pr3_snapshot( $binding_store );
 gpp_assert_same( $installed_before_noop, count( $after_noop['installed'][ $initial['binding_set_id'] ] ), 'No-op mapping must not create an unnecessary immutable version.' );
 gpp_assert_same( '1.0.1', $after_noop['activations'][ $context_key ]['binding_set_version'], 'No-op mapping must preserve the active version.' );
 
-// D: a stale settings view cannot overwrite a newer activation.
 gpp_pr3_expect_reason(
     'repair_activation_changed',
     static function () use ( $repair, $context_key, $initial ) {
@@ -287,7 +295,6 @@ gpp_pr3_expect_reason(
 );
 gpp_assert_same( '1.0.1', gpp_pr3_snapshot( $binding_store )['activations'][ $context_key ]['binding_set_version'], 'Stale unmap must not replace the newer active binding version.' );
 
-// A: changing first_name cannot touch photo or last_name.
 $changed = $repair->repairField(
     array(
         'context_key' => $context_key,
@@ -303,7 +310,6 @@ gpp_assert_same( 103, gpp_pr3_binding( $changed_artifact, 'student.first_name' )
 gpp_assert_same( 'UNBOUND', gpp_pr3_binding( $changed_artifact, 'student.photo' )['state'], 'Changing first_name must not remap photo.' );
 gpp_assert_same( 102, gpp_pr3_binding( $changed_artifact, 'student.last_name' )['source_ref']['field_id'], 'Changing first_name must not alter last_name.' );
 
-// H: explicit raw→canonical choice confirmation uses only real host choices.
 $female = $repair->confirmPrintOption(
     array(
         'context_key' => $context_key,
@@ -328,8 +334,6 @@ $male = $repair->confirmPrintOption(
 $choice_artifact = gpp_pr3_snapshot( $binding_store )['installed'][ $initial['binding_set_id'] ][ $male['binding_set_version'] ]['artifact'];
 gpp_assert_same( array( 'female' => 'F', 'male' => 'M' ), gpp_pr3_map( gpp_pr3_claim( $choice_artifact, 'student.gender', 'print_mapping' ) ), 'Choice proof must preserve explicit real raw values for both canonical gender options.' );
 
-// "Not confirmed" is first-class: removing one confirmation preserves the other,
-// and removing the final confirmation returns the claim to NOT_PROVEN.
 $cleared = $repair->clearPrintOption(
     array(
         'context_key' => $context_key,
@@ -342,7 +346,6 @@ $cleared = $repair->clearPrintOption(
 $clear_artifact = gpp_pr3_snapshot( $binding_store )['installed'][ $initial['binding_set_id'] ][ $cleared['binding_set_version'] ]['artifact'];
 gpp_assert_same( array( 'male' => 'M' ), gpp_pr3_map( gpp_pr3_claim( $clear_artifact, 'student.gender', 'print_mapping' ) ), 'Clearing one canonical option must preserve the unrelated confirmed option.' );
 
-// Reconfirm female so source-change invalidation proves a non-empty map is reset.
 $reconfirmed = $repair->confirmPrintOption(
     array(
         'context_key' => $context_key,
@@ -354,7 +357,6 @@ $reconfirmed = $repair->confirmPrintOption(
     )
 );
 
-// I: changing the source invalidates previous Print-option proof and map.
 $gender_change = $repair->repairField(
     array(
         'context_key' => $context_key,
@@ -369,14 +371,10 @@ $gender_claim = gpp_pr3_claim( $gender_changed_artifact, 'student.gender', 'prin
 gpp_assert_same( 'NOT_PROVEN', $gender_claim['evidence_state'], 'Changing a choice source must invalidate the old Print mapping proof.' );
 gpp_assert_true( ! isset( $gender_claim['print_option_map'] ), 'Changing a choice source must remove the old raw→canonical option map.' );
 
-// F + G: management policy keeps derived and host-owned non-field semantics out
-// of the arbitrary Gravity Forms field inventory.
 gpp_assert_same( OperationsBindingManagementPolicy::DERIVED, OperationsBindingManagementPolicy::kind( 'student.full_name' ), 'student.full_name must remain a derived management row.' );
 gpp_assert_same( array( 'student.first_name', 'student.last_name' ), OperationsBindingManagementPolicy::derivationComponents( 'student.full_name' ), 'Full-name derivation must identify its authoritative components.' );
 gpp_assert_same( OperationsBindingManagementPolicy::HOST_MANAGED, OperationsBindingManagementPolicy::kind( 'workflow.approve_action' ), 'Gravity Flow action semantics must not be offered as arbitrary Gravity Forms fields.' );
 
-// J + UI: render exact row identities, submit the row token + selected encoded
-// action, and prove the service request keeps the same semantic slot end-to-end.
 $ui_artifact = $choice_artifact;
 $ui_context = array(
     'context_key' => 'ui-context',
@@ -413,8 +411,13 @@ foreach ( $addon->plugin_settings_fields() as $section ) {
     }
 }
 gpp_assert_true( is_array( $binding_section ), 'Mapping & Binding Health settings section must remain present.' );
-gpp_assert_same( 'Binding history rollback', $binding_section['fields'][1]['label'], 'Global field must be history rollback, not the primary mapping workflow.' );
-gpp_assert_same( 'No rollback', $binding_section['fields'][1]['choices'][0]['label'], 'Rollback control must default to no binding change.' );
+$batch_mapping_field = gpp_pr3_settings_field( $binding_section, 'entry_detail_mapping' );
+$rollback_field = gpp_pr3_settings_field( $binding_section, 'binding_management_action' );
+gpp_assert_true( is_array( $batch_mapping_field ), 'Entry Detail batch mapping must coexist with the legacy row mapping controls.' );
+gpp_assert_same( 'gpp_entry_detail_mapping', $batch_mapping_field['type'], 'Batch mapping must use its dedicated embedded renderer.' );
+gpp_assert_true( is_array( $rollback_field ), 'History rollback field must remain available by stable name.' );
+gpp_assert_same( 'Binding history rollback', $rollback_field['label'], 'Global field must be history rollback, not the primary mapping workflow.' );
+gpp_assert_same( 'No rollback', $rollback_field['choices'][0]['label'], 'Rollback control must default to no binding change.' );
 
 ob_start();
 $addon->settings_gpp_binding_health( null );

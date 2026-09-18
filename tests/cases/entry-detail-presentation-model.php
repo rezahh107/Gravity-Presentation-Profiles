@@ -137,12 +137,12 @@ $alpha_entry = array( 'id' => 1001, 'form_id' => 101 );
 $beta_entry = array( 'id' => 2001, 'form_id' => 202 );
 
 gpp_assert_same( 'srwf.operations.entry-detail.v1', $model->profileId(), 'Current qualification uses the shipped Operations Entry Detail profile.' );
-gpp_assert_same( ed_required_slots( $package ), $model->requiredSemanticSlotKeys(), 'Required Entry Detail semantics come from the current Operations Package.' );
-gpp_assert_true( in_array( 'workflow.approve_action', $model->requiredSemanticSlotKeys(), true ), 'Approve remains required in the current contract.' );
-gpp_assert_true( in_array( 'workflow.reject_action', $model->requiredSemanticSlotKeys(), true ), 'Reject remains required in the current contract.' );
-gpp_assert_true( in_array( 'print.utility', $model->requiredSemanticSlotKeys(), true ), 'Print utility remains required in the current contract.' );
+gpp_assert_same( ed_required_slots( $package ), $model->requiredSemanticSlotKeys(), 'Required Entry Detail semantics remain health/completeness authority from the current Operations Package.' );
+gpp_assert_true( in_array( 'workflow.approve_action', $model->requiredSemanticSlotKeys(), true ), 'Approve remains required for completeness where the request is actionable.' );
+gpp_assert_true( in_array( 'workflow.reject_action', $model->requiredSemanticSlotKeys(), true ), 'Reject remains required for completeness where the request is actionable.' );
+gpp_assert_true( in_array( 'print.utility', $model->requiredSemanticSlotKeys(), true ), 'Print utility requiredness remains visible as package completeness metadata.' );
 
-gpp_assert_true( $model->isPresentationReady( $alpha_entry, ed_capabilities() ), 'Current Operations package can become structurally ready without fake request-local bindings.' );
+gpp_assert_true( $model->isPresentationReady( $alpha_entry, ed_capabilities() ), 'Current Operations package is structurally ready with one unambiguous binding context.' );
 gpp_assert_true( $model->isPresentationReady( $beta_entry, ed_capabilities() ), 'A second environment can use different direct field IDs with the same current profile.' );
 
 $derived = $model->derivedDecision( $alpha_entry, 'student.full_name' );
@@ -159,18 +159,21 @@ gpp_assert_same( 'derived_slot_requires_derivation', $direct_name['reason'], 'De
 $missing_first = ed_set_binding_state( $alpha, 'student.first_name', 'UNBOUND' );
 $missing_first_model = new EntryDetailPresentationModel( $profile, array( $missing_first ), $package['semantic_slots'] );
 $missing_first_decision = $missing_first_model->presentationReadiness( $alpha_entry, ed_capabilities() );
-gpp_assert_true( ! $missing_first_decision['ready'], 'Removing first-name component fails full-name readiness closed.' );
-gpp_assert_same( 'student.first_name', $missing_first_decision['semantic_slot_key'], 'First failed canonical component is reported.' );
+gpp_assert_true( $missing_first_decision['ready'], 'An unmapped required data component must not kill structurally admitted Entry Detail.' );
+$missing_first_derived = $missing_first_model->derivedDecision( $alpha_entry, 'student.full_name' );
+gpp_assert_true( ! $missing_first_derived['ready'], 'Derived full name still reports its unresolved component independently.' );
+gpp_assert_same( 'student.first_name', $missing_first_derived['semantic_slot_key'], 'Derived degradation identifies the unresolved first-name component.' );
 
 $missing_last = ed_set_binding_state( $alpha, 'student.last_name', 'UNBOUND' );
 $missing_last_model = new EntryDetailPresentationModel( $profile, array( $missing_last ), $package['semantic_slots'] );
 $missing_last_decision = $missing_last_model->presentationReadiness( $alpha_entry, ed_capabilities() );
-gpp_assert_true( ! $missing_last_decision['ready'], 'Removing last-name component fails full-name readiness closed despite the bogus direct full-name source.' );
-gpp_assert_same( 'student.last_name', $missing_last_decision['semantic_slot_key'], 'Direct full-name source cannot substitute for missing last-name component.' );
+gpp_assert_true( $missing_last_decision['ready'], 'A second required data component can degrade without invalidating the page shell.' );
+$missing_last_derived = $missing_last_model->derivedDecision( $alpha_entry, 'student.full_name' );
+gpp_assert_true( ! $missing_last_derived['ready'], 'Bogus direct full-name authority cannot substitute for an unresolved last-name component.' );
+gpp_assert_same( 'student.last_name', $missing_last_derived['semantic_slot_key'], 'Derived degradation identifies the unresolved last-name component.' );
 
 $print_unready = $model->presentationReadiness( $alpha_entry, ed_capabilities( false ) );
-gpp_assert_true( ! $print_unready['ready'], 'Unavailable required Print capability fails enhanced Entry Detail closed.' );
-gpp_assert_same( 'print.utility', $print_unready['semantic_slot_key'], 'Print capability failure is attributed to print.utility.' );
+gpp_assert_true( $print_unready['ready'], 'Unavailable Print capability is region-degraded and must not kill Entry Detail.' );
 $print_source = $model->resolve( $alpha_entry, 'print.utility' );
 gpp_assert_true( ! $print_source['resolved'] && null === $print_source['source_ref'], 'No direct host source is fabricated for print.utility.' );
 
@@ -181,17 +184,22 @@ gpp_assert_true( ! $model->runtimeClaimIsProven( $alpha_entry, 'workflow.approve
 $broken = ed_set_binding_state( $alpha, 'student.national_id', 'NOT_PROVEN' );
 $broken_model = new EntryDetailPresentationModel( $profile, array( $broken ), $package['semantic_slots'] );
 $broken_decision = $broken_model->presentationReadiness( $alpha_entry, ed_capabilities() );
-gpp_assert_true( ! $broken_decision['ready'], 'NOT_PROVEN required direct binding fails enhanced dossier closed.' );
-gpp_assert_same( 'student.national_id', $broken_decision['semantic_slot_key'], 'Structural readiness identifies the first failed semantic key.' );
+gpp_assert_true( $broken_decision['ready'], 'NOT_PROVEN required direct data binding degrades its slot instead of killing the dossier shell.' );
+$broken_slot = $broken_model->resolve( $alpha_entry, 'student.national_id' );
+gpp_assert_true( ! $broken_slot['resolved'], 'The degraded direct semantic remains unresolved and must not fabricate a value.' );
 
 $ambiguous_model = new EntryDetailPresentationModel(
     $profile,
     array( $alpha, ed_binding( 'entry-detail.alpha.other-install', 'other-installation', 101, $package, 140 ) ),
     $package['semantic_slots']
 );
-$ambiguous = $ambiguous_model->resolve( $alpha_entry, 'student.first_name' );
-gpp_assert_true( ! $ambiguous['resolved'], 'Ambiguous active installation fails closed.' );
+$ambiguous = $ambiguous_model->presentationReadiness( $alpha_entry, ed_capabilities() );
+gpp_assert_true( ! $ambiguous['ready'], 'Ambiguous active EnvironmentBindingSet identity remains page-fatal.' );
 gpp_assert_same( 'missing_or_ambiguous_active_environment', $ambiguous['reason'], 'Ambiguous environment failure is explicit.' );
+
+$invalid = $model->presentationReadiness( array( 'id' => 0, 'form_id' => 101 ), ed_capabilities() );
+gpp_assert_true( ! $invalid['ready'], 'Invalid entry context remains page-fatal.' );
+gpp_assert_same( 'invalid_entry_context', $invalid['reason'], 'Invalid host payload failure remains explicit.' );
 
 // Legacy-fixture falsification: this control is intentionally acceptable to the
 // old WU09 contract but invalid under the current Operations Package.

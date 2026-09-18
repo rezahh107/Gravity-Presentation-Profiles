@@ -30,11 +30,10 @@ function wp_strip_all_tags( $value ) {
 }
 
 /**
- * Minimal stand-in for a Gravity Forms choice field. `get_value_entry_detail`
- * mirrors the host signature
- * ( $value, $currency = '', $use_text = false, $format = 'html', $media = 'screen' )
- * and fails loudly if a caller passes the entry where the currency belongs,
- * which is exactly the defect this coverage exists to prevent.
+ * Minimal stand-in for a Gravity Forms 3.1.x choice field.
+ * Since Gravity Forms 2.9.29, GF_Field::get_value_entry_detail() receives the
+ * current Entry Object as argument two instead of the legacy currency string.
+ * Fail loudly if a caller regresses to the pre-2.9.29 contract.
  */
 final class PrintStubChoiceField {
     public $id;
@@ -48,9 +47,9 @@ final class PrintStubChoiceField {
         $this->choices = $choices;
     }
 
-    public function get_value_entry_detail( $value, $currency = '', $use_text = false, $format = 'html', $media = 'screen' ) {
-        if ( ! is_string( $currency ) ) {
-            throw new \InvalidArgumentException( 'currency argument must be a currency code string' );
+    public function get_value_entry_detail( $value, $entry = array(), $use_text = false, $format = 'html', $media = 'screen' ) {
+        if ( ! is_array( $entry ) ) {
+            throw new \InvalidArgumentException( 'entry argument must be the current Entry Object' );
         }
         if ( 'text' !== $format ) {
             throw new \InvalidArgumentException( 'print presentation must request the text format' );
@@ -72,9 +71,9 @@ final class PrintStubTextField {
         $this->label = $label;
     }
 
-    public function get_value_entry_detail( $value, $currency = '', $use_text = false, $format = 'html', $media = 'screen' ) {
-        if ( ! is_string( $currency ) ) {
-            throw new \InvalidArgumentException( 'currency argument must be a currency code string' );
+    public function get_value_entry_detail( $value, $entry = array(), $use_text = false, $format = 'html', $media = 'screen' ) {
+        if ( ! is_array( $entry ) ) {
+            throw new \InvalidArgumentException( 'entry argument must be the current Entry Object' );
         }
         return (string) $value;
     }

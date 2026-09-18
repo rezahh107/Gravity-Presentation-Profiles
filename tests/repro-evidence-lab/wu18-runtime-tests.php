@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/wu18-runtime-tests-core.php';
+require __DIR__ . '/wu18-formatter-contract.php';
 
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = json_decode( file_get_contents( $results_path ), true );
@@ -25,15 +26,22 @@ foreach ( $expected_order as $stage ) {
     $previous_position = $position;
 }
 
-$structural = $results['decision_controls']['structural_failure'];
-$structural_failure = wu18_trace_event( $structural, 'ENTRY_DETAIL_BINDING_READINESS', 'FAIL' );
+$semantic_degradation = $results['decision_controls']['semantic_degradation'];
 wu18_assert(
-    null !== $structural_failure && 0 === strpos( $structural_failure['reason_code'], 'semantic.student.national_id.' ),
-    'Structural trace did not identify the first failed semantic key.'
+    null !== wu18_trace_event( $semantic_degradation, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ),
+    'A data-semantic degradation was incorrectly classified as structural failure.'
 );
 wu18_assert(
-    null === wu18_trace_event( $structural, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' ),
-    'Structural failure incorrectly proceeded to live Approval eligibility.'
+    null !== wu18_trace_reason( $semantic_degradation, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.student.national_id.unmapped' ),
+    'Semantic degradation trace did not identify the unresolved student.national_id slot.'
+);
+wu18_assert(
+    null !== wu18_trace_event( $semantic_degradation, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' ),
+    'Structurally admitted semantic degradation did not continue to live Approval eligibility.'
+);
+wu18_assert(
+    null !== wu18_trace_event( $semantic_degradation, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ),
+    'Structurally admitted semantic degradation did not emit the GPP dossier.'
 );
 
 $non_assignee = $results['decision_controls']['authorized_non_assignee'];
@@ -42,21 +50,32 @@ wu18_assert(
     null !== $non_assignee_gate && 'current_assignee_not_eligible' === $non_assignee_gate['reason_code'],
     'Authorized non-assignee trace did not record live request ineligibility.'
 );
+wu18_assert(
+    null !== wu18_trace_event( $non_assignee, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ),
+    'Authorized non-assignee did not retain the read-only enhanced presentation.'
+);
 
 $print_unavailable = $results['decision_controls']['print_unavailable'];
-$print_failure = wu18_trace_event( $print_unavailable, 'ENTRY_DETAIL_BINDING_READINESS', 'FAIL' );
 wu18_assert(
-    null !== $print_failure && 0 === strpos( $print_failure['reason_code'], 'semantic.print.utility.' ),
-    'Required Print capability failure was not visible in shared Entry Detail diagnostics.'
+    null !== wu18_trace_event( $print_unavailable, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ),
+    'Unavailable Print utility was incorrectly classified as structural failure.'
+);
+wu18_assert(
+    null !== wu18_trace_reason( $print_unavailable, 'ENTRY_DETAIL_OPTIONAL_REGIONS', 'region.print.utility.unavailable' ),
+    'Unavailable Print utility was not exposed as an optional-region degradation.'
+);
+wu18_assert(
+    null !== wu18_trace_event( $print_unavailable, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ),
+    'Unavailable Print utility incorrectly prevented Entry Detail presentation output.'
 );
 
 $results['runtime_decision_trace'] = array(
     'schema_version' => $success_trace['schema_version'],
     'status' => $success_trace['status'],
     'ordered_success_stages' => $success_stages,
-    'first_failed_semantic_observed' => true,
-    'request_ineligibility_distinct_from_binding_failure' => true,
-    'native_fallback_observed' => true,
+    'semantic_degradation_distinct_from_structural_failure' => true,
+    'request_ineligibility_distinct_from_view_authorization' => true,
+    'optional_print_degradation_observed' => true,
 );
 file_put_contents(
     $results_path,

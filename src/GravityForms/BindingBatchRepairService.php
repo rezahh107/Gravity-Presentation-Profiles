@@ -21,6 +21,8 @@ use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPoli
  * evidence stores as the existing single-row repair path.
  */
 final class BindingBatchRepairService {
+    const STATUS_UNCHANGED = 'UNCHANGED';
+
     private $binding_store;
     private $evidence_store;
     private $inventory;
@@ -110,7 +112,7 @@ final class BindingBatchRepairService {
 
         if ( array() === $changed ) {
             return array(
-                'status' => 'UNCHANGED',
+                'status' => self::STATUS_UNCHANGED,
                 'binding_set_id' => $artifact['binding_set_id'],
                 'previous_version' => $artifact['binding_set_version'],
                 'binding_set_version' => $artifact['binding_set_version'],

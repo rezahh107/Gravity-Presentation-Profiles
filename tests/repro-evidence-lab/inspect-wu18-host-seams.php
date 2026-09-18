@@ -1,6 +1,6 @@
 <?php
 /**
- * Authentic Gravity Flow 3.1.0 host-seam inventory for WU18.
+ * Authentic Gravity Flow 3.1.0 / Gravity Forms 3.1.1.1 host-seam inventory for WU18.
  *
  * Runs only inside the pinned disposable runtime and records source/runtime
  * capability evidence. It never records entry values, users, nonces, action
@@ -45,20 +45,21 @@ $patterns = array(
     'approval_step_class'               => 'class Gravity_Flow_Step_Approval',
     'current_step_api'                  => 'function get_current_step',
     'entry_detail_can_update'           => 'function can_update',
+    'entry_detail_field_visibility'     => 'function is_display_field',
     'approval_button_text'              => 'approve',
     'reject_button_text'                => 'reject',
     'instructions_key'                  => 'instructionsValue',
-    'entry_detail_method'                => 'function entry_detail',
-    'entry_detail_permission'            => 'function is_permission_granted',
-    'backlink_filter'                    => 'gravityflow_back_link_url_entry_detail',
-    'backlink_markup'                    => 'back-link',
-    'timeline_flag'                      => 'show_timeline',
-    'timeline_api'                       => 'function get_timeline',
-    'status_api'                         => 'function get_status',
-    'approval_actions_method'            => 'function workflow_detail_status_box_actions',
-    'approval_get_actions'               => 'function get_actions',
-    'status_box_method'                  => 'function workflow_detail_status_box',
-    'user_input_step_class'               => 'class Gravity_Flow_Step_User_Input',
+    'entry_detail_method'               => 'function entry_detail',
+    'entry_detail_permission'           => 'function is_permission_granted',
+    'backlink_filter'                   => 'gravityflow_back_link_url_entry_detail',
+    'backlink_markup'                   => 'back-link',
+    'timeline_flag'                     => 'show_timeline',
+    'timeline_api'                      => 'function get_timeline',
+    'status_api'                        => 'function get_status',
+    'approval_actions_method'           => 'function workflow_detail_status_box_actions',
+    'approval_get_actions'              => 'function get_actions',
+    'status_box_method'                 => 'function workflow_detail_status_box',
+    'user_input_step_class'             => 'class Gravity_Flow_Step_User_Input',
 );
 
 $occurrences = array();
@@ -98,6 +99,43 @@ foreach ( $iterator as $file ) {
     }
 }
 
+$parameter_shape = static function ( ReflectionMethod $method ) {
+    $parameters = array();
+    foreach ( $method->getParameters() as $parameter ) {
+        $parameters[] = array(
+            'name' => $parameter->getName(),
+            'required' => ! $parameter->isOptional(),
+            'has_default' => $parameter->isDefaultValueAvailable(),
+        );
+    }
+    return $parameters;
+};
+
+$method_source = static function ( ReflectionMethod $method, $root, $parameter_shape ) {
+    $file_name = $method->getFileName();
+    if ( ! is_string( $file_name ) || ! is_file( $file_name ) ) {
+        return null;
+    }
+    $lines = file( $file_name, FILE_IGNORE_NEW_LINES );
+    if ( ! is_array( $lines ) ) {
+        return null;
+    }
+    $body = array();
+    for ( $line = $method->getStartLine(); $line <= $method->getEndLine(); $line++ ) {
+        if ( isset( $lines[ $line - 1 ] ) ) {
+            $body[] = array( 'line' => $line, 'text' => rtrim( $lines[ $line - 1 ] ) );
+        }
+    }
+    return array(
+        'declaring_class' => $method->getDeclaringClass()->getName(),
+        'file' => ltrim( str_replace( $root, '', $file_name ), '/\\' ),
+        'start_line' => $method->getStartLine(),
+        'end_line' => $method->getEndLine(),
+        'parameters' => $parameter_shape( $method ),
+        'body' => $body,
+    );
+};
+
 $reflection = array();
 foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_Step_Approval' ) as $class ) {
     if ( ! class_exists( $class ) ) {
@@ -114,6 +152,7 @@ foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_
             'name' => $method->getName(),
             'visibility' => $method->isPublic() ? 'public' : ( $method->isProtected() ? 'protected' : 'private' ),
             'static' => $method->isStatic(),
+            'parameters' => $parameter_shape( $method ),
             'file' => $method->getFileName() ? ltrim( str_replace( $flow_root, '', $method->getFileName() ), '/\\' ) : null,
             'start_line' => $method->getStartLine(),
             'end_line' => $method->getEndLine(),
@@ -130,7 +169,18 @@ foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_
 $selected_method_source = array();
 $selected_methods = array(
     'Gravity_Flow_API' => array( 'get_current_step', 'get_status', 'get_timeline' ),
-    'Gravity_Flow_Entry_Detail' => array( 'entry_detail', 'is_permission_granted', 'can_update', 'maybe_display_back_link', 'maybe_show_instructions', 'maybe_show_timeline' ),
+    'Gravity_Flow_Entry_Detail' => array(
+        'entry_detail',
+        'entry_detail_grid',
+        'fields',
+        'get_display_value',
+        'is_display_field',
+        'is_permission_granted',
+        'can_update',
+        'maybe_display_back_link',
+        'maybe_show_instructions',
+        'maybe_show_timeline',
+    ),
     'Gravity_Flow_Step_Approval' => array( 'get_actions', 'workflow_detail_box', 'workflow_detail_status_box_actions', 'workflow_detail_status_box_status' ),
 );
 foreach ( $selected_methods as $class => $methods ) {
@@ -142,38 +192,105 @@ foreach ( $selected_methods as $class => $methods ) {
         if ( ! $rc->hasMethod( $method_name ) ) {
             continue;
         }
-        $method = $rc->getMethod( $method_name );
-        $file_name = $method->getFileName();
-        if ( ! is_string( $file_name ) || ! is_file( $file_name ) ) {
+        $source = $method_source( $rc->getMethod( $method_name ), $flow_root, $parameter_shape );
+        if ( null !== $source ) {
+            $selected_method_source[ $class . '::' . $method_name ] = $source;
+        }
+    }
+}
+
+$gravity_forms_entry_detail_formatters = array();
+foreach ( array(
+    'GF_Field',
+    'GF_Field_Text',
+    'GF_Field_Phone',
+    'GF_Field_Radio',
+    'GF_Field_Select',
+    'GF_Field_Name',
+    'GF_Field_Date',
+    'GF_Field_FileUpload',
+    'GF_Field_Fileupload',
+) as $requested_class ) {
+    if ( ! class_exists( $requested_class ) ) {
+        $gravity_forms_entry_detail_formatters[ $requested_class ] = array( 'exists' => false );
+        continue;
+    }
+    $rc = new ReflectionClass( $requested_class );
+    $runtime_class = $rc->getName();
+    if ( isset( $gravity_forms_entry_detail_formatters[ $runtime_class ] ) ) {
+        continue;
+    }
+    if ( ! $rc->hasMethod( 'get_value_entry_detail' ) ) {
+        $gravity_forms_entry_detail_formatters[ $runtime_class ] = array( 'exists' => true, 'method_exists' => false );
+        continue;
+    }
+    $method = $rc->getMethod( 'get_value_entry_detail' );
+    $source = $method_source( $method, $gf_root, $parameter_shape );
+    $gravity_forms_entry_detail_formatters[ $runtime_class ] = array(
+        'exists' => true,
+        'method_exists' => true,
+        'method' => $source,
+    );
+}
+
+$gravity_forms_plugin_settings = array(
+    'methods' => array(),
+    'source_occurrences' => array(),
+);
+if ( class_exists( 'GFAddOn' ) ) {
+    $addon_reflection = new ReflectionClass( 'GFAddOn' );
+    foreach ( $addon_reflection->getMethods() as $method ) {
+        if ( false === strpos( $method->getName(), 'plugin_settings' ) && false === strpos( $method->getName(), 'settings_fields' ) && false === strpos( $method->getName(), 'app_settings' ) ) {
             continue;
         }
-        $lines = file( $file_name, FILE_IGNORE_NEW_LINES );
-        if ( ! is_array( $lines ) ) {
+        $source = $method_source( $method, $gf_root, $parameter_shape );
+        if ( null !== $source ) {
+            $gravity_forms_plugin_settings['methods'][ $method->getName() ] = $source;
+        }
+    }
+}
+$addon_iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator( $gf_root . '/includes', FilesystemIterator::SKIP_DOTS )
+);
+foreach ( $addon_iterator as $file ) {
+    if ( ! $file->isFile() || 'php' !== strtolower( $file->getExtension() ) ) {
+        continue;
+    }
+    $lines = @file( $file->getPathname(), FILE_IGNORE_NEW_LINES );
+    if ( ! is_array( $lines ) ) {
+        continue;
+    }
+    foreach ( $lines as $index => $line ) {
+        if ( false === strpos( $line, 'plugin_settings_fields' ) && false === strpos( $line, 'gform_addon_' ) ) {
             continue;
         }
-        $body = array();
-        for ( $line = $method->getStartLine(); $line <= $method->getEndLine(); $line++ ) {
-            if ( isset( $lines[ $line - 1 ] ) ) {
-                $body[] = array( 'line' => $line, 'text' => rtrim( $lines[ $line - 1 ] ) );
-            }
+        $start = max( 0, $index - 3 );
+        $end = min( count( $lines ) - 1, $index + 5 );
+        $snippet = array();
+        for ( $i = $start; $i <= $end; $i++ ) {
+            $snippet[] = array( 'line' => $i + 1, 'text' => trim( $lines[ $i ] ) );
         }
-        $selected_method_source[ $class . '::' . $method_name ] = array(
-            'file' => ltrim( str_replace( $flow_root, '', $file_name ), '/\\\\' ),
-            'start_line' => $method->getStartLine(),
-            'end_line' => $method->getEndLine(),
-            'body' => $body,
+        $gravity_forms_plugin_settings['source_occurrences'][] = array(
+            'file' => ltrim( str_replace( $gf_root, '', $file->getPathname() ), '/\\' ),
+            'line' => $index + 1,
+            'snippet' => $snippet,
         );
+        if ( count( $gravity_forms_plugin_settings['source_occurrences'] ) >= 40 ) {
+            break 2;
+        }
     }
 }
 
 $result = array(
-    'schema_version' => '1.1.0',
+    'schema_version' => '1.4.0',
     'gravity_forms_version' => $gf_version,
     'gravity_flow_version' => $flow_version,
     'gravity_flow_main_sha256' => hash_file( 'sha256', $flow_root . '/gravityflow.php' ),
     'occurrences' => $occurrences,
     'reflection' => $reflection,
     'selected_method_source' => $selected_method_source,
+    'gravity_forms_entry_detail_formatters' => $gravity_forms_entry_detail_formatters,
+    'gravity_forms_plugin_settings' => $gravity_forms_plugin_settings,
 );
 wp_mkdir_p( $artifact_dir );
 file_put_contents(

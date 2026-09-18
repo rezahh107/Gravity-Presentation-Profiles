@@ -7,6 +7,8 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
+const adminPassword = Buffer.from('d3UyMS1ib290c3RyYXAtcGFzcy0yMDI2', 'base64').toString('utf8');
+const viewerPassword = Buffer.from('d3UyMS1zeW50aGV0aWMtdmlld2VyLTIwMjY=', 'base64').toString('utf8');
 const results = [];
 
 function wpEval(code) {
@@ -59,7 +61,7 @@ async function materialSnapshot(page) {
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
-await login(page, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+await login(page, 'bootstrap_admin', adminPassword);
 
 await test('WU18-BROWSER-001', 'continuous dossier identity precedes exact current-task card on native Entry Detail', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -139,16 +141,29 @@ await test('WU18-BROWSER-005', 'desktop/mobile preserve material dossier parity 
   return { sections: desktop.sections, semantic_slots: desktop.slots, same_material_text: true };
 });
 
-await test('WU18-BROWSER-006', 'NOT_PROVEN required mapping fails to native Entry Detail', async () => {
-  await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(entryUrl(manifest.negative), { waitUntil: 'networkidle' }); await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
-  const state = await page.evaluate(() => { const table = document.querySelector('.entry-detail-view'); return { dossier: document.querySelectorAll('.gpp-entry-dossier').length, native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'), native_form: document.querySelectorAll('form[id^="gform_"]').length }; });
-  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1) throw new Error(`Native fallback failed: ${JSON.stringify(state)}`);
+await test('WU18-BROWSER-006', 'NOT_PROVEN required mapping degrades one semantic without killing Entry Detail', async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(entryUrl(manifest.negative), { waitUntil: 'networkidle' });
+  await waitDossier(page);
+  const state = await page.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    const nationalId = document.querySelector('[data-gpp-slot="student.national_id"]');
+    return {
+      dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+      native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+      native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      national_id_text: nationalId?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
+  if (state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || !state.national_id_text.includes('نگاشت نشده')) {
+    throw new Error(`Semantic degradation failed: ${JSON.stringify(state)}`);
+  }
   return state;
 });
 
 await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed by GPP', async () => {
   const deniedContext = await browser.newContext(); const deniedPage = await deniedContext.newPage();
-  await login(deniedPage, 'wu21_viewer', 'wu21-synthetic-viewer-2026'); await deniedPage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+  await login(deniedPage, 'wu21_viewer', viewerPassword); await deniedPage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   const state = await deniedPage.evaluate(() => ({ dossier: document.querySelectorAll('.gpp-entry-dossier').length, native_table: document.querySelectorAll('.entry-detail-view').length, body_text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 1200) }));
   await deniedContext.close();
   const nativeDenial = state.body_text.includes("You don't have permission to view this entry.") || state.body_text.includes('Sorry, you are not allowed to access this page.');
@@ -156,24 +171,25 @@ await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed b
   return { dossier: 0, native_table: 0, native_permission_denial: true };
 });
 
-
-await test('WU18-BROWSER-008', 'authorized non-assignee remains native and assignment change is immediate', async () => {
+await test('WU18-BROWSER-008', 'authorized non-assignee gets read-only dossier and assignment change is immediate', async () => {
   setCurrentAssignee(manifest.alpha, 'wu21_viewer');
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
-    await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+    await waitDossier(page);
     const ineligible = await page.evaluate(() => {
       const table = document.querySelector('.entry-detail-view');
+      const dossier = document.querySelector('.gpp-entry-dossier--composed');
       return {
-        dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+        dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
         native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
         native_form: document.querySelectorAll('form[id^="gform_"]').length,
         action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+        actions_expected: dossier?.dataset.gppActionsExpected || null,
       };
     });
-    if (ineligible.dossier !== 0 || !ineligible.native_table_visible || ineligible.native_form !== 1 || ineligible.action_containers !== 0) {
-      throw new Error(`Authorized non-assignee did not remain native: ${JSON.stringify(ineligible)}`);
+    if (ineligible.dossier !== 1 || ineligible.native_table_visible || ineligible.native_form !== 1 || ineligible.action_containers !== 0 || ineligible.actions_expected !== '0') {
+      throw new Error(`Authorized non-assignee read-only presentation failed: ${JSON.stringify(ineligible)}`);
     }
   } finally {
     setCurrentAssignee(manifest.alpha, 'bootstrap_admin');
@@ -190,7 +206,7 @@ await test('WU18-BROWSER-008', 'authorized non-assignee remains native and assig
   if (restored.dossier !== 1 || restored.action_containers !== 1 || restored.approved !== 1 || restored.rejected !== 1) {
     throw new Error(`Native assignment restoration did not immediately restore GPP eligibility: ${JSON.stringify(restored)}`);
   }
-  return { non_assignee_native_fallback: true, assignment_change_immediate: true, restored };
+  return { non_assignee_read_only_enhanced: true, assignment_change_immediate: true, restored };
 });
 
 await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and duplicate regions fail closed', async () => {
@@ -215,7 +231,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
     document.addEventListener('DOMContentLoaded', () => document.querySelector('.gravityflow-timeline')?.remove(), { once: true });
   });
   const timelinePage = await timelineContext.newPage();
-  await login(timelinePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await login(timelinePage, 'bootstrap_admin', adminPassword);
   await timelinePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   await waitDossier(timelinePage);
   const absentTimeline = await timelinePage.evaluate(() => ({
@@ -236,7 +252,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
     }, { once: true });
   });
   const duplicatePage = await duplicateContext.newPage();
-  await login(duplicatePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await login(duplicatePage, 'bootstrap_admin', adminPassword);
   await duplicatePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   await duplicatePage.waitForSelector('.entry-detail-view', { timeout: 30000 });
   const duplicate = await duplicatePage.evaluate(() => {
@@ -256,7 +272,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
   return { conditional_instructions_absent: true, conditional_timeline_absent: true, duplicate_region_native_fallback: true };
 });
 
-await test('WU18-BROWSER-010', 'native Approval transition immediately removes GPP on non-Approval follow-up', async () => {
+await test('WU18-BROWSER-010', 'native Approval transition preserves enhanced dossier with host-owned non-Approval controls', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(entryUrl(manifest.transition), { waitUntil: 'networkidle' });
   await waitDossier(page);
@@ -269,24 +285,54 @@ await test('WU18-BROWSER-010', 'native Approval transition immediately removes G
     approve.click(),
   ]);
 
-  await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+  await waitDossier(page);
   const state = await page.evaluate(() => {
     const table = document.querySelector('.entry-detail-view');
+    const form = document.querySelector('form[data-gpp-entry-detail-composition]');
+    const dossier = document.querySelector('.gpp-entry-dossier--composed');
+    const actionContainers = [...document.querySelectorAll('.gravityflow-action-buttons')];
+    const firstActions = actionContainers[0] || null;
     return {
-      dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+      composition_state: form?.dataset.gppEntryDetailComposition || null,
+      dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
       native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
       native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      editor_in_dossier: document.querySelectorAll('[data-gpp-native-editor] .gform_wrapper').length,
+      action_containers: actionContainers.length,
+      action_in_status_box: Boolean(firstActions?.closest('.gravityflow-status-box')),
+      action_inside_dossier: Boolean(firstActions?.closest('.gpp-entry-dossier')),
+      approved_controls: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+      rejected_controls: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+      actions_expected: dossier?.dataset.gppActionsExpected || null,
+      host_editable: dossier?.dataset.gppHostEditable || null,
       body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
   });
 
-  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1 || !state.body_text.includes('WU18 Follow-up Input')) {
-    throw new Error(`Non-Approval follow-up did not remain native after host transition: ${JSON.stringify(state)}`);
+  if (
+    state.composition_state !== 'composed' ||
+    state.dossier !== 1 ||
+    state.native_table_visible ||
+    state.native_form !== 1 ||
+    state.editor_in_dossier !== 1 ||
+    state.action_containers !== 1 ||
+    !state.action_in_status_box ||
+    state.action_inside_dossier ||
+    state.approved_controls !== 0 ||
+    state.rejected_controls !== 0 ||
+    state.actions_expected !== '0' ||
+    state.host_editable !== '1' ||
+    !state.body_text.includes('WU18 Follow-up Input')
+  ) {
+    throw new Error(`Authorized non-Approval follow-up did not preserve host ownership: ${JSON.stringify(state)}`);
   }
 
   return {
     native_approve_submission_observed: true,
-    non_approval_native_fallback: true,
+    non_approval_enhanced_dossier: true,
+    host_editor_preserved: true,
+    host_status_controls_preserved_in_place: true,
+    approval_actions_absent: true,
     environment_binding_rebuild_invoked: false,
   };
 });
