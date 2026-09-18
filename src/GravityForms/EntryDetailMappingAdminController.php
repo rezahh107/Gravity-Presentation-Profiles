@@ -8,6 +8,7 @@ use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
  * Owner-facing Entry Detail batch mapping inside the existing GPP Plugin
  * Settings renderer. Mapping mutation still crosses a dedicated admin-post
  * boundary so an Entry Detail mapping save cannot persist unrelated GF settings.
+ * Field mapping is shared across every GPP surface that consumes that semantic.
  */
 final class EntryDetailMappingAdminController {
     const ACTION = 'gpp_entry_detail_mapping_save';
