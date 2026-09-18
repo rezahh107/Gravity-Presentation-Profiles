@@ -12,6 +12,7 @@ on:
       - 'tests/cases/entry-detail-setup-diagnostics.php'
       - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
+      - 'tests/repro-evidence-lab/create-wu18-unbound-form.php'
       - 'tests/repro-evidence-lab/wu18-admin-setup-request.php'
       - 'tests/repro-evidence-lab/wu18-entry-detail-setup-state.php'
       - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
@@ -126,6 +127,9 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/wu18-host-seam-inventory.json"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
           test -s "$WU21_ARTIFACT_DIR/fixture-manifest.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/create-wu18-unbound-form.php
+          unbound_form_id="$(tr -d '\r\n' < "$WU21_ARTIFACT_DIR/wu18-unbound-form-id.txt")"
+          test "$unbound_form_id" -gt 0
 
           cp tests/repro-evidence-lab/wu18-admin-setup-request.php "$WU21_WP_PATH/wu18-admin-setup-request.php"
           php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/wu18-setup-probe-server.log 2>&1 &
@@ -136,38 +140,54 @@ jobs:
             sleep 1
           done
           curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null
+
+          failure_body=/tmp/wu18-entry-detail-setup-failure-body.html
+          failure_http="$(curl -sS -o "$failure_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$unbound_form_id&expect=failure")"
+          test "$failure_http" = "409"
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
+          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
+
           form_id="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); if(!is_array($d)||empty($d["forms"][0]["form_id"])) exit(2); echo (int)$d["forms"][0]["form_id"];' "$WU21_ARTIFACT_DIR/fixture-manifest.json")"
-          probe_headers=/tmp/wu18-entry-detail-setup-headers.txt
-          probe_body=/tmp/wu18-entry-detail-setup-body.html
-          http_code="$(curl -sS -D "$probe_headers" -o "$probe_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$form_id")"
-          location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/ {sub(/\r$/, ""); sub(/^Location:[[:space:]]*/, ""); print; exit}' "$probe_headers")"
-          python3 - "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json" "$form_id" "$http_code" "$location" <<'PY'
+          success_headers=/tmp/wu18-entry-detail-setup-success-headers.txt
+          success_body=/tmp/wu18-entry-detail-setup-success-body.html
+          success_http="$(curl -sS -D "$success_headers" -o "$success_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$form_id&expect=success")"
+          success_location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/ {sub(/\r$/, ""); sub(/^Location:[[:space:]]*/, ""); print; exit}' "$success_headers")"
+
+          python3 - "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json" "$unbound_form_id" "$failure_http" "$form_id" "$success_http" "$success_location" <<'PY'
           import json
           import sys
-          out, form_id, http_code, location = sys.argv[1:]
+          out, unbound_id, failure_http, form_id, success_http, location = sys.argv[1:]
           payload = {
-              'schema_version': '1.0.0',
+              'schema_version': '1.1.0',
               'surface': 'gravity_flow.entry_detail',
               'request_path': 'wp-admin/admin-post.php',
-              'form_id': int(form_id),
-              'http_status': int(http_code),
-              'completed_redirect': 'gpp_entry_detail_setup=completed' in location,
+              'failure_control': {
+                  'form_id': int(unbound_id),
+                  'http_status': int(failure_http),
+                  'expected_reason_code': 'entry_detail_binding_context_missing',
+              },
+              'successful_setup': {
+                  'form_id': int(form_id),
+                  'http_status': int(success_http),
+                  'completed_redirect': 'gpp_entry_detail_setup=completed' in location,
+              },
           }
           with open(out, 'w', encoding='utf-8') as fh:
               json.dump(payload, fh, indent=2, sort_keys=True)
               fh.write('\n')
           PY
-          cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context.json"
+
+          cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context-failure.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context-success.json"
           cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json"
-          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
-          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-before.json"
-          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-after.json"
-          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
-          if [[ "$http_code" != "302" || "$location" != *"gpp_entry_detail_setup=completed"* ]]; then
-            sed -n '1,40p' "$probe_body" >&2 || true
+          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-success-transition.json"
+          if [[ "$success_http" != "302" || "$success_location" != *"gpp_entry_detail_setup=completed"* ]]; then
+            sed -n '1,40p' "$success_body" >&2 || true
             exit 1
           fi
-          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
+          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-success-transition.json"
+
           kill "$setup_server_pid" >/dev/null 2>&1 || true
           wait "$setup_server_pid" 2>/dev/null || true
           trap - EXIT
@@ -213,11 +233,15 @@ jobs:
           name: wu18-entry-detail-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             /tmp/wu18-artifacts/wu18-host-seam-inventory.json
-            /tmp/wu18-artifacts/wu18-admin-setup-context.json
+            /tmp/wu18-artifacts/wu18-admin-setup-context-failure.json
+            /tmp/wu18-artifacts/wu18-admin-setup-context-success.json
             /tmp/wu18-artifacts/wu18-admin-setup-result.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-before.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-after.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-transition.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-before.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-after.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-transition.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-before.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-after.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-transition.json
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
