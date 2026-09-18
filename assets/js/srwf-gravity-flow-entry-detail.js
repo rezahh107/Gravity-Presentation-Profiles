@@ -60,6 +60,7 @@
     const actionsTarget = dossier.querySelector('[data-gpp-native-actions]');
     const historyTarget = dossier.querySelector('[data-gpp-native-history]');
     const actionsExpected = dossier.dataset.gppActionsExpected === '1';
+    const serverHostEditable = dossier.dataset.gppHostEditable === '1';
 
     const unique = selector => {
       const nodes = form.querySelectorAll(selector);
@@ -71,6 +72,13 @@
     const nativeActions = unique('.gravityflow-action-buttons');
     const nativeTimeline = unique('.gravityflow-timeline');
 
+    // Gravity Flow renders the editable Gravity Forms editor only after its
+    // own generic current-assignee can_update() predicate succeeds. Treat that
+    // host-rendered editor as runtime proof of editability for non-Approval
+    // steps too; Approval eligibility remains a separate concern.
+    const hostEditable = serverHostEditable || nativeEditor.count === 1;
+    dossier.dataset.gppHostEditable = hostEditable ? '1' : '0';
+
     // Preflight every ownership-sensitive region before moving any host node.
     // Any ambiguity leaves Gravity Flow's native UI untouched. Conditional
     // instructions/timeline may be absent. Approval controls are required only
@@ -80,7 +88,7 @@
       nativeEditor.count > 1 ||
       nativeActions.count > 1 ||
       nativeTimeline.count > 1 ||
-      (dossier.dataset.gppHostEditable === '1' && nativeEditor.count !== 1)
+      (serverHostEditable && nativeEditor.count !== 1)
     ) {
       markFailure(form, dossier, 'failed-host-ambiguity');
       return;
@@ -104,13 +112,14 @@
       }
 
       if (nativeActions.count === 1) {
-        // A non-Approval step may expose host-owned edit/save controls inside
-        // its native Gravity Forms editor. Preserve that editor as one original
-        // subtree; never detach, duplicate, or reinterpret those controls as
-        // Approval actions. A mutation-control region outside the unique native
-        // editor remains ambiguous and fails closed to Gravity Flow.
-        if (!nativeEditor.node || !nativeEditor.node.contains(nativeActions.node)) {
-          markFailure(form, dossier, 'failed-nonapproval-actions-ambiguous');
+        // Gravity Flow may render a unique non-Approval status/action cluster
+        // outside the editable gform_wrapper (for example User Input). If the
+        // host also rendered its unique editable editor and the cluster has no
+        // Approval controls, leave that original node exactly where Gravity
+        // Flow put it. GPP neither absorbs nor suppresses host-owned workflow
+        // controls. Without host editability this remains fail-closed.
+        if (!hostEditable) {
+          markFailure(form, dossier, 'failed-readonly-actions-present');
           return;
         }
         if (
