@@ -166,15 +166,18 @@ await test('CORE-SPINE-004', 'fresh Print permission mutation evidence is reused
   return { reused_focused_test: 'WU19-BROWSER-005', entry_detail_was_accessible: true, fresh_native_print_denied_after_assignment_change: true, stale_gpp_access_reuse: false };
 });
 
-await test('CORE-SPINE-005', 'evidence degradation to NOT_PROVEN fails closed without stale semantic reuse', async () => {
+await test('CORE-SPINE-005', 'evidence degradation to NOT_PROVEN isolates Entry Detail semantics and prevents stale Print reuse', async () => {
   control('degradation-on');
   try {
     await openEntry(page); const entry = await entryState(page);
-    if (entry.ready || !entry.native_visible) throw new Error(`Entry Detail did not fall back to native host presentation: ${JSON.stringify(entry)}`);
+    if (!entry.ready || entry.profile !== currentEntryProfile || entry.native_visible || entry.national_id !== 'نگاشت نشده') {
+      throw new Error(`Entry Detail did not preserve the admitted dossier with isolated semantic degradation: ${JSON.stringify(entry)}`);
+    }
+    if (happySemantics?.national_id && entry.national_id === happySemantics.national_id) throw new Error('Entry Detail reused stale admitted national-id data after evidence degradation.');
     await openPrint(page); const print = await printState(page);
     if (print.national_id !== '' || !traceHas(print, 'PRINT_BINDINGS_EVALUATED', 'binding_not_proven')) throw new Error(`Print did not blank NOT_PROVEN semantic data: ${JSON.stringify(print)}`);
     if (happySemantics?.national_id && print.national_id === happySemantics.national_id) throw new Error('Print reused stale admitted national-id data after evidence degradation.');
-    return { entry_detail_native_fallback: true, print_degraded_value_blank: true, print_trace_binding_not_proven: true, stale_semantic_reuse: false };
+    return { entry_detail_dossier_preserved: true, entry_detail_semantic_placeholder: 'نگاشت نشده', print_degraded_value_blank: true, print_trace_binding_not_proven: true, stale_semantic_reuse: false };
   } finally {
     control('degradation-off');
   }
