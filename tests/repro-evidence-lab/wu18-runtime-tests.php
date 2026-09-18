@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/wu18-runtime-tests-core.php';
+require __DIR__ . '/wu18-formatter-contract.php';
 
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = json_decode( file_get_contents( $results_path ), true );
