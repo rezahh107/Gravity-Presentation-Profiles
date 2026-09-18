@@ -43,6 +43,7 @@ $cases = array(
     'entry-detail-production-activation.php',
     'entry-detail-setup-conflict.php',
     'entry-detail-setup-diagnostics.php',
+    'entry-detail-settings-contract.php',
     'print-dossier-presentation-model.php',
     'print-dossier-data-path.php',
     'operations-setup-production-path.php',
