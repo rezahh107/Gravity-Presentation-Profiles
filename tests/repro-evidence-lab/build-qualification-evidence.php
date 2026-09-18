@@ -58,7 +58,9 @@ $evidence = array(
         'pdf' => '34d9b4e137667ca103d5c6e7752f7148f0c92e36f0f1d182d7d87a890c55fec5',
     ),
     'focused_runtime_reuse' => array(
-        'wu18_php_runtime' => ! empty( $wu18_runtime['shared_profile'] ) ? 'PASS' : 'FAIL',
+        'wu18_php_runtime' => isset( $wu18_runtime['profile_id'], $wu18_runtime['runtime_decision_trace']['status'] )
+            && 'srwf.operations.entry-detail.v1' === $wu18_runtime['profile_id']
+            && 'PASS' === $wu18_runtime['runtime_decision_trace']['status'] ? 'PASS' : 'FAIL',
         'wu18_browser' => count( array_filter( $wu18_browser['results'], static function ( $r ) { return 'PASS' !== $r['status']; } ) ) ? 'FAIL' : 'PASS',
         'wu19_php_runtime' => ! empty( $wu19_runtime['happy_ready'] ) ? 'PASS' : 'FAIL',
         'wu19_browser' => count( array_filter( $wu19_browser['results'], static function ( $r ) { return 'PASS' !== $r['status']; } ) ) ? 'FAIL' : 'PASS',
