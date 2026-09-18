@@ -2,12 +2,18 @@
 /** Test-only observer for the real Gravity Forms Add-On settings request. */
 defined( 'ABSPATH' ) || exit;
 
+$gpp_wu18_settings_probe_buffer_level = null;
+
+$gpp_wu18_is_settings_request = static function () {
+    $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+    $subview = isset( $_GET['subview'] ) ? sanitize_key( wp_unslash( $_GET['subview'] ) ) : '';
+    return 'gf_settings' === $page && 'gravity-presentation-profiles' === $subview;
+};
+
 add_action(
     'current_screen',
-    static function () {
-        $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-        $subview = isset( $_GET['subview'] ) ? sanitize_key( wp_unslash( $_GET['subview'] ) ) : '';
-        if ( 'gf_settings' !== $page || 'gravity-presentation-profiles' !== $subview ) {
+    static function () use ( $gpp_wu18_is_settings_request ) {
+        if ( ! $gpp_wu18_is_settings_request() ) {
             return;
         }
 
@@ -50,13 +56,15 @@ add_action(
         }
 
         $facts = array(
-            'schema_version' => '1.1.0',
+            'schema_version' => '1.2.0',
             'request_context' => 'gravity_forms_addon_settings_current_screen',
             'gravity_flow_api_loaded_before_autoload_check' => $loaded_before_autoload_check,
             'gravity_flow_api_available' => $available,
             'form_bound_api_constructible' => $constructible,
             'get_current_step' => $method_fact( 'get_current_step' ),
             'get_status' => $method_fact( 'get_status' ),
+            'setup_notice_rendered' => null,
+            'setup_action_rendered' => null,
         );
         wp_mkdir_p( $artifact_dir );
         file_put_contents(
@@ -65,4 +73,52 @@ add_action(
         );
     },
     99
+);
+
+// Observe only the bounded admin-notice output and immediately replay it. The
+// artifact stores booleans only; no nonce, token, HTML, form title or site data
+// is retained.
+add_action(
+    'admin_notices',
+    static function () use ( $gpp_wu18_is_settings_request, &$gpp_wu18_settings_probe_buffer_level ) {
+        if ( ! $gpp_wu18_is_settings_request() ) {
+            return;
+        }
+        ob_start();
+        $gpp_wu18_settings_probe_buffer_level = ob_get_level();
+    },
+    -999
+);
+
+add_action(
+    'admin_notices',
+    static function () use ( $gpp_wu18_is_settings_request, &$gpp_wu18_settings_probe_buffer_level ) {
+        if ( ! $gpp_wu18_is_settings_request()
+            || ! is_int( $gpp_wu18_settings_probe_buffer_level )
+            || ob_get_level() < $gpp_wu18_settings_probe_buffer_level ) {
+            return;
+        }
+
+        $html = (string) ob_get_clean();
+        $gpp_wu18_settings_probe_buffer_level = null;
+
+        $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
+        $path = is_string( $artifact_dir ) && '' !== $artifact_dir
+            ? trailingslashit( $artifact_dir ) . 'wu18-admin-settings-context.json'
+            : '';
+        if ( '' !== $path && is_readable( $path ) ) {
+            $facts = json_decode( (string) file_get_contents( $path ), true );
+            if ( is_array( $facts ) ) {
+                $facts['setup_notice_rendered'] = false !== strpos( $html, 'data-gpp-entry-detail-setup="explicit"' );
+                $facts['setup_action_rendered'] = false !== strpos( $html, 'name="action" value="gpp_initialize_entry_detail_presentation"' );
+                file_put_contents(
+                    $path,
+                    wp_json_encode( $facts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n"
+                );
+            }
+        }
+
+        echo $html;
+    },
+    PHP_INT_MAX
 );
