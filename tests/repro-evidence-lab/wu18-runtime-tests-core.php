@@ -261,30 +261,20 @@ try {
     if ( is_wp_error( $restore_creator ) ) throw new RuntimeException( $restore_creator->get_error_message() );
 }
 
-// Assignment/current-step mutation falsification is intentionally executed in
-// the browser suite, where every navigation is a fresh PHP request. Gravity
-// Flow caches step/feed objects inside one process, so using an in-process feed
-// mutation here would test cache invalidation rather than the Owner policy.
-
-// Legitimately absent request-local native regions are never fabricated.
-$region_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
-$region_step = $region_api->get_current_step( GFAPI::get_entry( $alpha_entry['id'] ) );
-$region_meta = $region_step->get_feed_meta();
-$regionless_meta = $region_meta;
-$regionless_meta['instructionsEnable'] = '0';
-gravity_flow()->update_feed_meta( $region_step->get_id(), $regionless_meta );
-try {
-    EntryDetailPresentationAdapter::resetRuntimeCache();
-    list( $regionless_html ) = wu18_render_entry(
-        $manifest['alpha']['form_id'],
-        $manifest['alpha']['entry_id'],
-        array( 'show_timeline' => false )
-    );
-    wu18_assert( false === strpos( $regionless_html, 'class="postbox gravityflow-instructions"' ), 'Disabled host instructions were fabricated.' );
-    wu18_assert( false === strpos( $regionless_html, 'class="postbox gravityflow-timeline"' ), 'Disabled host timeline was fabricated.' );
-} finally {
-    gravity_flow()->update_feed_meta( $region_step->get_id(), $region_meta );
-}
+// Assignment/current-step mutation falsification and conditional instruction
+// presence are intentionally executed in the browser suite, where every
+// navigation is a fresh PHP request. Gravity Flow caches step/feed objects
+// inside one process, so mutating feed metadata and re-rendering here would test
+// cache invalidation rather than request-local Entry Detail behavior.
+// The native show_timeline request argument is not cached and remains safe to
+// exercise in this same-process PHP control.
+EntryDetailPresentationAdapter::resetRuntimeCache();
+list( $timeline_hidden_html ) = wu18_render_entry(
+    $manifest['alpha']['form_id'],
+    $manifest['alpha']['entry_id'],
+    array( 'show_timeline' => false )
+);
+wu18_assert( false === strpos( $timeline_hidden_html, 'class="postbox gravityflow-timeline"' ), 'Host-disabled timeline was fabricated.' );
 
 // Native authorization denial still wins before the GPP post-permission seam.
 wp_set_current_user( $viewer->ID );
@@ -310,7 +300,8 @@ $results = array(
     'non_approval_native_fallback' => 'browser_fresh_request_control',
     'stale_action_permission_bypass_blocked' => true,
     'assignment_change_without_binding_rebuild' => 'browser_fresh_request_control',
-    'native_region_absence_not_fabricated' => true,
+    'native_region_integrity' => 'browser_fresh_request_control',
+    'native_timeline_absence_not_fabricated' => true,
     'negative_native_fallback' => true,
     'unauthorized_native_denial' => true,
     'native_approval_actions' => array( 'approved', 'rejected' ),
