@@ -295,6 +295,7 @@ $bindings = array(
     wu18_binding_set( 'wu18.operations.alpha.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $alpha_entry['entry_id'], $visual_package ),
     wu18_binding_set( 'wu18.operations.beta.v1', $base['installation_id'], $beta_form['form_id'], $beta_fields, $beta_entry['entry_id'], $visual_package ),
     wu18_binding_set( 'wu18.operations.alpha.negative.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $negative_entry['entry_id'], $visual_package, true ),
+    wu18_binding_set( 'wu18.operations.alpha.transition.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $transition_entry['entry_id'], $visual_package ),
 );
 
 foreach ( $bindings as $binding ) EnvironmentBindingSet::validate( $binding );
@@ -345,6 +346,11 @@ $manifest = array(
     'negative' => array(
         'form_id' => (int) $alpha_form['form_id'],
         'entry_id' => (int) $negative_entry['entry_id'],
+    ),
+    'transition' => array(
+        'form_id' => (int) $alpha_form['form_id'],
+        'entry_id' => (int) $transition_entry['entry_id'],
+        'follow_up_step_id' => (int) $follow_up_step_id,
     ),
     'locked_history_helper' => 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.',
 );
