@@ -140,9 +140,9 @@ final class EntryDetailSetupService {
             'inbox_activation' => $inbox_after,
         );
         $steps['runtime_readiness'] = array(
-            'outcome' => 'not_proven',
-            'reason' => 'entry_detail_runtime_qualification_pending',
-            'message' => 'Activation does not invent Gravity Flow region/action availability. Native Entry Detail remains the fail-closed fallback until runtime evidence is qualified.',
+            'outcome' => 'deferred_to_request',
+            'reason' => 'live_approval_processing_required',
+            'message' => 'Activation does not grant request eligibility. Structural readiness and Gravity Flow native Approval/current-assignee eligibility are evaluated fresh for each Entry Detail request.',
         );
 
         return $this->result( self::STATUS_COMPLETED, $form_id, $identity, $steps );
