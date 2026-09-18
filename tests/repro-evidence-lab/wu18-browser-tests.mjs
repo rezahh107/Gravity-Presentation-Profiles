@@ -283,22 +283,44 @@ await test('WU18-BROWSER-010', 'native Approval transition preserves a read-only
     approve.click(),
   ]);
 
-  await waitDossier(page);
+  await page.waitForFunction(() => {
+    const form = document.querySelector('form[data-gpp-entry-detail-composition]');
+    const composition = form?.dataset.gppEntryDetailComposition || '';
+    return composition === 'composed' || composition.startsWith('failed-');
+  }, { timeout: 10000 }).catch(() => {});
+
   const state = await page.evaluate(() => {
     const table = document.querySelector('.entry-detail-view');
-    const dossier = document.querySelector('.gpp-entry-dossier--composed');
+    const form = document.querySelector('form[data-gpp-entry-detail-composition]');
+    const dossier = document.querySelector('.gpp-entry-dossier--composed, .gpp-entry-dossier[data-gpp-entry-detail="ready"]');
+    const editor = document.querySelector('.entry-detail-view .gform_wrapper');
+    const actionContainers = [...document.querySelectorAll('.gravityflow-action-buttons')];
+    const firstActions = actionContainers[0] || null;
+    const ancestorSummary = [];
+    let ancestor = firstActions;
+    for (let i = 0; ancestor && i < 5; i += 1, ancestor = ancestor.parentElement) {
+      ancestorSummary.push({ tag: ancestor.tagName, id: ancestor.id || null, class: ancestor.className || null });
+    }
     return {
+      composition_state: form?.dataset.gppEntryDetailComposition || null,
       dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+      pending_dossier: document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').length,
       native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
       native_form: document.querySelectorAll('form[id^="gform_"]').length,
-      action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+      native_editor: document.querySelectorAll('.entry-detail-view .gform_wrapper').length,
+      action_containers: actionContainers.length,
+      approved_controls: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+      rejected_controls: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+      action_inside_editor: Boolean(firstActions && editor && editor.contains(firstActions)),
+      action_ancestors: ancestorSummary,
       actions_expected: dossier?.dataset.gppActionsExpected || null,
-      body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
+      host_editable: dossier?.dataset.gppHostEditable || null,
+      body_text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 2400),
     };
   });
 
-  if (state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || state.action_containers !== 0 || state.actions_expected !== '0' || !state.body_text.includes('WU18 Follow-up Input')) {
-    throw new Error(`Authorized non-Approval follow-up did not preserve read-only GPP composition: ${JSON.stringify(state)}`);
+  if (state.composition_state !== 'composed' || state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || state.action_containers !== 0 || state.actions_expected !== '0' || !state.body_text.includes('WU18 Follow-up Input')) {
+    throw new Error(`Authorized non-Approval follow-up composition evidence: ${JSON.stringify(state)}`);
   }
 
   return {
