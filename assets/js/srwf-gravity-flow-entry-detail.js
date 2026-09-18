@@ -64,27 +64,41 @@
     const nativeActions = unique('.gravityflow-action-buttons');
     const nativeTimeline = unique('.gravityflow-timeline');
 
-    // Never guess which host region/control is authoritative. Unexpected
-    // duplication is ambiguous even for an optional region; a required region
-    // must additionally be present in this exact request.
+    // Never guess which host region/control is authoritative. Duplicates are
+    // ambiguous and fail closed. Instructions/timeline are legitimately
+    // conditional per request, so zero presence removes only the empty GPP
+    // projection. Approval actions are different: the Owner-selected enhanced
+    // surface requires exactly one native action region with both host controls.
     if (
       nativeInstructions.count > 1 ||
       nativeEditor.count > 1 ||
       nativeActions.count > 1 ||
       nativeTimeline.count > 1 ||
-      (dossier.dataset.gppRequireInstructions === '1' && nativeInstructions.count !== 1) ||
       (dossier.dataset.gppHostEditable === '1' && nativeEditor.count !== 1) ||
-      (actionsTarget && nativeActions.count !== 1) ||
-      (historyTarget && nativeTimeline.count !== 1)
+      !actionsTarget ||
+      nativeActions.count !== 1
     ) {
       dossier.remove();
       return;
     }
 
+    const approvedControls = nativeActions.node.querySelectorAll('[value="approved"]');
+    const rejectedControls = nativeActions.node.querySelectorAll('[value="rejected"]');
+    if (approvedControls.length !== 1 || rejectedControls.length !== 1) {
+      dossier.remove();
+      return;
+    }
+
     if (nativeInstructions.node && instructionsTarget) instructionsTarget.append(nativeInstructions.node);
+    else instructionsTarget?.remove();
+
     if (nativeEditor.node && editorTarget) editorTarget.append(nativeEditor.node);
-    if (nativeActions.node && actionsTarget) actionsTarget.append(nativeActions.node);
+    else editorTarget?.remove();
+
+    actionsTarget.append(nativeActions.node);
+
     if (nativeTimeline.node && historyTarget) historyTarget.append(nativeTimeline.node);
+    else historyTarget?.closest('[data-gpp-section="history"]')?.remove();
 
     dossier.classList.add('gpp-entry-dossier--composed');
     bindPreview(dossier);
