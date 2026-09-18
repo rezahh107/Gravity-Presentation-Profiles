@@ -17,14 +17,21 @@ function wpEval(code) {
 
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
+const cookies = JSON.parse(wpEval(`
+$u = get_user_by('login', 'bootstrap_admin');
+if (!$u) { throw new RuntimeException('bootstrap_admin unavailable'); }
+$expiration = time() + 300;
+echo wp_json_encode(array(
+    array('name' => AUTH_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'auth')),
+    array('name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'logged_in'))
+));
+`));
+
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext();
+  await context.addCookies(cookies.map(cookie => ({ ...cookie, url: baseUrl })));
   const page = await context.newPage();
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', 'bootstrap_admin');
-  await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 
   const dossierUrl = `${baseUrl}/wp-admin/admin-ajax.php?action=gravityflow_print_entries&lid=${alpha.entry_id}&gpp_presentation=dossier`;
   await page.setViewportSize({ width: 1280, height: 1000 });
