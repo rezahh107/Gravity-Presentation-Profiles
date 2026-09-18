@@ -135,6 +135,11 @@ final class AddOn extends \GFAddOn {
                         'type'  => 'gpp_binding_health',
                     ),
                     array(
+                        'name'  => 'entry_detail_mapping',
+                        'label' => esc_html__( 'Entry Detail batch mapping', 'gravity-presentation-profiles' ),
+                        'type'  => 'gpp_entry_detail_mapping',
+                    ),
+                    array(
                         'name'                => 'binding_management_action',
                         'label'               => esc_html__( 'Binding history rollback', 'gravity-presentation-profiles' ),
                         'description'         => esc_html__( 'Rollback is separate from normal row-by-row mapping. Choose one previously-authoritative immutable version only when you intentionally want to reactivate it. The default performs no binding change.', 'gravity-presentation-profiles' ),
@@ -773,6 +778,10 @@ final class AddOn extends \GFAddOn {
             }
             echo '</tbody></table>';
         }
+    }
+
+    public function settings_gpp_entry_detail_mapping( $field ) {
+        EntryDetailMappingAdminController::renderEmbedded( $field );
     }
 
     private function bindingManagementMarkup( $context, $fact ) {
