@@ -98,6 +98,7 @@ $alpha_fields = wu18_field_map( $alpha_form, wu18_extend_form( $alpha_form['form
 $beta_fields = wu18_field_map( $beta_form, wu18_extend_form( $beta_form['form_id'] ) );
 $alpha_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 0 );
 $negative_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 1 );
+$transition_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 2 );
 $beta_entry = wu18_entry_for_form( $base, $beta_form['form_id'], 0 );
 
 $uploads = wp_upload_dir();
@@ -137,6 +138,7 @@ function wu18_populate_entry( $entry_id, $fields, $prefix, $document_url ) {
 }
 wu18_populate_entry( $alpha_entry['entry_id'], $alpha_fields, 'Alpha', $image_url );
 wu18_populate_entry( $negative_entry['entry_id'], $alpha_fields, 'Negative', $image_url );
+wu18_populate_entry( $transition_entry['entry_id'], $alpha_fields, 'Transition', $image_url );
 wu18_populate_entry( $beta_entry['entry_id'], $beta_fields, 'Beta', $pdf_url );
 
 foreach ( array( array( $alpha_form, $alpha_fields ), array( $beta_form, $beta_fields ) ) as $pair ) {
