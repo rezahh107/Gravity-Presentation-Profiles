@@ -329,7 +329,6 @@ $results = array(
         'success' => $alpha_trace,
         'structural_failure' => $negative_trace,
         'authorized_non_assignee' => $non_assignee_trace,
-        'non_approval' => $non_approval_trace,
         'print_unavailable' => $print_unready_trace,
     ),
 );
