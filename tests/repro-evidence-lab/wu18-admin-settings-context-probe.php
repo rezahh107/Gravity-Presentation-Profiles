@@ -56,15 +56,15 @@ add_action(
         }
 
         $facts = array(
-            'schema_version' => '1.2.0',
+            'schema_version' => '1.3.0',
             'request_context' => 'gravity_forms_addon_settings_current_screen',
             'gravity_flow_api_loaded_before_autoload_check' => $loaded_before_autoload_check,
             'gravity_flow_api_available' => $available,
             'form_bound_api_constructible' => $constructible,
             'get_current_step' => $method_fact( 'get_current_step' ),
             'get_status' => $method_fact( 'get_status' ),
-            'setup_notice_rendered' => null,
-            'setup_action_rendered' => null,
+            'legacy_admin_notice_setup_rendered' => null,
+            'legacy_admin_notice_action_rendered' => null,
         );
         wp_mkdir_p( $artifact_dir );
         file_put_contents(
@@ -75,9 +75,9 @@ add_action(
     99
 );
 
-// Observe only the bounded admin-notice output and immediately replay it. The
-// artifact stores booleans only; no nonce, token, HTML, form title or site data
-// is retained.
+// Observe only the retired admin-notice seam and immediately replay its output.
+// The visible Entry Detail control is now owned by GFAddOn plugin settings; these
+// booleans document only that the superseded notice seam stayed absent.
 add_action(
     'admin_notices',
     static function () use ( $gpp_wu18_is_settings_request, &$gpp_wu18_settings_probe_buffer_level ) {
@@ -109,8 +109,8 @@ add_action(
         if ( '' !== $path && is_readable( $path ) ) {
             $facts = json_decode( (string) file_get_contents( $path ), true );
             if ( is_array( $facts ) ) {
-                $facts['setup_notice_rendered'] = false !== strpos( $html, 'data-gpp-entry-detail-setup="explicit"' );
-                $facts['setup_action_rendered'] = false !== strpos( $html, 'name="action" value="gpp_initialize_entry_detail_presentation"' );
+                $facts['legacy_admin_notice_setup_rendered'] = false !== strpos( $html, 'data-gpp-entry-detail-setup="explicit"' );
+                $facts['legacy_admin_notice_action_rendered'] = false !== strpos( $html, 'name="action" value="gpp_initialize_entry_detail_presentation"' );
                 file_put_contents(
                     $path,
                     wp_json_encode( $facts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n"
