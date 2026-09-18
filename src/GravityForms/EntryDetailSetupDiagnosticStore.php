@@ -30,6 +30,82 @@ final class EntryDetailSetupDiagnosticStore {
         return new self( new WordPressOptionStateStore( self::OPTION_NAME ) );
     }
 
+    /**
+     * Normalize and persist the outcome returned by EntryDetailSetupService.
+     * This is shared by every explicit administrator entry point so support
+     * diagnostics cannot drift when the host settings lifecycle changes.
+     */
+    public function recordServiceResult( $form_id, $result ) {
+        $status = is_array( $result ) && isset( $result['status'] ) && in_array( $result['status'], self::RESULTS, true )
+            ? $result['status']
+            : EntryDetailSetupService::STATUS_FAILED;
+        $step = 'binding_context';
+        $reason = 'entry_detail_setup_failed';
+
+        if ( EntryDetailSetupService::STATUS_COMPLETED === $status ) {
+            $step = 'cross_surface_preservation';
+            $reason = 'entry_detail_setup_completed';
+        } elseif ( is_array( $result ) && ! empty( $result['steps'] ) && is_array( $result['steps'] ) ) {
+            foreach ( $result['steps'] as $step_name => $details ) {
+                $outcome = is_array( $details ) && isset( $details['outcome'] ) ? $details['outcome'] : '';
+                if ( ! in_array( $outcome, array( 'conflict', 'failed' ), true ) ) {
+                    continue;
+                }
+                $step = $this->diagnosticStep( $step_name, isset( $details['reason'] ) ? $details['reason'] : null );
+                $reason = $this->boundedReason( isset( $details['reason'] ) ? $details['reason'] : null, 'entry_detail_setup_failed' );
+                break;
+            }
+        }
+
+        $binding = null;
+        if ( EntryDetailSetupService::STATUS_COMPLETED === $status
+            && is_array( $result )
+            && ! empty( $result['steps']['stable_host_sources']['binding_set_id'] )
+            && ! empty( $result['steps']['stable_host_sources']['binding_set_version'] ) ) {
+            $binding = array(
+                'binding_set_id' => (string) $result['steps']['stable_host_sources']['binding_set_id'],
+                'binding_set_version' => (string) $result['steps']['stable_host_sources']['binding_set_version'],
+            );
+        }
+
+        $activation = null;
+        if ( EntryDetailSetupService::STATUS_COMPLETED === $status
+            && is_array( $result )
+            && ! empty( $result['entry_detail_profile'] )
+            && is_array( $result['entry_detail_profile'] ) ) {
+            $activation = $result['entry_detail_profile'];
+        }
+
+        return $this->record(
+            array(
+                'selected_form_id' => (int) $form_id,
+                'result' => $status,
+                'step' => $step,
+                'reason_code' => $reason,
+                'binding_set' => $binding,
+                'entry_detail_activation' => $activation,
+            )
+        );
+    }
+
+    /** Persist a bounded failure raised before a service result can be returned. */
+    public function recordFailureReason( $form_id, $reason_code ) {
+        return $this->record(
+            array(
+                'selected_form_id' => (int) $form_id,
+                'result' => EntryDetailSetupService::STATUS_FAILED,
+                'step' => $this->diagnosticStep( null, $reason_code ),
+                'reason_code' => $this->boundedReason( $reason_code, 'entry_detail_setup_failed' ),
+                'binding_set' => null,
+                'entry_detail_activation' => null,
+            )
+        );
+    }
+
+    public function recordUnexpectedFailure( $form_id ) {
+        return $this->recordFailureReason( $form_id, 'entry_detail_setup_unexpected_failure' );
+    }
+
     public function record( $attempt ) {
         $record = $this->normalize( $attempt );
         $state = $this->loadState();
@@ -46,6 +122,33 @@ final class EntryDetailSetupDiagnosticStore {
 
     public function snapshot() {
         return $this->loadState();
+    }
+
+    private function diagnosticStep( $step_name, $reason_code ) {
+        $reason = is_string( $reason_code ) ? $reason_code : '';
+        if ( 0 === strpos( $reason, 'entry_detail_binding_' ) || 'setup_installation_unknown' === $reason ) {
+            return 'binding_context';
+        }
+        if ( in_array( $step_name, array( 'stable_host_sources', 'package_import', 'entry_detail_activation' ), true ) ) {
+            return $step_name;
+        }
+        if ( 'existing_surfaces' === $step_name || 'cross_surface_preservation' === $step_name || 'entry_detail_setup_cross_surface_activation_changed' === $reason ) {
+            return 'cross_surface_preservation';
+        }
+        if ( 0 === strpos( $reason, 'operations_package_' ) ) {
+            return 'package_import';
+        }
+        if ( 0 === strpos( $reason, 'entry_detail_host_' ) || 0 === strpos( $reason, 'entry_detail_semantic_' ) ) {
+            return 'stable_host_sources';
+        }
+        return 'binding_context';
+    }
+
+    private function boundedReason( $reason_code, $fallback ) {
+        if ( is_string( $reason_code ) && '' !== $reason_code && 1 === preg_match( '/^[a-z0-9_]+$/', $reason_code ) ) {
+            return $reason_code;
+        }
+        return $fallback;
     }
 
     private function normalize( $attempt ) {
