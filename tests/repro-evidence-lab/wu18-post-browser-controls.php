@@ -35,6 +35,9 @@ if ( 'user_input' !== $step->get_type() ) {
 if ( ! Gravity_Flow_Entry_Detail::is_permission_granted( $entry, $form, $step ) ) {
     throw new RuntimeException( 'Native non-Approval Entry Detail permission was not preserved for the assigned operator.' );
 }
+if ( ! Gravity_Flow_Entry_Detail::can_update( $step ) ) {
+    throw new RuntimeException( 'Native User Input editability was not preserved for the assigned operator.' );
+}
 
 $binding_hash_after = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
 if ( $binding_hash_after !== $manifest['binding_state_sha256'] ) {
@@ -65,7 +68,10 @@ $html = ob_get_clean();
 $trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
 
 if ( false === strpos( $html, 'data-gpp-entry-detail="ready"' ) || false === strpos( $html, 'entry-detail-view' ) ) {
-    throw new RuntimeException( 'Fresh authorized non-Approval request did not emit the read-only GPP dossier alongside the native host grid.' );
+    throw new RuntimeException( 'Fresh authorized non-Approval request did not emit the GPP dossier alongside the native host grid.' );
+}
+if ( false === strpos( $html, 'data-gpp-host-editable="1"' ) ) {
+    throw new RuntimeException( 'Fresh authorized User Input request did not preserve host editability independently of Approval eligibility.' );
 }
 if ( false === strpos( $html, 'data-gpp-actions-expected="0"' ) ) {
     throw new RuntimeException( 'Fresh authorized non-Approval request incorrectly expected Approval actions.' );
@@ -206,7 +212,9 @@ if ( ! is_array( $results ) ) $results = array();
 $results['post_browser_controls'] = array(
     'native_approval_transition_observed' => true,
     'current_step_type' => $step->get_type(),
-    'read_only_gpp_dossier_emitted' => true,
+    'gpp_dossier_emitted' => true,
+    'native_user_input_editability_preserved' => true,
+    'approval_actions_not_expected' => true,
     'native_entry_detail_grid_preserved_pre_composition' => true,
     'binding_state_unchanged_by_workflow_transition' => true,
     'stale_action_permission_claim_present_but_powerless' => true,
