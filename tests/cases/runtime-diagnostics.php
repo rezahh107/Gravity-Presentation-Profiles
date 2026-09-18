@@ -49,6 +49,7 @@ $success = new RuntimeDecisionTrace( 'gravity_flow.entry_detail' );
 $success->record( 'ENTRY_DETAIL_HOST_SEAM', RuntimeDecisionTrace::RESULT_PASS, 'post_permission_seam_reached', 'host_authorization_preserved' );
 $success->record( 'ENTRY_DETAIL_PROFILE_RESOLUTION', RuntimeDecisionTrace::RESULT_PASS );
 $success->record( 'ENTRY_DETAIL_BINDING_READINESS', RuntimeDecisionTrace::RESULT_PASS );
+$success->record( 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', RuntimeDecisionTrace::RESULT_PASS, 'native_current_assignee_can_update' );
 $success->record( 'ENTRY_DETAIL_PRESENTATION_OUTPUT', RuntimeDecisionTrace::RESULT_PASS );
 $store->recordTrace( $success->snapshot() );
 $persisted = $store->snapshot();
