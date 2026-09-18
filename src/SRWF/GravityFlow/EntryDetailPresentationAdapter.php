@@ -85,13 +85,14 @@ final class EntryDetailPresentationAdapter {
             return;
         }
 
-        $decision = $model->presentationReadiness( $entry );
+        $capabilities = self::structuralCapabilities( $entry );
+        $decision = $model->presentationReadiness( $entry, $capabilities );
         if ( ! $decision['ready'] ) {
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_BINDING_READINESS',
                 RuntimeDecisionTrace::RESULT_FAIL,
-                $decision['reason'],
+                self::structuralFailureReason( $decision ),
                 'native_gravity_flow_entry_detail'
             );
             RuntimeDiagnostics::recordOnce(
@@ -106,18 +107,40 @@ final class EntryDetailPresentationAdapter {
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_BINDING_READINESS',
-            RuntimeDecisionTrace::RESULT_PASS
+            RuntimeDecisionTrace::RESULT_PASS,
+            'structural_readiness_satisfied'
         );
 
         $current_step = self::currentStep( $entry );
+        $eligibility = self::approvalProcessingEligibility( $current_step );
+        if ( empty( $eligibility['eligible'] ) ) {
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_APPROVAL_ELIGIBILITY',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                $eligibility['reason'],
+                'native_gravity_flow_entry_detail'
+            );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'approval_processing_ineligible',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_APPROVAL_ELIGIBILITY',
+            RuntimeDecisionTrace::RESULT_PASS,
+            'native_current_assignee_can_update'
+        );
+
         $editable_fields = self::hostEditableFields( $current_step );
-        $instructions_expected = $model->isAvailable( $entry, 'workflow.instructions' );
-        $history_expected = $model->isAvailable( $entry, 'workflow.timeline' );
-        $approval_actions = self::approvalActionsAreProven( $model, $entry, $current_step );
 
         echo '<div class="gpp-entry-dossier" dir="rtl" data-gpp-entry-detail="ready" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '"';
-        echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '"';
-        echo ' data-gpp-require-instructions="' . ( $instructions_expected ? '1' : '0' ) . '">';
+        echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '">';
 
         self::renderIdentitySection( $model, $form, $entry );
 
@@ -129,41 +152,38 @@ final class EntryDetailPresentationAdapter {
         }
         echo '<div class="gpp-entry-dossier__native-instructions" data-gpp-native-instructions></div>';
         echo '<div class="gpp-entry-dossier__native-editor" data-gpp-native-editor></div>';
-        if ( $approval_actions ) {
-            echo '<div class="gpp-entry-dossier__native-actions" data-gpp-native-actions></div>';
-        }
+        echo '<div class="gpp-entry-dossier__native-actions" data-gpp-native-actions></div>';
         echo '</section>';
 
         self::renderFactsSection( $model, $form, $entry );
         self::renderDocumentsSection( $model, $form, $entry );
 
-        if ( $history_expected ) {
-            echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history">';
-            echo '<details data-gpp-history-details>';
-            echo '<summary>' . esc_html__( 'سوابق بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
-            echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
-            echo '<div data-gpp-native-history></div>';
-            echo '</details>';
-            echo '</section>';
-        }
+        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history">';
+        echo '<details data-gpp-history-details>';
+        echo '<summary>' . esc_html__( 'سوابق بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
+        echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<div data-gpp-native-history></div>';
+        echo '</details>';
+        echo '</section>';
 
         echo self::previewDialogMarkup();
         echo '</div>';
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_PRESENTATION_OUTPUT',
-            RuntimeDecisionTrace::RESULT_PASS
+            RuntimeDecisionTrace::RESULT_PASS,
+            'gpp_enhanced_entry_detail_admitted'
         );
     }
 
     public static function filterApproveLabel( $label, $step ) {
-        return self::canRelabelAction( $step, 'workflow.approve_action', 'approve' )
+        return self::canRelabelAction( $step )
             ? __( 'تأیید پرونده', 'gravity-presentation-profiles' )
             : $label;
     }
 
     public static function filterRejectLabel( $label, $step ) {
-        return self::canRelabelAction( $step, 'workflow.reject_action', 'reject' )
+        return self::canRelabelAction( $step )
             ? __( 'رد پرونده', 'gravity-presentation-profiles' )
             : $label;
     }
@@ -289,8 +309,23 @@ final class EntryDetailPresentationAdapter {
     }
 
     private static function slotText( EntryDetailPresentationModel $model, $form, $entry, $slot ) {
-        if ( ! $model->isAvailable( $entry, $slot ) ) {
-            return null;
+        if ( $model->isDerivedSlot( $slot ) ) {
+            $decision = $model->derivedDecision( $entry, $slot );
+            if ( empty( $decision['ready'] ) || empty( $decision['component_source_refs'] ) ) {
+                return null;
+            }
+
+            $parts = array();
+            foreach ( $decision['component_source_refs'] as $source ) {
+                $part = self::normalizedTextValue( self::readSourceValue( $source, $form, $entry ) );
+                if ( null === $part ) {
+                    return null;
+                }
+                $parts[] = $part;
+            }
+
+            $text = trim( implode( ' ', $parts ) );
+            return '' === $text ? null : $text;
         }
 
         $resolved = $model->resolve( $entry, $slot );
@@ -298,8 +333,10 @@ final class EntryDetailPresentationAdapter {
             return null;
         }
 
-        $source = $resolved['source_ref'];
-        $value = self::readSourceValue( $source, $form, $entry );
+        return self::normalizedTextValue( self::readSourceValue( $resolved['source_ref'], $form, $entry ) );
+    }
+
+    private static function normalizedTextValue( $value ) {
         if ( is_int( $value ) || is_float( $value ) ) {
             return (string) $value;
         }
@@ -318,9 +355,6 @@ final class EntryDetailPresentationAdapter {
     }
 
     private static function documentForSlot( EntryDetailPresentationModel $model, $form, $entry, $slot ) {
-        if ( ! $model->isAvailable( $entry, $slot ) ) {
-            return null;
-        }
         $resolved = $model->resolve( $entry, $slot );
         if ( empty( $resolved['resolved'] ) || 'gravity_forms.field' !== $resolved['source_ref']['type'] || ! class_exists( 'GFAPI' ) ) {
             return null;
@@ -414,28 +448,81 @@ final class EntryDetailPresentationAdapter {
         return is_array( $fields ) ? $fields : array();
     }
 
-    private static function approvalActionsAreProven( EntryDetailPresentationModel $model, $entry, $current_step ) {
-        if ( ! $current_step || ! method_exists( $current_step, 'get_type' ) || 'approval' !== $current_step->get_type() ) {
-            return false;
+    private static function approvalProcessingEligibility( $current_step ) {
+        if ( ! is_object( $current_step ) || ! method_exists( $current_step, 'get_type' ) ) {
+            return array( 'eligible' => false, 'reason' => 'current_step_unavailable' );
         }
-        return $model->runtimeClaimIsProven( $entry, 'workflow.approve_action', 'action_permission' )
-            && $model->runtimeClaimIsProven( $entry, 'workflow.reject_action', 'action_permission' );
+        if ( 'approval' !== $current_step->get_type() ) {
+            return array( 'eligible' => false, 'reason' => 'current_step_not_approval' );
+        }
+        if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
+            return array( 'eligible' => false, 'reason' => 'native_update_predicate_unavailable' );
+        }
+
+        try {
+            if ( ! \Gravity_Flow_Entry_Detail::can_update( $current_step ) ) {
+                return array( 'eligible' => false, 'reason' => 'current_assignee_not_eligible' );
+            }
+        } catch ( \Throwable $exception ) {
+            return array( 'eligible' => false, 'reason' => 'native_update_predicate_failed' );
+        }
+
+        return array( 'eligible' => true, 'reason' => null );
     }
 
-    private static function canRelabelAction( $step, $slot, $action_key ) {
-        if ( ! is_object( $step ) || ! method_exists( $step, 'get_type' ) || 'approval' !== $step->get_type() || ! method_exists( $step, 'get_entry' ) ) {
+    private static function canRelabelAction( $step ) {
+        if ( ! is_object( $step ) || ! method_exists( $step, 'get_entry' ) ) {
             return false;
         }
+
         $entry = $step->get_entry();
         $model = self::model();
-        if ( null === $model || ! is_array( $entry ) || ! $model->isPresentationReady( $entry ) ) {
+        if ( null === $model || ! is_array( $entry ) ) {
             return false;
         }
-        $resolved = $model->resolve( $entry, $slot );
-        return ! empty( $resolved['resolved'] )
-            && 'gravity_flow.action' === $resolved['source_ref']['type']
-            && $action_key === $resolved['source_ref']['action_key']
-            && $model->runtimeClaimIsProven( $entry, $slot, 'action_permission' );
+
+        $capabilities = self::structuralCapabilities( $entry );
+        if ( ! $model->isPresentationReady( $entry, $capabilities ) ) {
+            return false;
+        }
+
+        $eligibility = self::approvalProcessingEligibility( $step );
+        return ! empty( $eligibility['eligible'] );
+    }
+
+    private static function structuralCapabilities( $entry ) {
+        $entry_detail_available = class_exists( 'Gravity_Flow_Entry_Detail' );
+
+        $approval_actions_available = class_exists( 'Gravity_Flow_Step_Approval' )
+            && method_exists( 'Gravity_Flow_Step_Approval', 'get_actions' )
+            && method_exists( 'Gravity_Flow_Step_Approval', 'workflow_detail_status_box_actions' )
+            && $entry_detail_available
+            && method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' );
+
+        return array(
+            'entry.created_at' => class_exists( 'GFAPI' ) && method_exists( 'GFAPI', 'get_entry' ),
+            'workflow.current_step' => class_exists( 'Gravity_Flow_API' ) && method_exists( 'Gravity_Flow_API', 'get_current_step' ),
+            'workflow.status' => class_exists( 'Gravity_Flow_API' ) && method_exists( 'Gravity_Flow_API', 'get_status' ),
+            'workflow.instructions' => $entry_detail_available && method_exists( 'Gravity_Flow_Entry_Detail', 'maybe_show_instructions' ),
+            'workflow.approve_action' => $approval_actions_available,
+            'workflow.reject_action' => $approval_actions_available,
+            'workflow.timeline' => $entry_detail_available && method_exists( 'Gravity_Flow_Entry_Detail', 'maybe_show_timeline' ),
+            'navigation.backlink' => $entry_detail_available && method_exists( 'Gravity_Flow_Entry_Detail', 'maybe_display_back_link' ),
+            'print.utility' => PrintDossierRuntime::utilityAvailable( $entry ),
+        );
+    }
+
+    private static function structuralFailureReason( $decision ) {
+        $slot = isset( $decision['semantic_slot_key'] ) && is_string( $decision['semantic_slot_key'] )
+            ? $decision['semantic_slot_key']
+            : 'unknown';
+        $reason = isset( $decision['reason'] ) && is_string( $decision['reason'] )
+            ? $decision['reason']
+            : 'not_ready';
+
+        $code = 'semantic.' . $slot . '.' . $reason;
+        $code = strtolower( preg_replace( '/[^a-z0-9_.-]+/i', '_', $code ) );
+        return substr( $code, 0, 96 );
     }
 
     private static function model() {
