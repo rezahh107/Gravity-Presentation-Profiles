@@ -94,6 +94,8 @@ final class EntryDetailSetupService {
                 'binding_set_id' => $qualification['binding_set_id'],
                 'binding_set_version' => $qualification['binding_set_version'],
                 'sources' => $qualification['stable_sources'],
+                'host_source_contract' => $qualification['host_source_contract'],
+                'request_values' => $qualification['request_values'],
             );
         } catch ( LifecycleException $exception ) {
             return $this->failedResult( $form_id, $identity, 'stable_host_sources', $exception, $steps );
@@ -123,7 +125,12 @@ final class EntryDetailSetupService {
         $print_after = $this->visual->resolve( OperationsSetupService::PRINT_SURFACE );
         $inbox_after = $this->visual->resolve( InboxSetupService::SURFACE );
         if ( $print_before !== $print_after || $inbox_before !== $inbox_after ) {
-            throw new LifecycleException( 'entry_detail_setup_cross_surface_activation_changed', 'Entry Detail setup unexpectedly changed an existing Inbox or Print activation.' );
+            $steps['cross_surface_preservation'] = array(
+                'outcome' => 'failed',
+                'reason' => 'entry_detail_setup_cross_surface_activation_changed',
+                'message' => 'Entry Detail setup unexpectedly changed an existing Inbox or Print activation.',
+            );
+            return $this->result( self::STATUS_FAILED, $form_id, $identity, $steps );
         }
 
         $steps['existing_surfaces'] = array(
