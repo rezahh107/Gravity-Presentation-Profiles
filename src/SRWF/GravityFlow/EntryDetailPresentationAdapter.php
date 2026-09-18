@@ -130,7 +130,10 @@ final class EntryDetailPresentationAdapter {
             $actionable ? 'native_current_assignee_can_update' : $eligibility['reason']
         );
 
-        $editable_fields = $actionable ? self::hostEditableFields( $current_step ) : array();
+        // Gravity Flow's can_update() predicate governs host editability for
+        // every current step, not only Approval. Keep that independent from
+        // the narrower Approve/Reject eligibility decision above.
+        $editable_fields = self::hostEditableFields( $current_step );
 
         echo '<div class="gpp-entry-dossier" dir="rtl" data-gpp-entry-detail="ready" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '"';
         echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '"';
@@ -303,7 +306,13 @@ final class EntryDetailPresentationAdapter {
                     'semantic.documents.report_card.invalid_file_metadata',
                     'blank_unproven_value'
                 );
-                return;
+                $decision = self::valueDecision(
+                    self::VALUE_STALE,
+                    null,
+                    $decision['source_ref'],
+                    $decision['field'],
+                    'invalid_file_metadata'
+                );
             }
         }
 
