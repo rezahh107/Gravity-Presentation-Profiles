@@ -7,23 +7,31 @@ use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 
 final class SupportBundleBuilder {
-    const SCHEMA_VERSION = '1.0.0';
+    const SCHEMA_VERSION = '1.1.0';
 
     private $binding_health;
     private $incidents;
     private $visual;
+    private $entry_detail_setup;
 
-    public function __construct( BindingHealthService $binding_health, RuntimeIncidentStore $incidents, VisualPackageLifecycle $visual ) {
+    public function __construct(
+        BindingHealthService $binding_health,
+        RuntimeIncidentStore $incidents,
+        VisualPackageLifecycle $visual,
+        EntryDetailSetupDiagnosticStore $entry_detail_setup = null
+    ) {
         $this->binding_health = $binding_health;
         $this->incidents = $incidents;
         $this->visual = $visual;
+        $this->entry_detail_setup = $entry_detail_setup;
     }
 
     public static function forWordPress() {
         return new self(
             BindingHealthService::forWordPress(),
             RuntimeIncidentStore::forWordPress(),
-            new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) )
+            new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) ),
+            EntryDetailSetupDiagnosticStore::forWordPress()
         );
     }
 
@@ -32,6 +40,7 @@ final class SupportBundleBuilder {
         $binding_health = null;
         $diagnostics = null;
         $profiles = array();
+        $entry_detail_setup = array( 'attempted' => false );
 
         try {
             $binding_health = $this->binding_health->diagnosticFacts();
@@ -47,6 +56,16 @@ final class SupportBundleBuilder {
             $profiles = $this->activeProfiles( $this->visual->snapshot(), $unknown );
         } catch ( \Throwable $exception ) {
             $unknown[] = 'active_profile_identity_unavailable';
+        }
+        if ( null !== $this->entry_detail_setup ) {
+            try {
+                $setup_state = $this->entry_detail_setup->snapshot();
+                if ( ! empty( $setup_state['latest_attempt'] ) && is_array( $setup_state['latest_attempt'] ) ) {
+                    $entry_detail_setup = $setup_state['latest_attempt'];
+                }
+            } catch ( \Throwable $exception ) {
+                $unknown[] = 'entry_detail_setup_diagnostic_unavailable';
+            }
         }
 
         $runtime = $this->runtimeFacts( $unknown );
@@ -64,6 +83,7 @@ final class SupportBundleBuilder {
                 'active_profiles' => $profiles,
                 'binding_health' => $binding_health,
                 'diagnostics' => $diagnostics,
+                'entry_detail_setup' => $entry_detail_setup,
             ),
             'unknown_or_unproven' => array_values( array_unique( $unknown ) ),
             'privacy_boundary' => array(
