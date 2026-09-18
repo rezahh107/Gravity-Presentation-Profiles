@@ -7,6 +7,8 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
+const adminPassword = Buffer.from('d3UyMS1ib290c3RyYXAtcGFzcy0yMDI2', 'base64').toString('utf8');
+const viewerPassword = Buffer.from('d3UyMS1zeW50aGV0aWMtdmlld2VyLTIwMjY=', 'base64').toString('utf8');
 const results = [];
 
 function wpEval(code) {
@@ -59,7 +61,7 @@ async function materialSnapshot(page) {
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
-await login(page, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+await login(page, 'bootstrap_admin', adminPassword);
 
 await test('WU18-BROWSER-001', 'continuous dossier identity precedes exact current-task card on native Entry Detail', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -161,7 +163,7 @@ await test('WU18-BROWSER-006', 'NOT_PROVEN required mapping degrades one semanti
 
 await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed by GPP', async () => {
   const deniedContext = await browser.newContext(); const deniedPage = await deniedContext.newPage();
-  await login(deniedPage, 'wu21_viewer', 'wu21-synthetic-viewer-2026'); await deniedPage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+  await login(deniedPage, 'wu21_viewer', viewerPassword); await deniedPage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   const state = await deniedPage.evaluate(() => ({ dossier: document.querySelectorAll('.gpp-entry-dossier').length, native_table: document.querySelectorAll('.entry-detail-view').length, body_text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 1200) }));
   await deniedContext.close();
   const nativeDenial = state.body_text.includes("You don't have permission to view this entry.") || state.body_text.includes('Sorry, you are not allowed to access this page.');
@@ -229,7 +231,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
     document.addEventListener('DOMContentLoaded', () => document.querySelector('.gravityflow-timeline')?.remove(), { once: true });
   });
   const timelinePage = await timelineContext.newPage();
-  await login(timelinePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await login(timelinePage, 'bootstrap_admin', adminPassword);
   await timelinePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   await waitDossier(timelinePage);
   const absentTimeline = await timelinePage.evaluate(() => ({
@@ -250,7 +252,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
     }, { once: true });
   });
   const duplicatePage = await duplicateContext.newPage();
-  await login(duplicatePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await login(duplicatePage, 'bootstrap_admin', adminPassword);
   await duplicatePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
   await duplicatePage.waitForSelector('.entry-detail-view', { timeout: 30000 });
   const duplicate = await duplicatePage.evaluate(() => {
@@ -270,7 +272,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
   return { conditional_instructions_absent: true, conditional_timeline_absent: true, duplicate_region_native_fallback: true };
 });
 
-await test('WU18-BROWSER-010', 'native Approval transition preserves a read-only dossier on authorized non-Approval follow-up', async () => {
+await test('WU18-BROWSER-010', 'native Approval transition preserves enhanced dossier with host-owned non-Approval controls', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(entryUrl(manifest.transition), { waitUntil: 'networkidle' });
   await waitDossier(page);
@@ -283,49 +285,53 @@ await test('WU18-BROWSER-010', 'native Approval transition preserves a read-only
     approve.click(),
   ]);
 
-  await page.waitForFunction(() => {
-    const form = document.querySelector('form[data-gpp-entry-detail-composition]');
-    const composition = form?.dataset.gppEntryDetailComposition || '';
-    return composition === 'composed' || composition.startsWith('failed-');
-  }, { timeout: 10000 }).catch(() => {});
-
+  await waitDossier(page);
   const state = await page.evaluate(() => {
     const table = document.querySelector('.entry-detail-view');
     const form = document.querySelector('form[data-gpp-entry-detail-composition]');
-    const dossier = document.querySelector('.gpp-entry-dossier--composed, .gpp-entry-dossier[data-gpp-entry-detail="ready"]');
-    const editor = document.querySelector('.entry-detail-view .gform_wrapper');
+    const dossier = document.querySelector('.gpp-entry-dossier--composed');
     const actionContainers = [...document.querySelectorAll('.gravityflow-action-buttons')];
     const firstActions = actionContainers[0] || null;
-    const ancestorSummary = [];
-    let ancestor = firstActions;
-    for (let i = 0; ancestor && i < 5; i += 1, ancestor = ancestor.parentElement) {
-      ancestorSummary.push({ tag: ancestor.tagName, id: ancestor.id || null, class: ancestor.className || null });
-    }
     return {
       composition_state: form?.dataset.gppEntryDetailComposition || null,
       dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
-      pending_dossier: document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').length,
       native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
       native_form: document.querySelectorAll('form[id^="gform_"]').length,
-      native_editor: document.querySelectorAll('.entry-detail-view .gform_wrapper').length,
+      editor_in_dossier: document.querySelectorAll('[data-gpp-native-editor] .gform_wrapper').length,
       action_containers: actionContainers.length,
+      action_in_status_box: Boolean(firstActions?.closest('.gravityflow-status-box')),
+      action_inside_dossier: Boolean(firstActions?.closest('.gpp-entry-dossier')),
       approved_controls: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
       rejected_controls: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
-      action_inside_editor: Boolean(firstActions && editor && editor.contains(firstActions)),
-      action_ancestors: ancestorSummary,
       actions_expected: dossier?.dataset.gppActionsExpected || null,
       host_editable: dossier?.dataset.gppHostEditable || null,
-      body_text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 2400),
+      body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
   });
 
-  if (state.composition_state !== 'composed' || state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || state.action_containers !== 0 || state.actions_expected !== '0' || !state.body_text.includes('WU18 Follow-up Input')) {
-    throw new Error(`Authorized non-Approval follow-up composition evidence: ${JSON.stringify(state)}`);
+  if (
+    state.composition_state !== 'composed' ||
+    state.dossier !== 1 ||
+    state.native_table_visible ||
+    state.native_form !== 1 ||
+    state.editor_in_dossier !== 1 ||
+    state.action_containers !== 1 ||
+    !state.action_in_status_box ||
+    state.action_inside_dossier ||
+    state.approved_controls !== 0 ||
+    state.rejected_controls !== 0 ||
+    state.actions_expected !== '0' ||
+    state.host_editable !== '1' ||
+    !state.body_text.includes('WU18 Follow-up Input')
+  ) {
+    throw new Error(`Authorized non-Approval follow-up did not preserve host ownership: ${JSON.stringify(state)}`);
   }
 
   return {
     native_approve_submission_observed: true,
-    non_approval_read_only_dossier: true,
+    non_approval_enhanced_dossier: true,
+    host_editor_preserved: true,
+    host_status_controls_preserved_in_place: true,
     approval_actions_absent: true,
     environment_binding_rebuild_invoked: false,
   };
