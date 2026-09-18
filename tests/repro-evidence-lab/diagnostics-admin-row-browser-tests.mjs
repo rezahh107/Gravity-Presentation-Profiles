@@ -184,7 +184,8 @@ try {
 
     fs.writeFileSync(bundlePath, raw);
     staleBundle = JSON.parse(raw);
-    if (staleBundle.schema_version !== '1.0.0' || staleBundle.bundle_type !== 'gpp.support_bundle') throw new Error('Downloaded support artifact schema/type is invalid.');
+    if (staleBundle.schema_version !== '1.1.0' || staleBundle.bundle_type !== 'gpp.support_bundle') throw new Error('Downloaded support artifact schema/type is invalid.');
+    if (staleBundle.observed?.entry_detail_setup?.attempted !== false) throw new Error('Support bundle must report that no explicit Entry Detail setup was attempted in the WU21 diagnostics fixture.');
     const fact = findBindingFact(staleBundle, stale.form_id, 'student.national_id');
     assertBindingFact(fact, 'stale_source_missing', 11, 'Existing binding-health stale fact missing from bundle');
     const cookieValues = (await context.cookies()).map(cookie => cookie.value).filter(Boolean);
@@ -195,7 +196,7 @@ try {
       if (boundary[key] !== 'OMITTED') throw new Error(`Privacy boundary ${key} is not explicit.`);
     }
     if (!staleBundle.observed?.runtime?.wordpress_version || !staleBundle.observed?.runtime?.php_version || !staleBundle.observed?.runtime?.gravity_forms_version || !staleBundle.observed?.runtime?.gravity_flow_version) throw new Error('Support bundle is missing pinned runtime identity facts.');
-    return { file: path.basename(bundlePath), endpoint_status: response.status(), stale_fact: fact, privacy_boundary: boundary };
+    return { file: path.basename(bundlePath), endpoint_status: response.status(), stale_fact: fact, entry_detail_setup_attempted: staleBundle.observed.entry_detail_setup.attempted, privacy_boundary: boundary };
   });
 
   await test('GPP-DIAG-ADMIN-003', 'explicit stale-binding repair executes through the exact real row settings form and re-evaluates healthy', async () => {

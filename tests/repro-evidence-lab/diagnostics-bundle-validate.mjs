@@ -9,8 +9,9 @@ if (!fs.existsSync(file)) throw new Error('Downloaded GPP support bundle artifac
 
 const raw = fs.readFileSync(file, 'utf8');
 const bundle = JSON.parse(raw);
-if (bundle.schema_version !== '1.0.0' || bundle.bundle_type !== 'gpp.support_bundle') throw new Error('Support bundle schema/type mismatch.');
-if (!bundle.observed || !bundle.observed.binding_health || !bundle.observed.diagnostics) throw new Error('Support bundle observed facts are incomplete.');
+if (bundle.schema_version !== '1.1.0' || bundle.bundle_type !== 'gpp.support_bundle') throw new Error('Support bundle schema/type mismatch.');
+if (!bundle.observed || !bundle.observed.binding_health || !bundle.observed.diagnostics || !bundle.observed.entry_detail_setup) throw new Error('Support bundle observed facts are incomplete.');
+if (bundle.observed.entry_detail_setup.attempted !== false) throw new Error('Support bundle must report that no explicit Entry Detail setup was attempted in the WU21 diagnostics fixture.');
 if (!Array.isArray(bundle.unknown_or_unproven) || typeof bundle.privacy_boundary !== 'object') throw new Error('Support bundle fact/proof boundary is missing.');
 
 const traces = [
@@ -52,6 +53,8 @@ const validation = {
   size_bytes: Buffer.byteLength(raw),
   binding_health_present: true,
   runtime_diagnostics_present: true,
+  entry_detail_setup_present: true,
+  entry_detail_setup_attempted: bundle.observed.entry_detail_setup.attempted,
   inbox_stages: stages,
   privacy_falsification: 'PASS',
 };

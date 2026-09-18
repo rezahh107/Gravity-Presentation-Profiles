@@ -155,6 +155,12 @@ Repository CI and pinned authentic/reproducible WordPress, Gravity Forms, and Gr
 
 These lanes do not prove target-production equivalence. Target installation IDs, plugin/license configuration, theme/cache/CDN/server behavior, remaining Registration production-specific evidence, and physical-printer equivalence remain separate `NOT_PROVEN` claims until exercised in those environments.
 
+### Entry Detail setup diagnostics
+
+An explicit `Operations Setup — Entry Detail` attempt records only its latest bounded setup outcome in the local support evidence: selected form ID, `COMPLETED` / `CONFLICT` / `FAILED`, the bounded lifecycle step and reason code, and resulting binding/profile identities when setup succeeds. The setup diagnostic does not persist entry values, user identity, current assignment or permission, uploaded-file data, arbitrary exception text, or stack traces.
+
+A successful setup qualifies only stable installation/form source contracts. Live Entry Detail authorization, current-assignee eligibility, Approval availability, and workflow values remain fresh Gravity Flow request facts and are never converted into installation-level permission claims.
+
 ## Security and privacy
 
 This plugin remains presentation-only and offline/local for its diagnostics and authoring-prompt capabilities. It must not weaken WordPress, Gravity Forms, or Gravity Flow authorization boundaries. Test fixtures use synthetic data only.

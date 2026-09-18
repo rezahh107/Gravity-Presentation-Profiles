@@ -67,11 +67,7 @@ final class EntryDetailRuntimeReadinessService {
         }
 
         $artifact = $record['artifact'];
-        foreach ( array_keys( self::HOST_SOURCES ) as $slot_key ) {
-            if ( ! $this->hostSeamAvailable( $slot_key ) ) {
-                throw new LifecycleException( 'entry_detail_host_seam_unavailable', 'A required stable Entry Detail host API is unavailable.' );
-            }
-        }
+        $this->assertStableHostSourceContract( $context );
 
         $comparison_refs = array();
         $current_candidate = $this->qualifiedArtifact( $artifact, $comparison_refs );
@@ -81,6 +77,8 @@ final class EntryDetailRuntimeReadinessService {
                 'binding_set_id' => $artifact['binding_set_id'],
                 'binding_set_version' => $artifact['binding_set_version'],
                 'stable_sources' => array_keys( self::HOST_SOURCES ),
+                'host_source_contract' => 'form_bound_public_api',
+                'request_values' => 'not_persisted',
                 'request_authorization' => 'decided_per_request_by_gravity_flow',
             );
         }
@@ -123,8 +121,66 @@ final class EntryDetailRuntimeReadinessService {
             'previous_version' => $artifact['binding_set_version'],
             'binding_set_version' => $next['binding_set_version'],
             'stable_sources' => array_keys( self::HOST_SOURCES ),
+            'host_source_contract' => 'form_bound_public_api',
+            'request_values' => 'not_persisted',
             'request_authorization' => 'decided_per_request_by_gravity_flow',
         );
+    }
+
+    /**
+     * Proves installation-level source availability without manufacturing a
+     * request value. Gravity Flow 3.1.0 documents both workflow getters as
+     * entry-valued methods on a form-bound Gravity_Flow_API instance. Setup
+     * therefore verifies the selected form, constructible API object and exact
+     * public entry-parameter contract, but deliberately does not cache or
+     * persist an entry/status/step value.
+     */
+    private function assertStableHostSourceContract( $context ) {
+        if ( ! isset( $context['form_source_ref']['type'], $context['form_source_ref']['form_id'] )
+            || 'gravity_forms.form' !== $context['form_source_ref']['type'] ) {
+            throw new LifecycleException( 'entry_detail_host_form_context_invalid', 'Entry Detail host-source qualification requires the selected Gravity Forms form context.' );
+        }
+
+        $form_id = (int) $context['form_source_ref']['form_id'];
+        if ( $form_id <= 0
+            || ! class_exists( 'GFAPI' )
+            || ! method_exists( 'GFAPI', 'get_form' )
+            || ! method_exists( 'GFAPI', 'get_entry' ) ) {
+            throw new LifecycleException( 'entry_detail_host_gravity_forms_api_unavailable', 'The required Gravity Forms host API is unavailable.' );
+        }
+
+        try {
+            $form = \GFAPI::get_form( $form_id );
+        } catch ( \Throwable $exception ) {
+            throw new LifecycleException( 'entry_detail_host_form_unavailable', 'The selected Gravity Forms form could not be read for Entry Detail qualification.' );
+        }
+        if ( ! is_array( $form ) || empty( $form['id'] ) || (int) $form['id'] !== $form_id ) {
+            throw new LifecycleException( 'entry_detail_host_form_unavailable', 'The selected Gravity Forms form is unavailable for Entry Detail qualification.' );
+        }
+
+        if ( ! class_exists( 'Gravity_Flow_API' ) ) {
+            throw new LifecycleException( 'entry_detail_host_gravity_flow_api_unavailable', 'The Gravity Flow orchestration API is unavailable in the setup request.' );
+        }
+
+        foreach ( array( 'get_current_step', 'get_status' ) as $method_name ) {
+            if ( ! method_exists( 'Gravity_Flow_API', $method_name ) ) {
+                throw new LifecycleException( 'entry_detail_host_gravity_flow_api_contract_invalid', 'The Gravity Flow orchestration API does not expose the required stable Entry Detail method contract.' );
+            }
+            try {
+                $method = new \ReflectionMethod( 'Gravity_Flow_API', $method_name );
+            } catch ( \ReflectionException $exception ) {
+                throw new LifecycleException( 'entry_detail_host_gravity_flow_api_contract_invalid', 'The Gravity Flow orchestration API method contract could not be inspected.' );
+            }
+            if ( ! $method->isPublic() || $method->isStatic() || $method->getNumberOfRequiredParameters() < 1 ) {
+                throw new LifecycleException( 'entry_detail_host_gravity_flow_api_contract_invalid', 'The Gravity Flow orchestration API method contract is not the admitted entry-valued public API.' );
+            }
+        }
+
+        try {
+            new \Gravity_Flow_API( $form_id );
+        } catch ( \Throwable $exception ) {
+            throw new LifecycleException( 'entry_detail_host_gravity_flow_api_initialization_failed', 'The form-bound Gravity Flow orchestration API could not be initialized.' );
+        }
     }
 
     private function qualifiedArtifact( $artifact, &$binding_refs ) {
@@ -167,19 +223,6 @@ final class EntryDetailRuntimeReadinessService {
             }
         }
         throw new LifecycleException( 'entry_detail_semantic_slot_missing', 'A required stable Entry Detail semantic is absent from the active EnvironmentBindingSet.' );
-    }
-
-    private function hostSeamAvailable( $slot_key ) {
-        if ( 'entry.created_at' === $slot_key ) {
-            return class_exists( 'GFAPI' ) && method_exists( 'GFAPI', 'get_entry' );
-        }
-        if ( 'workflow.current_step' === $slot_key ) {
-            return class_exists( 'Gravity_Flow_API' ) && method_exists( 'Gravity_Flow_API', 'get_current_step' );
-        }
-        if ( 'workflow.status' === $slot_key ) {
-            return class_exists( 'Gravity_Flow_API' ) && method_exists( 'Gravity_Flow_API', 'get_status' );
-        }
-        return false;
     }
 
     private function sameSource( $left, $right ) {

@@ -70,6 +70,7 @@ gravity-presentation-profiles.php
 src/Autoloader.php
 src/Bootstrap.php
 src/GravityForms/AddOn.php
+src/GravityForms/EntryDetailSetupDiagnosticStore.php
 assets/css/base.css
 assets/css/gravity-forms-declarative.css
 assets/css/srwf-gravity-flow-inbox.css

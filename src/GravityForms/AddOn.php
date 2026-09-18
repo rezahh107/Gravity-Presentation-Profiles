@@ -111,6 +111,21 @@ final class AddOn extends \GFAddOn {
                 ),
             ),
             array(
+                'title'       => esc_html__( 'Operations Setup (Entry Detail)', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Adopt the shipped SRWF Entry Detail presentation for one existing operations binding context. GPP qualifies only admitted stable host sources, preserves Inbox and Print, and never records or grants Gravity Flow assignment, Approval permission, or request authorization.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'                => 'entry_detail_setup_action',
+                        'label'               => esc_html__( 'Initialize / Adopt Entry Detail presentation', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Choose the exact existing operations form, then save settings. Re-running this action is idempotent when the same stable host sources and Entry Detail activation are already authoritative. Gravity Flow still decides request-time Approval/current-assignee eligibility.', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'choices'             => $this->operationsSetupChoices(),
+                        'validation_callback' => array( $this, 'validate_entry_detail_setup_action' ),
+                        'save_callback'       => array( $this, 'discard_entry_detail_setup_action' ),
+                    ),
+                ),
+            ),
+            array(
                 'title'       => esc_html__( 'Mapping & Binding Health', 'gravity-presentation-profiles' ),
                 'description' => esc_html__( 'Map each admitted Gravity Forms-backed canonical meaning on its own row, apply that row explicitly, then review the resulting health. Not mapped is always explicit. Derived and host-managed meanings are shown without a misleading field selector. Every accepted change creates and conflict-safely activates a new immutable binding version.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
@@ -577,6 +592,81 @@ final class AddOn extends \GFAddOn {
         }
 
         return __( 'Inbox presentation setup did not complete.', 'gravity-presentation-profiles' );
+    }
+
+    /**
+     * Entry Detail setup belongs to the same native Gravity Forms Add-On
+     * settings-save boundary as Print and Inbox. The framework owns the page,
+     * capability check and nonce; GPP owns only the selected-form validation
+     * and its bounded lifecycle transition.
+     */
+    public function validate_entry_detail_setup_action( $field, $value ) {
+        if ( ! is_string( $value ) || '' === trim( $value ) ) {
+            return;
+        }
+
+        if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
+            $this->setSettingsFieldError( $field, 'The selected Entry Detail setup action is invalid. Refresh the page and try again.' );
+            return;
+        }
+
+        $form_id = (int) $matches[1];
+
+        try {
+            $result = EntryDetailSetupService::forWordPress()->initialize( array( 'form_id' => $form_id ) );
+        } catch ( LifecycleException $exception ) {
+            try {
+                EntryDetailSetupDiagnosticStore::forWordPress()->recordFailureReason( $form_id, $exception->reasonCode() );
+            } catch ( \Throwable $diagnostic_exception ) {
+                // Diagnostics are observational and never change setup outcome.
+            }
+            $this->setSettingsFieldError( $field, $exception->getMessage() );
+            return;
+        } catch ( \Throwable $exception ) {
+            try {
+                EntryDetailSetupDiagnosticStore::forWordPress()->recordUnexpectedFailure( $form_id );
+            } catch ( \Throwable $diagnostic_exception ) {
+                // Diagnostics are observational and never change setup outcome.
+            }
+            $this->setSettingsFieldError( $field, 'Entry Detail setup failed before presentation state could be safely completed.' );
+            return;
+        }
+
+        try {
+            EntryDetailSetupDiagnosticStore::forWordPress()->recordServiceResult( $form_id, $result );
+        } catch ( \Throwable $diagnostic_exception ) {
+            // Diagnostics are observational and never change setup outcome.
+        }
+
+        if ( EntryDetailSetupService::STATUS_COMPLETED !== $result['status'] ) {
+            $this->setSettingsFieldError( $field, $this->entryDetailSetupFailureMessage( $result ) );
+        }
+    }
+
+    public function discard_entry_detail_setup_action( $field, $value ) {
+        unset( $field, $value );
+        return '';
+    }
+
+    private function entryDetailSetupFailureMessage( $result ) {
+        if ( ! empty( $result['steps'] ) && is_array( $result['steps'] ) ) {
+            foreach ( $result['steps'] as $name => $step ) {
+                $outcome = isset( $step['outcome'] ) ? $step['outcome'] : '';
+                if ( ! in_array( $outcome, array( 'conflict', 'failed' ), true ) ) {
+                    continue;
+                }
+                $detail = ! empty( $step['message'] ) ? $step['message'] : ( isset( $step['reason'] ) ? $step['reason'] : '' );
+                if ( '' !== $detail ) {
+                    return sprintf(
+                        __( 'Entry Detail setup stopped at %1$s: %2$s', 'gravity-presentation-profiles' ),
+                        $name,
+                        $detail
+                    );
+                }
+            }
+        }
+
+        return __( 'Entry Detail presentation setup did not complete.', 'gravity-presentation-profiles' );
     }
 
     private function setupFormLabel( $form_id ) {
