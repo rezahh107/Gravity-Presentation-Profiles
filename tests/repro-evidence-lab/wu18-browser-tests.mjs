@@ -256,6 +256,41 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
   return { conditional_instructions_absent: true, conditional_timeline_absent: true, duplicate_region_native_fallback: true };
 });
 
+await test('WU18-BROWSER-010', 'native Approval transition immediately removes GPP on non-Approval follow-up', async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(entryUrl(manifest.transition), { waitUntil: 'networkidle' });
+  await waitDossier(page);
+
+  const approve = page.locator('.gravityflow-action-buttons [value="approved"]');
+  if (await approve.count() !== 1) throw new Error('Transition fixture has no single native Approve control.');
+
+  await Promise.all([
+    page.waitForLoadState('networkidle'),
+    approve.click(),
+  ]);
+
+  await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+  const state = await page.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    return {
+      dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+      native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+      native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
+    };
+  });
+
+  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1 || !state.body_text.includes('WU18 Follow-up Input')) {
+    throw new Error(`Non-Approval follow-up did not remain native after host transition: ${JSON.stringify(state)}`);
+  }
+
+  return {
+    native_approve_submission_observed: true,
+    non_approval_native_fallback: true,
+    environment_binding_rebuild_invoked: false,
+  };
+});
+
 fs.writeFileSync(path.join(artifactDir, 'wu18-browser-results.json'), JSON.stringify({ suite: 'WU18 browser/runtime', results }, null, 2) + '\n');
 for (const result of results) console.log(`${result.status} ${result.id} ${result.name}`);
 await browser.close();
