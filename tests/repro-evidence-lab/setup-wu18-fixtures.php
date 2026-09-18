@@ -158,6 +158,26 @@ foreach ( array( array( $alpha_form, $alpha_fields ), array( $beta_form, $beta_f
     gravity_flow()->update_feed_meta( $step->get_id(), $meta );
 }
 
+$operator = get_user_by( 'login', 'bootstrap_admin' );
+if ( ! $operator ) throw new RuntimeException( 'Pinned WU18 operator unavailable.' );
+$alpha_api = new Gravity_Flow_API( (int) $alpha_form['form_id'] );
+$follow_up_step_id = $alpha_api->add_step(
+    array(
+        'step_name' => 'WU18 Follow-up Input',
+        'step_type' => 'user_input',
+        'description' => 'Synthetic non-Approval follow-up for fresh-request eligibility falsification.',
+        'type' => 'select',
+        'assignees' => array( 'user_id|' . (int) $operator->ID ),
+        'assignee_policy' => 'all',
+        'editable_fields' => array( (string) $alpha_fields['review.reason'] ),
+        'instructionsEnable' => '1',
+        'instructionsValue' => 'Synthetic follow-up input.',
+    )
+);
+if ( ! $follow_up_step_id || is_wp_error( $follow_up_step_id ) ) {
+    throw new RuntimeException( 'Unable to create WU18 User Input follow-up step.' );
+}
+
 gravity_flow()->add_timeline_note( $alpha_entry['entry_id'], 'Synthetic dossier review opened.' );
 gravity_flow()->add_timeline_note( $beta_entry['entry_id'], 'Synthetic dossier review opened.' );
 
