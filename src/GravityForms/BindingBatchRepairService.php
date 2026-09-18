@@ -10,6 +10,7 @@ use GravityPresentationProfiles\Core\Lifecycle\RepairBindingEvidenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\StateStore;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 use GravityPresentationProfiles\Core\Portable\EnvironmentBindingSet;
+use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPolicy;
 
 /**
  * Bounded multi-field variant of the existing BindingRepairService mutation.
@@ -68,6 +69,9 @@ final class BindingBatchRepairService {
             $slot_key = trim( $mapping['semantic_slot_key'] );
             if ( isset( $normalized[ $slot_key ] ) ) {
                 throw new LifecycleException( 'repair_duplicate_slot', 'A semantic mapping may be submitted only once per save.' );
+            }
+            if ( OperationsBindingManagementPolicy::DIRECT_FIELD !== OperationsBindingManagementPolicy::kind( $slot_key ) ) {
+                throw new LifecycleException( 'mapping_slot_not_direct_field', 'This semantic meaning is not admitted as a direct Gravity Forms field mapping.' );
             }
 
             $binding = $this->bindingForSlot( $artifact, $slot_key );
