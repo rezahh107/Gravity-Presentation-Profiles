@@ -22,6 +22,14 @@ final class EntryDetailPresentationAdapter {
     const STYLE_HANDLE = 'gpp-srwf-gravity-flow-entry-detail';
     const SCRIPT_HANDLE = 'gpp-srwf-gravity-flow-entry-detail';
 
+    const VALUE_MAPPED = 'MAPPED_VALUE';
+    const VALUE_EMPTY = 'MAPPED_EMPTY';
+    const VALUE_UNMAPPED = 'UNMAPPED';
+    const VALUE_STALE = 'STALE_SOURCE';
+    const VALUE_HIDDEN = 'HOST_HIDDEN';
+    const VALUE_UNAVAILABLE = 'SOURCE_UNAVAILABLE';
+    const VALUE_UNSUPPORTED = 'UNSUPPORTED_SOURCE';
+
     private static $model_loaded = false;
     private static $model = null;
 
@@ -30,8 +38,8 @@ final class EntryDetailPresentationAdapter {
             return;
         }
 
-        // Source-proven Gravity Flow 3.1.0 seams. The content hook executes only
-        // after Gravity Flow's own Entry Detail permission gate has passed.
+        // Source-proven Gravity Flow 3.1.0 seam. It executes only after the
+        // host's own Entry Detail permission gate has admitted this request.
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderDossier' ), 20, 2 );
         add_filter( 'gravityflow_approve_label_workflow_detail', array( __CLASS__, 'filterApproveLabel' ), 20, 2 );
         add_filter( 'gravityflow_reject_label_workflow_detail', array( __CLASS__, 'filterRejectLabel' ), 20, 2 );
@@ -46,8 +54,6 @@ final class EntryDetailPresentationAdapter {
     }
 
     public static function renderDossier( $form, $entry ) {
-        // Gravity Flow owns the permission decision. Reaching this hook is the
-        // observed fact; GPP does not claim an independent authorization grant.
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_HOST_SEAM',
@@ -67,12 +73,13 @@ final class EntryDetailPresentationAdapter {
             );
             return;
         }
-        if ( ! is_array( $form ) || ! is_array( $entry ) ) {
+
+        if ( ! self::hostPayloadMatches( $form, $entry ) ) {
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_BINDING_READINESS',
                 RuntimeDecisionTrace::RESULT_FAIL,
-                'invalid_host_payload',
+                'invalid_or_mismatched_host_context',
                 'native_gravity_flow_entry_detail'
             );
             RuntimeDiagnostics::recordOnce(
@@ -87,7 +94,7 @@ final class EntryDetailPresentationAdapter {
 
         $capabilities = self::structuralCapabilities( $entry );
         $decision = $model->presentationReadiness( $entry, $capabilities );
-        if ( ! $decision['ready'] ) {
+        if ( empty( $decision['ready'] ) ) {
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_BINDING_READINESS',
@@ -111,54 +118,40 @@ final class EntryDetailPresentationAdapter {
             'structural_readiness_satisfied'
         );
 
+        self::recordOptionalRegionCapabilities( $capabilities );
+
         $current_step = self::currentStep( $entry );
         $eligibility = self::approvalProcessingEligibility( $current_step );
-        if ( empty( $eligibility['eligible'] ) ) {
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'ENTRY_DETAIL_APPROVAL_ELIGIBILITY',
-                RuntimeDecisionTrace::RESULT_SKIP,
-                $eligibility['reason'],
-                'native_gravity_flow_entry_detail'
-            );
-            RuntimeDiagnostics::recordOnce(
-                self::SURFACE,
-                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
-                RuntimeDecisionTrace::RESULT_SKIP,
-                'approval_processing_ineligible',
-                'native_gravity_flow_entry_detail'
-            );
-            return;
-        }
+        $actionable = ! empty( $eligibility['eligible'] );
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_APPROVAL_ELIGIBILITY',
-            RuntimeDecisionTrace::RESULT_PASS,
-            'native_current_assignee_can_update'
+            $actionable ? RuntimeDecisionTrace::RESULT_PASS : RuntimeDecisionTrace::RESULT_SKIP,
+            $actionable ? 'native_current_assignee_can_update' : $eligibility['reason']
         );
 
-        $editable_fields = self::hostEditableFields( $current_step );
+        $editable_fields = $actionable ? self::hostEditableFields( $current_step ) : array();
 
         echo '<div class="gpp-entry-dossier" dir="rtl" data-gpp-entry-detail="ready" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '"';
-        echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '">';
+        echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '"';
+        echo ' data-gpp-actions-expected="' . ( $actionable ? '1' : '0' ) . '" data-gpp-composition-state="pending">';
 
-        self::renderIdentitySection( $model, $form, $entry );
+        self::renderIdentitySection( $model, $form, $entry, $current_step );
 
         echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__task" data-gpp-section="current-task">';
         echo '<h2 class="gpp-entry-dossier__task-heading">' . esc_html__( 'کاری که الان باید انجام دهید', 'gravity-presentation-profiles' ) . '</h2>';
-        $step_name = self::slotText( $model, $form, $entry, 'workflow.current_step' );
-        if ( null !== $step_name ) {
-            echo '<p class="gpp-entry-dossier__task-step"><span>' . esc_html__( 'مرحله جاری', 'gravity-presentation-profiles' ) . '</span><strong>' . esc_html( $step_name ) . '</strong></p>';
-        }
+        self::renderFact( $model, $form, $entry, $current_step, 'workflow.current_step', 'مرحله جاری', 'gpp-entry-dossier__task-step' );
         echo '<div class="gpp-entry-dossier__native-instructions" data-gpp-native-instructions></div>';
         echo '<div class="gpp-entry-dossier__native-editor" data-gpp-native-editor></div>';
-        echo '<div class="gpp-entry-dossier__native-actions" data-gpp-native-actions></div>';
+        if ( $actionable ) {
+            echo '<div class="gpp-entry-dossier__native-actions" data-gpp-native-actions></div>';
+        }
         echo '</section>';
 
-        self::renderFactsSection( $model, $form, $entry );
-        self::renderDocumentsSection( $model, $form, $entry );
+        self::renderFactsSection( $model, $form, $entry, $current_step );
+        self::renderDocumentsSection( $model, $form, $entry, $current_step );
 
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history">';
+        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history" data-gpp-optional-history>'; 
         echo '<details data-gpp-history-details>';
         echo '<summary>' . esc_html__( 'سوابق بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
         echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
@@ -168,11 +161,12 @@ final class EntryDetailPresentationAdapter {
 
         echo self::previewDialogMarkup();
         echo '</div>';
+
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_PRESENTATION_OUTPUT',
             RuntimeDecisionTrace::RESULT_PASS,
-            'gpp_enhanced_entry_detail_admitted'
+            'gpp_enhanced_entry_detail_emitted'
         );
     }
 
@@ -216,11 +210,6 @@ final class EntryDetailPresentationAdapter {
         }
     }
 
-    /**
-     * Content-derived cache key, matching the established Inbox asset contract.
-     * A missing/unreadable file deliberately returns false so WordPress does not
-     * receive a fabricated version identity.
-     */
     private static function assetVersion( $absolute_path ) {
         if ( ! is_string( $absolute_path ) || '' === $absolute_path || ! is_file( $absolute_path ) || ! is_readable( $absolute_path ) ) {
             return false;
@@ -236,104 +225,238 @@ final class EntryDetailPresentationAdapter {
         return false;
     }
 
-    private static function renderIdentitySection( EntryDetailPresentationModel $model, $form, $entry ) {
+    private static function hostPayloadMatches( $form, $entry ) {
+        if ( ! is_array( $form ) || ! is_array( $entry ) || empty( $form['id'] ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
+            return false;
+        }
+        return (string) $form['id'] === (string) $entry['form_id'];
+    }
+
+    private static function renderIdentitySection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
         echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__identity" data-gpp-section="identity">';
         echo '<div class="gpp-entry-dossier__identity-main">';
 
-        $photo = self::documentForSlot( $model, $form, $entry, 'student.photo' );
-        if ( null !== $photo && 'image' === $photo['kind'] ) {
-            echo self::imageThumbnailMarkup( $photo, 'gpp-entry-dossier__student-photo' );
+        $photo_state = self::semanticDecision( $model, $form, $entry, $current_step, 'student.photo' );
+        self::recordSemanticDecision( 'student.photo', $photo_state );
+        if ( self::VALUE_MAPPED === $photo_state['state'] ) {
+            $photo = self::documentFromDecision( $photo_state, $entry );
+            if ( null !== $photo && 'image' === $photo['kind'] ) {
+                echo self::imageThumbnailMarkup( $photo, 'gpp-entry-dossier__student-photo' );
+            }
+        } elseif ( self::isVisiblePlaceholderState( $photo_state['state'] ) ) {
+            echo '<div class="gpp-entry-dossier__student-photo gpp-entry-dossier__slot-state" data-gpp-slot="student.photo">' . esc_html( self::placeholderForState( $photo_state['state'] ) ) . '</div>';
         }
 
         echo '<div class="gpp-entry-dossier__identity-text">';
-        $name = self::slotText( $model, $form, $entry, 'student.full_name' );
-        echo '<h1>' . esc_html( null === $name ? '—' : $name ) . '</h1>';
+        $name_state = self::semanticDecision( $model, $form, $entry, $current_step, 'student.full_name' );
+        self::recordSemanticDecision( 'student.full_name', $name_state );
+        $name = self::displayTextForDecision( $name_state );
+        echo '<h1 data-gpp-slot="student.full_name">' . esc_html( null === $name ? '—' : $name ) . '</h1>';
         echo '<dl class="gpp-entry-dossier__facts gpp-entry-dossier__facts--identity">';
-        self::renderFact( $model, $form, $entry, 'student.national_id', 'کد ملی' );
-        self::renderFact( $model, $form, $entry, 'student.father_name', 'نام پدر' );
-        self::renderFact( $model, $form, $entry, 'student.birth_date_jalali', 'تاریخ تولد' );
-        self::renderFact( $model, $form, $entry, 'student.gender', 'جنسیت' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.national_id', 'کد ملی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.father_name', 'نام پدر' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.birth_date_jalali', 'تاریخ تولد' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.gender', 'جنسیت' );
         echo '</dl>';
         echo '</div></div></section>';
     }
 
-    private static function renderFactsSection( EntryDetailPresentationModel $model, $form, $entry ) {
+    private static function renderFactsSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
         echo '<section class="gpp-entry-dossier__section" data-gpp-section="facts">';
         echo '<h2>' . esc_html__( 'اطلاعات پرونده', 'gravity-presentation-profiles' ) . '</h2>';
         echo '<dl class="gpp-entry-dossier__facts">';
-        self::renderFact( $model, $form, $entry, 'student.mobile', 'تلفن همراه دانش‌آموز' );
-        self::renderFact( $model, $form, $entry, 'student.home_phone', 'تلفن منزل' );
-        self::renderFact( $model, $form, $entry, 'student.father_mobile', 'تلفن همراه پدر' );
-        self::renderFact( $model, $form, $entry, 'student.mother_mobile', 'تلفن همراه مادر' );
-        self::renderFact( $model, $form, $entry, 'education.level', 'مقطع تحصیلی' );
-        self::renderFact( $model, $form, $entry, 'education.grade_group', 'پایه / گروه' );
-        self::renderFact( $model, $form, $entry, 'education.graduation_status', 'وضعیت تحصیلی' );
-        self::renderFact( $model, $form, $entry, 'school.name', 'مدرسه' );
-        self::renderFact( $model, $form, $entry, 'registration.center', 'مرکز ثبت‌نام' );
-        self::renderFact( $model, $form, $entry, 'review.status', 'وضعیت بررسی' );
-        self::renderFact( $model, $form, $entry, 'review.reason', 'توضیح بررسی' );
-        self::renderFact( $model, $form, $entry, 'finance.status', 'وضعیت مالی' );
-        self::renderFact( $model, $form, $entry, 'finance.tuition_amount', 'شهریه' );
-        self::renderFact( $model, $form, $entry, 'finance.discount_amount', 'تخفیف' );
-        self::renderFact( $model, $form, $entry, 'finance.discount_title', 'عنوان تخفیف' );
-        self::renderFact( $model, $form, $entry, 'finance.net_payable_amount', 'خالص قابل پرداخت' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.mobile', 'تلفن همراه دانش‌آموز' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.home_phone', 'تلفن منزل' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.father_mobile', 'تلفن همراه پدر' );
+        self::renderFact( $model, $form, $entry, $current_step, 'student.mother_mobile', 'تلفن همراه مادر' );
+        self::renderFact( $model, $form, $entry, $current_step, 'education.level', 'مقطع تحصیلی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'education.grade_group', 'پایه / گروه' );
+        self::renderFact( $model, $form, $entry, $current_step, 'education.graduation_status', 'وضعیت تحصیلی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'school.name', 'مدرسه' );
+        self::renderFact( $model, $form, $entry, $current_step, 'registration.center', 'مرکز ثبت‌نام' );
+        self::renderFact( $model, $form, $entry, $current_step, 'review.status', 'وضعیت بررسی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'review.reason', 'توضیح بررسی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'finance.status', 'وضعیت مالی' );
+        self::renderFact( $model, $form, $entry, $current_step, 'finance.tuition_amount', 'شهریه' );
+        self::renderFact( $model, $form, $entry, $current_step, 'finance.discount_amount', 'تخفیف' );
+        self::renderFact( $model, $form, $entry, $current_step, 'finance.discount_title', 'عنوان تخفیف' );
+        self::renderFact( $model, $form, $entry, $current_step, 'finance.net_payable_amount', 'خالص قابل پرداخت' );
         echo '</dl></section>';
     }
 
-    private static function renderDocumentsSection( EntryDetailPresentationModel $model, $form, $entry ) {
-        $document = self::documentForSlot( $model, $form, $entry, 'documents.report_card' );
-        if ( null === $document ) {
+    private static function renderDocumentsSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        $decision = self::semanticDecision( $model, $form, $entry, $current_step, 'documents.report_card' );
+        self::recordSemanticDecision( 'documents.report_card', $decision );
+
+        if ( in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ) {
             return;
         }
 
         echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents" data-gpp-section="documents">';
         echo '<h2>' . esc_html__( 'مدارک', 'gravity-presentation-profiles' ) . '</h2>';
-        echo '<div class="gpp-entry-dossier__document">';
+        echo '<div class="gpp-entry-dossier__document" data-gpp-slot="documents.report_card">';
         echo '<span class="gpp-entry-dossier__document-label">' . esc_html__( 'کارنامه', 'gravity-presentation-profiles' ) . '</span>';
-        if ( 'image' === $document['kind'] ) {
-            echo self::imageThumbnailMarkup( $document, 'gpp-entry-dossier__document-thumbnail' );
-        } else {
-            echo '<a class="gpp-entry-dossier__file-link" href="' . esc_url( $document['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $document['name'] ) . '</a>';
+
+        if ( self::VALUE_MAPPED === $decision['state'] ) {
+            $document = self::documentFromDecision( $decision, $entry );
+            if ( null !== $document && 'image' === $document['kind'] ) {
+                echo self::imageThumbnailMarkup( $document, 'gpp-entry-dossier__document-thumbnail' );
+            } elseif ( null !== $document ) {
+                echo '<a class="gpp-entry-dossier__file-link" href="' . esc_url( $document['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $document['name'] ) . '</a>';
+            }
+        } elseif ( self::isVisiblePlaceholderState( $decision['state'] ) ) {
+            echo '<span class="gpp-entry-dossier__slot-state">' . esc_html( self::placeholderForState( $decision['state'] ) ) . '</span>';
         }
         echo '</div></section>';
     }
 
-    private static function renderFact( EntryDetailPresentationModel $model, $form, $entry, $slot, $label ) {
-        $value = self::slotText( $model, $form, $entry, $slot );
+    private static function renderFact( EntryDetailPresentationModel $model, $form, $entry, $current_step, $slot, $label, $class_name = '' ) {
+        $decision = self::semanticDecision( $model, $form, $entry, $current_step, $slot );
+        self::recordSemanticDecision( $slot, $decision );
+
+        if ( in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ) {
+            return;
+        }
+
+        $value = self::displayTextForDecision( $decision );
         if ( null === $value ) {
             return;
         }
 
-        echo '<div class="gpp-entry-dossier__fact" data-gpp-slot="' . esc_attr( $slot ) . '">';
+        $class = 'gpp-entry-dossier__fact' . ( '' !== $class_name ? ' ' . $class_name : '' );
+        echo '<div class="' . esc_attr( $class ) . '" data-gpp-slot="' . esc_attr( $slot ) . '">';
         echo '<dt>' . esc_html( $label ) . '</dt><dd>' . esc_html( $value ) . '</dd></div>';
     }
 
-    private static function slotText( EntryDetailPresentationModel $model, $form, $entry, $slot ) {
+    private static function semanticDecision( EntryDetailPresentationModel $model, $form, $entry, $current_step, $slot ) {
         if ( $model->isDerivedSlot( $slot ) ) {
-            $decision = $model->derivedDecision( $entry, $slot );
-            if ( empty( $decision['ready'] ) || empty( $decision['component_source_refs'] ) ) {
-                return null;
-            }
-
-            $parts = array();
-            foreach ( $decision['component_source_refs'] as $source ) {
-                $part = self::normalizedTextValue( self::readSourceValue( $source, $form, $entry ) );
-                if ( null === $part ) {
-                    return null;
-                }
-                $parts[] = $part;
-            }
-
-            $text = trim( implode( ' ', $parts ) );
-            return '' === $text ? null : $text;
+            return self::derivedSemanticDecision( $model, $form, $entry, $current_step, $slot );
         }
 
         $resolved = $model->resolve( $entry, $slot );
         if ( empty( $resolved['resolved'] ) || empty( $resolved['source_ref'] ) ) {
-            return null;
+            $reason = isset( $resolved['reason'] ) ? (string) $resolved['reason'] : '';
+            if ( 'source_adapter_not_admitted' === $reason ) {
+                return self::valueDecision( self::VALUE_UNSUPPORTED, null, null, null, $reason );
+            }
+            return self::valueDecision( self::VALUE_UNMAPPED, null, null, null, '' !== $reason ? $reason : 'binding_not_proven' );
         }
 
-        return self::normalizedTextValue( self::readSourceValue( $resolved['source_ref'], $form, $entry ) );
+        $source = $resolved['source_ref'];
+        if ( 'gravity_forms.field' === $source['type'] ) {
+            if ( ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_field' ) ) {
+                return self::valueDecision( self::VALUE_UNAVAILABLE, null, $source, null, 'gravity_forms_field_api_unavailable' );
+            }
+            $field = \GFAPI::get_field( $form, $source['field_id'] );
+            if ( ! is_object( $field ) ) {
+                return self::valueDecision( self::VALUE_STALE, null, $source, null, 'mapped_field_missing' );
+            }
+
+            $visibility = ( new EntryDetailFieldVisibility() )->decide( $field, $form, $entry, $current_step );
+            if ( empty( $visibility['proven'] ) ) {
+                return self::valueDecision( self::VALUE_UNAVAILABLE, null, $source, $field, $visibility['reason'] );
+            }
+            if ( empty( $visibility['visible'] ) ) {
+                return self::valueDecision( self::VALUE_HIDDEN, null, $source, $field, 'host_hidden' );
+            }
+
+            $value = self::normalizedTextValue( self::readSourceValue( $source, $form, $entry ) );
+            return null === $value
+                ? self::valueDecision( self::VALUE_EMPTY, null, $source, $field, 'mapped_value_empty' )
+                : self::valueDecision( self::VALUE_MAPPED, $value, $source, $field, null );
+        }
+
+        $value = self::normalizedTextValue( self::readSourceValue( $source, $form, $entry ) );
+        return null === $value
+            ? self::valueDecision( self::VALUE_EMPTY, null, $source, null, 'mapped_value_empty' )
+            : self::valueDecision( self::VALUE_MAPPED, $value, $source, null, null );
+    }
+
+    private static function derivedSemanticDecision( EntryDetailPresentationModel $model, $form, $entry, $current_step, $slot ) {
+        $components = $model->derivationComponents( $slot );
+        if ( empty( $components ) ) {
+            return self::valueDecision( self::VALUE_UNSUPPORTED, null, null, null, 'derived_components_unavailable' );
+        }
+
+        $parts = array();
+        foreach ( $components as $component ) {
+            $decision = self::semanticDecision( $model, $form, $entry, $current_step, $component );
+            self::recordSemanticDecision( $component, $decision );
+            if ( self::VALUE_MAPPED === $decision['state'] ) {
+                $parts[] = $decision['value'];
+                continue;
+            }
+            if ( self::VALUE_HIDDEN === $decision['state'] ) {
+                return self::valueDecision( self::VALUE_HIDDEN, null, null, null, 'derived_component_host_hidden' );
+            }
+            if ( self::VALUE_UNAVAILABLE === $decision['state'] ) {
+                return self::valueDecision( self::VALUE_UNAVAILABLE, null, null, null, 'derived_component_source_unavailable' );
+            }
+            if ( self::VALUE_STALE === $decision['state'] ) {
+                return self::valueDecision( self::VALUE_STALE, null, null, null, 'derived_component_stale' );
+            }
+            if ( self::VALUE_UNSUPPORTED === $decision['state'] ) {
+                return self::valueDecision( self::VALUE_UNSUPPORTED, null, null, null, 'derived_component_unsupported' );
+            }
+            if ( self::VALUE_UNMAPPED === $decision['state'] ) {
+                return self::valueDecision( self::VALUE_UNMAPPED, null, null, null, 'derived_component_unmapped' );
+            }
+            return self::valueDecision( self::VALUE_EMPTY, null, null, null, 'derived_component_empty' );
+        }
+
+        $value = trim( implode( ' ', $parts ) );
+        return '' === $value
+            ? self::valueDecision( self::VALUE_EMPTY, null, null, null, 'derived_value_empty' )
+            : self::valueDecision( self::VALUE_MAPPED, $value, null, null, null );
+    }
+
+    private static function valueDecision( $state, $value, $source, $field, $reason ) {
+        return array(
+            'state' => $state,
+            'value' => $value,
+            'source_ref' => $source,
+            'field' => $field,
+            'reason' => $reason,
+        );
+    }
+
+    private static function displayTextForDecision( $decision ) {
+        if ( self::VALUE_MAPPED === $decision['state'] ) {
+            return $decision['value'];
+        }
+        if ( self::isVisiblePlaceholderState( $decision['state'] ) ) {
+            return self::placeholderForState( $decision['state'] );
+        }
+        return null;
+    }
+
+    private static function isVisiblePlaceholderState( $state ) {
+        return in_array( $state, array( self::VALUE_EMPTY, self::VALUE_UNMAPPED, self::VALUE_STALE, self::VALUE_UNSUPPORTED ), true );
+    }
+
+    private static function placeholderForState( $state ) {
+        if ( self::VALUE_EMPTY === $state ) {
+            return __( 'ثبت نشده', 'gravity-presentation-profiles' );
+        }
+        if ( in_array( $state, array( self::VALUE_STALE, self::VALUE_UNSUPPORTED ), true ) ) {
+            return __( 'نگاشت معتبر نیست', 'gravity-presentation-profiles' );
+        }
+        return __( 'نگاشت نشده', 'gravity-presentation-profiles' );
+    }
+
+    private static function recordSemanticDecision( $slot, $decision ) {
+        if ( ! is_array( $decision ) || empty( $decision['state'] ) || self::VALUE_MAPPED === $decision['state'] ) {
+            return;
+        }
+        $state = strtolower( $decision['state'] );
+        $reason = 'semantic.' . strtolower( preg_replace( '/[^a-z0-9_.-]+/i', '_', $slot ) ) . '.' . $state;
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_SEMANTIC_COMPLETENESS',
+            RuntimeDecisionTrace::RESULT_SKIP,
+            substr( $reason, 0, 96 ),
+            in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ? 'blank_unproven_value' : null
+        );
     }
 
     private static function normalizedTextValue( $value ) {
@@ -349,36 +472,26 @@ final class EntryDetailPresentationAdapter {
     }
 
     private static function readSourceValue( $source, $form, $entry ) {
-        // Entry Detail renders human-readable presentation text only; it never
-        // performs raw option-selection comparisons.
         return ( new BoundHostValueReader() )->readDisplay( $source, $form, $entry );
     }
 
-    private static function documentForSlot( EntryDetailPresentationModel $model, $form, $entry, $slot ) {
-        $resolved = $model->resolve( $entry, $slot );
-        if ( empty( $resolved['resolved'] ) || 'gravity_forms.field' !== $resolved['source_ref']['type'] || ! class_exists( 'GFAPI' ) ) {
+    private static function documentFromDecision( $decision, $entry ) {
+        if ( self::VALUE_MAPPED !== $decision['state'] || ! is_object( $decision['field'] ) || ! is_array( $decision['source_ref'] ) ) {
+            return null;
+        }
+        $field = $decision['field'];
+        if ( 'fileupload' !== $field->type || ! method_exists( $field, 'to_array' ) || ! method_exists( $field, 'get_download_url' ) || ! method_exists( $field, 'get_file_name_from_url' ) ) {
             return null;
         }
 
-        $field_id = $resolved['source_ref']['field_id'];
-        $field = \GFAPI::get_field( $form, $field_id );
-        if ( ! is_object( $field ) || 'fileupload' !== $field->type || ! method_exists( $field, 'to_array' ) || ! method_exists( $field, 'get_download_url' ) || ! method_exists( $field, 'get_file_name_from_url' ) ) {
-            return null;
-        }
-
-        $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
+        $field_id = (string) $decision['source_ref']['field_id'];
+        $raw = array_key_exists( $field_id, $entry ) ? $entry[ $field_id ] : null;
         $files = $field->to_array( $raw );
         $stored_url = self::singleAuthoritativeFile( $files );
-        if ( null === $stored_url ) {
-            return null;
-        }
-        if ( '' === $stored_url ) {
+        if ( null === $stored_url || '' === $stored_url ) {
             return null;
         }
 
-        // Gravity Forms 3.x owns file-name parsing. The pinned 3.1.1.1
-        // contract returns false or structured metadata with original/sanitized
-        // names; the sanitized host basename is the canonical presentation name.
         $name_metadata = $field->get_file_name_from_url( $stored_url );
         if ( ! is_array( $name_metadata ) || ! isset( $name_metadata['sanitized'] ) || ! is_string( $name_metadata['sanitized'] ) ) {
             return null;
@@ -398,11 +511,6 @@ final class EntryDetailPresentationAdapter {
         return array( 'kind' => $kind, 'url' => $url, 'name' => $name );
     }
 
-    /**
-     * The semantic contract names one authoritative report card. Without a
-     * separate admitted selection rule, zero or multiple host files are not a
-     * safe single semantic value.
-     */
     private static function singleAuthoritativeFile( $files ) {
         if ( ! is_array( $files ) ) {
             return null;
@@ -433,8 +541,12 @@ final class EntryDetailPresentationAdapter {
         if ( ! class_exists( 'Gravity_Flow_API' ) || ! is_array( $entry ) || empty( $entry['form_id'] ) ) {
             return null;
         }
-        $api = new \Gravity_Flow_API( (int) $entry['form_id'] );
-        return $api->get_current_step( $entry );
+        try {
+            $api = new \Gravity_Flow_API( (int) $entry['form_id'] );
+            return $api->get_current_step( $entry );
+        } catch ( \Throwable $exception ) {
+            return null;
+        }
     }
 
     private static function hostEditableFields( $current_step ) {
@@ -481,8 +593,7 @@ final class EntryDetailPresentationAdapter {
             return false;
         }
 
-        $capabilities = self::structuralCapabilities( $entry );
-        if ( ! $model->isPresentationReady( $entry, $capabilities ) ) {
+        if ( ! $model->isPresentationReady( $entry, self::structuralCapabilities( $entry ) ) ) {
             return false;
         }
 
@@ -492,7 +603,6 @@ final class EntryDetailPresentationAdapter {
 
     private static function structuralCapabilities( $entry ) {
         $entry_detail_available = class_exists( 'Gravity_Flow_Entry_Detail' );
-
         $approval_actions_available = class_exists( 'Gravity_Flow_Step_Approval' )
             && method_exists( 'Gravity_Flow_Step_Approval', 'get_actions' )
             && method_exists( 'Gravity_Flow_Step_Approval', 'workflow_detail_status_box_actions' )
@@ -512,15 +622,25 @@ final class EntryDetailPresentationAdapter {
         );
     }
 
+    private static function recordOptionalRegionCapabilities( $capabilities ) {
+        foreach ( array( 'workflow.instructions', 'workflow.timeline', 'navigation.backlink', 'print.utility' ) as $slot ) {
+            if ( ! empty( $capabilities[ $slot ] ) ) {
+                continue;
+            }
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_OPTIONAL_REGIONS',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                substr( 'region.' . $slot . '.unavailable', 0, 96 )
+            );
+        }
+    }
+
     private static function structuralFailureReason( $decision ) {
-        $slot = isset( $decision['semantic_slot_key'] ) && is_string( $decision['semantic_slot_key'] )
-            ? $decision['semantic_slot_key']
-            : 'unknown';
         $reason = isset( $decision['reason'] ) && is_string( $decision['reason'] )
             ? $decision['reason']
             : 'not_ready';
-
-        $code = 'semantic.' . $slot . '.' . $reason;
+        $code = 'structural.' . $reason;
         $code = strtolower( preg_replace( '/[^a-z0-9_.-]+/i', '_', $code ) );
         return substr( $code, 0, 96 );
     }
@@ -572,7 +692,6 @@ final class EntryDetailPresentationAdapter {
                 RuntimeDecisionTrace::RESULT_PASS
             );
         } catch ( \Throwable $exception ) {
-            // Presentation failure must never replace native Entry Detail.
             RuntimeDiagnostics::recordException(
                 self::SURFACE,
                 'ENTRY_DETAIL_PROFILE_RESOLUTION',
