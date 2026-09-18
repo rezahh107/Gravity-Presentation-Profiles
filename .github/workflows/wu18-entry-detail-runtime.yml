@@ -13,6 +13,7 @@ on:
       - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
       - 'tests/repro-evidence-lab/wu18-admin-setup-request.php'
+      - 'tests/repro-evidence-lab/wu18-entry-detail-setup-state.php'
       - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
       - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
       - 'tests/repro-evidence-lab/wu18-post-browser-controls.php'
@@ -158,10 +159,15 @@ jobs:
           PY
           cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context.json"
           cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-before.json"
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-after.json"
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
           if [[ "$http_code" != "302" || "$location" != *"gpp_entry_detail_setup=completed"* ]]; then
             sed -n '1,40p' "$probe_body" >&2 || true
             exit 1
           fi
+          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
           kill "$setup_server_pid" >/dev/null 2>&1 || true
           wait "$setup_server_pid" 2>/dev/null || true
           trap - EXIT
@@ -209,6 +215,9 @@ jobs:
             /tmp/wu18-artifacts/wu18-host-seam-inventory.json
             /tmp/wu18-artifacts/wu18-admin-setup-context.json
             /tmp/wu18-artifacts/wu18-admin-setup-result.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-before.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-after.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-transition.json
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
