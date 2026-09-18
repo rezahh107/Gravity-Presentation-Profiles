@@ -17,8 +17,13 @@ add_action(
             return;
         }
 
-        $method_fact = static function ( $method_name ) {
-            if ( ! class_exists( 'Gravity_Flow_API' ) || ! method_exists( 'Gravity_Flow_API', $method_name ) ) {
+        // Capture lifecycle truth before any probe below is allowed to invoke an
+        // autoloader. Availability and preloaded state are different facts.
+        $loaded_before_autoload_check = class_exists( 'Gravity_Flow_API', false );
+        $available = class_exists( 'Gravity_Flow_API' );
+
+        $method_fact = static function ( $method_name ) use ( $available ) {
+            if ( ! $available || ! method_exists( 'Gravity_Flow_API', $method_name ) ) {
                 return null;
             }
             try {
@@ -36,7 +41,7 @@ add_action(
 
         $constructible = false;
         try {
-            if ( class_exists( 'Gravity_Flow_API' ) ) {
+            if ( $available ) {
                 new Gravity_Flow_API( $form_id );
                 $constructible = true;
             }
@@ -45,10 +50,10 @@ add_action(
         }
 
         $facts = array(
-            'schema_version' => '1.0.0',
+            'schema_version' => '1.1.0',
             'request_context' => 'gravity_forms_addon_settings_current_screen',
-            'gravity_flow_api_loaded_before_autoload_check' => class_exists( 'Gravity_Flow_API', false ),
-            'gravity_flow_api_available' => class_exists( 'Gravity_Flow_API' ),
+            'gravity_flow_api_loaded_before_autoload_check' => $loaded_before_autoload_check,
+            'gravity_flow_api_available' => $available,
             'form_bound_api_constructible' => $constructible,
             'get_current_step' => $method_fact( 'get_current_step' ),
             'get_status' => $method_fact( 'get_status' ),
