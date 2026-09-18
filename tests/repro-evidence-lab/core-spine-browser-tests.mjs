@@ -29,6 +29,7 @@ function control(action) {
 }
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
+const currentEntryProfile = 'srwf.operations.entry-detail.v1';
 const runtimePassword = `gppq-${randomBytes(18).toString('hex')}-A1!`;
 wpEval(`wp_set_password(${JSON.stringify(runtimePassword)}, ${Number(manifest.bootstrap_id)}); echo 'credential-ready';`);
 const entryUrl = item => `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id=${item.form_id}&lid=${item.entry_id}`;
@@ -103,7 +104,7 @@ let happySemantics = null;
 await test('CORE-SPINE-001', 'happy path carries one authoritative entry through Entry Detail into dossier Print', async () => {
   await openEntry(page);
   const entry = await entryState(page);
-  if (!entry.ready || entry.profile !== 'shared.entry_detail.v1') throw new Error(`Entry Detail not admitted: ${JSON.stringify(entry)}`);
+  if (!entry.ready || entry.profile !== currentEntryProfile) throw new Error(`Entry Detail not admitted: ${JSON.stringify(entry)}`);
   const utility = page.locator('[data-gpp-print-utility="dossier"] [data-gpp-dossier-print-url]');
   if (await utility.count() !== 1) throw new Error('Dedicated dossier Print utility missing from the admitted Entry Detail.');
   const url = await utility.getAttribute('data-gpp-dossier-print-url');
@@ -190,7 +191,7 @@ await test('CORE-SPINE-006', 'lifecycle deactivation and replacement are observe
     control('lifecycle-replace');
     await openEntry(page); const entryActive = await entryState(page);
     await openPrint(page); const printActive = await printState(page);
-    if (!entryActive.ready || entryActive.profile !== 'shared.entry_detail.v1') throw new Error('Replacement Entry binding was not observed by a fresh request.');
+    if (!entryActive.ready || entryActive.profile !== currentEntryProfile) throw new Error('Replacement Entry binding was not observed by a fresh request.');
     if (printActive.state !== 'ready' || printActive.profile !== 'shared.print.v1' || !traceHas(printActive, 'PRINT_COMPOSITION_READY', 'ready_two_pages')) throw new Error('Replacement Print binding was not observed by a fresh request.');
     if (happySemantics && (entryActive.full_name !== happySemantics.full_name || printActive.full_name !== happySemantics.full_name || entryActive.national_id !== printActive.national_id)) throw new Error('Replacement lifecycle state changed authoritative semantic meaning unexpectedly.');
     return { deactivation_observed: true, inactive_entry_native_fallback: true, inactive_print_failure: 'binding_context_missing', replacement_activation_observed: true, stale_lifecycle_cache: false };
