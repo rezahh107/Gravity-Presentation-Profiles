@@ -118,6 +118,18 @@ final class GppBindingHealthAddonField {
     public function set_error( $message ) { $this->error = $message; }
 }
 
+function gpp_binding_health_field_by_name( $section, $name ) {
+    if ( empty( $section['fields'] ) || ! is_array( $section['fields'] ) ) {
+        return null;
+    }
+    foreach ( $section['fields'] as $field ) {
+        if ( isset( $field['name'] ) && $name === $field['name'] ) {
+            return $field;
+        }
+    }
+    return null;
+}
+
 $addon = \GravityPresentationProfiles\GravityForms\AddOn::get_instance();
 $health_fake = new GppBindingHealthAddonFakeHealth();
 $repair_fake = new GppBindingHealthAddonFakeRepair();
@@ -136,9 +148,14 @@ foreach ( $sections as $section ) {
     }
 }
 gpp_assert_true( is_array( $binding_section ), 'Existing Gravity Forms Add-On settings must contain Mapping & Binding Health.' );
-$health_field = $binding_section['fields'][0];
-$rollback_field = $binding_section['fields'][1];
+$health_field = gpp_binding_health_field_by_name( $binding_section, 'binding_health' );
+$entry_detail_mapping_field = gpp_binding_health_field_by_name( $binding_section, 'entry_detail_mapping' );
+$rollback_field = gpp_binding_health_field_by_name( $binding_section, 'binding_management_action' );
+gpp_assert_true( is_array( $health_field ), 'Binding health field must remain present by stable name.' );
+gpp_assert_true( is_array( $entry_detail_mapping_field ), 'Entry Detail batch mapping field must coexist on the same Plugin Settings surface.' );
+gpp_assert_true( is_array( $rollback_field ), 'Rollback field must remain present by stable name.' );
 gpp_assert_same( 'gpp_binding_health', $health_field['type'], 'Mapping health must remain on the existing Add-On settings surface.' );
+gpp_assert_same( 'gpp_entry_detail_mapping', $entry_detail_mapping_field['type'], 'Entry Detail mapping must use its dedicated embedded renderer.' );
 gpp_assert_same( 'Binding history rollback', $rollback_field['label'], 'Global select must be rollback-only rather than the primary mapping workflow.' );
 gpp_assert_same( array( $addon, 'validate_binding_management_action' ), $rollback_field['validation_callback'], 'Rollback must continue through the lifecycle-backed management validator.' );
 gpp_assert_same( '', $rollback_field['choices'][0]['value'], 'Ordinary settings saves must default to no binding change.' );
