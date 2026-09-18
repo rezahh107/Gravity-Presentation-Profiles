@@ -236,69 +236,35 @@ wu18_assert( false === strpos( $print_unready_html, 'data-gpp-entry-detail="read
 wu18_assert( null !== $print_failure && 0 === strpos( $print_failure['reason_code'], 'semantic.print.utility.' ), 'Print capability failure was not attributed to print.utility.' );
 PrintDossierPresentationAdapter::resetRuntimeCache();
 
-// Assignment/current-user eligibility is fresh per request. The stale
-// action_permission=PROVEN claims remain in the immutable binding artifact and
-// must have zero power once the operator is no longer the current assignee.
-$api = new Gravity_Flow_API( (int) $alpha_form['id'] );
-$step = $api->get_current_step( GFAPI::get_entry( $alpha_entry['id'] ) );
-$original_meta = $step->get_feed_meta();
-$reassigned_meta = $original_meta;
-$reassigned_meta['assignees'] = array( 'user_id|' . (int) $viewer->ID );
-$reassigned_meta['assignee_policy'] = 'all';
-gravity_flow()->update_feed_meta( $step->get_id(), $reassigned_meta );
+// A user may legitimately view Entry Detail as the entry creator while still
+// not being the current Approval assignee. This stays inside the same host
+// request, so no feed-metadata cache invalidation is involved.
+$original_creator = (int) $alpha_entry['created_by'];
+$creator_update = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', (int) $viewer->ID );
+if ( is_wp_error( $creator_update ) ) throw new RuntimeException( $creator_update->get_error_message() );
 
 try {
-    $api_after_assignment = new Gravity_Flow_API( (int) $alpha_form['id'] );
-    $step_after_assignment = $api_after_assignment->get_current_step( GFAPI::get_entry( $alpha_entry['id'] ) );
-    wu18_assert( $step_after_assignment && 'approval' === $step_after_assignment->get_type(), 'Assignment control lost the Approval step.' );
-    wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $step_after_assignment ), 'Reassigned operator still satisfies the native update predicate.' );
-
+    wp_set_current_user( $viewer->ID );
     EntryDetailPresentationAdapter::resetRuntimeCache();
     list( $non_assignee_html, $non_assignee_form, $non_assignee_entry, $non_assignee_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
     $non_assignee_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
 
-    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_assignee_entry, $non_assignee_form, $non_assignee_step ), 'Authorized-viewer negative control unexpectedly lost native Entry Detail permission.' );
-    wu18_assert( false === strpos( $non_assignee_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $non_assignee_html, 'entry-detail-view' ), 'Authorized non-assignee received enhanced GPP Entry Detail.' );
+    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_assignee_entry, $non_assignee_form, $non_assignee_step ), 'Creator-view control unexpectedly lost native Entry Detail permission.' );
+    wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $non_assignee_step ), 'Creator-view control unexpectedly satisfies native Approval update eligibility.' );
+    wu18_assert( false === strpos( $non_assignee_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $non_assignee_html, 'entry-detail-view' ), 'Authorized non-assignee creator received enhanced GPP Entry Detail.' );
 
     $non_assignee_gate = wu18_trace_event( $non_assignee_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'SKIP' );
     wu18_assert( null !== $non_assignee_gate && 'current_assignee_not_eligible' === $non_assignee_gate['reason_code'], 'Non-assignee request was not distinguished from structural failure.' );
-
-    list( $alpha_binding_after_assignment, $binding_snapshot_after_assignment ) = wu18_active_binding_artifact( 'wu18.operations.alpha.v1' );
-    wu18_assert( $alpha_binding_after_assignment === $alpha_binding, 'Assignment change mutated the Entry Detail EnvironmentBindingSet.' );
-    wu18_assert( $binding_snapshot_after_assignment['activations'] === $binding_snapshot_before['activations'], 'Assignment change required binding reactivation/clearance.' );
 } finally {
-    gravity_flow()->update_feed_meta( $step->get_id(), $original_meta );
+    wp_set_current_user( $operator->ID );
+    $restore_creator = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', $original_creator );
+    if ( is_wp_error( $restore_creator ) ) throw new RuntimeException( $restore_creator->get_error_message() );
 }
 
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $reassigned_back_html, $reassigned_back_form, $reassigned_back_entry, $reassigned_back_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-wu18_assert( Gravity_Flow_Entry_Detail::can_update( $reassigned_back_step ), 'Restored assignee did not regain native processing eligibility.' );
-wu18_assert( false !== strpos( $reassigned_back_html, 'data-gpp-entry-detail="ready"' ), 'GPP eligibility did not recover immediately after native assignment restoration.' );
-
-// Non-Approval current step remains native even when the same user may view it.
-$approval_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
-$approval_step = $approval_api->get_current_step( GFAPI::get_entry( $alpha_entry['id'] ) );
-$approval_meta = $approval_step->get_feed_meta();
-$non_approval_meta = $approval_meta;
-$non_approval_meta['step_type'] = 'user_input';
-gravity_flow()->update_feed_meta( $approval_step->get_id(), $non_approval_meta );
-
-try {
-    $non_approval_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
-    $non_approval_step = $non_approval_api->get_current_step( GFAPI::get_entry( $alpha_entry['id'] ) );
-    wu18_assert( $non_approval_step && 'approval' !== $non_approval_step->get_type(), 'Non-Approval control did not change the native current step type.' );
-
-    EntryDetailPresentationAdapter::resetRuntimeCache();
-    list( $non_approval_html, $non_approval_form, $non_approval_entry, $rendered_non_approval_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-    $non_approval_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_approval_entry, $non_approval_form, $rendered_non_approval_step ), 'Non-Approval authorized-view control lost native permission.' );
-    wu18_assert( false === strpos( $non_approval_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $non_approval_html, 'entry-detail-view' ), 'Non-Approval request received enhanced GPP Entry Detail.' );
-
-    $non_approval_gate = wu18_trace_event( $non_approval_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'SKIP' );
-    wu18_assert( null !== $non_approval_gate && 'current_step_not_approval' === $non_approval_gate['reason_code'], 'Non-Approval request did not emit distinct live ineligibility.' );
-} finally {
-    gravity_flow()->update_feed_meta( $approval_step->get_id(), $approval_meta );
-}
+// Assignment/current-step mutation falsification is intentionally executed in
+// the browser suite, where every navigation is a fresh PHP request. Gravity
+// Flow caches step/feed objects inside one process, so using an in-process feed
+// mutation here would test cache invalidation rather than the Owner policy.
 
 // Legitimately absent request-local native regions are never fabricated.
 $region_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
@@ -341,9 +307,9 @@ $results = array(
     'print_capability_fail_closed' => true,
     'approval_assignee_positive' => true,
     'authorized_non_assignee_native_fallback' => true,
-    'non_approval_native_fallback' => true,
+    'non_approval_native_fallback' => 'browser_fresh_request_control',
     'stale_action_permission_bypass_blocked' => true,
-    'assignment_change_without_binding_rebuild' => true,
+    'assignment_change_without_binding_rebuild' => 'browser_fresh_request_control',
     'native_region_absence_not_fabricated' => true,
     'negative_native_fallback' => true,
     'unauthorized_native_denial' => true,
