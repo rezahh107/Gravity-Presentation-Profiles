@@ -15,11 +15,19 @@ if ( ! function_exists( 'gpp_wu18_entry_detail_setup_state' ) ) {
             throw new RuntimeException( 'WU18 setup-state capture requires bounded artifact directory and label.' );
         }
 
-        $base = get_option( 'gpp_wu21_fixture_manifest' );
-        if ( ! is_array( $base ) || empty( $base['forms'][0]['form_id'] ) ) {
-            throw new RuntimeException( 'WU18 setup-state capture requires WU21 fixtures.' );
+        $requested_form_id = getenv( 'WU18_SETUP_FORM_ID' );
+        $form_id = is_string( $requested_form_id ) && ctype_digit( $requested_form_id ) && (int) $requested_form_id > 0
+            ? (int) $requested_form_id
+            : 0;
+
+        if ( $form_id <= 0 ) {
+            $base = get_option( 'gpp_wu21_fixture_manifest' );
+            if ( ! is_array( $base ) || empty( $base['forms'][0]['form_id'] ) ) {
+                throw new RuntimeException( 'WU18 setup-state capture requires WU21 fixtures or an explicit setup form ID.' );
+            }
+            $form_id = (int) $base['forms'][0]['form_id'];
         }
-        $form_id = (int) $base['forms'][0]['form_id'];
+
         $operations = OperationsSetupService::forWordPress();
         $context = $operations->bindingContext( $form_id );
 
