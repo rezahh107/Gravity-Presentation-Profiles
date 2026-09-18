@@ -8,11 +8,10 @@ use GravityPresentationProfiles\Core\Portable\SemanticBindingResolver;
 /**
  * Semantic/readiness model for the native Gravity Flow Entry Detail surface.
  *
- * The Operations Package declares presentation meanings, but those meanings do
- * not all have the same authority shape. Direct fields resolve from the active
- * EnvironmentBindingSet, derived values expand to canonical components, stable
- * host state uses admitted host APIs, request-local regions/actions are checked
- * live, and print.utility is owned by the existing Print runtime capability.
+ * Structural admission and presentation-data completeness are deliberately
+ * separate. The active package/profile and one unambiguous EnvironmentBindingSet
+ * must be structurally resolvable; individual data meanings may remain UNBOUND,
+ * stale, empty or temporarily unavailable without invalidating the whole page.
  */
 final class EntryDetailPresentationModel {
     const SURFACE = 'gravity_flow.entry_detail';
@@ -122,68 +121,56 @@ final class EntryDetailPresentationModel {
     }
 
     /**
-     * Structural readiness only.
+     * Page/structure readiness only.
      *
-     * $capabilities contains stable host/GPP capability facts, never
-     * request-local action authorization. Current Approval assignment is checked
-     * separately at the live Entry Detail request boundary.
+     * Requiredness remains health/completeness information, not a page-kill
+     * switch. A structurally admitted Entry Detail needs one valid entry/form
+     * context and one uniquely selected active EnvironmentBindingSet identity.
+     * Individual semantic state and optional region capability are evaluated by
+     * the adapter after this gate and degrade independently.
      */
     public function presentationReadiness( $entry, $capabilities ) {
         if ( ! is_array( $capabilities ) ) {
             throw new ContractViolation( 'Entry Detail readiness requires a capability map.' );
         }
-
-        foreach ( $this->required_slots as $slot_key ) {
-            $kind = OperationsBindingManagementPolicy::entryDetailReadinessKind( $slot_key );
-
-            if ( OperationsBindingManagementPolicy::ENTRY_DETAIL_DERIVED === $kind ) {
-                $derived = $this->derivedDecision( $entry, $slot_key );
-                if ( empty( $derived['ready'] ) ) {
-                    return $this->failedReadiness(
-                        $derived['semantic_slot_key'],
-                        $derived['reason']
-                    );
-                }
-                continue;
-            }
-
-            if ( in_array( $kind, array(
-                OperationsBindingManagementPolicy::ENTRY_DETAIL_DIRECT_SOURCE,
-                OperationsBindingManagementPolicy::ENTRY_DETAIL_STABLE_HOST_SOURCE,
-            ), true ) ) {
-                $resolved = $this->resolve( $entry, $slot_key );
-                if ( empty( $resolved['resolved'] ) || 'PROVEN' !== $resolved['state'] || empty( $resolved['source_ref'] ) ) {
-                    return $this->failedReadiness(
-                        $slot_key,
-                        isset( $resolved['reason'] ) && is_string( $resolved['reason'] ) ? $resolved['reason'] : 'binding_not_proven'
-                    );
-                }
-
-                if ( OperationsBindingManagementPolicy::ENTRY_DETAIL_STABLE_HOST_SOURCE === $kind
-                    && empty( $capabilities[ $slot_key ] ) ) {
-                    return $this->failedReadiness( $slot_key, 'stable_host_capability_unavailable' );
-                }
-                continue;
-            }
-
-            if ( in_array( $kind, array(
-                OperationsBindingManagementPolicy::ENTRY_DETAIL_REQUEST_REGION,
-                OperationsBindingManagementPolicy::ENTRY_DETAIL_REQUEST_ACTION,
-                OperationsBindingManagementPolicy::ENTRY_DETAIL_GPP_CAPABILITY,
-            ), true ) ) {
-                if ( empty( $capabilities[ $slot_key ] ) ) {
-                    $reason = OperationsBindingManagementPolicy::ENTRY_DETAIL_GPP_CAPABILITY === $kind
-                        ? 'required_gpp_capability_unavailable'
-                        : 'stable_host_capability_unavailable';
-                    return $this->failedReadiness( $slot_key, $reason );
-                }
-                continue;
-            }
-
-            return $this->failedReadiness( $slot_key, 'semantic_readiness_kind_unknown' );
+        if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
+            return $this->failedReadiness( null, 'invalid_entry_context' );
         }
 
-        return array( 'ready' => true, 'reason' => null, 'semantic_slot_key' => null );
+        $installation_id = $this->installationIdForEntry( $entry );
+        if ( null === $installation_id ) {
+            return $this->failedReadiness( null, 'missing_or_ambiguous_active_environment' );
+        }
+        if ( empty( $this->required_source_slots ) ) {
+            return $this->failedReadiness( null, 'structural_probe_semantic_unavailable' );
+        }
+
+        // Resolver selection itself is the authority for entry-specific versus
+        // general binding precedence. An unresolved semantic still carries the
+        // selected binding identity when the context is unique; that is enough
+        // for structural admission and lets the slot degrade independently.
+        $probe = $this->resolver->resolve(
+            array(
+                'installation_id' => $installation_id,
+                'form_id' => (int) $entry['form_id'],
+                'entry_id' => (int) $entry['id'],
+                'surface' => self::SURFACE,
+            ),
+            $this->required_source_slots[0]
+        );
+
+        if ( empty( $probe['binding_set_id'] ) || empty( $probe['binding_set_version'] ) ) {
+            $reason = isset( $probe['reason'] ) && is_string( $probe['reason'] ) ? $probe['reason'] : 'binding_context_unavailable';
+            return $this->failedReadiness( null, $reason );
+        }
+
+        return array(
+            'ready' => true,
+            'reason' => null,
+            'semantic_slot_key' => null,
+            'binding_set_id' => $probe['binding_set_id'],
+            'binding_set_version' => $probe['binding_set_version'],
+        );
     }
 
     public function isPresentationReady( $entry, $capabilities ) {
