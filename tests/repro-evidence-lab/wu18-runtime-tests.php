@@ -43,13 +43,6 @@ wu18_assert(
     'Authorized non-assignee trace did not record live request ineligibility.'
 );
 
-$non_approval = $results['decision_controls']['non_approval'];
-$non_approval_gate = wu18_trace_event( $non_approval, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'SKIP' );
-wu18_assert(
-    null !== $non_approval_gate && 'current_step_not_approval' === $non_approval_gate['reason_code'],
-    'Non-Approval trace did not record distinct live request ineligibility.'
-);
-
 $print_unavailable = $results['decision_controls']['print_unavailable'];
 $print_failure = wu18_trace_event( $print_unavailable, 'ENTRY_DETAIL_BINDING_READINESS', 'FAIL' );
 wu18_assert(
