@@ -324,6 +324,8 @@ foreach ( $bindings as $binding ) {
 EntryDetailPresentationAdapter::resetRuntimeCache();
 PrintDossierPresentationAdapter::resetRuntimeCache();
 
+$binding_state_sha256 = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
+
 $manifest = array(
     'schema_version' => '2.0.0',
     'data_class' => 'SYNTHETIC_NON_PII',
@@ -331,6 +333,7 @@ $manifest = array(
     'package_version' => $visual_package['package_version'],
     'profile_id' => 'srwf.operations.entry-detail.v1',
     'legacy_profile_excluded' => 'shared.entry_detail.v1',
+    'binding_state_sha256' => $binding_state_sha256,
     'alpha' => array(
         'form_id' => (int) $alpha_form['form_id'],
         'entry_id' => (int) $alpha_entry['entry_id'],
