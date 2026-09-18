@@ -270,7 +270,7 @@ await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and 
   return { conditional_instructions_absent: true, conditional_timeline_absent: true, duplicate_region_native_fallback: true };
 });
 
-await test('WU18-BROWSER-010', 'native Approval transition immediately removes GPP on non-Approval follow-up', async () => {
+await test('WU18-BROWSER-010', 'native Approval transition preserves a read-only dossier on authorized non-Approval follow-up', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(entryUrl(manifest.transition), { waitUntil: 'networkidle' });
   await waitDossier(page);
@@ -283,24 +283,28 @@ await test('WU18-BROWSER-010', 'native Approval transition immediately removes G
     approve.click(),
   ]);
 
-  await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+  await waitDossier(page);
   const state = await page.evaluate(() => {
     const table = document.querySelector('.entry-detail-view');
+    const dossier = document.querySelector('.gpp-entry-dossier--composed');
     return {
-      dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+      dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
       native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
       native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+      actions_expected: dossier?.dataset.gppActionsExpected || null,
       body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
   });
 
-  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1 || !state.body_text.includes('WU18 Follow-up Input')) {
-    throw new Error(`Non-Approval follow-up did not remain native after host transition: ${JSON.stringify(state)}`);
+  if (state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || state.action_containers !== 0 || state.actions_expected !== '0' || !state.body_text.includes('WU18 Follow-up Input')) {
+    throw new Error(`Authorized non-Approval follow-up did not preserve read-only GPP composition: ${JSON.stringify(state)}`);
   }
 
   return {
     native_approve_submission_observed: true,
-    non_approval_native_fallback: true,
+    non_approval_read_only_dossier: true,
+    approval_actions_absent: true,
     environment_binding_rebuild_invoked: false,
   };
 });
