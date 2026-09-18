@@ -52,6 +52,13 @@ function pr5_binding_for( $artifact, $slot ) {
     throw new RuntimeException( 'Missing fixture binding: ' . $slot );
 }
 
+function pr5_assert_source( $artifact, $slot, $type, $key, $value, $message ) {
+    $source = pr5_binding_for( $artifact, $slot )['source_ref'];
+    gpp_assert_true( is_array( $source ), $message . ' (missing source)' );
+    gpp_assert_same( $type, isset( $source['type'] ) ? $source['type'] : null, $message . ' (type)' );
+    gpp_assert_same( $value, isset( $source[ $key ] ) ? $source[ $key ] : null, $message . ' (' . $key . ')' );
+}
+
 $visual_store = new Pr5MemoryStateStore();
 $binding_store = new Pr5MemoryStateStore();
 $evidence_store = new Pr5MemoryStateStore();
@@ -86,19 +93,28 @@ gpp_assert_same( 'deferred_to_request', $first['steps']['runtime_readiness']['ou
 gpp_assert_same( $print_before, $visual->resolve( 'print.dossier' ), 'Entry Detail adoption preserves Print activation.' );
 
 $qualified = pr5_active_binding_artifact( $binding_store, $context );
-gpp_assert_same(
-    array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' ),
-    pr5_binding_for( $qualified, 'entry.created_at' )['source_ref'],
+pr5_assert_source(
+    $qualified,
+    'entry.created_at',
+    'gravity_forms.entry_meta',
+    'meta_key',
+    'date_created',
     'Entry creation time is qualified from the admitted Gravity Forms entry-meta source.'
 );
-gpp_assert_same(
-    array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ),
-    pr5_binding_for( $qualified, 'workflow.current_step' )['source_ref'],
+pr5_assert_source(
+    $qualified,
+    'workflow.current_step',
+    'gravity_flow.state',
+    'state_key',
+    'current_step',
     'Current step is qualified from the admitted Gravity Flow API-backed source.'
 );
-gpp_assert_same(
-    array( 'type' => 'gravity_flow.state', 'state_key' => 'status' ),
-    pr5_binding_for( $qualified, 'workflow.status' )['source_ref'],
+pr5_assert_source(
+    $qualified,
+    'workflow.status',
+    'gravity_flow.state',
+    'state_key',
+    'status',
     'Workflow status is qualified from the admitted Gravity Flow API-backed source.'
 );
 gpp_assert_same( 'UNBOUND', pr5_binding_for( $qualified, 'workflow.approve_action' )['state'], 'Entry Detail qualification must not persist request-local Approval authorization.' );
