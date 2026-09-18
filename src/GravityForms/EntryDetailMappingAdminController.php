@@ -58,7 +58,7 @@ final class EntryDetailMappingAdminController {
     public static function renderSettingsTab() {
         if ( is_callable( self::$base_settings_callback ) ) {
             call_user_func( self::$base_settings_callback );
-        } elseif ( class_exists( __NAMESPACE__ . '\\AddOn' ) ) {
+        } elseif ( class_exists( 'GravityPresentationProfiles\\GravityForms\\AddOn' ) ) {
             $addon = AddOn::get_instance();
             if ( method_exists( $addon, 'app_settings_tab' ) ) {
                 $addon->app_settings_tab();
