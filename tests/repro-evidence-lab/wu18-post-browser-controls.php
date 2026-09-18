@@ -64,13 +64,16 @@ Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, array( 'show_head
 $html = ob_get_clean();
 $trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
 
-if ( false !== strpos( $html, 'data-gpp-entry-detail="ready"' ) || false === strpos( $html, 'entry-detail-view' ) ) {
-    throw new RuntimeException( 'Fresh non-Approval request did not remain on native Gravity Flow Entry Detail.' );
+if ( false === strpos( $html, 'data-gpp-entry-detail="ready"' ) || false === strpos( $html, 'entry-detail-view' ) ) {
+    throw new RuntimeException( 'Fresh authorized non-Approval request did not emit the read-only GPP dossier alongside the native host grid.' );
+}
+if ( false === strpos( $html, 'data-gpp-actions-expected="0"' ) ) {
+    throw new RuntimeException( 'Fresh authorized non-Approval request incorrectly expected Approval actions.' );
 }
 
 $binding_pass = false;
 $eligibility_skip = false;
-$output_skip = false;
+$output_pass = false;
 foreach ( isset( $trace['events'] ) && is_array( $trace['events'] ) ? $trace['events'] : array() as $event ) {
     if ( 'ENTRY_DETAIL_BINDING_READINESS' === $event['stage'] && 'PASS' === $event['result'] ) {
         $binding_pass = true;
@@ -81,13 +84,13 @@ foreach ( isset( $trace['events'] ) && is_array( $trace['events'] ) ? $trace['ev
         $eligibility_skip = true;
     }
     if ( 'ENTRY_DETAIL_PRESENTATION_OUTPUT' === $event['stage']
-        && 'SKIP' === $event['result']
-        && 'approval_processing_ineligible' === $event['reason_code'] ) {
-        $output_skip = true;
+        && 'PASS' === $event['result']
+        && 'gpp_enhanced_entry_detail_emitted' === $event['reason_code'] ) {
+        $output_pass = true;
     }
 }
-if ( ! $binding_pass || ! $eligibility_skip || ! $output_skip ) {
-    throw new RuntimeException( 'Non-Approval diagnostics did not distinguish structural readiness from live request ineligibility.' );
+if ( ! $binding_pass || ! $eligibility_skip || ! $output_pass ) {
+    throw new RuntimeException( 'Non-Approval diagnostics did not distinguish action ineligibility from dossier view admission.' );
 }
 
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
@@ -96,13 +99,14 @@ if ( ! is_array( $results ) ) $results = array();
 $results['post_browser_controls'] = array(
     'native_approval_transition_observed' => true,
     'current_step_type' => $step->get_type(),
-    'native_entry_detail_preserved' => true,
+    'read_only_gpp_dossier_emitted' => true,
+    'native_entry_detail_grid_preserved_pre_composition' => true,
     'binding_state_unchanged' => true,
     'stale_action_permission_claim_present_but_powerless' => true,
     'diagnostics' => array(
         'structural_readiness' => 'PASS',
         'approval_processing_eligibility' => 'SKIP:current_step_not_approval',
-        'presentation' => 'SKIP:native_gravity_flow_entry_detail',
+        'presentation' => 'PASS:gpp_enhanced_entry_detail_emitted',
     ),
 );
 file_put_contents(
