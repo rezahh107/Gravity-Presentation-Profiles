@@ -12,7 +12,7 @@ on:
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
       - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
       - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
-      - 'tests/fixtures/wu09-visual-package.json'
+      - 'profiles/srwf/operations/operations-package-v1.json'
       - 'gravity-presentation-profiles.php'
   workflow_dispatch:
 
