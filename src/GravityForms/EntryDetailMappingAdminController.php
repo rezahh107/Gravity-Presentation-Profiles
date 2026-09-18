@@ -14,18 +14,61 @@ final class EntryDetailMappingAdminController {
     const NONCE_ACTION = 'gpp_entry_detail_mapping_save';
     const NONCE_NAME = 'gpp_entry_detail_mapping_nonce';
 
+    private static $base_settings_callback = null;
+
     public static function register() {
-        if ( ! function_exists( 'add_action' ) ) {
-            return;
+        if ( function_exists( 'add_filter' ) ) {
+            add_filter(
+                'gform_addon_app_settings_menu_gravity-presentation-profiles',
+                array( __CLASS__, 'attachToSettingsTab' ),
+                50
+            );
         }
-        add_action( 'admin_notices', array( __CLASS__, 'render' ) );
-        add_action( 'admin_post_' . self::ACTION, array( __CLASS__, 'handle' ) );
+        if ( function_exists( 'add_action' ) ) {
+            add_action( 'admin_post_' . self::ACTION, array( __CLASS__, 'handle' ) );
+        }
+    }
+
+    /**
+     * Keep the native Gravity Forms Add-On settings callback, then append this
+     * workflow inside that same Settings tab. This avoids a second settings app
+     * and avoids the unrelated admin_notices lifecycle.
+     */
+    public static function attachToSettingsTab( $tabs ) {
+        if ( ! is_array( $tabs ) ) {
+            return $tabs;
+        }
+
+        foreach ( $tabs as $index => $tab ) {
+            if ( ! is_array( $tab ) || 'settings' !== ( isset( $tab['name'] ) ? $tab['name'] : null ) ) {
+                continue;
+            }
+
+            $our_callback = array( __CLASS__, 'renderSettingsTab' );
+            if ( isset( $tab['callback'] ) && $tab['callback'] !== $our_callback && is_callable( $tab['callback'] ) ) {
+                self::$base_settings_callback = $tab['callback'];
+            }
+            $tabs[ $index ]['callback'] = $our_callback;
+            break;
+        }
+
+        return $tabs;
+    }
+
+    public static function renderSettingsTab() {
+        if ( is_callable( self::$base_settings_callback ) ) {
+            call_user_func( self::$base_settings_callback );
+        } elseif ( class_exists( __NAMESPACE__ . '\\AddOn' ) ) {
+            $addon = AddOn::get_instance();
+            if ( method_exists( $addon, 'app_settings_tab' ) ) {
+                $addon->app_settings_tab();
+            }
+        }
+
+        self::render();
     }
 
     public static function render() {
-        if ( ! self::isGppSettingsPage() ) {
-            return;
-        }
         if ( ! class_exists( 'GFCommon' ) || ! \GFCommon::current_user_can_any( 'gravityforms_edit_settings' ) ) {
             return;
         }
@@ -37,8 +80,9 @@ final class EntryDetailMappingAdminController {
             return;
         }
 
-        echo '<div class="notice notice-info inline" data-gpp-entry-detail-mapping-workflow>';
-        echo '<h2>' . esc_html__( 'Entry Detail Mapping — Mapping & Binding Health', 'gravity-presentation-profiles' ) . '</h2>';
+        echo '<div class="gpp-entry-detail-mapping-workflow" data-gpp-entry-detail-mapping-workflow>';
+        echo '<hr><h2>' . esc_html__( 'Entry Detail Mapping — Mapping & Binding Health', 'gravity-presentation-profiles' ) . '</h2>';
+        self::renderResultFeedback();
         echo '<p>' . esc_html__( 'Field mapping is shared: choosing another Gravity Forms field changes the semantic source for every GPP surface that consumes that meaning, including Entry Detail, Inbox, and Print.', 'gravity-presentation-profiles' ) . '</p>';
         echo '<p>' . esc_html__( 'Entry Detail visibility is separate from shared mapping. This build does not store a “Do not show in this view” preference because no admitted Entry Detail-only persistence seam exists yet.', 'gravity-presentation-profiles' ) . '</p>';
         echo '<p><small>' . esc_html__( 'Active Entry Detail profile:', 'gravity-presentation-profiles' ) . ' <code>' . esc_html( $facts['profile']['package_id'] . '@' . $facts['profile']['package_version'] . ' / ' . $facts['profile']['profile_id'] ) . '</code></small></p>';
@@ -52,6 +96,18 @@ final class EntryDetailMappingAdminController {
             self::renderContext( $facts['profile'], $context );
         }
         echo '</div>';
+    }
+
+    private static function renderResultFeedback() {
+        $result = isset( $_GET['gpp_entry_detail_mapping_result'] ) && is_scalar( $_GET['gpp_entry_detail_mapping_result'] )
+            ? trim( (string) ( function_exists( 'wp_unslash' ) ? wp_unslash( $_GET['gpp_entry_detail_mapping_result'] ) : $_GET['gpp_entry_detail_mapping_result'] ) )
+            : '';
+
+        if ( 'updated' === $result ) {
+            echo '<div class="notice notice-success inline"><p>' . esc_html__( 'Entry Detail shared mappings were updated and the next immutable binding version was activated.', 'gravity-presentation-profiles' ) . '</p></div>';
+        } elseif ( 'unchanged' === $result ) {
+            echo '<div class="notice notice-info inline"><p>' . esc_html__( 'No shared mapping facts changed. No new binding version was created.', 'gravity-presentation-profiles' ) . '</p></div>';
+        }
     }
 
     private static function renderContext( $profile, $context ) {
@@ -256,11 +312,5 @@ final class EntryDetailMappingAdminController {
             return $context;
         }
         throw new LifecycleException( 'entry_detail_mapping_context_changed', 'The active Entry Detail binding context changed after this page loaded. Reload before saving mappings.' );
-    }
-
-    private static function isGppSettingsPage() {
-        $page = isset( $_GET['page'] ) && is_scalar( $_GET['page'] ) ? (string) $_GET['page'] : '';
-        $subview = isset( $_GET['subview'] ) && is_scalar( $_GET['subview'] ) ? (string) $_GET['subview'] : '';
-        return 'gf_settings' === $page && 'gravity-presentation-profiles' === $subview;
     }
 }
