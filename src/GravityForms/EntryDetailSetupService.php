@@ -5,17 +5,9 @@ namespace GravityPresentationProfiles\GravityForms;
 use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeReadinessService;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailRuntimeReadinessService;
 
-/**
- * Explicit production adoption path for the shipped SRWF Entry Detail profile.
- *
- * This deliberately activates presentation only after an existing authoritative
- * EnvironmentBindingSet has been proven present for the selected form. It does
- * not manufacture Entry Detail runtime claims: unresolved host regions/actions
- * remain NOT_PROVEN and EntryDetailPresentationModel therefore fails closed to
- * native Gravity Flow until separately qualified evidence exists.
- */
+/** Explicit production adoption path for the shipped SRWF Entry Detail profile. */
 final class EntryDetailSetupService {
     const SURFACE = 'gravity_flow.entry_detail';
 
@@ -25,23 +17,23 @@ final class EntryDetailSetupService {
 
     private $operations;
     private $visual;
-    private $binding_reader;
+    private $runtime_readiness;
 
     public function __construct(
         OperationsSetupService $operations,
         VisualPackageLifecycle $visual,
-        InboxRuntimeReadinessService $binding_reader
+        EntryDetailRuntimeReadinessService $runtime_readiness
     ) {
         $this->operations = $operations;
         $this->visual = $visual;
-        $this->binding_reader = $binding_reader;
+        $this->runtime_readiness = $runtime_readiness;
     }
 
     public static function forWordPress() {
         return new self(
             OperationsSetupService::forWordPress(),
             new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) ),
-            InboxRuntimeReadinessService::forWordPress()
+            EntryDetailRuntimeReadinessService::forWordPress()
         );
     }
 
@@ -95,15 +87,16 @@ final class EntryDetailSetupService {
 
         $steps = array();
         try {
-            $binding = $this->binding_reader->assertActiveBindingContext( $context );
-            $steps['binding_context'] = array(
-                'outcome' => 'reused',
+            $qualification = $this->runtime_readiness->qualify( $context );
+            $steps['stable_host_sources'] = array(
+                'outcome' => EntryDetailRuntimeReadinessService::STATUS_ALREADY_QUALIFIED === $qualification['status'] ? 'already_qualified' : 'qualified',
                 'reason' => null,
-                'binding_set_id' => $binding['binding_set_id'],
-                'binding_set_version' => $binding['binding_set_version'],
+                'binding_set_id' => $qualification['binding_set_id'],
+                'binding_set_version' => $qualification['binding_set_version'],
+                'sources' => $qualification['stable_sources'],
             );
         } catch ( LifecycleException $exception ) {
-            return $this->failedResult( $form_id, $identity, 'binding_context', $exception, $steps );
+            return $this->failedResult( $form_id, $identity, 'stable_host_sources', $exception, $steps );
         }
 
         try {
@@ -140,9 +133,9 @@ final class EntryDetailSetupService {
             'inbox_activation' => $inbox_after,
         );
         $steps['runtime_readiness'] = array(
-            'outcome' => 'not_proven',
-            'reason' => 'entry_detail_runtime_qualification_pending',
-            'message' => 'Activation does not invent Gravity Flow region/action availability. Native Entry Detail remains the fail-closed fallback until runtime evidence is qualified.',
+            'outcome' => 'deferred_to_request',
+            'reason' => 'live_approval_processing_required',
+            'message' => 'Stable host sources are qualified during adoption, but activation never grants request eligibility. Gravity Flow native Approval/current-assignee eligibility is evaluated fresh for every Entry Detail request.',
         );
 
         return $this->result( self::STATUS_COMPLETED, $form_id, $identity, $steps );

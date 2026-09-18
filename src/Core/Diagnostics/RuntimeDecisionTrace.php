@@ -21,7 +21,8 @@ final class RuntimeDecisionTrace {
         'INBOX_PRESENTATION_OUTPUT' => array( 'surface' => 'gravity_flow.inbox', 'label' => 'Inbox presentation output' ),
         'ENTRY_DETAIL_HOST_SEAM' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail host permission seam' ),
         'ENTRY_DETAIL_PROFILE_RESOLUTION' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail presentation profile' ),
-        'ENTRY_DETAIL_BINDING_READINESS' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail semantic bindings' ),
+        'ENTRY_DETAIL_BINDING_READINESS' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail structural readiness' ),
+        'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail live Approval-processing eligibility' ),
         'ENTRY_DETAIL_PRESENTATION_OUTPUT' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail presentation output' ),
         // WU19 stage identities are intentionally retained so Print evidence and
         // consumers migrate into the shared trace model without a vocabulary break.

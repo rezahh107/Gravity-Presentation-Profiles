@@ -22,9 +22,9 @@ final class EntryDetailSetupAdminController {
 
         echo '<div class="notice notice-info" data-gpp-entry-detail-setup="explicit">';
         echo '<h2>' . esc_html__( 'Operations Setup — Entry Detail', 'gravity-presentation-profiles' ) . '</h2>';
-        echo '<p>' . esc_html__( 'Adopt the shipped SRWF Entry Detail presentation for one existing operations binding context. This action reuses the active EnvironmentBindingSet and does not create authorization or runtime-readiness claims.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p>' . esc_html__( 'Adopt the shipped SRWF Entry Detail presentation for one existing operations binding context. This action qualifies only the admitted stable host sources; it never records current-user authorization, assignment, or action permission.', 'gravity-presentation-profiles' ) . '</p>';
         if ( 'completed' === $status ) {
-            echo '<p><strong>' . esc_html__( 'Entry Detail profile adopted. Runtime readiness remains evidence-gated; native Gravity Flow remains the fallback until proven.', 'gravity-presentation-profiles' ) . '</strong></p>';
+            echo '<p><strong>' . esc_html__( 'Entry Detail profile adopted. Enhanced presentation is admitted only on a live native Approval step where the current assignee can process the entry; all other legitimate requests remain native.', 'gravity-presentation-profiles' ) . '</strong></p>';
         }
         if ( array() === $forms ) {
             echo '<p>' . esc_html__( 'No Gravity Forms form is available for Entry Detail setup.', 'gravity-presentation-profiles' ) . '</p></div>';
@@ -43,7 +43,7 @@ final class EntryDetailSetupAdminController {
         echo '</select> ';
         submit_button( __( 'Initialize / Adopt Entry Detail presentation', 'gravity-presentation-profiles' ), 'secondary', 'submit', false );
         echo '</form>';
-        echo '<p><small>' . esc_html__( 'This step activates only the surface profile. Unproven Gravity Flow regions/actions continue to fail closed to the native Entry Detail surface.', 'gravity-presentation-profiles' ) . '</small></p>';
+        echo '<p><small>' . esc_html__( 'Stable Entry Detail host sources are qualified through the existing immutable binding lifecycle. Native Gravity Flow still decides every request permission, current assignment, Approval action, and conditional region.', 'gravity-presentation-profiles' ) . '</small></p>';
         echo '</div>';
     }
 

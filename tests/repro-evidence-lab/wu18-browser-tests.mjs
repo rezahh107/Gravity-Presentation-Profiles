@@ -27,6 +27,25 @@ async function login(page, user, pass) {
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 }
 async function waitDossier(page) { await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 }); }
+
+function setCurrentAssignee(item, login) {
+  const php = '$u=get_user_by("login",' + JSON.stringify(login) + ');'
+    + '$e=GFAPI::get_entry(' + Number(item.entry_id) + ');'
+    + '$api=new Gravity_Flow_API(' + Number(item.form_id) + ');'
+    + '$s=$api->get_current_step($e);'
+    + 'if(!$u||!$s){throw new RuntimeException("assignee control unavailable");}'
+    + '$m=$s->get_feed_meta();$m["assignees"]=array("user_id|".$u->ID);$m["assignee_policy"]="all";'
+    + 'gravity_flow()->update_feed_meta($s->get_id(),$m);echo "ok";';
+  if (wpEval(php) !== 'ok') throw new Error('Unable to mutate native current assignee.');
+}
+function setInstructionsEnabled(item, enabled) {
+  const php = '$e=GFAPI::get_entry(' + Number(item.entry_id) + ');'
+    + '$api=new Gravity_Flow_API(' + Number(item.form_id) + ');'
+    + '$s=$api->get_current_step($e);if(!$s){throw new RuntimeException("step unavailable");}'
+    + '$m=$s->get_feed_meta();$m["instructionsEnable"]=' + JSON.stringify(enabled ? '1' : '0') + ';'
+    + 'gravity_flow()->update_feed_meta($s->get_id(),$m);echo "ok";';
+  if (wpEval(php) !== 'ok') throw new Error('Unable to mutate native instructions setting.');
+}
 async function materialSnapshot(page) {
   return page.locator('.gpp-entry-dossier--composed').evaluate(dossier => ({
     sections: [...dossier.querySelectorAll('[data-gpp-section]')].map(el => el.dataset.gppSection),
@@ -51,7 +70,7 @@ await test('WU18-BROWSER-001', 'continuous dossier identity precedes exact curre
     const table = document.querySelector('.entry-detail-view');
     return { profile: dossier?.dataset.gppProfileId, title: task?.querySelector('h2')?.textContent?.trim(), order: identity && task ? Boolean(identity.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING) : false, native_wrappers: document.querySelectorAll('.gravityflow_workflow_detail').length, native_forms: document.querySelectorAll('form[id^="gform_"]').length, replacement_apps: document.querySelectorAll('[data-gpp-replacement-entry-detail], .gpp-custom-entry-app').length, native_grid_visible: Boolean(table && getComputedStyle(table).display !== 'none') };
   });
-  if (state.profile !== 'shared.entry_detail.v1' || state.title !== 'کاری که الان باید انجام دهید' || !state.order) throw new Error(`Dossier identity/order failed: ${JSON.stringify(state)}`);
+  if (state.profile !== 'srwf.operations.entry-detail.v1' || state.title !== 'کاری که الان باید انجام دهید' || !state.order) throw new Error(`Dossier identity/order failed: ${JSON.stringify(state)}`);
   if (state.native_wrappers !== 1 || state.native_forms !== 1 || state.replacement_apps !== 0 || state.native_grid_visible) throw new Error(`Native ownership failed: ${JSON.stringify(state)}`);
   return state;
 });
@@ -61,12 +80,21 @@ await test('WU18-BROWSER-002', 'host editability and native Approval actions rem
   const reviewControl = page.locator(`#input_${formId}_${review}`);
   if (await reviewControl.count() !== 1 || !(await reviewControl.isVisible())) throw new Error('Host-authentic review control not exposed.');
   if (await page.locator(`#input_${formId}_${mobile}`).count() !== 0) throw new Error('Semantic editability claim manufactured mobile control.');
-  const actions = await page.locator('[data-gpp-section="current-task"] .gravityflow-action-buttons button').evaluateAll(buttons => buttons.map(b => ({ value: b.value, text: b.textContent.replace(/\s+/g, ' ').trim() })));
+  const actionContainer = page.locator('[data-gpp-section="current-task"] .gravityflow-action-buttons');
+  const ownership = await actionContainer.evaluate(node => ({
+    global_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+    in_native_form: Boolean(node.closest('form[id^="gform_"]')),
+    native_submit_names: [...node.querySelectorAll('button,input')].map(el => el.getAttribute('name')).filter(Boolean),
+  }));
+  if (ownership.global_containers !== 1 || !ownership.in_native_form) throw new Error(`Native action node was cloned or detached from its host form: ${JSON.stringify(ownership)}`);
+  const actions = await actionContainer.locator('button').evaluateAll(buttons => buttons.map(b => ({ value: b.value, text: b.textContent.replace(/\s+/g, ' ').trim() })));
   if (JSON.stringify(actions.map(v => v.value).sort()) !== JSON.stringify(['approved', 'rejected'])) throw new Error(`Unexpected Approval actions: ${JSON.stringify(actions)}`);
   if (!actions.find(v => v.value === 'approved')?.text.includes('تأیید پرونده') || !actions.find(v => v.value === 'rejected')?.text.includes('رد پرونده')) throw new Error('Persian native action labels missing.');
   if (await page.getByText(/Save Draft|Send Next|Return for Correction/, { exact: false }).count() !== 0) throw new Error('Invented action is visible.');
-  if (await page.locator('[data-gpp-section="current-task"] .detail-view-print').count() !== 0 || await page.locator('form .detail-view-print').count() !== 1) throw new Error('Print utility crossed task-action boundary.');
-  return { host_editable_review_field: review, semantic_claim_without_host_control: mobile, native_actions: actions };
+  if (await page.locator('[data-gpp-section="current-task"] .detail-view-print').count() !== 0 || await page.locator('form .detail-view-print').count() !== 1) throw new Error('Native Print crossed task-action boundary.');
+  const gppPrintUtility = page.locator('[data-gpp-print-utility="dossier"]');
+  if (await gppPrintUtility.count() !== 1 || await page.locator('[data-gpp-section="current-task"] [data-gpp-print-utility="dossier"]').count() !== 0) throw new Error('Required GPP Print utility is unavailable or crossed the native action cluster.');
+  return { host_editable_review_field: review, semantic_claim_without_host_control: mobile, native_actions: actions, native_action_node_ownership: ownership, gpp_print_utility: true };
 });
 
 await test('WU18-BROWSER-003', 'image preview supports Escape/backdrop/focus/scroll restoration', async () => {
@@ -98,7 +126,7 @@ await test('WU18-BROWSER-004', 'PDF is host-file open affordance and history is 
   const helper = (await page.locator('.gpp-entry-dossier__history-help').textContent()).trim();
   const timelineInDetails = await details.locator('.gravityflow-timeline').count();
   const timelineGlobal = await page.locator('form .gravityflow-timeline').count();
-  if (helper !== manifest.locked_history_helper || timelineInDetails !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
+  if (helper !== manifest.locked_history_helper || timelineInDetails !== 1 || timelineGlobal !== 1) throw new Error(`History helper/native timeline failed: ${JSON.stringify({ helper, expected: manifest.locked_history_helper, timeline_in_details: timelineInDetails, timeline_global: timelineGlobal })}`);
   return { pdf_href: href, history_collapsed: true, native_timeline: true };
 });
 
@@ -126,6 +154,141 @@ await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed b
   const nativeDenial = state.body_text.includes("You don't have permission to view this entry.") || state.body_text.includes('Sorry, you are not allowed to access this page.');
   if (state.dossier !== 0 || state.native_table !== 0 || !nativeDenial) throw new Error(`Authorization boundary failed: ${JSON.stringify(state)}`);
   return { dossier: 0, native_table: 0, native_permission_denial: true };
+});
+
+
+await test('WU18-BROWSER-008', 'authorized non-assignee remains native and assignment change is immediate', async () => {
+  setCurrentAssignee(manifest.alpha, 'wu21_viewer');
+  try {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+    await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+    const ineligible = await page.evaluate(() => {
+      const table = document.querySelector('.entry-detail-view');
+      return {
+        dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+        native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+        native_form: document.querySelectorAll('form[id^="gform_"]').length,
+        action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+      };
+    });
+    if (ineligible.dossier !== 0 || !ineligible.native_table_visible || ineligible.native_form !== 1 || ineligible.action_containers !== 0) {
+      throw new Error(`Authorized non-assignee did not remain native: ${JSON.stringify(ineligible)}`);
+    }
+  } finally {
+    setCurrentAssignee(manifest.alpha, 'bootstrap_admin');
+  }
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await waitDossier(page);
+  const restored = await page.evaluate(() => ({
+    dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+    action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+    approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+    rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+  }));
+  if (restored.dossier !== 1 || restored.action_containers !== 1 || restored.approved !== 1 || restored.rejected !== 1) {
+    throw new Error(`Native assignment restoration did not immediately restore GPP eligibility: ${JSON.stringify(restored)}`);
+  }
+  return { non_assignee_native_fallback: true, assignment_change_immediate: true, restored };
+});
+
+await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and duplicate regions fail closed', async () => {
+  setInstructionsEnabled(manifest.alpha, false);
+  try {
+    await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+    await waitDossier(page);
+    const absentInstructions = await page.evaluate(() => ({
+      native_instructions: document.querySelectorAll('.gravityflow-instructions').length,
+      gpp_instruction_target: document.querySelectorAll('[data-gpp-native-instructions]').length,
+      dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+    }));
+    if (absentInstructions.native_instructions !== 0 || absentInstructions.gpp_instruction_target !== 0 || absentInstructions.dossier !== 1) {
+      throw new Error(`Conditional instructions absence was fabricated or rejected: ${JSON.stringify(absentInstructions)}`);
+    }
+  } finally {
+    setInstructionsEnabled(manifest.alpha, true);
+  }
+
+  const timelineContext = await browser.newContext();
+  await timelineContext.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => document.querySelector('.gravityflow-timeline')?.remove(), { once: true });
+  });
+  const timelinePage = await timelineContext.newPage();
+  await login(timelinePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await timelinePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+  await waitDossier(timelinePage);
+  const absentTimeline = await timelinePage.evaluate(() => ({
+    timeline: document.querySelectorAll('.gravityflow-timeline').length,
+    history_section: document.querySelectorAll('[data-gpp-section="history"]').length,
+    dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+  }));
+  await timelineContext.close();
+  if (absentTimeline.timeline !== 0 || absentTimeline.history_section !== 0 || absentTimeline.dossier !== 1) {
+    throw new Error(`Conditional timeline absence was fabricated or rejected: ${JSON.stringify(absentTimeline)}`);
+  }
+
+  const duplicateContext = await browser.newContext();
+  await duplicateContext.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const native = document.querySelector('.gravityflow-instructions');
+      if (native) native.parentNode?.append(native.cloneNode(true));
+    }, { once: true });
+  });
+  const duplicatePage = await duplicateContext.newPage();
+  await login(duplicatePage, 'bootstrap_admin', 'wu21-bootstrap-pass-2026');
+  await duplicatePage.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
+  await duplicatePage.waitForSelector('.entry-detail-view', { timeout: 30000 });
+  const duplicate = await duplicatePage.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    return {
+      dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+      duplicate_instructions: document.querySelectorAll('.gravityflow-instructions').length,
+      native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+      native_form: document.querySelectorAll('form[id^="gform_"]').length,
+    };
+  });
+  await duplicateContext.close();
+  if (duplicate.dossier !== 0 || duplicate.duplicate_instructions < 2 || !duplicate.native_table_visible || duplicate.native_form !== 1) {
+    throw new Error(`Ambiguous native region did not fail closed to native Entry Detail: ${JSON.stringify(duplicate)}`);
+  }
+
+  return { conditional_instructions_absent: true, conditional_timeline_absent: true, duplicate_region_native_fallback: true };
+});
+
+await test('WU18-BROWSER-010', 'native Approval transition immediately removes GPP on non-Approval follow-up', async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(entryUrl(manifest.transition), { waitUntil: 'networkidle' });
+  await waitDossier(page);
+
+  const approve = page.locator('.gravityflow-action-buttons [value="approved"]');
+  if (await approve.count() !== 1) throw new Error('Transition fixture has no single native Approve control.');
+
+  await Promise.all([
+    page.waitForLoadState('networkidle'),
+    approve.click(),
+  ]);
+
+  await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+  const state = await page.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    return {
+      dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+      native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+      native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      body_text: document.body.innerText.replace(/\s+/g, ' ').trim(),
+    };
+  });
+
+  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1 || !state.body_text.includes('WU18 Follow-up Input')) {
+    throw new Error(`Non-Approval follow-up did not remain native after host transition: ${JSON.stringify(state)}`);
+  }
+
+  return {
+    native_approve_submission_observed: true,
+    non_approval_native_fallback: true,
+    environment_binding_rebuild_invoked: false,
+  };
 });
 
 fs.writeFileSync(path.join(artifactDir, 'wu18-browser-results.json'), JSON.stringify({ suite: 'WU18 browser/runtime', results }, null, 2) + '\n');

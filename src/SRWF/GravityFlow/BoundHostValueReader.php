@@ -97,15 +97,16 @@ final class BoundHostValueReader {
         }
 
         $api  = new \Gravity_Flow_API( (int) $entry['form_id'] );
-        $step = $api->get_current_step( $entry );
 
         if ( 'current_step' === $source['state_key'] ) {
+            $step = $api->get_current_step( $entry );
             return $step ? $step->get_name() : null;
         }
         if ( 'status' === $source['state_key'] ) {
-            return $step && method_exists( $step, 'get_status' ) ? $step->get_status() : null;
+            return method_exists( $api, 'get_status' ) ? $api->get_status( $entry ) : null;
         }
         if ( 'due_at' === $source['state_key'] ) {
+            $step = $api->get_current_step( $entry );
             return $step && method_exists( $step, 'get_due_date' ) ? $step->get_due_date() : null;
         }
 

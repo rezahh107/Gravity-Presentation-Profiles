@@ -2,14 +2,6 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
-use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
-use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
-use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
-use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
-use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
-use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\Core\Portable\ContractViolation;
-
 /**
  * Presentation-only consumer of Gravity Flow 3.1.0's native Print lifecycle.
  * Entry material is emitted only from gravityflow_print_entry_footer, which the
@@ -22,8 +14,6 @@ final class PrintDossierPresentationAdapter {
     const STYLE_VERSION = '1.0.1';
     const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
 
-    private static $model_loaded = false;
-    private static $model_resolution = null;
     private static $print_rendered = false;
     private static $last_trace = null;
 
@@ -92,8 +82,7 @@ final class PrintDossierPresentationAdapter {
     }
 
     public static function resetRuntimeCache() {
-        self::$model_loaded = false;
-        self::$model_resolution = null;
+        PrintDossierRuntime::reset();
         self::$print_rendered = false;
         self::$last_trace = null;
     }
@@ -106,6 +95,14 @@ final class PrintDossierPresentationAdapter {
 
     public static function renderPrintUtility( $form, $entry ) {
         if ( ! is_array( $form ) || ! is_array( $entry ) || empty( $entry['id'] ) || ! function_exists( 'admin_url' ) ) {
+            return;
+        }
+
+        // The affordance represents the existing GPP Print vertical slice, not
+        // a generic promise that printing must work. Expose it only when that
+        // slice is configured for this entry context. The Print request itself
+        // is still independently authorized by Gravity Flow.
+        if ( ! self::printUtilityAvailable( $entry ) ) {
             return;
         }
 
@@ -123,6 +120,10 @@ final class PrintDossierPresentationAdapter {
         echo ' onclick="if(typeof printPage===\'function\'){printPage(\'' . esc_js( $url ) . '\');}else{window.open(\'' . esc_js( $url ) . '\',\'_blank\',\'noopener\');}return false;">';
         echo esc_html__( 'چاپ پرونده (دو صفحهٔ A4)', 'gravity-presentation-profiles' );
         echo '</a></div>';
+    }
+
+    private static function printUtilityAvailable( $entry ) {
+        return PrintDossierRuntime::utilityAvailable( $entry );
     }
 
     public static function renderPrintDossier( $form, $entry ) {
@@ -267,116 +268,11 @@ final class PrintDossierPresentationAdapter {
     }
 
     /**
-     * Resolved Print model plus, on failure, the specific reason.
-     *
-     * The distinct setup failures below have materially different operator
-     * remedies, so they are never collapsed into one public meaning.
-     *
-     * @return array{model: ?PrintDossierPresentationModel, reason: ?string}
+     * Shared internal Print runtime authority. Entry Detail consumes the same
+     * model/context/assets capability without reconstructing it.
      */
     private static function modelResolution() {
-        if ( self::$model_loaded ) {
-            return self::$model_resolution;
-        }
-
-        self::$model_loaded     = true;
-        self::$model_resolution = self::resolveModel();
-
-        return self::$model_resolution;
+        return PrintDossierRuntime::modelResolution();
     }
 
-    private static function resolveModel() {
-        try {
-            $visual     = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
-            $activation = $visual->resolve( self::SURFACE );
-            if ( null === $activation ) {
-                return self::unresolvedModel( 'print_surface_not_activated' );
-            }
-
-            $package = self::activeVisualPackage( $visual->snapshot(), $activation );
-            if ( null === $package ) {
-                return self::unresolvedModel( 'activated_package_unresolved' );
-            }
-
-            $profile = $visual->effectiveProfile( self::SURFACE );
-            if ( null === $profile ) {
-                return self::unresolvedModel( 'semantic_package_unusable' );
-            }
-
-            $bindings = new BindingSetLifecycle(
-                new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
-                new EvidenceReferenceGate( array() )
-            );
-
-            return array(
-                'model' => new PrintDossierPresentationModel(
-                    $profile,
-                    self::activeBindingSets( $bindings->snapshot() ),
-                    $package['semantic_slots']
-                ),
-                'reason' => null,
-            );
-        } catch ( ContractViolation $exception ) {
-            return self::unresolvedModel( 'semantic_package_unusable', $exception );
-        } catch ( LifecycleException $exception ) {
-            $reason = 'activation_state_corrupt' === $exception->reasonCode()
-                ? 'semantic_package_unusable'
-                : 'activated_package_unresolved';
-
-            return self::unresolvedModel( $reason, $exception );
-        } catch ( \Throwable $exception ) {
-            return self::unresolvedModel( 'runtime_exception', $exception );
-        }
-    }
-
-    private static function unresolvedModel( $reason, \Throwable $exception = null ) {
-        if ( null !== $exception ) {
-            RuntimeDiagnostics::recordException(
-                self::SURFACE,
-                'PRINT_PROFILE_RESOLVED',
-                $reason,
-                'dossier_not_rendered',
-                $exception
-            );
-        }
-
-        return array( 'model' => null, 'reason' => $reason );
-    }
-
-    private static function activeVisualPackage( $snapshot, $activation ) {
-        if ( ! is_array( $snapshot ) || ! is_array( $activation ) || ! isset( $activation['package_id'], $activation['package_version'] ) ) {
-            return null;
-        }
-        $id = $activation['package_id'];
-        $version = $activation['package_version'];
-        if ( empty( $snapshot['installed'][ $id ][ $version ]['artifact'] ) ) {
-            return null;
-        }
-        $package = $snapshot['installed'][ $id ][ $version ]['artifact'];
-        return ! empty( $package['semantic_slots'] ) && is_array( $package['semantic_slots'] ) ? $package : null;
-    }
-
-    private static function activeBindingSets( $snapshot ) {
-        if ( ! is_array( $snapshot ) || empty( $snapshot['installed'] ) || empty( $snapshot['activations'] ) ) {
-            return array();
-        }
-
-        $active = array();
-        foreach ( $snapshot['activations'] as $context_key => $identity ) {
-            if ( ! isset( $identity['binding_set_id'], $identity['binding_set_version'] ) ) {
-                continue;
-            }
-            $id = $identity['binding_set_id'];
-            $version = $identity['binding_set_version'];
-            if ( ! isset( $snapshot['installed'][ $id ][ $version ] ) ) {
-                continue;
-            }
-            $record = $snapshot['installed'][ $id ][ $version ];
-            if ( ! isset( $record['context_key'], $record['artifact'] ) || $record['context_key'] !== $context_key ) {
-                continue;
-            }
-            $active[] = $record['artifact'];
-        }
-        return $active;
-    }
 }

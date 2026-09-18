@@ -149,12 +149,37 @@ if ( 'runtime' === $command ) {
     if ( ! empty( $decision['populate'] ) ) {
         $value = ( new BoundHostValueReader() )->readDisplay( $decision['source_ref'], $form, $entry );
     }
+    $reader = new BoundHostValueReader();
+    $flow_api = new Gravity_Flow_API( $form_id );
+    $host_step = $flow_api->get_current_step( $entry );
+    $host_step_name = $host_step && method_exists( $host_step, 'get_name' ) ? $host_step->get_name() : null;
+    $host_status = method_exists( $flow_api, 'get_status' ) ? $flow_api->get_status( $entry ) : null;
+    $gpp_step_name = $reader->readRaw(
+        array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ),
+        $form,
+        $entry
+    );
+    $gpp_status = $reader->readRaw(
+        array( 'type' => 'gravity_flow.state', 'state_key' => 'status' ),
+        $form,
+        $entry
+    );
+    if ( $host_step_name !== $gpp_step_name || $host_status !== $gpp_status ) {
+        throw new RuntimeException( 'GPP Gravity Flow state sources diverged from the pinned host API.' );
+    }
+
     $state['runtime'] = array(
         'print_profile_id' => isset( $profile['profile_id'] ) ? $profile['profile_id'] : null,
         'binding_context_status' => $model->bindingContextStatus( $entry ),
         'student_first_name_resolution' => $resolved,
         'student_first_name_decision' => $decision,
         'student_first_name_value' => $value,
+        'entry_detail_state_sources' => array(
+            'current_step' => 'Gravity_Flow_API::get_current_step',
+            'status' => 'Gravity_Flow_API::get_status',
+            'current_step_matches_host' => true,
+            'status_matches_host' => true,
+        ),
     );
 }
 

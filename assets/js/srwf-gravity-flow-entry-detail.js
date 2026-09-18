@@ -53,26 +53,52 @@
     const editorTarget = dossier.querySelector('[data-gpp-native-editor]');
     const actionsTarget = dossier.querySelector('[data-gpp-native-actions]');
     const historyTarget = dossier.querySelector('[data-gpp-native-history]');
-    const nativeInstructions = form.querySelector('.gravityflow-instructions');
-    const nativeEditor = form.querySelector('.entry-detail-view .gform_wrapper');
-    const nativeActions = form.querySelector('.gravityflow-action-buttons');
-    const nativeTimeline = form.querySelector('.gravityflow-timeline');
 
-    // Required host evidence must agree with the actual rendered native surface.
-    // If it does not, remove only GPP's projection and leave native Entry Detail.
-    if (dossier.dataset.gppRequireInstructions === '1' && !nativeInstructions) {
+    const unique = selector => {
+      const nodes = form.querySelectorAll(selector);
+      return { count: nodes.length, node: nodes.length === 1 ? nodes[0] : null };
+    };
+
+    const nativeInstructions = unique('.gravityflow-instructions');
+    const nativeEditor = unique('.entry-detail-view .gform_wrapper');
+    const nativeActions = unique('.gravityflow-action-buttons');
+    const nativeTimeline = unique('.gravityflow-timeline');
+
+    // Never guess which host region/control is authoritative. Duplicates are
+    // ambiguous and fail closed. Instructions/timeline are legitimately
+    // conditional per request, so zero presence removes only the empty GPP
+    // projection. Approval actions are different: the Owner-selected enhanced
+    // surface requires exactly one native action region with both host controls.
+    if (
+      nativeInstructions.count > 1 ||
+      nativeEditor.count > 1 ||
+      nativeActions.count > 1 ||
+      nativeTimeline.count > 1 ||
+      (dossier.dataset.gppHostEditable === '1' && nativeEditor.count !== 1) ||
+      !actionsTarget ||
+      nativeActions.count !== 1
+    ) {
       dossier.remove();
       return;
     }
-    if (dossier.dataset.gppHostEditable === '1' && !nativeEditor) {
+
+    const approvedControls = nativeActions.node.querySelectorAll('[value="approved"]');
+    const rejectedControls = nativeActions.node.querySelectorAll('[value="rejected"]');
+    if (approvedControls.length !== 1 || rejectedControls.length !== 1) {
       dossier.remove();
       return;
     }
 
-    if (nativeInstructions && instructionsTarget) instructionsTarget.append(nativeInstructions);
-    if (nativeEditor && editorTarget) editorTarget.append(nativeEditor);
-    if (nativeActions && actionsTarget) actionsTarget.append(nativeActions);
-    if (nativeTimeline && historyTarget) historyTarget.append(nativeTimeline);
+    if (nativeInstructions.node && instructionsTarget) instructionsTarget.append(nativeInstructions.node);
+    else instructionsTarget?.remove();
+
+    if (nativeEditor.node && editorTarget) editorTarget.append(nativeEditor.node);
+    else editorTarget?.remove();
+
+    actionsTarget.append(nativeActions.node);
+
+    if (nativeTimeline.node && historyTarget) historyTarget.append(nativeTimeline.node);
+    else historyTarget?.closest('[data-gpp-section="history"]')?.remove();
 
     dossier.classList.add('gpp-entry-dossier--composed');
     bindPreview(dossier);
