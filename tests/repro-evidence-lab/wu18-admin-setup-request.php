@@ -4,8 +4,9 @@
  *
  * The disposable runtime copies this file to the WordPress document root. It
  * boots WordPress with WP_ADMIN=true, authenticates only the synthetic fixture
- * administrator in-process, creates the normal action nonce, then delegates to
- * wp-admin/admin-post.php. No production hook or bypass is added to GPP.
+ * administrator in-process, creates a normal WordPress action nonce, then
+ * delegates to wp-admin/admin-post.php. No production hook or bypass is added
+ * to GPP; the real EntryDetailSetupAdminController handles the request.
  */
 
 if ( ! defined( 'WP_ADMIN' ) ) {
@@ -28,7 +29,7 @@ require rtrim( $workspace, '/\\' ) . '/tests/repro-evidence-lab/wu18-entry-detai
 $form_id = isset( $_GET['form_id'] ) ? absint( $_GET['form_id'] ) : 0;
 $expect = isset( $_GET['expect'] ) ? sanitize_key( wp_unslash( $_GET['expect'] ) ) : 'success';
 $operator = get_user_by( 'login', 'bootstrap_admin' );
-if ( $form_id <= 0 || ! $operator || ! in_array( $expect, array( 'success', 'failure' ), true ) ) {
+if ( $form_id <= 0 || ! $operator || ! in_array( $expect, array( 'success', 'failure', 'rerun' ), true ) ) {
     http_response_code( 400 );
     exit( 'fixture_context_unavailable' );
 }
@@ -50,7 +51,7 @@ try {
 }
 
 $facts = array(
-    'schema_version' => '1.1.0',
+    'schema_version' => '1.2.0',
     'request_context' => 'http_wp_admin_before_admin_post_dispatch',
     'expectation' => $expect,
     'selected_form_id' => $form_id,
@@ -110,7 +111,7 @@ register_shutdown_function(
                 || null !== ( $diagnostic['entry_detail_activation'] ?? null ) ) {
                 $errors[] = 'failure_diagnostic_missing_or_incorrect';
             }
-        } else {
+        } elseif ( 'success' === $expect ) {
             $after_source = $after['workflow_status']['source_ref'] ?? null;
             if ( 'PROVEN' === $before_status ) $errors[] = 'before_workflow_status_already_proven';
             if ( 'PROVEN' !== $after_status ) $errors[] = 'after_workflow_status_not_proven';
@@ -152,10 +153,24 @@ register_shutdown_function(
                     $errors[] = 'runtime_' . $key . '_mismatch';
                 }
             }
+        } else {
+            if ( 302 !== http_response_code() ) $errors[] = 'rerun_http_status_not_302';
+            if ( 'PROVEN' !== $before_status || 'PROVEN' !== $after_status ) $errors[] = 'rerun_workflow_status_not_proven';
+            if ( $before['binding_activation'] !== $after['binding_activation'] ) $errors[] = 'rerun_binding_activation_changed';
+            if ( $before['workflow_status'] !== $after['workflow_status'] ) $errors[] = 'rerun_workflow_status_changed';
+            if ( ! is_array( $before_entry_detail ) || $before_entry_detail !== $after_entry_detail ) $errors[] = 'rerun_entry_detail_activation_changed';
+            if ( ! is_array( $diagnostic )
+                || true !== ( $diagnostic['attempted'] ?? null )
+                || $form_id !== ( $diagnostic['selected_form_id'] ?? null )
+                || 'COMPLETED' !== ( $diagnostic['result'] ?? null )
+                || 'cross_surface_preservation' !== ( $diagnostic['step'] ?? null )
+                || 'entry_detail_setup_completed' !== ( $diagnostic['reason_code'] ?? null ) ) {
+                $errors[] = 'rerun_diagnostic_missing_or_incorrect';
+            }
         }
 
         $transition = array(
-            'schema_version' => '1.0.0',
+            'schema_version' => '1.1.0',
             'expectation' => $expect,
             'selected_form_id' => $form_id,
             'http_status' => http_response_code(),
