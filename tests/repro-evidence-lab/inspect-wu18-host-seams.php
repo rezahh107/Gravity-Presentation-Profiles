@@ -233,8 +233,56 @@ foreach ( array(
     );
 }
 
+$gravity_forms_plugin_settings = array(
+    'methods' => array(),
+    'source_occurrences' => array(),
+);
+if ( class_exists( 'GFAddOn' ) ) {
+    $addon_reflection = new ReflectionClass( 'GFAddOn' );
+    foreach ( $addon_reflection->getMethods() as $method ) {
+        if ( false === strpos( $method->getName(), 'plugin_settings' ) && false === strpos( $method->getName(), 'settings_fields' ) && false === strpos( $method->getName(), 'app_settings' ) ) {
+            continue;
+        }
+        $source = $method_source( $method, $gf_root, $parameter_shape );
+        if ( null !== $source ) {
+            $gravity_forms_plugin_settings['methods'][ $method->getName() ] = $source;
+        }
+    }
+}
+$addon_iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator( $gf_root . '/includes', FilesystemIterator::SKIP_DOTS )
+);
+foreach ( $addon_iterator as $file ) {
+    if ( ! $file->isFile() || 'php' !== strtolower( $file->getExtension() ) ) {
+        continue;
+    }
+    $lines = @file( $file->getPathname(), FILE_IGNORE_NEW_LINES );
+    if ( ! is_array( $lines ) ) {
+        continue;
+    }
+    foreach ( $lines as $index => $line ) {
+        if ( false === strpos( $line, 'plugin_settings_fields' ) && false === strpos( $line, 'gform_addon_' ) ) {
+            continue;
+        }
+        $start = max( 0, $index - 3 );
+        $end = min( count( $lines ) - 1, $index + 5 );
+        $snippet = array();
+        for ( $i = $start; $i <= $end; $i++ ) {
+            $snippet[] = array( 'line' => $i + 1, 'text' => trim( $lines[ $i ] ) );
+        }
+        $gravity_forms_plugin_settings['source_occurrences'][] = array(
+            'file' => ltrim( str_replace( $gf_root, '', $file->getPathname() ), '/\\' ),
+            'line' => $index + 1,
+            'snippet' => $snippet,
+        );
+        if ( count( $gravity_forms_plugin_settings['source_occurrences'] ) >= 40 ) {
+            break 2;
+        }
+    }
+}
+
 $result = array(
-    'schema_version' => '1.3.0',
+    'schema_version' => '1.4.0',
     'gravity_forms_version' => $gf_version,
     'gravity_flow_version' => $flow_version,
     'gravity_flow_main_sha256' => hash_file( 'sha256', $flow_root . '/gravityflow.php' ),
@@ -242,6 +290,7 @@ $result = array(
     'reflection' => $reflection,
     'selected_method_source' => $selected_method_source,
     'gravity_forms_entry_detail_formatters' => $gravity_forms_entry_detail_formatters,
+    'gravity_forms_plugin_settings' => $gravity_forms_plugin_settings,
 );
 wp_mkdir_p( $artifact_dir );
 file_put_contents(
