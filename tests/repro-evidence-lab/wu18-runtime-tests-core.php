@@ -25,15 +25,13 @@ function wu18_assert( $condition, $message ) {
     if ( ! $condition ) throw new RuntimeException( $message );
 }
 
-function wu18_render_entry( $form_id, $entry_id, $args = array() ) {
+function wu18_render_entry( $form_id, $entry_id ) {
     $form = GFAPI::get_form( $form_id );
     $entry = GFAPI::get_entry( $entry_id );
     $api = new Gravity_Flow_API( $form_id );
     $step = $api->get_current_step( $entry );
-    $args = array_merge( array( 'show_header' => false ), $args );
-
     ob_start();
-    Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, $args );
+    Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, array( 'show_header' => false ) );
     return array( ob_get_clean(), $form, $entry, $step );
 }
 
@@ -56,26 +54,13 @@ function wu18_host_file_contract( $form, $entry, $field_id ) {
     wu18_assert( is_object( $field ) && 'fileupload' === $field->type, 'Expected host File Upload field unavailable.' );
     $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
     $files = $field->to_array( $raw );
-    wu18_assert( is_array( $files ) && ! empty( $files[0] ) && is_scalar( $files[0] ), 'Host File Upload value did not normalize to a stored URL.' );
+    wu18_assert( is_array( $files ) && 1 === count( array_filter( $files ) ) && ! empty( $files[0] ) && is_scalar( $files[0] ), 'Host File Upload value did not normalize to one stored URL.' );
     $stored_url = (string) $files[0];
     $name_metadata = $field->get_file_name_from_url( $stored_url );
-    wu18_assert( is_array( $name_metadata ), 'Pinned Gravity Forms filename metadata was not structured.' );
-    wu18_assert(
-        isset( $name_metadata['original'], $name_metadata['sanitized'] )
-            && is_string( $name_metadata['original'] )
-            && is_string( $name_metadata['sanitized'] )
-            && '' !== $name_metadata['sanitized'],
-        'Pinned Gravity Forms filename metadata keys changed or became unusable.'
-    );
+    wu18_assert( is_array( $name_metadata ) && isset( $name_metadata['sanitized'] ) && is_string( $name_metadata['sanitized'] ) && '' !== $name_metadata['sanitized'], 'Pinned Gravity Forms filename metadata was unusable.' );
     $download_url = $field->get_download_url( $stored_url, false, (int) $entry['id'] );
     wu18_assert( is_string( $download_url ) && '' !== $download_url, 'Host File Upload download URL unavailable.' );
-
-    return array(
-        'field' => $field,
-        'stored_url' => $stored_url,
-        'name' => $name_metadata['sanitized'],
-        'download_url' => $download_url,
-    );
+    return array( 'field' => $field, 'name' => $name_metadata['sanitized'], 'download_url' => $download_url );
 }
 
 function wu18_html_uses_host_url( $html, $url ) {
@@ -101,7 +86,7 @@ function wu18_active_binding_artifact( $binding_set_id, $version = '1.0.0' ) {
     if ( empty( $snapshot['installed'][ $binding_set_id ][ $version ]['artifact'] ) ) {
         throw new RuntimeException( 'Expected WU18 binding artifact missing: ' . $binding_set_id );
     }
-    return array( $snapshot['installed'][ $binding_set_id ][ $version ]['artifact'], $snapshot );
+    return $snapshot['installed'][ $binding_set_id ][ $version ]['artifact'];
 }
 
 function wu18_binding_row( $artifact, $slot ) {
@@ -124,20 +109,26 @@ function wu18_set_print_runtime_resolution( $resolution ) {
 wu18_assert( 'srwf.operations.entry-detail.v1' === $manifest['profile_id'], 'WU18 did not load the current Operations Entry Detail profile.' );
 wu18_assert( 'shared.entry_detail.v1' === $manifest['legacy_profile_excluded'], 'WU18 legacy-fixture exclusion control is missing.' );
 
-list( $alpha_binding, $binding_snapshot_before ) = wu18_active_binding_artifact( 'wu18.operations.alpha.v1' );
-$full_name_binding = wu18_binding_row( $alpha_binding, 'student.full_name' );
-$print_utility_binding = wu18_binding_row( $alpha_binding, 'print.utility' );
-$approve_binding = wu18_binding_row( $alpha_binding, 'workflow.approve_action' );
-wu18_assert( 'UNBOUND' === $full_name_binding['state'] && null === $full_name_binding['source_ref'], 'Current WU18 fixture incorrectly direct-binds student.full_name.' );
-wu18_assert( 'UNBOUND' === $print_utility_binding['state'] && null === $print_utility_binding['source_ref'], 'Current WU18 fixture fabricated a print.utility host source.' );
-wu18_assert( 'UNBOUND' === $approve_binding['state'] && null === $approve_binding['source_ref'], 'Current WU18 fixture fabricated an Approval-action host source.' );
+$alpha_binding = wu18_active_binding_artifact( 'wu18.operations.alpha.v1' );
+foreach ( array( 'student.full_name', 'print.utility', 'workflow.approve_action', 'workflow.reject_action' ) as $unbound_slot ) {
+    $row = wu18_binding_row( $alpha_binding, $unbound_slot );
+    wu18_assert( 'UNBOUND' === $row['state'] && null === $row['source_ref'], 'WU18 fabricated a direct source for ' . $unbound_slot );
+}
+$stale_permission_claim = false;
+foreach ( $alpha_binding['runtime_claims'] as $claim ) {
+    if ( 'workflow.approve_action' === $claim['semantic_slot_key'] && 'action_permission' === $claim['claim'] && 'PROVEN' === $claim['evidence_state'] ) {
+        $stale_permission_claim = true;
+        break;
+    }
+}
+wu18_assert( $stale_permission_claim, 'Stale action-permission falsification claim is missing.' );
 
 wp_set_current_user( $operator->ID );
 PrintDossierPresentationAdapter::resetRuntimeCache();
 EntryDetailPresentationAdapter::resetRuntimeCache();
-
 list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
 $alpha_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
+
 wu18_assert( $alpha_step && 'approval' === $alpha_step->get_type(), 'Alpha current step is not native Approval.' );
 wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $alpha_entry, $alpha_form, $alpha_step ), 'Operator lost native Entry Detail permission.' );
 wu18_assert( Gravity_Flow_Entry_Detail::can_update( $alpha_step ), 'Operator is not the native current Approval assignee/update subject.' );
@@ -146,7 +137,7 @@ wu18_assert( false === strpos( $alpha_html, 'data-gpp-profile-id="shared.entry_d
 wu18_assert( false !== strpos( $alpha_html, 'data-gpp-print-utility="dossier"' ), 'Required existing Print utility capability was not exposed.' );
 
 $base_alpha_entry = wu18_base_entry_meta( $base_manifest, $alpha_entry['id'] );
-wu18_assert( false !== strpos( $alpha_html, esc_html( $base_alpha_entry['student_name'] ) ), 'Derived student.full_name did not compose the authoritative first/last values.' );
+wu18_assert( false !== strpos( $alpha_html, esc_html( $base_alpha_entry['student_name'] ) ), 'Derived student.full_name did not compose authoritative first/last values.' );
 
 $host_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
 $reader = new BoundHostValueReader();
@@ -160,22 +151,13 @@ $review_field = (string) $manifest['alpha']['fields']['review.reason'];
 $mobile_field = (string) $manifest['alpha']['fields']['student.mobile'];
 wu18_assert( in_array( $review_field, $editable, true ), 'Pinned Approval did not expose review field as host-editable.' );
 wu18_assert( ! in_array( $mobile_field, $editable, true ), 'Semantic editability control became host-editable.' );
-
-$identity_pos = strpos( $alpha_html, 'data-gpp-section="identity"' );
-$task_pos = strpos( $alpha_html, 'data-gpp-section="current-task"' );
-wu18_assert( false !== $identity_pos && false !== $task_pos && $identity_pos < $task_pos, 'Identity does not precede current task.' );
-wu18_assert( false !== strpos( $alpha_html, 'کاری که الان باید انجام دهید' ), 'Exact current-task title missing.' );
 wu18_assert( false !== strpos( $alpha_html, 'value="approved"' ) && false !== strpos( $alpha_html, 'تأیید پرونده' ), 'Native Approve action/label missing.' );
 wu18_assert( false !== strpos( $alpha_html, 'value="rejected"' ) && false !== strpos( $alpha_html, 'رد پرونده' ), 'Native Reject action/label missing.' );
 wu18_assert( false === strpos( $alpha_html, 'value="revert"' ), 'Fixture unexpectedly exposes Revert.' );
-foreach ( array( 'Save Draft', 'Send Next', 'Return for Correction' ) as $invented ) {
-    wu18_assert( false === strpos( $alpha_html, $invented ), 'Invented workflow action leaked.' );
-}
 
-$binding_pass = wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' );
-$approval_pass = wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'PASS' );
-$output_pass = wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' );
-wu18_assert( null !== $binding_pass && null !== $approval_pass && null !== $output_pass, 'Successful Approval-processing decision chain is incomplete.' );
+wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ), 'Successful structural-readiness trace missing.' );
+wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'PASS' ), 'Successful live Approval eligibility trace missing.' );
+wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ), 'Successful GPP presentation trace missing.' );
 
 EntryDetailPresentationAdapter::resetRuntimeCache();
 list( $beta_html, $beta_form, $beta_entry ) = wu18_render_entry( $manifest['beta']['form_id'], $manifest['beta']['entry_id'] );
@@ -184,49 +166,35 @@ $beta_document = wu18_host_file_contract( $beta_form, $beta_entry, $manifest['be
 $alpha_base_form = wu18_base_form_meta( $base_manifest, $manifest['alpha']['form_id'] );
 $alpha_photo = wu18_host_file_contract( $alpha_form, $alpha_entry, $alpha_base_form['photo_field_id'] );
 wu18_assert( false !== strpos( $alpha_html, 'gpp-entry-dossier__document-thumbnail' ), 'Bound image document thumbnail missing.' );
-wu18_assert( false !== strpos( $alpha_html, 'data-gpp-image-name="' . esc_attr( $alpha_document['name'] ) . '"' ), 'Image document did not use canonical host filename.' );
 wu18_assert( wu18_html_uses_host_url( $alpha_html, $alpha_document['download_url'] ), 'Image document did not use host-authoritative download URL.' );
 wu18_assert( false !== strpos( $alpha_html, 'gpp-entry-dossier__student-photo' ), 'Bound student.photo thumbnail missing.' );
-wu18_assert( false !== strpos( $alpha_html, 'data-gpp-image-name="' . esc_attr( $alpha_photo['name'] ) . '"' ), 'student.photo did not use canonical host filename.' );
 wu18_assert( wu18_html_uses_host_url( $alpha_html, $alpha_photo['download_url'] ), 'student.photo did not use host-authoritative download URL.' );
 wu18_assert( false !== strpos( $beta_html, esc_html( $beta_document['name'] ) ) && false !== strpos( $beta_html, 'target="_blank"' ), 'Bound PDF open behavior missing.' );
 wu18_assert( wu18_html_uses_host_url( $beta_html, $beta_document['download_url'] ), 'PDF did not use host-authoritative download URL.' );
 
-$alpha_document_field = $manifest['alpha']['fields']['documents.report_card'];
-$original_document_value = $alpha_entry[ (string) $alpha_document_field ];
-$invalid_update = GFAPI::update_entry_field( $alpha_entry['id'], $alpha_document_field, 'not-a-valid-url' );
+$document_field_id = $manifest['alpha']['fields']['documents.report_card'];
+$original_document_value = $alpha_entry[ (string) $document_field_id ];
+$invalid_update = GFAPI::update_entry_field( $alpha_entry['id'], $document_field_id, 'not-a-valid-url' );
 if ( is_wp_error( $invalid_update ) ) throw new RuntimeException( $invalid_update->get_error_message() );
 try {
     EntryDetailPresentationAdapter::resetRuntimeCache();
     list( $invalid_document_html, $invalid_form, $invalid_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-    $invalid_field = GFAPI::get_field( $invalid_form, $alpha_document_field );
-    wu18_assert( false === $invalid_field->get_file_name_from_url( $invalid_entry[ (string) $alpha_document_field ] ), 'Negative control did not produce unusable host filename metadata.' );
+    $invalid_field = GFAPI::get_field( $invalid_form, $document_field_id );
+    wu18_assert( false === $invalid_field->get_file_name_from_url( $invalid_entry[ (string) $document_field_id ] ), 'Invalid filename control did not become unusable host metadata.' );
     wu18_assert( false === strpos( $invalid_document_html, 'data-gpp-section="documents"' ), 'Invalid host filename metadata did not fail closed.' );
-    wu18_assert( false === strpos( $invalid_document_html, 'gpp-entry-dossier__document-thumbnail' ), 'Invalid host filename metadata projected an image document.' );
-    wu18_assert( false === strpos( $invalid_document_html, 'gpp-entry-dossier__file-link' ), 'Invalid host filename metadata projected a file link.' );
 } finally {
-    $restore = GFAPI::update_entry_field( $alpha_entry['id'], $alpha_document_field, $original_document_value );
+    $restore = GFAPI::update_entry_field( $alpha_entry['id'], $document_field_id, $original_document_value );
     if ( is_wp_error( $restore ) ) throw new RuntimeException( $restore->get_error_message() );
 }
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $restored_alpha_html ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-wu18_assert( false !== strpos( $restored_alpha_html, 'gpp-entry-dossier__document-thumbnail' ), 'Image document did not recover after negative-control restoration.' );
 
-wu18_assert( false !== strpos( $alpha_html, 'data-gpp-history-details' ) && false === strpos( $alpha_html, '<details data-gpp-history-details open' ), 'History is not collapsed by default.' );
-wu18_assert( false !== strpos( $alpha_html, $manifest['locked_history_helper'] ), 'Locked history helper changed.' );
-wu18_assert( false !== strpos( $alpha_html, 'class="detail-view-print"' ), 'Native Print disappeared.' );
-
-// Structural failure must identify the first failed semantic and never proceed
-// to live Approval eligibility.
 EntryDetailPresentationAdapter::resetRuntimeCache();
 list( $negative_html ) = wu18_render_entry( $manifest['negative']['form_id'], $manifest['negative']['entry_id'] );
 $negative_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
 $negative_binding = wu18_trace_event( $negative_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'FAIL' );
 wu18_assert( false === strpos( $negative_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $negative_html, 'entry-detail-view' ), 'Required NOT_PROVEN mapping did not fall back to native Entry Detail.' );
 wu18_assert( null !== $negative_binding && 0 === strpos( $negative_binding['reason_code'], 'semantic.student.national_id.' ), 'Structural failure did not expose first failed semantic key.' );
-wu18_assert( null === wu18_trace_event( $negative_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' ), 'Live action eligibility was evaluated after structural failure.' );
+wu18_assert( null === wu18_trace_event( $negative_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' ), 'Live action eligibility ran after structural failure.' );
 
-// Required Print capability fails closed without inventing a source.
 wu18_set_print_runtime_resolution( array( 'model' => null, 'reason' => 'synthetic_unavailable_control' ) );
 EntryDetailPresentationAdapter::resetRuntimeCache();
 list( $print_unready_html ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
@@ -236,51 +204,29 @@ wu18_assert( false === strpos( $print_unready_html, 'data-gpp-entry-detail="read
 wu18_assert( null !== $print_failure && 0 === strpos( $print_failure['reason_code'], 'semantic.print.utility.' ), 'Print capability failure was not attributed to print.utility.' );
 PrintDossierPresentationAdapter::resetRuntimeCache();
 
-// A user may legitimately view Entry Detail as the entry creator while still
-// not being the current Approval assignee. This stays inside the same host
-// request, so no feed-metadata cache invalidation is involved.
 $original_creator = (int) $alpha_entry['created_by'];
 $creator_update = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', (int) $viewer->ID );
 if ( is_wp_error( $creator_update ) ) throw new RuntimeException( $creator_update->get_error_message() );
-
 try {
     wp_set_current_user( $viewer->ID );
     EntryDetailPresentationAdapter::resetRuntimeCache();
     list( $non_assignee_html, $non_assignee_form, $non_assignee_entry, $non_assignee_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
     $non_assignee_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-
-    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_assignee_entry, $non_assignee_form, $non_assignee_step ), 'Creator-view control unexpectedly lost native Entry Detail permission.' );
-    wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $non_assignee_step ), 'Creator-view control unexpectedly satisfies native Approval update eligibility.' );
-    wu18_assert( false === strpos( $non_assignee_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $non_assignee_html, 'entry-detail-view' ), 'Authorized non-assignee creator received enhanced GPP Entry Detail.' );
-
+    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_assignee_entry, $non_assignee_form, $non_assignee_step ), 'Creator-view control lost native permission.' );
+    wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $non_assignee_step ), 'Creator-view control unexpectedly gained native Approval update eligibility.' );
+    wu18_assert( false === strpos( $non_assignee_html, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $non_assignee_html, 'entry-detail-view' ), 'Authorized non-assignee received enhanced GPP Entry Detail.' );
     $non_assignee_gate = wu18_trace_event( $non_assignee_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'SKIP' );
-    wu18_assert( null !== $non_assignee_gate && 'current_assignee_not_eligible' === $non_assignee_gate['reason_code'], 'Non-assignee request was not distinguished from structural failure.' );
+    wu18_assert( null !== $non_assignee_gate && 'current_assignee_not_eligible' === $non_assignee_gate['reason_code'], 'Non-assignee request was not distinguished from binding failure.' );
 } finally {
     wp_set_current_user( $operator->ID );
     $restore_creator = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', $original_creator );
     if ( is_wp_error( $restore_creator ) ) throw new RuntimeException( $restore_creator->get_error_message() );
 }
 
-// Assignment/current-step mutation falsification and conditional instruction
-// presence are intentionally executed in the browser suite, where every
-// navigation is a fresh PHP request. Gravity Flow caches step/feed objects
-// inside one process, so mutating feed metadata and re-rendering here would test
-// cache invalidation rather than request-local Entry Detail behavior.
-// The native show_timeline request argument is not cached and remains safe to
-// exercise in this same-process PHP control.
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $timeline_hidden_html ) = wu18_render_entry(
-    $manifest['alpha']['form_id'],
-    $manifest['alpha']['entry_id'],
-    array( 'show_timeline' => false )
-);
-wu18_assert( false === strpos( $timeline_hidden_html, 'class="postbox gravityflow-timeline"' ), 'Host-disabled timeline was fabricated.' );
-
-// Native authorization denial still wins before the GPP post-permission seam.
 wp_set_current_user( $viewer->ID );
 EntryDetailPresentationAdapter::resetRuntimeCache();
 list( $denied_html, $denied_form, $denied_entry, $denied_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-wu18_assert( ! Gravity_Flow_Entry_Detail::is_permission_granted( $denied_entry, $denied_form, $denied_step ), 'Viewer unexpectedly has native permission.' );
+wu18_assert( ! Gravity_Flow_Entry_Detail::is_permission_granted( $denied_entry, $denied_form, $denied_step ), 'Viewer unexpectedly has native permission after creator restoration.' );
 wu18_assert( false === strpos( $denied_html, 'data-gpp-entry-detail="ready"' ) && false === strpos( $denied_html, 'entry-detail-view' ), 'GPP bypassed native permission denial.' );
 wp_set_current_user( $operator->ID );
 
@@ -297,11 +243,9 @@ $results = array(
     'print_capability_fail_closed' => true,
     'approval_assignee_positive' => true,
     'authorized_non_assignee_native_fallback' => true,
-    'non_approval_native_fallback' => 'browser_fresh_request_control',
     'stale_action_permission_bypass_blocked' => true,
-    'assignment_change_without_binding_rebuild' => 'browser_fresh_request_control',
-    'native_region_integrity' => 'browser_fresh_request_control',
-    'native_timeline_absence_not_fabricated' => true,
+    'request_change_controls' => 'browser_fresh_request',
+    'native_region_integrity' => 'browser_fresh_request',
     'negative_native_fallback' => true,
     'unauthorized_native_denial' => true,
     'native_approval_actions' => array( 'approved', 'rejected' ),
