@@ -74,7 +74,7 @@
     // Preflight every ownership-sensitive region before moving any host node.
     // Any ambiguity leaves Gravity Flow's native UI untouched. Conditional
     // instructions/timeline may be absent. Approval controls are required only
-    // when the server proved current-assignee update eligibility.
+    // when the server proved current-assignee Approval eligibility.
     if (
       nativeInstructions.count > 1 ||
       nativeEditor.count > 1 ||
@@ -97,11 +97,30 @@
         markFailure(form, dossier, 'failed-actions-ambiguous');
         return;
       }
-    } else if (nativeActions.count !== 0 || actionsTarget) {
-      // A read-only dossier must never absorb or suppress unexpected native
-      // mutation controls. Leave the entire host surface untouched instead.
-      markFailure(form, dossier, 'failed-readonly-actions-present');
-      return;
+    } else {
+      if (actionsTarget) {
+        markFailure(form, dossier, 'failed-readonly-actions-target');
+        return;
+      }
+
+      if (nativeActions.count === 1) {
+        // A non-Approval step may expose host-owned edit/save controls inside
+        // its native Gravity Forms editor. Preserve that editor as one original
+        // subtree; never detach, duplicate, or reinterpret those controls as
+        // Approval actions. A mutation-control region outside the unique native
+        // editor remains ambiguous and fails closed to Gravity Flow.
+        if (!nativeEditor.node || !nativeEditor.node.contains(nativeActions.node)) {
+          markFailure(form, dossier, 'failed-nonapproval-actions-ambiguous');
+          return;
+        }
+        if (
+          nativeActions.node.querySelectorAll('[value="approved"]').length !== 0 ||
+          nativeActions.node.querySelectorAll('[value="rejected"]').length !== 0
+        ) {
+          markFailure(form, dossier, 'failed-unexpected-approval-actions');
+          return;
+        }
+      }
     }
 
     if (nativeInstructions.node && instructionsTarget) instructionsTarget.append(nativeInstructions.node);
