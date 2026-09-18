@@ -44,11 +44,13 @@ final class BoundHostValueReader {
     /**
      * Human-readable presentation text for this source.
      *
-     * For a Gravity Forms field this delegates to the host field object so that
-     * choice labels, compound inputs and field-specific rendering stay
-     * host-owned. The Gravity Forms signature is
-     * `get_value_entry_detail( $value, $currency = '', $use_text = false, $format = 'html', $media = 'screen' )`,
-     * so the currency argument must be a currency code and never the entry.
+     * Gravity Forms 3.1.1.1 is not signature-uniform across every field class:
+     * the current base/choice/date/file/compound implementations accept the
+     * entry as argument two while a small number of legacy overrides still name
+     * that position differently. The pinned Gravity Flow 3.1.0 Entry Detail
+     * path resolves that compatibility boundary by passing the current entry to
+     * every field. GPP follows the same host contract and requests text output;
+     * it does not maintain a parallel field-type formatter table.
      */
     public function readDisplay( $source, $form, $entry ) {
         if ( ! is_array( $source ) || empty( $source['type'] ) || ! is_array( $entry ) ) {
@@ -73,7 +75,7 @@ final class BoundHostValueReader {
             return $raw;
         }
 
-        return $field->get_value_entry_detail( $raw, '', true, 'text' );
+        return $field->get_value_entry_detail( $raw, $entry, true, 'text' );
     }
 
     private function entryMeta( $source, $entry ) {
