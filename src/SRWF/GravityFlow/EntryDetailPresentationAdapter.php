@@ -151,7 +151,7 @@ final class EntryDetailPresentationAdapter {
         self::renderFactsSection( $model, $form, $entry, $current_step );
         self::renderDocumentsSection( $model, $form, $entry, $current_step );
 
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history" data-gpp-optional-history>'; 
+        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history" data-gpp-optional-history>';
         echo '<details data-gpp-history-details>';
         echo '<summary>' . esc_html__( 'سوابق بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
         echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
@@ -292,18 +292,30 @@ final class EntryDetailPresentationAdapter {
             return;
         }
 
+        $document = null;
+        if ( self::VALUE_MAPPED === $decision['state'] ) {
+            $document = self::documentFromDecision( $decision, $entry );
+            if ( null === $document ) {
+                RuntimeDiagnostics::recordOnce(
+                    self::SURFACE,
+                    'ENTRY_DETAIL_SEMANTIC_COMPLETENESS',
+                    RuntimeDecisionTrace::RESULT_SKIP,
+                    'semantic.documents.report_card.invalid_file_metadata',
+                    'blank_unproven_value'
+                );
+                return;
+            }
+        }
+
         echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents" data-gpp-section="documents">';
         echo '<h2>' . esc_html__( 'مدارک', 'gravity-presentation-profiles' ) . '</h2>';
         echo '<div class="gpp-entry-dossier__document" data-gpp-slot="documents.report_card">';
         echo '<span class="gpp-entry-dossier__document-label">' . esc_html__( 'کارنامه', 'gravity-presentation-profiles' ) . '</span>';
 
-        if ( self::VALUE_MAPPED === $decision['state'] ) {
-            $document = self::documentFromDecision( $decision, $entry );
-            if ( null !== $document && 'image' === $document['kind'] ) {
-                echo self::imageThumbnailMarkup( $document, 'gpp-entry-dossier__document-thumbnail' );
-            } elseif ( null !== $document ) {
-                echo '<a class="gpp-entry-dossier__file-link" href="' . esc_url( $document['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $document['name'] ) . '</a>';
-            }
+        if ( null !== $document && 'image' === $document['kind'] ) {
+            echo self::imageThumbnailMarkup( $document, 'gpp-entry-dossier__document-thumbnail' );
+        } elseif ( null !== $document ) {
+            echo '<a class="gpp-entry-dossier__file-link" href="' . esc_url( $document['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $document['name'] ) . '</a>';
         } elseif ( self::isVisiblePlaceholderState( $decision['state'] ) ) {
             echo '<span class="gpp-entry-dossier__slot-state">' . esc_html( self::placeholderForState( $decision['state'] ) ) . '</span>';
         }
