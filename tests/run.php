@@ -20,6 +20,8 @@ $cases = array(
     'binding-health-management.php',
     'binding-health-compound-input.php',
     'binding-activation-cas.php',
+    'entry-detail-mapping-workflow.php',
+    'entry-detail-mapping-settings-seam.php',
     'pr25-root-repairs.php',
     'pr2-binding-repair-identity.php',
     'pr3-mapping-ux-unmap.php',
