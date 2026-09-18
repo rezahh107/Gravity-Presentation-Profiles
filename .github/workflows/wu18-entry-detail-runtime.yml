@@ -17,7 +17,6 @@ on:
       - 'tests/repro-evidence-lab/wu18-admin-setup-request.php'
       - 'tests/repro-evidence-lab/wu18-admin-settings-context-probe.php'
       - 'tests/repro-evidence-lab/wu18-entry-detail-setup-state.php'
-      - 'tests/repro-evidence-lab/wu18-verify-entry-detail-setup-transition.php'
       - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
       - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
       - 'tests/repro-evidence-lab/wu18-post-browser-controls.php'
@@ -149,23 +148,18 @@ jobs:
           done
           curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null
 
-          # Negative control: controller/service failure must be fail-closed and
-          # observable without mutating visual or binding authority.
+          # Negative control: the real admin-post Controller/Service chain must
+          # fail closed and emit bounded diagnostics when no binding context exists.
           failure_body=/tmp/wu18-entry-detail-setup-failure-body.html
           failure_http="$(curl -sS -o "$failure_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$unbound_form_id&expect=failure")"
           test "$failure_http" = "409"
           test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
           grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
 
-          # Capture target-equivalent BEFORE state: Inbox + Print are already
-          # active and Inbox has qualified created_at/current_step, while
-          # workflow.status and Entry Detail activation are still absent.
-          WU18_SETUP_STATE_LABEL=before php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-entry-detail-setup-state.php >/tmp/wu18-before-state.log
-
-          # Use a real WordPress admin session and the form rendered on the real
-          # Gravity Forms Add-On settings page; do not manufacture the setup nonce.
+          # Independently load the actual Gravity Forms Add-On settings page in
+          # a real administrator session. The test-only observer records host API
+          # lifecycle facts from that request without changing production GPP.
           cookie_jar=/tmp/wu18-admin-cookies.txt
-          login_html=/tmp/wu18-login.html
           settings_html=/tmp/wu18-gpp-settings.html
           curl -sS -c "$cookie_jar" "$WU21_BASE_URL/wp-login.php" >/dev/null
           curl -sS -L -b "$cookie_jar" -c "$cookie_jar" \
@@ -174,113 +168,49 @@ jobs:
             --data-urlencode 'wp-submit=Log In' \
             --data-urlencode "redirect_to=$WU21_BASE_URL/wp-admin/" \
             --data-urlencode 'testcookie=1' \
-            "$WU21_BASE_URL/wp-login.php" -o "$login_html"
+            "$WU21_BASE_URL/wp-login.php" -o /tmp/wu18-login.html
           curl -fsS -b "$cookie_jar" -c "$cookie_jar" \
             "$WU21_BASE_URL/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles" \
             -o "$settings_html"
           grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html"
           test -s "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
+          grep -q '"gravity_flow_api_loaded_before_autoload_check": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
+          grep -q '"form_bound_api_constructible": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
 
-          extract_setup_form() {
-            python3 - "$settings_html" "$form_id" "$WU21_BASE_URL" <<'PY'
-          import html
+          # Positive transition through the real admin-post controller chain.
+          success_headers=/tmp/wu18-entry-detail-setup-success-headers.txt
+          success_body=/tmp/wu18-entry-detail-setup-success-body.html
+          success_http="$(curl -sS -D "$success_headers" -o "$success_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$form_id&expect=success")"
+          success_location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/ {sub(/\r$/, ""); sub(/^Location:[[:space:]]*/, ""); print; exit}' "$success_headers")"
+          if [[ "$success_http" != "302" || "$success_location" != *"gpp_entry_detail_setup=completed"* ]]; then
+            sed -n '1,80p' "$success_body" >&2 || true
+            exit 1
+          fi
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-success-transition.json"
+          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-success-transition.json"
+
+          # Re-run the same explicit controller action and prove no binding-version
+          # churn or destructive activation rewrite occurs.
+          rerun_headers=/tmp/wu18-entry-detail-setup-rerun-headers.txt
+          rerun_body=/tmp/wu18-entry-detail-setup-rerun-body.html
+          rerun_http="$(curl -sS -D "$rerun_headers" -o "$rerun_body" -w '%{http_code}' "$WU21_BASE_URL/wu18-admin-setup-request.php?form_id=$form_id&expect=rerun")"
+          rerun_location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/ {sub(/\r$/, ""); sub(/^Location:[[:space:]]*/, ""); print; exit}' "$rerun_headers")"
+          if [[ "$rerun_http" != "302" || "$rerun_location" != *"gpp_entry_detail_setup=completed"* ]]; then
+            sed -n '1,80p' "$rerun_body" >&2 || true
+            exit 1
+          fi
+          test -s "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-rerun-transition.json"
+          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-rerun-transition.json"
+
+          python3 - "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json" "$unbound_form_id" "$failure_http" "$form_id" "$success_http" "$success_location" "$rerun_http" "$rerun_location" <<'PY'
           import json
           import sys
-          from html.parser import HTMLParser
-          from urllib.parse import urljoin
-
-          path, form_id, base = sys.argv[1:]
-          target_action = 'gpp_initialize_entry_detail_presentation'
-
-          class Parser(HTMLParser):
-              def __init__(self):
-                  super().__init__()
-                  self.forms = []
-                  self.current = None
-                  self.current_select = None
-              def handle_starttag(self, tag, attrs):
-                  attrs = dict(attrs)
-                  if tag == 'form':
-                      self.current = {'attrs': attrs, 'inputs': {}, 'selects': {}}
-                  elif self.current is not None and tag == 'input':
-                      name = attrs.get('name')
-                      if name:
-                          self.current['inputs'][name] = attrs.get('value', '')
-                  elif self.current is not None and tag == 'select':
-                      self.current_select = attrs.get('name')
-                      if self.current_select:
-                          self.current['selects'].setdefault(self.current_select, [])
-                  elif self.current is not None and tag == 'option' and self.current_select:
-                      self.current['selects'][self.current_select].append(attrs.get('value', ''))
-              def handle_endtag(self, tag):
-                  if tag == 'select':
-                      self.current_select = None
-                  elif tag == 'form' and self.current is not None:
-                      self.forms.append(self.current)
-                      self.current = None
-                      self.current_select = None
-
-          parser = Parser()
-          with open(path, encoding='utf-8') as fh:
-              parser.feed(fh.read())
-          matches = [f for f in parser.forms if f['inputs'].get('action') == target_action]
-          if len(matches) != 1:
-              raise SystemExit('expected exactly one Entry Detail setup form')
-          form = matches[0]
-          nonce = form['inputs'].get('_wpnonce')
-          choices = form['selects'].get('gpp_entry_detail_form_id', [])
-          if not nonce or form_id not in choices:
-              raise SystemExit('Entry Detail setup nonce/form selection missing')
-          print(json.dumps({
-              'action_url': urljoin(base + '/', html.unescape(form['attrs'].get('action', ''))),
-              'nonce': nonce,
-          }))
-          PY
-          }
-
-          submit_setup() {
-            local phase="$1"
-            local form_json nonce action_url headers body http_code location
-            form_json="$(extract_setup_form)"
-            nonce="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["nonce"])' <<<"$form_json")"
-            action_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["action_url"])' <<<"$form_json")"
-            headers="/tmp/wu18-entry-detail-setup-$phase-headers.txt"
-            body="/tmp/wu18-entry-detail-setup-$phase-body.html"
-            http_code="$(curl -sS -D "$headers" -o "$body" -w '%{http_code}' -b "$cookie_jar" -c "$cookie_jar" \
-              --data-urlencode 'action=gpp_initialize_entry_detail_presentation' \
-              --data-urlencode "_wpnonce=$nonce" \
-              --data-urlencode "gpp_entry_detail_form_id=$form_id" \
-              "$action_url")"
-            location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/ {sub(/\r$/, ""); sub(/^Location:[[:space:]]*/, ""); print; exit}' "$headers")"
-            if [[ "$http_code" != "302" || "$location" != *"gpp_entry_detail_setup=completed"* ]]; then
-              sed -n '1,80p' "$body" >&2 || true
-              return 1
-            fi
-            printf '%s\t%s\n' "$http_code" "$location"
-          }
-
-          success_result="$(submit_setup success)"
-          WU18_SETUP_STATE_LABEL=after php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-entry-detail-setup-state.php >/tmp/wu18-after-state.log
-
-          # Re-render to obtain a fresh form/nonce and prove a second explicit
-          # setup is idempotent rather than publishing another binding version.
-          curl -fsS -b "$cookie_jar" -c "$cookie_jar" \
-            "$WU21_BASE_URL/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles" \
-            -o "$settings_html"
-          rerun_result="$(submit_setup rerun)"
-          WU18_SETUP_STATE_LABEL=rerun php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-entry-detail-setup-state.php >/tmp/wu18-rerun-state.log
-          php tests/repro-evidence-lab/wu18-verify-entry-detail-setup-transition.php
-          grep -q '"result": "PASS"' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
-          grep -q '"rerun_idempotent": true' "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
-
-          python3 - "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json" "$unbound_form_id" "$failure_http" "$form_id" "$success_result" "$rerun_result" <<'PY'
-          import json
-          import sys
-          out, unbound_id, failure_http, form_id, success_result, rerun_result = sys.argv[1:]
+          out, unbound_id, failure_http, form_id, success_http, success_location, rerun_http, rerun_location = sys.argv[1:]
           payload = {
               'schema_version': '2.0.0',
               'surface': 'gravity_flow.entry_detail',
-              'request_path': 'rendered Gravity Forms settings form -> wp-admin/admin-post.php',
+              'settings_context': 'wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles',
+              'request_path': 'wp-admin/admin-post.php',
               'failure_control': {
                   'form_id': int(unbound_id),
                   'http_status': int(failure_http),
@@ -288,12 +218,12 @@ jobs:
               },
               'successful_setup': {
                   'form_id': int(form_id),
-                  'http_status': int(success_result.split('\t', 1)[0]),
-                  'completed_redirect': 'gpp_entry_detail_setup=completed' in success_result,
+                  'http_status': int(success_http),
+                  'completed_redirect': 'gpp_entry_detail_setup=completed' in success_location,
               },
               'idempotent_rerun': {
-                  'http_status': int(rerun_result.split('\t', 1)[0]),
-                  'completed_redirect': 'gpp_entry_detail_setup=completed' in rerun_result,
+                  'http_status': int(rerun_http),
+                  'completed_redirect': 'gpp_entry_detail_setup=completed' in rerun_location,
               },
           }
           with open(out, 'w', encoding='utf-8') as fh:
@@ -301,11 +231,13 @@ jobs:
               fh.write('\n')
           PY
 
+          cat "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context-failure.json"
           cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-failure-transition.json"
-          cat "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-context-success.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-success-transition.json"
+          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-rerun-transition.json"
           cat "$WU21_ARTIFACT_DIR/wu18-admin-setup-result.json"
-          cat "$WU21_ARTIFACT_DIR/wu18-entry-detail-setup-transition.json"
 
           kill "$setup_server_pid" >/dev/null 2>&1 || true
           wait "$setup_server_pid" 2>/dev/null || true
@@ -353,16 +285,20 @@ jobs:
           name: wu18-entry-detail-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             /tmp/wu18-artifacts/wu18-host-seam-inventory.json
-            /tmp/wu18-artifacts/wu18-admin-setup-context-failure.json
             /tmp/wu18-artifacts/wu18-admin-settings-context.json
+            /tmp/wu18-artifacts/wu18-admin-setup-context-failure.json
+            /tmp/wu18-artifacts/wu18-admin-setup-context-success.json
+            /tmp/wu18-artifacts/wu18-admin-setup-context-rerun.json
             /tmp/wu18-artifacts/wu18-admin-setup-result.json
             /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-before.json
             /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-after.json
             /tmp/wu18-artifacts/wu18-entry-detail-setup-failure-transition.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-before.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-after.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-rerun.json
-            /tmp/wu18-artifacts/wu18-entry-detail-setup-transition.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-before.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-after.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-success-transition.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-rerun-before.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-rerun-after.json
+            /tmp/wu18-artifacts/wu18-entry-detail-setup-rerun-transition.json
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
