@@ -41,6 +41,7 @@ $cases = array(
     'entry-detail-report-card-selection.php',
     'entry-detail-print-utility-availability.php',
     'entry-detail-production-activation.php',
+    'entry-detail-setup-conflict.php',
     'entry-detail-setup-diagnostics.php',
     'print-dossier-presentation-model.php',
     'print-dossier-data-path.php',
