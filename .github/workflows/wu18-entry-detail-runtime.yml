@@ -172,7 +172,7 @@ jobs:
           curl -fsS -b "$cookie_jar" -c "$cookie_jar" \
             "$WU21_BASE_URL/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles" \
             -o "$settings_html"
-          grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html"
+          grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html" || grep -Fq 'data-gpp-entry-detail-setup="explicit"' "$settings_html"
           test -s "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"gravity_flow_api_loaded_before_autoload_check": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"form_bound_api_constructible": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
