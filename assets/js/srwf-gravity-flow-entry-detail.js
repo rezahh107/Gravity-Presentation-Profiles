@@ -45,6 +45,12 @@
     dialog.addEventListener('close', () => restore(invoker, scrollX, scrollY));
   };
 
+  const markFailure = (form, dossier, state) => {
+    form.dataset.gppEntryDetailComposition = state;
+    dossier.dataset.gppCompositionState = state;
+    dossier.remove();
+  };
+
   const compose = dossier => {
     const form = dossier.closest('form');
     if (!form) return;
@@ -53,6 +59,7 @@
     const editorTarget = dossier.querySelector('[data-gpp-native-editor]');
     const actionsTarget = dossier.querySelector('[data-gpp-native-actions]');
     const historyTarget = dossier.querySelector('[data-gpp-native-history]');
+    const actionsExpected = dossier.dataset.gppActionsExpected === '1';
 
     const unique = selector => {
       const nodes = form.querySelectorAll(selector);
@@ -64,28 +71,36 @@
     const nativeActions = unique('.gravityflow-action-buttons');
     const nativeTimeline = unique('.gravityflow-timeline');
 
-    // Never guess which host region/control is authoritative. Duplicates are
-    // ambiguous and fail closed. Instructions/timeline are legitimately
-    // conditional per request, so zero presence removes only the empty GPP
-    // projection. Approval actions are different: the Owner-selected enhanced
-    // surface requires exactly one native action region with both host controls.
+    // Preflight every ownership-sensitive region before moving any host node.
+    // Any ambiguity leaves Gravity Flow's native UI untouched. Conditional
+    // instructions/timeline may be absent. Approval controls are required only
+    // when the server proved current-assignee update eligibility.
     if (
       nativeInstructions.count > 1 ||
       nativeEditor.count > 1 ||
       nativeActions.count > 1 ||
       nativeTimeline.count > 1 ||
-      (dossier.dataset.gppHostEditable === '1' && nativeEditor.count !== 1) ||
-      !actionsTarget ||
-      nativeActions.count !== 1
+      (dossier.dataset.gppHostEditable === '1' && nativeEditor.count !== 1)
     ) {
-      dossier.remove();
+      markFailure(form, dossier, 'failed-host-ambiguity');
       return;
     }
 
-    const approvedControls = nativeActions.node.querySelectorAll('[value="approved"]');
-    const rejectedControls = nativeActions.node.querySelectorAll('[value="rejected"]');
-    if (approvedControls.length !== 1 || rejectedControls.length !== 1) {
-      dossier.remove();
+    if (actionsExpected) {
+      if (!actionsTarget || nativeActions.count !== 1) {
+        markFailure(form, dossier, 'failed-actions-missing');
+        return;
+      }
+      const approvedControls = nativeActions.node.querySelectorAll('[value="approved"]');
+      const rejectedControls = nativeActions.node.querySelectorAll('[value="rejected"]');
+      if (approvedControls.length !== 1 || rejectedControls.length !== 1) {
+        markFailure(form, dossier, 'failed-actions-ambiguous');
+        return;
+      }
+    } else if (nativeActions.count !== 0 || actionsTarget) {
+      // A read-only dossier must never absorb or suppress unexpected native
+      // mutation controls. Leave the entire host surface untouched instead.
+      markFailure(form, dossier, 'failed-readonly-actions-present');
       return;
     }
 
@@ -95,12 +110,14 @@
     if (nativeEditor.node && editorTarget) editorTarget.append(nativeEditor.node);
     else editorTarget?.remove();
 
-    actionsTarget.append(nativeActions.node);
+    if (actionsExpected) actionsTarget.append(nativeActions.node);
 
     if (nativeTimeline.node && historyTarget) historyTarget.append(nativeTimeline.node);
-    else historyTarget?.closest('[data-gpp-section="history"]')?.remove();
+    else dossier.querySelector('[data-gpp-optional-history]')?.remove();
 
     dossier.classList.add('gpp-entry-dossier--composed');
+    dossier.dataset.gppCompositionState = 'composed';
+    form.dataset.gppEntryDetailComposition = 'composed';
     bindPreview(dossier);
   };
 
