@@ -93,6 +93,25 @@ if ( ! $binding_pass || ! $eligibility_skip || ! $output_pass ) {
     throw new RuntimeException( 'Non-Approval diagnostics did not distinguish action ineligibility from dossier view admission.' );
 }
 
+// Exercise the Owner-facing batch mapper through the real browser/plugin-settings
+// form and its dedicated admin-post boundary. This runs only after the request-
+// local workflow transition control above has proved that Flow did not mutate the
+// shared EnvironmentBindingSet.
+$mapping_script = __DIR__ . '/wu18-mapping-browser-control.mjs';
+$mapping_output = array();
+$mapping_status = 0;
+exec( 'node ' . escapeshellarg( $mapping_script ) . ' 2>&1', $mapping_output, $mapping_status );
+if ( 0 !== $mapping_status || empty( $mapping_output ) ) {
+    throw new RuntimeException( 'Real Entry Detail batch mapping browser control failed: ' . implode( "\n", array_slice( $mapping_output, -8 ) ) );
+}
+$mapping_evidence = json_decode( end( $mapping_output ), true );
+if ( ! is_array( $mapping_evidence )
+    || empty( $mapping_evidence['plugin_settings_panel_reached'] )
+    || 0 !== (int) $mapping_evidence['nested_forms']
+    || 409 !== (int) $mapping_evidence['stale_post_http_status'] ) {
+    throw new RuntimeException( 'Real Entry Detail batch mapping browser evidence is incomplete.' );
+}
+
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
 if ( ! is_array( $results ) ) $results = array();
@@ -101,7 +120,7 @@ $results['post_browser_controls'] = array(
     'current_step_type' => $step->get_type(),
     'read_only_gpp_dossier_emitted' => true,
     'native_entry_detail_grid_preserved_pre_composition' => true,
-    'binding_state_unchanged' => true,
+    'binding_state_unchanged_by_workflow_transition' => true,
     'stale_action_permission_claim_present_but_powerless' => true,
     'diagnostics' => array(
         'structural_readiness' => 'PASS',
@@ -109,9 +128,11 @@ $results['post_browser_controls'] = array(
         'presentation' => 'PASS:gpp_enhanced_entry_detail_emitted',
     ),
 );
+$results['real_mapping_browser_control'] = $mapping_evidence;
 file_put_contents(
     $results_path,
     wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
 );
 
 echo "WU18_POST_BROWSER_CONTROLS_PASS\n";
+echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
