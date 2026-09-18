@@ -139,10 +139,23 @@ await test('WU18-BROWSER-005', 'desktop/mobile preserve material dossier parity 
   return { sections: desktop.sections, semantic_slots: desktop.slots, same_material_text: true };
 });
 
-await test('WU18-BROWSER-006', 'NOT_PROVEN required mapping fails to native Entry Detail', async () => {
-  await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(entryUrl(manifest.negative), { waitUntil: 'networkidle' }); await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
-  const state = await page.evaluate(() => { const table = document.querySelector('.entry-detail-view'); return { dossier: document.querySelectorAll('.gpp-entry-dossier').length, native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'), native_form: document.querySelectorAll('form[id^="gform_"]').length }; });
-  if (state.dossier !== 0 || !state.native_table_visible || state.native_form !== 1) throw new Error(`Native fallback failed: ${JSON.stringify(state)}`);
+await test('WU18-BROWSER-006', 'NOT_PROVEN required mapping degrades one semantic without killing Entry Detail', async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(entryUrl(manifest.negative), { waitUntil: 'networkidle' });
+  await waitDossier(page);
+  const state = await page.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    const nationalId = document.querySelector('[data-gpp-slot="student.national_id"]');
+    return {
+      dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
+      native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
+      native_form: document.querySelectorAll('form[id^="gform_"]').length,
+      national_id_text: nationalId?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
+  if (state.dossier !== 1 || state.native_table_visible || state.native_form !== 1 || !state.national_id_text.includes('نگاشت نشده')) {
+    throw new Error(`Semantic degradation failed: ${JSON.stringify(state)}`);
+  }
   return state;
 });
 
@@ -156,24 +169,25 @@ await test('WU18-BROWSER-007', 'native authorization denial cannot be bypassed b
   return { dossier: 0, native_table: 0, native_permission_denial: true };
 });
 
-
-await test('WU18-BROWSER-008', 'authorized non-assignee remains native and assignment change is immediate', async () => {
+await test('WU18-BROWSER-008', 'authorized non-assignee gets read-only dossier and assignment change is immediate', async () => {
   setCurrentAssignee(manifest.alpha, 'wu21_viewer');
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
-    await page.waitForSelector('.entry-detail-view', { timeout: 30000 });
+    await waitDossier(page);
     const ineligible = await page.evaluate(() => {
       const table = document.querySelector('.entry-detail-view');
+      const dossier = document.querySelector('.gpp-entry-dossier--composed');
       return {
-        dossier: document.querySelectorAll('.gpp-entry-dossier').length,
+        dossier: document.querySelectorAll('.gpp-entry-dossier--composed').length,
         native_table_visible: Boolean(table && getComputedStyle(table).display !== 'none'),
         native_form: document.querySelectorAll('form[id^="gform_"]').length,
         action_containers: document.querySelectorAll('.gravityflow-action-buttons').length,
+        actions_expected: dossier?.dataset.gppActionsExpected || null,
       };
     });
-    if (ineligible.dossier !== 0 || !ineligible.native_table_visible || ineligible.native_form !== 1 || ineligible.action_containers !== 0) {
-      throw new Error(`Authorized non-assignee did not remain native: ${JSON.stringify(ineligible)}`);
+    if (ineligible.dossier !== 1 || ineligible.native_table_visible || ineligible.native_form !== 1 || ineligible.action_containers !== 0 || ineligible.actions_expected !== '0') {
+      throw new Error(`Authorized non-assignee read-only presentation failed: ${JSON.stringify(ineligible)}`);
     }
   } finally {
     setCurrentAssignee(manifest.alpha, 'bootstrap_admin');
@@ -190,7 +204,7 @@ await test('WU18-BROWSER-008', 'authorized non-assignee remains native and assig
   if (restored.dossier !== 1 || restored.action_containers !== 1 || restored.approved !== 1 || restored.rejected !== 1) {
     throw new Error(`Native assignment restoration did not immediately restore GPP eligibility: ${JSON.stringify(restored)}`);
   }
-  return { non_assignee_native_fallback: true, assignment_change_immediate: true, restored };
+  return { non_assignee_read_only_enhanced: true, assignment_change_immediate: true, restored };
 });
 
 await test('WU18-BROWSER-009', 'conditional native regions do not fabricate and duplicate regions fail closed', async () => {
