@@ -51,7 +51,7 @@ $first = $service->initialize( array( 'form_id' => 77 ) );
 gpp_assert_same( EntryDetailSetupService::STATUS_COMPLETED, $first['status'], 'Explicit Entry Detail adoption completes when the existing binding context is present.' );
 gpp_assert_same( 'reused', $first['steps']['binding_context']['outcome'], 'Entry Detail reuses the existing EnvironmentBindingSet.' );
 gpp_assert_same( 'activated', $first['steps']['entry_detail_activation']['outcome'], 'The shipped Entry Detail profile is explicitly activated.' );
-gpp_assert_same( 'not_proven', $first['steps']['runtime_readiness']['outcome'], 'Activation must not invent Entry Detail runtime evidence.' );
+gpp_assert_same( 'deferred_to_request', $first['steps']['runtime_readiness']['outcome'], 'Activation must defer live Entry Detail eligibility to the request boundary.' );
 gpp_assert_same( $print_before, $visual->resolve( 'print.dossier' ), 'Entry Detail adoption preserves Print activation.' );
 
 $activation = $visual->resolve( 'gravity_flow.entry_detail' );
@@ -61,6 +61,6 @@ gpp_assert_same( 'srwf.operations.entry-detail.v1', $activation['profile_id'], '
 $second = $service->initialize( array( 'form_id' => 77 ) );
 gpp_assert_same( EntryDetailSetupService::STATUS_COMPLETED, $second['status'], 'Entry Detail adoption is idempotent.' );
 gpp_assert_same( 'already_active', $second['steps']['entry_detail_activation']['outcome'], 'Idempotent rerun preserves the same activation.' );
-gpp_assert_same( 'not_proven', $second['steps']['runtime_readiness']['outcome'], 'Rerun still does not fabricate runtime proof.' );
+gpp_assert_same( 'deferred_to_request', $second['steps']['runtime_readiness']['outcome'], 'Rerun still does not cache or fabricate request eligibility.' );
 
 echo "ENTRY_DETAIL_PRODUCTION_ACTIVATION_TESTS_PASS\n";
