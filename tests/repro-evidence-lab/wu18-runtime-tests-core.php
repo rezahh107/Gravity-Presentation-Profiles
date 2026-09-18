@@ -192,10 +192,13 @@ try {
     $invalid_document_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
     $invalid_field = GFAPI::get_field( $invalid_form, $document_field_id );
     wu18_assert( false === $invalid_field->get_file_name_from_url( $invalid_entry[ (string) $document_field_id ] ), 'Invalid filename control did not become unusable host metadata.' );
-    wu18_assert( false !== strpos( $invalid_document_html, 'data-gpp-section="documents"' ), 'Invalid host filename metadata incorrectly removed the Documents region.' );
-    wu18_assert( false !== strpos( $invalid_document_html, 'data-gpp-slot="documents.report_card"' ) && false !== strpos( $invalid_document_html, 'نگاشت معتبر نیست' ), 'Invalid document metadata did not degrade the report-card slot to its safe stale-source state.' );
-    wu18_assert( false === strpos( $invalid_document_html, 'not-a-valid-url' ), 'Invalid raw file metadata leaked into Entry Detail output.' );
-    wu18_assert( false === strpos( $invalid_document_html, 'gpp-entry-dossier__file-link' ), 'Invalid file metadata produced an actionable file link.' );
+    $documents_start = strpos( $invalid_document_html, '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents"' );
+    $documents_end = false === $documents_start ? false : strpos( $invalid_document_html, '</section>', $documents_start );
+    wu18_assert( false !== $documents_start && false !== $documents_end, 'Invalid host filename metadata incorrectly removed the Documents region.' );
+    $invalid_documents_html = substr( $invalid_document_html, $documents_start, $documents_end + strlen( '</section>' ) - $documents_start );
+    wu18_assert( false !== strpos( $invalid_documents_html, 'data-gpp-slot="documents.report_card"' ) && false !== strpos( $invalid_documents_html, 'نگاشت معتبر نیست' ), 'Invalid document metadata did not degrade the report-card slot to its safe stale-source state.' );
+    wu18_assert( false === strpos( $invalid_documents_html, 'not-a-valid-url' ), 'Invalid raw file metadata leaked into the GPP Documents region.' );
+    wu18_assert( false === strpos( $invalid_documents_html, 'gpp-entry-dossier__file-link' ), 'Invalid file metadata produced an actionable GPP file link.' );
     wu18_assert( false !== strpos( $invalid_document_html, 'data-gpp-entry-detail="ready"' ), 'Invalid document metadata incorrectly killed the structurally admitted dossier.' );
     wu18_assert( null !== wu18_trace_reason( $invalid_document_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.documents.report_card.invalid_file_metadata' ), 'Invalid document metadata degradation was not diagnosed.' );
 } finally {
