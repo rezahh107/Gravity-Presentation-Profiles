@@ -60,18 +60,17 @@ $filter_hooks = array_map(
 
 gpp_assert_true( ! in_array( 'admin_notices', $action_hooks, true ), 'Entry Detail mapping UI must not depend on admin_notices.' );
 gpp_assert_true( in_array( 'admin_post_gpp_entry_detail_mapping_save', $action_hooks, true ), 'Entry Detail mapping save must have one explicit admin-post boundary.' );
-gpp_assert_true( in_array( 'gform_addon_app_settings_menu_gravity-presentation-profiles', $filter_hooks, true ), 'Entry Detail mapping UI must attach to the native GPP Add-On settings app.' );
+gpp_assert_true( ! in_array( 'gform_addon_app_settings_menu_gravity-presentation-profiles', $filter_hooks, true ), 'Entry Detail mapping must not attach to the unrelated GF App Settings lifecycle.' );
 
-$controller = 'GravityPresentationProfiles\\GravityForms\\EntryDetailMappingAdminController';
-$tabs = array(
-    array(
-        'name' => 'settings',
-        'label' => 'Settings',
-        'callback' => static function () {
-        },
-    ),
-);
-$wrapped = $controller::attachToSettingsTab( $tabs );
-gpp_assert_same( array( $controller, 'renderSettingsTab' ), $wrapped[0]['callback'], 'Native settings tab should be wrapped rather than replaced by an unrelated page.' );
+$root = dirname( __DIR__, 2 );
+$addon_source = file_get_contents( $root . '/src/GravityForms/AddOn.php' );
+$controller_source = file_get_contents( $root . '/src/GravityForms/EntryDetailMappingAdminController.php' );
+
+gpp_assert_true( false !== strpos( $addon_source, "'type'  => 'gpp_entry_detail_mapping'" ) || false !== strpos( $addon_source, "'type' => 'gpp_entry_detail_mapping'" ), 'Plugin Settings fields must contain the Entry Detail batch mapping renderer.' );
+gpp_assert_true( false !== strpos( $addon_source, 'settings_gpp_entry_detail_mapping' ), 'The GPP Add-On must expose the custom Plugin Settings field callback.' );
+gpp_assert_true( false !== strpos( $addon_source, 'EntryDetailMappingAdminController::renderEmbedded' ), 'The Plugin Settings callback must delegate to the bounded Entry Detail mapping controller.' );
+gpp_assert_true( false === strpos( $controller_source, '<form' ), 'Embedded mapping UI must not create a nested form inside the GF settings form.' );
+gpp_assert_true( false !== strpos( $controller_source, 'formaction=' ), 'The mapping button must cross the dedicated admin-post boundary without hijacking unrelated GF settings persistence.' );
+gpp_assert_true( false !== strpos( $controller_source, 'gpp_entry_detail_context_token' ), 'Each mapping save must identify exactly one revalidated binding context.' );
 
 echo "ENTRY_DETAIL_MAPPING_SETTINGS_SEAM_PASS\n";
