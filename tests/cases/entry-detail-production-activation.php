@@ -16,13 +16,16 @@ Autoloader::register();
 
 if ( ! class_exists( 'GFAPI' ) ) {
     class GFAPI {
+        public static function get_form( $form_id ) { return array( 'id' => (int) $form_id ); }
         public static function get_entry( $entry_id ) { return array( 'id' => $entry_id ); }
     }
 }
 if ( ! class_exists( 'Gravity_Flow_API' ) ) {
     class Gravity_Flow_API {
-        public function get_current_step( $entry = null ) { unset( $entry ); return null; }
-        public function get_status( $entry = null ) { unset( $entry ); return 'pending'; }
+        private $form_id;
+        public function __construct( $form_id ) { $this->form_id = (int) $form_id; }
+        public function get_current_step( $entry ) { unset( $entry ); return null; }
+        public function get_status( $entry ) { unset( $entry ); return 'pending'; }
     }
 }
 
@@ -88,6 +91,8 @@ gpp_assert_same(
     $first['steps']['stable_host_sources']['sources'],
     'Only the admitted stable host sources are persisted during Entry Detail qualification.'
 );
+gpp_assert_same( 'form_bound_public_api', $first['steps']['stable_host_sources']['host_source_contract'], 'Qualification proves the form-bound public host API contract, not bare method names.' );
+gpp_assert_same( 'not_persisted', $first['steps']['stable_host_sources']['request_values'], 'Setup must not persist entry-local workflow values.' );
 gpp_assert_same( 'activated', $first['steps']['entry_detail_activation']['outcome'], 'The shipped Entry Detail profile is explicitly activated.' );
 gpp_assert_same( 'deferred_to_request', $first['steps']['runtime_readiness']['outcome'], 'Activation must defer live Entry Detail eligibility to the request boundary.' );
 gpp_assert_same( $print_before, $visual->resolve( 'print.dossier' ), 'Entry Detail adoption preserves Print activation.' );
