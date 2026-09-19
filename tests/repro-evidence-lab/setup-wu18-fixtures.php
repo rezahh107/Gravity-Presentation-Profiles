@@ -92,6 +92,21 @@ function wu18_field_map( $base_meta, $extended ) {
     );
 }
 
+function wu18_clone_form( $source_form_id, $title ) {
+    $form = GFAPI::get_form( $source_form_id );
+    if ( ! is_array( $form ) ) {
+        throw new RuntimeException( 'Unable to clone synthetic form.' );
+    }
+    unset( $form['id'] );
+    $form['title'] = $title;
+    $form['description'] = 'Dedicated WU18 Approval editor fixture.';
+    $form_id = GFAPI::add_form( $form );
+    if ( is_wp_error( $form_id ) || ! $form_id ) {
+        throw new RuntimeException( is_wp_error( $form_id ) ? $form_id->get_error_message() : 'Unable to create dedicated WU18 editor form.' );
+    }
+    return (int) $form_id;
+}
+
 $alpha_form = wu18_form_meta( $base, 'alpha' );
 $beta_form = wu18_form_meta( $base, 'beta' );
 $alpha_fields = wu18_field_map( $alpha_form, wu18_extend_form( $alpha_form['form_id'] ) );
@@ -150,43 +165,64 @@ if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) {
     require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
 }
 
-function wu18_configure_approval_fixture( $form_id, $entry_id, $editable_fields, $note_mode, $revert_enabled ) {
+function wu18_configure_read_only_approval( $form_id, $entry_id ) {
     $entry = GFAPI::get_entry( $entry_id );
     $api = new Gravity_Flow_API( (int) $form_id );
     $step = $api->get_current_step( $entry );
     if ( ! $step || 'approval' !== $step->get_type() ) {
-        throw new RuntimeException( 'Pinned WU18 fixture did not expose Approval.' );
+        throw new RuntimeException( 'Pinned WU18 Review fixture did not expose Approval.' );
     }
 
     $meta = $step->get_feed_meta();
-    $meta['editable_fields'] = array_values( array_map( 'strval', $editable_fields ) );
+    $meta['editable_fields'] = array();
     $meta['instructionsEnable'] = '1';
     $meta['instructionsValue'] = 'Synthetic WU18 current-task instructions.';
-    $meta['note_mode'] = $note_mode;
-    $meta['revertEnable'] = $revert_enabled ? '1' : '0';
+    $meta['note_mode'] = 'optional';
+    $meta['revertEnable'] = '1';
     gravity_flow()->update_feed_meta( $step->get_id(), $meta );
 }
 
-// Stable host states are constructed once, before runtime/browser assertions.
-// Alpha is the normal read-only Review Approval. Beta's Approval is configured
-// for editing before a dedicated editor entry is created and assigned.
-wu18_configure_approval_fixture( $alpha_form['form_id'], $alpha_entry['entry_id'], array(), 'optional', true );
-wu18_configure_approval_fixture( $beta_form['form_id'], $beta_entry['entry_id'], array( (string) $beta_fields['review.reason'] ), 'optional', false );
+// Stable Review state: the base Alpha Approval already has no editable fields.
+// We set only the native Review conveniences once during fixture construction,
+// then later prove the host-effective state from a freshly resolved step.
+wu18_configure_read_only_approval( $alpha_form['form_id'], $alpha_entry['entry_id'] );
 
 $created_by_update = GFAPI::update_entry_property( $viewer_entry['entry_id'], 'created_by', (int) $viewer->ID );
 if ( is_wp_error( $created_by_update ) ) {
     throw new RuntimeException( $created_by_update->get_error_message() );
 }
 
-// Create the editor entry only after the Approval's editable-field setting is
-// established. Gravity Flow therefore creates the assignee snapshot with the
-// intended editable fields instead of trying to mutate an existing assignment.
+// Dedicated Approval editor fixture. The Approval step is created with its
+// editable-field setting from the start, before any entry reaches the step.
+// This avoids mutating an already-instantiated assignee snapshot.
+$editor_form_id = wu18_clone_form( $beta_form['form_id'], 'WU18 Dedicated Approval Editor' );
+$editor_fields = $beta_fields;
+$editor_api = new Gravity_Flow_API( $editor_form_id );
+$editor_step_id = $editor_api->add_step(
+    array(
+        'step_name' => 'WU18 Approval Editor',
+        'step_type' => 'approval',
+        'description' => 'Dedicated synthetic Approval editor fallback fixture.',
+        'type' => 'select',
+        'assignees' => array( 'user_id|' . (int) $operator->ID ),
+        'assignee_policy' => 'all',
+        'editable_fields' => array( (string) $editor_fields['review.reason'] ),
+        'instructionsEnable' => '1',
+        'instructionsValue' => 'Synthetic WU18 editor instructions.',
+        'note_mode' => 'optional',
+        'revertEnable' => '0',
+    )
+);
+if ( ! $editor_step_id || is_wp_error( $editor_step_id ) ) {
+    throw new RuntimeException( 'Unable to create dedicated WU18 Approval editor step.' );
+}
+
 $beta_source_entry = GFAPI::get_entry( $beta_entry['entry_id'] );
 if ( is_wp_error( $beta_source_entry ) ) {
     throw new RuntimeException( $beta_source_entry->get_error_message() );
 }
 $editor_entry_payload = array(
-    'form_id' => (int) $beta_form['form_id'],
+    'form_id' => $editor_form_id,
     'created_by' => (int) $operator->ID,
 );
 foreach ( $beta_source_entry as $key => $value ) {
@@ -199,8 +235,7 @@ if ( is_wp_error( $editor_entry_id ) || ! $editor_entry_id ) {
     throw new RuntimeException( is_wp_error( $editor_entry_id ) ? $editor_entry_id->get_error_message() : 'Unable to create WU18 editor entry.' );
 }
 $editor_entry_id = (int) $editor_entry_id;
-$beta_api = new Gravity_Flow_API( (int) $beta_form['form_id'] );
-$beta_api->process_workflow( $editor_entry_id );
+$editor_api->process_workflow( $editor_entry_id );
 
 $alpha_api = new Gravity_Flow_API( (int) $alpha_form['form_id'] );
 $follow_up_step_id = $alpha_api->add_step(
@@ -220,8 +255,8 @@ if ( ! $follow_up_step_id || is_wp_error( $follow_up_step_id ) ) {
     throw new RuntimeException( 'Unable to create WU18 User Input follow-up step.' );
 }
 
-// Read back host-effective state from freshly resolved steps. Writing feed meta
-// is not accepted as proof: the effective native API must expose the target.
+// Read back host-effective state from freshly resolved steps. Feed/step settings
+// are not accepted as proof: the native current-step API must expose the target.
 wp_set_current_user( $operator->ID );
 $alpha_fresh = ( new Gravity_Flow_API( (int) $alpha_form['form_id'] ) )->get_current_step( GFAPI::get_entry( $alpha_entry['entry_id'] ) );
 if ( ! $alpha_fresh || 'approval' !== $alpha_fresh->get_type() || ! Gravity_Flow_Entry_Detail::can_update( $alpha_fresh ) ) {
@@ -232,12 +267,12 @@ if ( array() !== $alpha_effective_editable ) {
     throw new RuntimeException( 'WU18 read-only Review fixture has effective native editable fields.' );
 }
 
-$editor_fresh = ( new Gravity_Flow_API( (int) $beta_form['form_id'] ) )->get_current_step( GFAPI::get_entry( $editor_entry_id ) );
-if ( ! $editor_fresh || 'approval' !== $editor_fresh->get_type() || ! Gravity_Flow_Entry_Detail::can_update( $editor_fresh ) ) {
-    throw new RuntimeException( 'WU18 editor fixture did not resolve as actionable native Approval.' );
+$editor_fresh = ( new Gravity_Flow_API( $editor_form_id ) )->get_current_step( GFAPI::get_entry( $editor_entry_id ) );
+if ( ! $editor_fresh || 'approval' !== $editor_fresh->get_type() || (int) $editor_fresh->get_id() !== (int) $editor_step_id || ! Gravity_Flow_Entry_Detail::can_update( $editor_fresh ) ) {
+    throw new RuntimeException( 'WU18 editor fixture did not resolve as the dedicated actionable native Approval.' );
 }
 $editor_effective_editable = array_values( array_filter( array_map( 'strval', $editor_fresh->get_editable_fields() ), 'strlen' ) );
-if ( ! in_array( (string) $beta_fields['review.reason'], $editor_effective_editable, true ) ) {
+if ( ! in_array( (string) $editor_fields['review.reason'], $editor_effective_editable, true ) ) {
     throw new RuntimeException( 'WU18 editor fixture did not expose review.reason through effective host editability.' );
 }
 
@@ -357,7 +392,7 @@ function wu18_binding_set( $id, $installation_id, $form_id, $fields, $entry_ref,
 $bindings = array(
     wu18_binding_set( 'wu18.operations.alpha.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $alpha_entry['entry_id'], $visual_package ),
     wu18_binding_set( 'wu18.operations.beta.v1', $base['installation_id'], $beta_form['form_id'], $beta_fields, $beta_entry['entry_id'], $visual_package ),
-    wu18_binding_set( 'wu18.operations.beta.editor.v1', $base['installation_id'], $beta_form['form_id'], $beta_fields, $editor_entry_id, $visual_package ),
+    wu18_binding_set( 'wu18.operations.editor.v1', $base['installation_id'], $editor_form_id, $editor_fields, $editor_entry_id, $visual_package ),
     wu18_binding_set( 'wu18.operations.alpha.negative.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $negative_entry['entry_id'], $visual_package, true ),
     wu18_binding_set( 'wu18.operations.alpha.transition.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $transition_entry['entry_id'], $visual_package ),
     wu18_binding_set( 'wu18.operations.alpha.viewer.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $viewer_entry['entry_id'], $visual_package ),
@@ -392,7 +427,7 @@ PrintDossierPresentationAdapter::resetRuntimeCache();
 $binding_state_sha256 = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
 
 $manifest = array(
-    'schema_version' => '3.1.0',
+    'schema_version' => '3.2.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'package_id' => $visual_package['package_id'],
     'package_version' => $visual_package['package_version'],
@@ -407,10 +442,11 @@ $manifest = array(
         'expected_effective_editable_fields' => array(),
     ),
     'editor' => array(
-        'form_id' => (int) $beta_form['form_id'],
+        'form_id' => $editor_form_id,
         'entry_id' => $editor_entry_id,
-        'fields' => $beta_fields,
-        'editable_field_id' => (string) $beta_fields['review.reason'],
+        'step_id' => (int) $editor_step_id,
+        'fields' => $editor_fields,
+        'editable_field_id' => (string) $editor_fields['review.reason'],
     ),
     'beta' => array(
         'form_id' => (int) $beta_form['form_id'],
@@ -440,6 +476,7 @@ $manifest = array(
         ),
         'approval_editor' => array(
             'step_type' => 'approval',
+            'step_id' => (int) $editor_step_id,
             'operator_can_update' => true,
             'effective_editable_fields' => $editor_effective_editable,
         ),
