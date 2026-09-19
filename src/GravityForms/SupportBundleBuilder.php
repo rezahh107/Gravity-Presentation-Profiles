@@ -5,29 +5,25 @@ namespace GravityPresentationProfiles\GravityForms;
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeIncidentStore;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
 final class SupportBundleBuilder {
-    const SCHEMA_VERSION = '1.2.0';
+    const SCHEMA_VERSION = '1.1.0';
 
     private $binding_health;
     private $incidents;
     private $visual;
     private $entry_detail_setup;
-    private $entry_detail_visual_variant;
 
     public function __construct(
         BindingHealthService $binding_health,
         RuntimeIncidentStore $incidents,
         VisualPackageLifecycle $visual,
-        EntryDetailSetupDiagnosticStore $entry_detail_setup = null,
-        EntryDetailVisualVariantDiagnosticStore $entry_detail_visual_variant = null
+        EntryDetailSetupDiagnosticStore $entry_detail_setup = null
     ) {
         $this->binding_health = $binding_health;
         $this->incidents = $incidents;
         $this->visual = $visual;
         $this->entry_detail_setup = $entry_detail_setup;
-        $this->entry_detail_visual_variant = $entry_detail_visual_variant;
     }
 
     public static function forWordPress() {
@@ -35,8 +31,7 @@ final class SupportBundleBuilder {
             BindingHealthService::forWordPress(),
             RuntimeIncidentStore::forWordPress(),
             new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) ),
-            EntryDetailSetupDiagnosticStore::forWordPress(),
-            EntryDetailVisualVariantDiagnosticStore::forWordPress()
+            EntryDetailSetupDiagnosticStore::forWordPress()
         );
     }
 
@@ -46,13 +41,6 @@ final class SupportBundleBuilder {
         $diagnostics = null;
         $profiles = array();
         $entry_detail_setup = array( 'attempted' => false );
-        $visual_state = null;
-        $entry_detail_visual_variant = array(
-            'active_variant' => null,
-            'active_label' => null,
-            'activation' => null,
-            'latest_switch' => null,
-        );
 
         try {
             $binding_health = $this->binding_health->diagnosticFacts();
@@ -65,12 +53,7 @@ final class SupportBundleBuilder {
             $unknown[] = 'runtime_diagnostics_unavailable';
         }
         try {
-            $visual_state = $this->visual->snapshot();
-            $profiles = $this->activeProfiles( $visual_state, $unknown );
-            $entry_detail_visual_variant = array_merge(
-                $entry_detail_visual_variant,
-                $this->entryDetailVariantFacts( $visual_state, $unknown )
-            );
+            $profiles = $this->activeProfiles( $this->visual->snapshot(), $unknown );
         } catch ( \Throwable $exception ) {
             $unknown[] = 'active_profile_identity_unavailable';
         }
@@ -82,16 +65,6 @@ final class SupportBundleBuilder {
                 }
             } catch ( \Throwable $exception ) {
                 $unknown[] = 'entry_detail_setup_diagnostic_unavailable';
-            }
-        }
-        if ( null !== $this->entry_detail_visual_variant ) {
-            try {
-                $variant_state = $this->entry_detail_visual_variant->snapshot();
-                if ( ! empty( $variant_state['latest_attempt'] ) && is_array( $variant_state['latest_attempt'] ) ) {
-                    $entry_detail_visual_variant['latest_switch'] = $variant_state['latest_attempt'];
-                }
-            } catch ( \Throwable $exception ) {
-                $unknown[] = 'entry_detail_visual_variant_diagnostic_unavailable';
             }
         }
 
@@ -111,7 +84,6 @@ final class SupportBundleBuilder {
                 'binding_health' => $binding_health,
                 'diagnostics' => $diagnostics,
                 'entry_detail_setup' => $entry_detail_setup,
-                'entry_detail_visual_variant' => $entry_detail_visual_variant,
             ),
             'unknown_or_unproven' => array_values( array_unique( $unknown ) ),
             'privacy_boundary' => array(
@@ -156,37 +128,6 @@ final class SupportBundleBuilder {
             }
         }
         usort( $result, static function ( $a, $b ) { return strcmp( $a['surface'], $b['surface'] ); } );
-        return $result;
-    }
-
-    private function entryDetailVariantFacts( $state, &$unknown ) {
-        $result = array( 'active_variant' => null, 'active_label' => null, 'activation' => null );
-        if ( ! is_array( $state ) || empty( $state['activations'][ EntryDetailVisualVariant::SURFACE ] ) ) {
-            return $result;
-        }
-
-        $activation = $state['activations'][ EntryDetailVisualVariant::SURFACE ];
-        if ( ! isset( $activation['package_id'], $activation['package_version'], $activation['profile_id'] ) ) {
-            $unknown[] = 'entry_detail_visual_variant_identity_incomplete';
-            return $result;
-        }
-        $result['activation'] = $activation;
-
-        if ( EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_ID === $activation['package_id']
-            && EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_VERSION === $activation['package_version']
-            && EntryDetailVisualVariant::FULL_WIDTH_PROFILE_ID === $activation['profile_id'] ) {
-            $result['active_variant'] = EntryDetailVisualVariant::FULL_WIDTH;
-            $result['active_label'] = EntryDetailVisualVariant::label( EntryDetailVisualVariant::FULL_WIDTH );
-            return $result;
-        }
-
-        if ( EntryDetailVisualVariant::CURRENT_SAFE_PROFILE_ID === $activation['profile_id'] ) {
-            $result['active_variant'] = EntryDetailVisualVariant::CURRENT_SAFE;
-            $result['active_label'] = EntryDetailVisualVariant::label( EntryDetailVisualVariant::CURRENT_SAFE );
-            return $result;
-        }
-
-        $unknown[] = 'entry_detail_visual_variant_unrecognized';
         return $result;
     }
 
