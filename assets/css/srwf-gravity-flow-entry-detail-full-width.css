@@ -9,7 +9,8 @@
 
 .gravityflow_workflow_detail:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) {
     box-sizing: border-box;
-    width: 100%;
+    /* Keep WordPress .wrap margins inside the admin content width. */
+    width: auto;
     max-width: none;
     padding: 28px clamp(24px, 3vw, 40px);
     background: #f8fafc;
