@@ -1,0 +1,123 @@
+name: Merged Main Owner Test ZIP
+
+on:
+  push:
+    branches: [tmp/merged-main-owner-zip-2762e197]
+
+permissions:
+  contents: read
+
+env:
+  GPP_SOURCE_SHA: 2762e197a6f8128b81bd9ea543e5024bd370ba40
+  GPP_TEST_VERSION: 9999.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-release-root
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-release-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - name: Checkout exact merged main source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.GPP_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Assert exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GPP_SOURCE_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$GPP_SOURCE_SHA"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+
+      - name: Install build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip jq
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+
+      - name: Run release contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/release/release-contract-tests.sh
+          bash tests/release/license-identity-tests.sh
+
+      - name: Verify dry-run publication prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/release
+          php scripts/release/check-publication-prerequisites.php --root=. --mode=dry-run | tee build/release/publication-prerequisites.json
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+
+      - name: Prepare synthetic non-production overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/release/prepare-candidate.php --root=. --version="$GPP_TEST_VERSION" --date=2099-01-01
+          git diff --name-only | sort > /tmp/release-prepared-files.txt
+          printf '%s\n' CHANGELOG.md gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/release-expected-files.txt
+          diff -u /tmp/release-expected-files.txt /tmp/release-prepared-files.txt
+
+      - name: Build validate and smoke exact canonical ZIP
+        shell: bash
+        env:
+          GPP_RELEASE_DB_NAME: wordpress
+          GPP_RELEASE_DB_USER: root
+          GPP_RELEASE_DB_PASS: gpp-release-root
+          GPP_RELEASE_DB_HOST: 127.0.0.1:3306
+          GPP_RELEASE_BASE_URL: http://127.0.0.1:8090
+        run: |
+          set -euo pipefail
+          ZIP="$(bash scripts/release/build-release.sh . "$GPP_TEST_VERSION" build/release | head -n1)"
+          test -s "$ZIP"
+          SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
+          SIZE="$(stat -c '%s' "$ZIP")"
+          COUNT="$(unzip -Z1 "$ZIP" | grep -v '/$' | wc -l | tr -d ' ')"
+          bash scripts/release/validate-release.sh . "$ZIP" "$GPP_TEST_VERSION" "$SHA"
+          bash scripts/release/smoke-zip.sh . "$ZIP" /tmp/gpp-merged-main-owner-test-wordpress
+          printf '%s  %s\n' "$SHA" "$(basename "$ZIP")" > "$ZIP.sha256"
+          jq -n \
+            --arg source_sha "$GPP_SOURCE_SHA" \
+            --arg version "$GPP_TEST_VERSION" \
+            --arg filename "$(basename "$ZIP")" \
+            --arg sha256 "$SHA" \
+            --argjson byte_size "$SIZE" \
+            --argjson file_count "$COUNT" \
+            '{source_sha:$source_sha,version:$version,filename:$filename,sha256:$sha256,byte_size:$byte_size,file_count:$file_count,validation:"PASS",smoke:"PASS",publication:"NOT_ATTEMPTED_TEST_ARTIFACT"}' \
+            > build/release/owner-test-metadata.json
+          cat build/release/owner-test-metadata.json
+
+      - name: Upload exact merged-main Owner test artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gpp-merged-main-owner-test-2762e197
+          path: |
+            build/release/gravity-presentation-profiles-9999.0.0.zip
+            build/release/gravity-presentation-profiles-9999.0.0.zip.sha256
+            build/release/owner-test-metadata.json
+            build/release/publication-prerequisites.json
+          if-no-files-found: error
+          retention-days: 30
