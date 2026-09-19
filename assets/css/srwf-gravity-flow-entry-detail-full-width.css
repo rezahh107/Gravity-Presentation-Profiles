@@ -444,3 +444,22 @@
         scroll-behavior: auto;
     }
 }
+
+/*
+ * WordPress admin's legacy columns-2 layout uses ID-heavy positive/negative
+ * margins. Once Full Width admits #post-body as the grid owner, those offsets
+ * must be neutralized with equally local, higher-specificity selectors so the
+ * native nodes stay in normal flow at every viewport.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body {
+    margin: 0;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #post-body-content,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #postbox-container-1,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #postbox-container-2 {
+    float: none;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+}
