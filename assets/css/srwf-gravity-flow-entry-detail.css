@@ -125,41 +125,200 @@
 }
 
 /*
- * Keep the workflow/status/action box structurally native. When it is rendered
- * in the main Entry Detail column, coordinate it with the admitted dossier
- * visual language without moving or rebuilding any host controls.
+ * Native Gravity Flow chrome remains structurally and behaviorally host-owned.
+ * Every visual value below is drawn from the admitted Entry Detail vNext
+ * authority. WU18 reads that checked-in authority directly and rejects drift.
+ * The form-level selector activates only for the server-admitted read-only GPP
+ * Review, so native editor/User Input and non-GPP surfaces keep host styling.
  */
-.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box {
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) #gravityflow-status-box-container {
     box-sizing: border-box;
-    float: none;
-    clear: both;
-    width: 1060px;
-    max-width: min(1060px, calc(100vw - 32px));
-    margin: 0 0 24px;
-    padding: 24px 28px;
+    overflow: hidden;
     border: 1px solid #c9d6f0;
     border-radius: 12px;
     background: #f8fafe;
-    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+    box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05);
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) #gravityflow-status-box-container > h3.hndle {
+    margin: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e4e7ec;
+    background: #f8fafe;
+    color: #172033;
+    font-size: 18px;
+    line-height: 1.7;
+    font-weight: 700;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     color: #172033;
 }
-.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box .gravityflow-action-buttons {
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-status-box-field {
+    line-height: 1.85;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-status-box-field-step-status h4 {
+    margin: 0 0 10px;
+    color: #172033;
+    font-size: 15px;
+    line-height: 1.85;
+    font-weight: 500;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-status-box-field-assignees {
+    margin: 0 0 16px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid #e4e7ec;
+    color: #475467;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-status-box-field-assignees ul {
+    margin: 0;
+    padding-inline-start: 20px;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-status-box-field-note {
+    margin: 0;
+    color: #172033;
+    font-weight: 500;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box textarea[name="gravityflow_note"] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: 8px 0 0;
+    padding: 10px 12px;
+    border: 1px solid #8690a1;
+    border-radius: 8px;
+    background: #fff;
+    color: #172033;
+    font: inherit;
+    line-height: 1.85;
+    resize: vertical;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box textarea[name="gravityflow_note"]:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 3px;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 18px;
     align-items: center;
+    margin-top: 16px;
+    text-align: start;
 }
-.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box button[value="approved"] { border-color: #18794e; }
-.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
-
-/* Sidebar-enabled host layouts keep the same native box in another host column. */
-.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
-    box-sizing: border-box;
-    border: 1px solid #c9d6f0;
-    border-radius: 12px;
-    background: #f8fafe;
-    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button {
+    min-block-size: 44px;
+    margin: 0;
+    padding: 8px 18px;
+    border: 1px solid #8690a1;
+    border-radius: 8px;
+    background: #fff;
     color: #172033;
+    font: inherit;
+    font-weight: 500;
+    line-height: 1.8;
+    box-shadow: none;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button[value="approved"] {
+    border-color: #1d4ed8;
+    background: #1d4ed8;
+    color: #fff;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button[value="rejected"] {
+    border-color: #b42318;
+    background: #fff;
+    color: #b42318;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button[value="revert"] {
+    border-color: #8a5700;
+    background: #fff;
+    color: #8a5700;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button:disabled,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button[aria-disabled="true"] {
+    opacity: .48;
+    cursor: default;
+}
+
+/*
+ * Gravity Flow 3.1.0 keeps Timeline/event markup and ordering. The vNext
+ * authority presents History as neutral chronology: a heading followed by
+ * line-separated events. GPP therefore removes host note-box chrome but does
+ * not create event cards, outcome classes, or visible-text classification.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 24px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > h3 {
+    margin: 0;
+    padding: 26px 0 0;
+    border: 0;
+    background: transparent;
+    color: #172033;
+    font-size: 20px;
+    line-height: 1.7;
+    font-weight: 700;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) #poststuff .gravityflow-timeline > .inside {
+    margin: 0;
+    padding: 20px 0 0;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note {
+    clear: both;
+    width: 100%;
+    margin: 0;
+    padding: 16px 0;
+    border: 0;
+    border-top: 1px solid #e4e7ec;
+    border-radius: 0;
+    background: transparent;
+    color: #172033;
+    box-shadow: none;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note-body-wrap {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note-title {
+    color: #172033;
+    font-size: 15px;
+    line-height: 1.8;
+    font-weight: 500;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note-meta {
+    color: #475467;
+    font-size: 14px;
+    line-height: 1.8;
+}
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note-body {
+    overflow-wrap: anywhere;
+    color: #475467;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+/*
+ * The host Print node stays in the DOM and its behavior remains untouched.
+ * Suppression requires both the admitted GPP Review marker and the actually
+ * rendered GPP dossier Print utility in the same native Entry Detail form.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]):has(.gpp-entry-print-utility[data-gpp-print-utility="dossier"]) .detail-view-print {
+    display: none;
 }
 
 @media (max-width: 760px) {
@@ -197,10 +356,25 @@
     .gpp-entry-dossier__student-photo,
     .gpp-entry-dossier__student-photo img,
     .gpp-entry-dossier__student-photo.gpp-entry-dossier__slot-state { width: 64px; height: 64px; flex-basis: 64px; }
-    .gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box {
-        width: calc(100% - 25px);
-        max-width: none;
-        margin: 0 auto 24px;
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) #gravityflow-status-box-container,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline {
+        max-width: 100%;
+    }
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box {
         padding: 18px 16px;
+    }
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons {
+        gap: 12px;
+    }
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-status-box .gravityflow-action-buttons button {
+        flex: 1 1 108px;
+        white-space: normal;
+    }
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > h3 {
+        font-size: 19px;
+    }
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note {
+        padding: 16px 0;
     }
 }
