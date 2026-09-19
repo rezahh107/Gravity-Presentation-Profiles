@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -L --fail --retry 4 -o "$WU21_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxQvwJfw4pvKCoPf&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
           test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
           test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
           echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
