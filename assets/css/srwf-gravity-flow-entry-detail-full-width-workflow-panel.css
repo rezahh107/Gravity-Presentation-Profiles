@@ -25,10 +25,16 @@
     font-weight: 700;
 }
 
-.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
+/*
+ * WordPress' native #poststuff .inside rule is ID-heavy. Match that host
+ * boundary locally so the target panel inset is actually applied in-browser,
+ * rather than losing the cascade to the legacy 12px postbox padding.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #gravityflow-status-box-container .gravityflow-status-box {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
+    margin: 0;
     padding: 22px clamp(20px, 6.75%, 24px) 24px;
     background: #fbfcfe;
     color: #344054;
@@ -235,7 +241,8 @@
         font-size: 20px;
     }
 
-    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #gravityflow-status-box-container .gravityflow-status-box {
+        margin: 0;
         padding: 20px 20px 22px;
     }
 }
