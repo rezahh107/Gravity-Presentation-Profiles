@@ -6,12 +6,6 @@
         return nodes.length === 1 ? nodes[0] : null;
     }
 
-    function visible(node) {
-        if (!node) return false;
-        const style = getComputedStyle(node);
-        return style.display !== 'none' && style.visibility !== 'hidden';
-    }
-
     function fail(dossier, form, reason) {
         if (form) form.dataset.gppEntryDetailComposition = `native-fallback:${reason}`;
         dossier.dataset.gppCompositionState = `failed:${reason}`;
@@ -62,7 +56,7 @@
         const historyTarget = dossier.querySelector('[data-gpp-native-history]');
         const historyRegion = dossier.querySelector('[data-gpp-entry-region="history"]');
         const actionsExpected = dossier.dataset.gppActionsExpected === '1';
-        const hostEditable = dossier.dataset.gppHostEditable === '1';
+        const serverHostEditable = dossier.dataset.gppHostEditable === '1';
 
         if (!instructionsTarget || !editorTarget || (actionsExpected && !statusTarget)) {
             fail(dossier, form, 'destination-missing');
@@ -75,13 +69,19 @@
         const statusBoxes = Array.from(form.querySelectorAll('.gravityflow-status-box'));
         const timelines = Array.from(form.querySelectorAll('.gravityflow-timeline'));
 
-        if (instructions.length > 1 || editors.length !== 1 || timelines.length > 1) {
+        if (instructions.length > 1 || editors.length > 1 || timelines.length > 1) {
             fail(dossier, form, 'native-cardinality');
             return;
         }
+        if (serverHostEditable && editors.length !== 1) {
+            fail(dossier, form, 'editable-editor-missing');
+            return;
+        }
 
-        const editor = editors[0];
-        if (editor.closest('form') !== form) {
+        const editor = editors.length === 1 ? editors[0] : null;
+        const hostEditable = serverHostEditable || editor !== null;
+        dossier.dataset.gppHostEditable = hostEditable ? '1' : '0';
+        if (editor && editor.closest('form') !== form) {
             fail(dossier, form, 'editor-form-ownership');
             return;
         }
@@ -123,9 +123,9 @@
             return;
         }
 
-        // All destructive/reparenting prerequisites have now been proven.
-        // Keep exact original anchors so any unexpected post-move invariant
-        // failure can transactionally restore the native host UI.
+        // All ownership-sensitive prerequisites are proven before any native
+        // node moves. Preserve exact native anchors so any failed postcondition
+        // restores the host DOM before the GPP dossier is discarded.
         const movingNodes = [
             instructions.length === 1 ? instructions[0] : null,
             editor,
@@ -143,16 +143,39 @@
 
         try {
             if (instructions.length === 1) instructionsTarget.append(instructions[0]);
-            editorTarget.append(editor);
+            else instructionsTarget.remove();
+            if (editor) editorTarget.append(editor);
+            else editorTarget.remove();
             if (approvalStatusBox) statusTarget.append(approvalStatusBox);
             if (timelines.length === 1) historyTarget.append(timelines[0]);
 
-            // Prove state-changing controls still belong to their original form
-            // after reparenting before native fallback is visually replaced.
+            // Re-prove original node uniqueness and native form ownership after
+            // movement, before native fallback is visually replaced.
+            if (editor && (editor.closest('form') !== form || !dossier.contains(editor))) {
+                throw new Error('post-move-editor-ownership');
+            }
+            if (instructions.length === 1 && !instructionsTarget.contains(instructions[0])) {
+                throw new Error('post-move-instructions');
+            }
+            if (timelines.length === 1 && !historyTarget.contains(timelines[0])) {
+                throw new Error('post-move-history');
+            }
             if (actionsExpected) {
-                const actions = unique(dossier, '.gravityflow-action-buttons');
-                if (!actions || actions.closest('form') !== form || !statusTarget.contains(actions)) {
-                    throw new Error('post-move-form-ownership');
+                const status = unique(form, '.gravityflow-status-box');
+                const actions = unique(form, '.gravityflow-action-buttons');
+                const approved = form.querySelectorAll('.gravityflow-action-buttons [value="approved"]');
+                const rejected = form.querySelectorAll('.gravityflow-action-buttons [value="rejected"]');
+                if (
+                    status !== approvalStatusBox ||
+                    !statusTarget.contains(status) ||
+                    !dossier.contains(status) ||
+                    !actions ||
+                    !status.contains(actions) ||
+                    actions.closest('form') !== form ||
+                    approved.length !== 1 ||
+                    rejected.length !== 1
+                ) {
+                    throw new Error('post-move-approval-ownership');
                 }
             }
         } catch (error) {
