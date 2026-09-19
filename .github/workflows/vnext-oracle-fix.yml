@@ -1,0 +1,45 @@
+name: Temporary vNext Oracle Fix
+
+on:
+  push:
+    branches: [feat/entry-detail-vnext-convergence]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, '[oracle-fix]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/entry-detail-vnext-convergence
+          fetch-depth: 0
+      - name: Correct exact Owner surface selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/repro-evidence-lab/entry-visual-contract-tests.mjs')
+          s = p.read_text()
+          old1 = "const referenceDesktop = await referenceSnapshot(referencePage, 'C');"
+          old2 = "const referenceMobile = await referenceSnapshot(referencePage, 'D');"
+          assert s.count(old1) == 1
+          assert s.count(old2) == 1
+          s = s.replace(old1, "const referenceDesktop = await referenceSnapshot(referencePage, 'detail-desktop');", 1)
+          s = s.replace(old2, "const referenceMobile = await referenceSnapshot(referencePage, 'detail-mobile');", 1)
+          p.write_text(s)
+          PY
+          node --check tests/repro-evidence-lab/entry-visual-contract-tests.mjs
+          git diff --check
+      - name: Commit correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/repro-evidence-lab/entry-visual-contract-tests.mjs
+          git commit -m '[oracle-fix] Use Owner vNext detail surface identifiers'
+          git push origin HEAD:feat/entry-detail-vnext-convergence
