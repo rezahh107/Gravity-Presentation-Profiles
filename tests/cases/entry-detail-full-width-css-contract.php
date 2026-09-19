@@ -43,7 +43,11 @@ gpp_assert_true( false !== strpos( $full, 'min-block-size: 48px' ), 'Full Width 
 gpp_assert_true( false !== strpos( $full, 'outline: 3px solid #2563eb' ), 'Full Width focus-visible treatment must remain explicit.' );
 gpp_assert_true( false !== strpos( $full, 'opacity: .48' ), 'Full Width disabled action state must remain visible.' );
 
-gpp_assert_true( false !== strpos( $full, '@media (max-width: 820px)' ) && false !== strpos( $full, '"main"\n            "workflow"\n            "timeline"' ), 'Full Width must collapse to source-order single-column flow without DOM relocation.' );
+gpp_assert_true( false !== strpos( $full, '@media (max-width: 820px)' ), 'Full Width must declare the narrow single-column breakpoint.' );
+gpp_assert_true(
+    1 === preg_match( '/grid-template-areas:\s*"main"\s*"workflow"\s*"timeline"\s*;/s', $full ),
+    'Full Width must collapse to source-order single-column flow without DOM relocation.'
+);
 gpp_assert_true( false !== strpos( $full, '@media (prefers-reduced-motion: reduce)' ), 'Reduced-motion boundary must remain explicit.' );
 
 echo "ENTRY_DETAIL_FULL_WIDTH_CSS_CONTRACT_PASS\n";
