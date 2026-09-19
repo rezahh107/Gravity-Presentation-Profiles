@@ -11,8 +11,9 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const ownerHtml = process.env.GPP_ENTRY_OWNER_HTML;
 const expectedHtml = { size: 119765, sha256: '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69' };
-const comparatorVersion = 'entry-vnext-browser-comparator-v1';
+const comparatorVersion = 'entry-vnext-browser-comparator-v2-server-review';
 const evidenceSchemaVersion = '2.0.0';
+const admittedReviewSelector = '.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]';
 const canonical = ['header', 'current-task', 'education', 'candidate-details', 'contact', 'school', 'documents', 'registration-finance', 'history'];
 const expectedPlacements = {
   'student.first_name': 'candidate-details',
@@ -65,7 +66,7 @@ const referenceProfile = {
 };
 
 const productionProfile = {
-  root: '.gpp-entry-dossier--composed',
+  root: admittedReviewSelector,
   regionMatchers: canonical.map(name => ({ name, selector: `[data-gpp-entry-region="${name}"]`, mode: 'self' })),
   grids: {
     education: '[data-gpp-entry-region="education"] .gpp-entry-dossier__facts',
@@ -366,7 +367,21 @@ async function freshProductionPage(context, viewport) {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
   await page.goto(entryUrl, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
+  await page.waitForSelector(admittedReviewSelector, { timeout: 30000 });
+  const admission = await page.evaluate(reviewSelector => {
+    const root = document.querySelector(reviewSelector);
+    const native = document.querySelector('.entry-detail-view');
+    return {
+      profile: root?.dataset.gppProfileId || null,
+      suppression: root?.dataset.gppNativeTableSuppression || null,
+      native_present: Boolean(native),
+      native_display: native ? getComputedStyle(native).display : null,
+    };
+  }, admittedReviewSelector);
+  if (admission.suppression !== 'read-only-review' || !admission.native_present || admission.native_display !== 'none') {
+    await page.close();
+    throw new Error(`Server-admitted Review suppression contract failed: ${JSON.stringify(admission)}`);
+  }
   return page;
 }
 
@@ -387,6 +402,8 @@ async function runPositive(context, reference, viewport, resultId, viewportId, s
       ...executableResultBase(resultId, 'positive', viewportId, comparison.comparator_result, comparison.failed_rule_ids),
       mutation_id: null,
       mutation_confirmed: null,
+      server_review_admission: true,
+      native_duplicate_suppressed: true,
       comparison_summary: {
         actual_root_width: actual.geometry.root?.width,
         reference_root_width: reference.geometry.root?.width,
@@ -436,6 +453,50 @@ async function runNegativeControl({
   } finally {
     await page.close();
   }
+}
+
+async function collectFlowOwnershipState(page) {
+  return page.evaluate(reviewSelector => {
+    const dossier = document.querySelector(reviewSelector);
+    const form = document.querySelector('form[id^="gform_"]');
+    const task = dossier?.querySelector('[data-gpp-entry-region="current-task"]');
+    const status = document.querySelector('.gravityflow-status-box');
+    const actions = document.querySelector('.gravityflow-action-buttons');
+    const statusStyle = status ? getComputedStyle(status) : null;
+    return {
+      forms: document.querySelectorAll('form[id^="gform_"]').length,
+      statusBoxes: document.querySelectorAll('.gravityflow-status-box').length,
+      actionContainers: document.querySelectorAll('.gravityflow-action-buttons').length,
+      approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+      rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+      revert: document.querySelectorAll('.gravityflow-action-buttons [value="revert"]').length,
+      note: document.querySelectorAll('.gravityflow-status-box textarea[name="gravityflow_note"]').length,
+      nonce: document.querySelectorAll('.gravityflow-status-box input[name="_wpnonce"]').length,
+      statusVisible: Boolean(status && statusStyle.display !== 'none' && statusStyle.visibility !== 'hidden'),
+      statusInsideDossier: Boolean(status && dossier?.contains(status)),
+      statusInsideTask: Boolean(status && task?.contains(status)),
+      actionsInsideStatus: Boolean(actions && status?.contains(actions)),
+      statusInForm: Boolean(status && status.closest('form[id^="gform_"]') === form),
+      actionsInForm: Boolean(actions && actions.closest('form[id^="gform_"]') === form),
+    };
+  }, admittedReviewSelector);
+}
+
+function flowOwnershipAccepted(state) {
+  return state.forms === 1
+    && state.statusBoxes === 1
+    && state.actionContainers === 1
+    && state.approved === 1
+    && state.rejected === 1
+    && state.revert === 1
+    && state.note === 1
+    && state.nonce === 1
+    && state.statusVisible
+    && !state.statusInsideDossier
+    && !state.statusInsideTask
+    && state.actionsInsideStatus
+    && state.statusInForm
+    && state.actionsInForm;
 }
 
 async function runCase(name, fn) {
@@ -523,8 +584,8 @@ await runCase('ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT', () => runNegativeControl({
   resultId: 'ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT',
   mutationId: 'dossier_width_72_percent',
   expectedRuleId: 'DOSSIER_INLINE_GEOMETRY',
-  mutate: async page => page.evaluate(() => {
-    const root = document.querySelector('.gpp-entry-dossier--composed');
+  mutate: async page => page.evaluate(reviewSelector => {
+    const root = document.querySelector(reviewSelector);
     if (!root) return { confirmed: false, reason: 'dossier_missing' };
     const before = root.getBoundingClientRect();
     root.style.setProperty('width', '72%', 'important');
@@ -537,7 +598,7 @@ await runCase('ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT', () => runNegativeControl({
       width_ratio: ratio,
       computed_width: getComputedStyle(root).width,
     };
-  }),
+  }, admittedReviewSelector),
 }));
 
 await runCase('ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN', () => runNegativeControl({
@@ -566,28 +627,28 @@ await runCase('ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN', () => runNegativeContro
 await runCase('ENTRY-VNEXT-FLOW-OWNERSHIP', async () => {
   const page = await freshProductionPage(context, { width: 1440, height: 1100 });
   try {
-    const state = await page.evaluate(() => {
-      const form = document.querySelector('form[id^="gform_"]');
-      const task = document.querySelector('[data-gpp-entry-region="current-task"]');
+    const baseline = await collectFlowOwnershipState(page);
+    if (!flowOwnershipAccepted(baseline)) throw new Error(`Native Flow ownership changed: ${JSON.stringify(baseline)}`);
+
+    const mutation = await page.evaluate(reviewSelector => {
+      const dossier = document.querySelector(reviewSelector);
+      const task = dossier?.querySelector('[data-gpp-entry-region="current-task"]');
       const status = document.querySelector('.gravityflow-status-box');
-      const actions = document.querySelector('.gravityflow-action-buttons');
+      if (!task || !status) return { confirmed: false, reason: 'required_nodes_missing' };
+      task.append(status);
       return {
-        forms: document.querySelectorAll('form[id^="gform_"]').length,
-        statusBoxes: document.querySelectorAll('.gravityflow-status-box').length,
-        actionContainers: document.querySelectorAll('.gravityflow-action-buttons').length,
-        approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
-        rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
-        statusInsideTask: Boolean(status && task?.contains(status)),
-        actionsInsideStatus: Boolean(actions && status?.contains(actions)),
-        statusInForm: Boolean(status && status.closest('form') === form),
-        actionsInForm: Boolean(actions && actions.closest('form') === form),
-        orphanVisible: [...document.querySelectorAll('.gravityflow-status-box')].filter(node => !node.closest('.gpp-entry-dossier') && getComputedStyle(node).display !== 'none').length,
+        confirmed: task.contains(status) && Boolean(status.closest(reviewSelector)),
+        status_inside_task: task.contains(status),
+        status_inside_dossier: Boolean(status.closest(reviewSelector)),
       };
-    });
-    if (state.forms !== 1 || state.statusBoxes !== 1 || state.actionContainers !== 1 || state.approved !== 1 || state.rejected !== 1
-        || !state.statusInsideTask || !state.actionsInsideStatus || !state.statusInForm || !state.actionsInForm || state.orphanVisible !== 0) {
-      throw new Error(`Native Flow ownership changed: ${JSON.stringify(state)}`);
+    }, admittedReviewSelector);
+    if (!mutation.confirmed) throw new Error(`Flow ownership falsification mutation did not materially apply: ${JSON.stringify(mutation)}`);
+
+    const mutated = await collectFlowOwnershipState(page);
+    if (flowOwnershipAccepted(mutated) || !mutated.statusInsideDossier || !mutated.statusInsideTask) {
+      throw new Error(`Flow ownership oracle failed to reject status reparenting into the GPP dossier: ${JSON.stringify(mutated)}`);
     }
+
     return {
       id: 'ENTRY-VNEXT-FLOW-OWNERSHIP',
       status: 'PASS',
@@ -599,7 +660,11 @@ await runCase('ENTRY-VNEXT-FLOW-OWNERSHIP', async () => {
       comparator_executed: false,
       comparator_result: 'NOT_APPLICABLE',
       failed_rule_ids: [],
-      details: state,
+      details: {
+        baseline,
+        moved_inside_dossier_rejected: true,
+        mutation,
+      },
     };
   } finally {
     await page.close();
@@ -613,6 +678,7 @@ const output = {
   suite: 'Entry Detail vNext shared browser/runtime visual contract',
   comparator_version: comparatorVersion,
   repository_head: repositoryHead,
+  admission_oracle: 'server_admitted_read_only_review',
   authority: { file: path.basename(ownerHtml), ...htmlIdentity },
   surfaces: {
     entry_desktop_C: positiveDesktop?.status === 'PASS' && positiveDesktop.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
