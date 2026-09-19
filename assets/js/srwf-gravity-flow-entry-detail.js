@@ -1,155 +1,207 @@
 (() => {
-  'use strict';
+    'use strict';
 
-  const restore = (trigger, x, y) => {
-    if (trigger && trigger.isConnected) {
-      try { trigger.focus({ preventScroll: true }); } catch (_) { trigger.focus(); }
-    }
-    window.scrollTo(x, y);
-  };
-
-  const bindPreview = dossier => {
-    const dialog = dossier.querySelector('[data-gpp-image-dialog]');
-    if (!dialog || typeof dialog.showModal !== 'function') return;
-
-    const full = dialog.querySelector('[data-gpp-image-full]');
-    const close = dialog.querySelector('[data-gpp-image-close]');
-    let invoker = null;
-    let scrollX = 0;
-    let scrollY = 0;
-
-    const closeDialog = () => {
-      if (dialog.open) dialog.close();
-    };
-
-    dossier.querySelectorAll('[data-gpp-image-preview]').forEach(trigger => {
-      trigger.addEventListener('click', () => {
-        invoker = trigger;
-        scrollX = window.scrollX;
-        scrollY = window.scrollY;
-        full.src = trigger.dataset.gppImageSrc || '';
-        full.alt = trigger.dataset.gppImageName || '';
-        dialog.showModal();
-        close?.focus();
-      });
-    });
-
-    close?.addEventListener('click', closeDialog);
-    dialog.addEventListener('click', event => {
-      if (event.target === dialog) closeDialog();
-    });
-    dialog.addEventListener('cancel', event => {
-      event.preventDefault();
-      closeDialog();
-    });
-    dialog.addEventListener('close', () => restore(invoker, scrollX, scrollY));
-  };
-
-  const markFailure = (form, dossier, state) => {
-    form.dataset.gppEntryDetailComposition = state;
-    dossier.dataset.gppCompositionState = state;
-    dossier.remove();
-  };
-
-  const compose = dossier => {
-    const form = dossier.closest('form');
-    if (!form) return;
-
-    const instructionsTarget = dossier.querySelector('[data-gpp-native-instructions]');
-    const editorTarget = dossier.querySelector('[data-gpp-native-editor]');
-    const actionsTarget = dossier.querySelector('[data-gpp-native-actions]');
-    const historyTarget = dossier.querySelector('[data-gpp-native-history]');
-    const actionsExpected = dossier.dataset.gppActionsExpected === '1';
-    const serverHostEditable = dossier.dataset.gppHostEditable === '1';
-
-    const unique = selector => {
-      const nodes = form.querySelectorAll(selector);
-      return { count: nodes.length, node: nodes.length === 1 ? nodes[0] : null };
-    };
-
-    const nativeInstructions = unique('.gravityflow-instructions');
-    const nativeEditor = unique('.entry-detail-view .gform_wrapper');
-    const nativeActions = unique('.gravityflow-action-buttons');
-    const nativeTimeline = unique('.gravityflow-timeline');
-
-    // Gravity Flow renders the editable Gravity Forms editor only after its
-    // own generic current-assignee can_update() predicate succeeds. Treat that
-    // host-rendered editor as runtime proof of editability for non-Approval
-    // steps too; Approval eligibility remains a separate concern.
-    const hostEditable = serverHostEditable || nativeEditor.count === 1;
-    dossier.dataset.gppHostEditable = hostEditable ? '1' : '0';
-
-    // Preflight every ownership-sensitive region before moving any host node.
-    // Any ambiguity leaves Gravity Flow's native UI untouched. Conditional
-    // instructions/timeline may be absent. Approval controls are required only
-    // when the server proved current-assignee Approval eligibility.
-    if (
-      nativeInstructions.count > 1 ||
-      nativeEditor.count > 1 ||
-      nativeActions.count > 1 ||
-      nativeTimeline.count > 1 ||
-      (serverHostEditable && nativeEditor.count !== 1)
-    ) {
-      markFailure(form, dossier, 'failed-host-ambiguity');
-      return;
+    function unique(root, selector) {
+        const nodes = Array.from(root.querySelectorAll(selector));
+        return nodes.length === 1 ? nodes[0] : null;
     }
 
-    if (actionsExpected) {
-      if (!actionsTarget || nativeActions.count !== 1) {
-        markFailure(form, dossier, 'failed-actions-missing');
-        return;
-      }
-      const approvedControls = nativeActions.node.querySelectorAll('[value="approved"]');
-      const rejectedControls = nativeActions.node.querySelectorAll('[value="rejected"]');
-      if (approvedControls.length !== 1 || rejectedControls.length !== 1) {
-        markFailure(form, dossier, 'failed-actions-ambiguous');
-        return;
-      }
-    } else {
-      if (actionsTarget) {
-        markFailure(form, dossier, 'failed-readonly-actions-target');
-        return;
-      }
+    function fail(dossier, form, reason) {
+        if (form) form.dataset.gppEntryDetailComposition = `native-fallback:${reason}`;
+        dossier.dataset.gppCompositionState = `failed:${reason}`;
+        dossier.remove();
+    }
 
-      if (nativeActions.count === 1) {
-        // Gravity Flow may render a unique non-Approval status/action cluster
-        // outside the editable gform_wrapper (for example User Input). If the
-        // host also rendered its unique editable editor and the cluster has no
-        // Approval controls, leave that original node exactly where Gravity
-        // Flow put it. GPP neither absorbs nor suppresses host-owned workflow
-        // controls. Without host editability this remains fail-closed.
-        if (!hostEditable) {
-          markFailure(form, dossier, 'failed-readonly-actions-present');
-          return;
+    function bindPreview(dossier) {
+        if (dossier.dataset.gppPreviewBound === '1') return;
+        const dialog = dossier.querySelector('[data-gpp-image-dialog]');
+        if (!dialog || typeof dialog.showModal !== 'function') return;
+        const image = dialog.querySelector('[data-gpp-image-full]');
+        const close = dialog.querySelector('[data-gpp-image-close]');
+        let trigger = null;
+        let scrollX = 0;
+        let scrollY = 0;
+        const restore = () => {
+            window.scrollTo(scrollX, scrollY);
+            if (trigger && typeof trigger.focus === 'function') trigger.focus({ preventScroll: true });
+        };
+        dossier.querySelectorAll('[data-gpp-image-preview]').forEach(button => {
+            button.addEventListener('click', () => {
+                trigger = button;
+                scrollX = window.scrollX;
+                scrollY = window.scrollY;
+                image.src = button.dataset.gppImageSrc || '';
+                image.alt = button.dataset.gppImageName || '';
+                dialog.showModal();
+                close?.focus({ preventScroll: true });
+            });
+        });
+        close?.addEventListener('click', () => dialog.close());
+        dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+        dialog.addEventListener('close', restore);
+        dossier.dataset.gppPreviewBound = '1';
+    }
+
+    function compose(dossier) {
+        if (!dossier || dossier.dataset.gppCompositionState === 'composed') return;
+        const form = dossier.closest('form');
+        if (!form || !form.matches('form[id^="gform_"]')) {
+            fail(dossier, form, 'native-form-missing');
+            return;
         }
-        if (
-          nativeActions.node.querySelectorAll('[value="approved"]').length !== 0 ||
-          nativeActions.node.querySelectorAll('[value="rejected"]').length !== 0
-        ) {
-          markFailure(form, dossier, 'failed-unexpected-approval-actions');
-          return;
+
+        const instructionsTarget = dossier.querySelector('[data-gpp-native-instructions]');
+        const editorTarget = dossier.querySelector('[data-gpp-native-editor]');
+        const statusTarget = dossier.querySelector('[data-gpp-native-status]');
+        const historyTarget = dossier.querySelector('[data-gpp-native-history]');
+        const historyRegion = dossier.querySelector('[data-gpp-entry-region="history"]');
+        const actionsExpected = dossier.dataset.gppActionsExpected === '1';
+        const serverHostEditable = dossier.dataset.gppHostEditable === '1';
+
+        if (!instructionsTarget || !editorTarget || (actionsExpected && !statusTarget)) {
+            fail(dossier, form, 'destination-missing');
+            return;
         }
-      }
+
+        const instructions = Array.from(form.querySelectorAll('.gravityflow-instructions'));
+        const editors = Array.from(form.querySelectorAll('.entry-detail-view .gform_wrapper'));
+        const actionContainers = Array.from(form.querySelectorAll('.gravityflow-action-buttons'));
+        const statusBoxes = Array.from(form.querySelectorAll('.gravityflow-status-box'));
+        const timelines = Array.from(form.querySelectorAll('.gravityflow-timeline'));
+
+        if (instructions.length > 1 || editors.length > 1 || timelines.length > 1) {
+            fail(dossier, form, 'native-cardinality');
+            return;
+        }
+        if (serverHostEditable && editors.length !== 1) {
+            fail(dossier, form, 'editable-editor-missing');
+            return;
+        }
+
+        const editor = editors.length === 1 ? editors[0] : null;
+        const hostEditable = serverHostEditable || editor !== null;
+        dossier.dataset.gppHostEditable = hostEditable ? '1' : '0';
+        if (editor && editor.closest('form') !== form) {
+            fail(dossier, form, 'editor-form-ownership');
+            return;
+        }
+
+        let approvalStatusBox = null;
+        if (actionsExpected) {
+            if (actionContainers.length !== 1 || statusBoxes.length !== 1) {
+                fail(dossier, form, 'approval-cardinality');
+                return;
+            }
+            const actions = actionContainers[0];
+            approvalStatusBox = statusBoxes[0];
+            const approved = actions.querySelectorAll('[value="approved"]');
+            const rejected = actions.querySelectorAll('[value="rejected"]');
+            // Gravity Flow step configuration may authentically expose only one
+            // of Approve/Reject. GPP admits the native set as rendered, while
+            // rejecting duplicates or an unexpectedly empty action container.
+            if (approved.length > 1 || rejected.length > 1 || approved.length + rejected.length < 1) {
+                fail(dossier, form, 'approval-action-cardinality');
+                return;
+            }
+            if (!approvalStatusBox.contains(actions) || approvalStatusBox.closest('form') !== form || actions.closest('form') !== form) {
+                fail(dossier, form, 'approval-form-ownership');
+                return;
+            }
+        } else if (actionContainers.length > 1 || statusBoxes.length > 1) {
+            fail(dossier, form, 'native-status-cardinality');
+            return;
+        } else if (actionContainers.length === 1) {
+            const actions = actionContainers[0];
+            const hasApprovalActions = actions.querySelector('[value="approved"], [value="rejected"]');
+            if (hasApprovalActions || !hostEditable || actions.closest('form') !== form) {
+                fail(dossier, form, 'unexpected-actions');
+                return;
+            }
+            // A non-Approval editable status/action cluster is host-owned and
+            // intentionally remains in Gravity Flow's native position.
+        }
+
+        if (timelines.length === 1 && (!historyTarget || !historyRegion)) {
+            fail(dossier, form, 'history-destination-missing');
+            return;
+        }
+
+        // All ownership-sensitive prerequisites are proven before any native
+        // node moves. Preserve exact native anchors so any failed postcondition
+        // restores the host DOM before the GPP dossier is discarded.
+        const movingNodes = [
+            instructions.length === 1 ? instructions[0] : null,
+            editor,
+            approvalStatusBox,
+            timelines.length === 1 ? timelines[0] : null,
+        ].filter(Boolean);
+        const anchors = movingNodes.map(node => ({ node, parent: node.parentNode, next: node.nextSibling }));
+        const rollback = () => {
+            for (const anchor of anchors.slice().reverse()) {
+                if (!anchor.parent) continue;
+                if (anchor.next && anchor.next.parentNode === anchor.parent) anchor.parent.insertBefore(anchor.node, anchor.next);
+                else anchor.parent.append(anchor.node);
+            }
+        };
+
+        try {
+            if (instructions.length === 1) instructionsTarget.append(instructions[0]);
+            else instructionsTarget.remove();
+            if (editor) editorTarget.append(editor);
+            else editorTarget.remove();
+            if (approvalStatusBox) statusTarget.append(approvalStatusBox);
+            if (timelines.length === 1) historyTarget.append(timelines[0]);
+
+            // Re-prove original node uniqueness and native form ownership after
+            // movement, before native fallback is visually replaced.
+            if (editor && (editor.closest('form') !== form || !dossier.contains(editor))) {
+                throw new Error('post-move-editor-ownership');
+            }
+            if (instructions.length === 1 && !instructionsTarget.contains(instructions[0])) {
+                throw new Error('post-move-instructions');
+            }
+            if (timelines.length === 1 && !historyTarget.contains(timelines[0])) {
+                throw new Error('post-move-history');
+            }
+            if (actionsExpected) {
+                const status = unique(form, '.gravityflow-status-box');
+                const actions = unique(form, '.gravityflow-action-buttons');
+                const approved = form.querySelectorAll('.gravityflow-action-buttons [value="approved"]');
+                const rejected = form.querySelectorAll('.gravityflow-action-buttons [value="rejected"]');
+                if (
+                    status !== approvalStatusBox ||
+                    !statusTarget.contains(status) ||
+                    !dossier.contains(status) ||
+                    !actions ||
+                    !status.contains(actions) ||
+                    actions.closest('form') !== form ||
+                    approved.length > 1 ||
+                    rejected.length > 1 ||
+                    approved.length + rejected.length < 1
+                ) {
+                    throw new Error('post-move-approval-ownership');
+                }
+            }
+        } catch (error) {
+            rollback();
+            fail(dossier, form, error?.message || 'composition-move-failed');
+            return;
+        }
+
+        // GPP-owned optional history chrome is removed only after host node
+        // movement has succeeded, so rollback never needs to recreate it.
+        if (timelines.length === 0) historyRegion?.remove();
+
+        form.dataset.gppEntryDetailComposition = 'composed';
+        dossier.dataset.gppCompositionState = 'composed';
+        dossier.classList.add('gpp-entry-dossier--composed');
+        bindPreview(dossier);
     }
 
-    if (nativeInstructions.node && instructionsTarget) instructionsTarget.append(nativeInstructions.node);
-    else instructionsTarget?.remove();
+    function init() {
+        document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').forEach(compose);
+    }
 
-    if (nativeEditor.node && editorTarget) editorTarget.append(nativeEditor.node);
-    else editorTarget?.remove();
-
-    if (actionsExpected) actionsTarget.append(nativeActions.node);
-
-    if (nativeTimeline.node && historyTarget) historyTarget.append(nativeTimeline.node);
-    else dossier.querySelector('[data-gpp-optional-history]')?.remove();
-
-    dossier.classList.add('gpp-entry-dossier--composed');
-    dossier.dataset.gppCompositionState = 'composed';
-    form.dataset.gppEntryDetailComposition = 'composed';
-    bindPreview(dossier);
-  };
-
-  const init = () => document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').forEach(compose);
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
-  else init();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+    else init();
 })();

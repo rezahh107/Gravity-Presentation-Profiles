@@ -53,12 +53,12 @@ async function openEntry(page) {
 async function entryState(page) {
   return page.evaluate(() => {
     const dossier = document.querySelector('.gpp-entry-dossier--composed');
-    const slot = dossier?.querySelector('[data-gpp-slot="student.national_id"] dd');
+    const slot = dossier?.querySelector('[data-gpp-entry-region="candidate-details"] [data-gpp-slot="student.national_id"] dd');
     const native = document.querySelector('.entry-detail-view');
     return {
       ready: Boolean(dossier),
       profile: dossier?.dataset.gppProfileId || null,
-      full_name: dossier?.querySelector('[data-gpp-section="identity"] h1')?.textContent?.trim() || null,
+      full_name: dossier?.querySelector('[data-gpp-entry-region="header"] h1')?.textContent?.trim() || null,
       national_id: slot?.textContent?.trim() || null,
       native_visible: Boolean(native && getComputedStyle(native).display !== 'none'),
       native_editor_text: dossier?.querySelector('[data-gpp-native-editor]')?.innerText?.replace(/\s+/g, ' ').trim() || '',

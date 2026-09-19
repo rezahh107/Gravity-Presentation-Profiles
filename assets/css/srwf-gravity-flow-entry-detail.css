@@ -1,4 +1,6 @@
 .gpp-entry-dossier {
+    --gpp-entry-group-surface: #fcfdfe;
+    --gpp-entry-group-line: #e7eaf0;
     direction: rtl;
     box-sizing: border-box;
     width: 1060px;
@@ -14,58 +16,112 @@
     font-synthesis: none;
 }
 
-.gpp-entry-dossier__section {
+.gpp-entry-dossier__header {
+    display: flex;
+    align-items: center;
+    padding: 0 0 24px;
+    border: 0;
+    background: transparent;
+}
+.gpp-entry-dossier__header-main { display: flex; align-items: center; gap: 20px; width: 100%; min-width: 0; }
+.gpp-entry-dossier__header-text { flex: 1 1 auto; min-width: 0; }
+.gpp-entry-dossier__header h1 { margin: 0; color: #172033; font-size: 27px; line-height: 1.6; font-weight: 700; }
+.gpp-entry-dossier__header-summary { display: flex; flex-wrap: wrap; gap: 0; margin: 8px 0 0; }
+.gpp-entry-dossier__header-fact { display: inline-flex; align-items: baseline; gap: 6px; min-height: 22px; padding: 0; background: transparent; }
+.gpp-entry-dossier__header-fact + .gpp-entry-dossier__header-fact { margin-inline-start: 20px; padding-inline-start: 20px; border-inline-start: 1px solid #e4e7ec; }
+.gpp-entry-dossier__header-fact dt,
+.gpp-entry-dossier__header-fact dd { margin: 0; font-size: 15px; line-height: 1.7; }
+.gpp-entry-dossier__header-fact dt { color: #667085; font-weight: 400; }
+.gpp-entry-dossier__header-fact dd { color: #475467; font-weight: 500; }
+.gpp-entry-dossier__student-photo { flex: 0 0 72px; }
+.gpp-entry-dossier__student-photo img { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 12px; }
+.gpp-entry-dossier__student-photo.gpp-entry-dossier__slot-state { display: flex; width: 72px; height: 72px; align-items: center; justify-content: center; border: 1px solid #e4e7ec; border-radius: 12px; color: #667085; font-size: 12px; text-align: center; }
+
+.gpp-entry-dossier__task {
     box-sizing: border-box;
     margin: 0 0 18px;
-    padding: 22px;
-    border: 1px solid #e4e7ec;
-    border-radius: 14px;
-    background: #fff;
+    padding: 24px 28px;
+    border: 1px solid #c9d6f0;
+    border-radius: 12px;
+    background: #f8fafe;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+}
+.gpp-entry-dossier .gpp-entry-dossier__task-heading,
+#poststuff .gpp-entry-dossier .gpp-entry-dossier__task-heading { margin: 0 0 8px; color: #172033; font-size: 21px; line-height: 1.7; font-weight: 700; }
+.gpp-entry-dossier__task-context { margin: 0; }
+.gpp-entry-dossier__task-step { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; background: transparent; }
+.gpp-entry-dossier__task-step dt,
+.gpp-entry-dossier__task-step dd { margin: 0; color: #1d4ed8; font-size: 14px; line-height: 1.8; font-weight: 500; }
+.gpp-entry-dossier__native-instructions .gravityflow-instructions,
+.gpp-entry-dossier__native-editor .gform_wrapper,
+.gpp-entry-dossier__native-status .gravityflow-status-box { margin: 14px 0 0; }
+.gpp-entry-dossier__native-instructions:empty,
+.gpp-entry-dossier__native-editor:empty,
+.gpp-entry-dossier__native-status:empty { display: none; }
+.gpp-entry-dossier__native-status .gravityflow-status-box { float: none; width: auto; max-width: 100%; }
+.gpp-entry-dossier__native-status .gravityflow-action-buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.gpp-entry-dossier__native-status button[value="approved"] { border-color: #18794e; }
+.gpp-entry-dossier__native-status button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
+
+.gpp-entry-dossier__section {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 27px 0 30px;
+    border: 0;
+    border-bottom: 1px solid #e4e7ec;
+    border-radius: 0;
+    background: transparent;
+}
+.gpp-entry-dossier__section-title { margin: 0 0 12px; color: #172033; font-size: 20px; line-height: 1.7; font-weight: 700; }
+.gpp-entry-dossier__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--gpp-entry-group-line);
+    border-radius: 11px;
+    background: var(--gpp-entry-group-surface);
+}
+.gpp-entry-dossier__facts--education,
+.gpp-entry-dossier__facts--contact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gpp-entry-dossier__facts--school { grid-template-columns: 1fr; }
+.gpp-entry-dossier__fact { min-width: 0; padding: 13px 18px 14px; background: transparent; }
+.gpp-entry-dossier__fact dt { margin: 0 0 5px; color: #667085; font-size: 13.5px; line-height: 1.7; font-weight: 400; }
+.gpp-entry-dossier__fact dd { margin: 0; color: #172033; font-size: 16px; line-height: 1.8; font-weight: 500; overflow-wrap: anywhere; }
+.gpp-entry-dossier__facts--personal > .gpp-entry-dossier__fact:not(:nth-child(3n)),
+.gpp-entry-dossier__facts--financial > .gpp-entry-dossier__fact:not(:nth-child(3n)) { border-inline-end: 1px solid var(--gpp-entry-group-line); }
+.gpp-entry-dossier__facts--personal > .gpp-entry-dossier__fact:nth-child(n+4),
+.gpp-entry-dossier__facts--financial > .gpp-entry-dossier__fact:nth-child(n+4) { border-top: 1px solid var(--gpp-entry-group-line); }
+.gpp-entry-dossier__facts--education > .gpp-entry-dossier__fact:first-child,
+.gpp-entry-dossier__facts--contact > .gpp-entry-dossier__fact:nth-child(odd) { border-inline-end: 1px solid var(--gpp-entry-group-line); }
+.gpp-entry-dossier__facts--contact > .gpp-entry-dossier__fact:nth-child(n+3) { border-top: 1px solid var(--gpp-entry-group-line); }
+
+.gpp-entry-dossier [data-gpp-slot="student.national_id"] dd,
+.gpp-entry-dossier [data-gpp-slot="student.mobile"] dd,
+.gpp-entry-dossier [data-gpp-slot="student.home_phone"] dd,
+.gpp-entry-dossier [data-gpp-slot="student.father_mobile"] dd,
+.gpp-entry-dossier [data-gpp-slot="student.mother_mobile"] dd,
+.gpp-entry-dossier [data-gpp-slot="finance.tuition_amount"] dd,
+.gpp-entry-dossier [data-gpp-slot="finance.discount_amount"] dd,
+.gpp-entry-dossier [data-gpp-slot="finance.net_payable_amount"] dd {
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: right;
 }
 
-.gpp-entry-dossier .gpp-entry-dossier__section h1,
-.gpp-entry-dossier .gpp-entry-dossier__section h2 {
-    margin: 0 0 16px;
-    color: #172033;
-    font-weight: 700;
-    line-height: 1.5;
-}
-.gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 27px; }
-.gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 20px; }
-.gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
-#poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 21px; font-weight: 700; }
-.gpp-entry-dossier__identity { margin-bottom: 0; border-top: 4px solid #1d4ed8; }
-.gpp-entry-dossier__identity-main { display: flex; align-items: flex-start; gap: 20px; }
-.gpp-entry-dossier__identity-text { flex: 1 1 auto; min-width: 0; }
-.gpp-entry-dossier__task { margin-bottom: 14px; border-color: #93c5fd; background: #f8fbff; box-shadow: 0 1px 0 rgba(29, 78, 216, .08); }
-.gpp-entry-dossier__task-step { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; color: #475467; }
-.gpp-entry-dossier__task-step strong { color: #172033; }
-.gpp-entry-dossier__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: #e4e7ec; border: 1px solid #e4e7ec; border-radius: 10px; overflow: hidden; }
-.gpp-entry-dossier__fact { min-width: 0; padding: 13px 15px; background: #fff; }
-.gpp-entry-dossier__fact dt { margin: 0 0 5px; color: #667085; font-size: 12px; font-weight: 500; }
-.gpp-entry-dossier__fact dd { margin: 0; color: #172033; font-size: 14px; overflow-wrap: anywhere; }
-.gpp-entry-dossier__facts--identity { margin-top: 12px; }
 .gpp-entry-dossier__image-trigger { padding: 0; border: 1px solid #d0d5dd; border-radius: 10px; background: #fff; cursor: zoom-in; }
 .gpp-entry-dossier__image-trigger:focus-visible,
 .gpp-entry-dossier__file-link:focus-visible,
 .gpp-entry-dossier__preview-close:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
-.gpp-entry-dossier__student-photo img { display: block; width: 96px; height: 112px; object-fit: cover; border-radius: 9px; }
 .gpp-entry-dossier__document { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .gpp-entry-dossier__document-label { font-weight: 700; }
 .gpp-entry-dossier__document-thumbnail img { display: block; width: 120px; height: 88px; object-fit: cover; border-radius: 8px; }
 .gpp-entry-dossier__file-link { overflow-wrap: anywhere; }
-.gpp-entry-dossier__native-instructions .gravityflow-instructions,
-.gpp-entry-dossier__native-editor .gform_wrapper,
-.gpp-entry-dossier__native-actions .gravityflow-action-buttons,
-.gpp-entry-dossier__history .gravityflow-timeline { margin: 14px 0 0; }
-.gpp-entry-dossier__native-editor:empty,
-.gpp-entry-dossier__native-instructions:empty,
-.gpp-entry-dossier__native-actions:empty { display: none; }
-.gpp-entry-dossier__native-actions .gravityflow-action-buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.gpp-entry-dossier__native-actions button[value="approved"] { border-color: #18794e; }
-.gpp-entry-dossier__native-actions button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
-.gpp-entry-dossier__history details > summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+.gpp-entry-dossier__history { border-bottom: 0; padding-bottom: 0; }
+.gpp-entry-dossier__history details > summary { cursor: pointer; font-weight: 700; font-size: 20px; line-height: 1.7; }
 .gpp-entry-dossier__history-help { margin: 12px 0; color: #475467; line-height: 1.9; }
+.gpp-entry-dossier__history .gravityflow-timeline { margin: 14px 0 0; }
 .gpp-entry-dossier__history .gravityflow-timeline > h3 { display: none; }
 .gpp-entry-dossier__history .postbox.gravityflow-timeline { border: 0; box-shadow: none; }
 .gpp-entry-dossier__preview { box-sizing: border-box; width: min(92vw, 960px); max-height: 90vh; padding: 42px 18px 18px; border: 0; border-radius: 14px; }
@@ -73,23 +129,42 @@
 .gpp-entry-dossier__preview img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: auto; object-fit: contain; }
 .gpp-entry-dossier__preview-close { position: absolute; top: 8px; inset-inline-end: 10px; width: 34px; height: 34px; border: 0; background: transparent; font-size: 26px; cursor: pointer; }
 
-/* Native Entry Detail remains visible unless JS proves the composition worked. */
+/* Native Entry Detail remains visible unless JS proves the entire composition. */
 .gpp-entry-dossier--composed ~ .entry-detail-view { display: none; }
 
-@media (max-width: 782px) {
-    .gpp-entry-dossier {
-        width: calc(100% - 25px);
-        max-width: none;
-        margin: 0 auto 24px;
-        padding: 20px 16px;
-        border-radius: 12px;
-    }
-    .gpp-entry-dossier__section { padding: 16px; }
-    .gpp-entry-dossier .gpp-entry-dossier__section h1 { font-size: 22px; }
-    .gpp-entry-dossier .gpp-entry-dossier__section h2 { font-size: 18px; }
-    .gpp-entry-dossier .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading,
-    #poststuff .gpp-entry-dossier__task > .gpp-entry-dossier__task-heading { font-size: 19px; font-weight: 700; }
-    .gpp-entry-dossier__identity-main { flex-direction: column; }
-    .gpp-entry-dossier__facts { grid-template-columns: minmax(0, 1fr); }
-    .gpp-entry-dossier__student-photo img { width: 88px; height: 104px; }
+@media (max-width: 760px) {
+    .gpp-entry-dossier { padding: 25px; }
+    .gpp-entry-dossier__facts--personal,
+    .gpp-entry-dossier__facts--financial { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .gpp-entry-dossier__facts--personal > .gpp-entry-dossier__fact,
+    .gpp-entry-dossier__facts--financial > .gpp-entry-dossier__fact { border-inline-end: 0; border-top: 0; }
+    .gpp-entry-dossier__facts--personal > .gpp-entry-dossier__fact:nth-child(odd),
+    .gpp-entry-dossier__facts--financial > .gpp-entry-dossier__fact:nth-child(odd) { border-inline-end: 1px solid var(--gpp-entry-group-line); }
+    .gpp-entry-dossier__facts--personal > .gpp-entry-dossier__fact:nth-child(n+3),
+    .gpp-entry-dossier__facts--financial > .gpp-entry-dossier__fact:nth-child(n+3) { border-top: 1px solid var(--gpp-entry-group-line); }
+}
+
+@media (max-width: 600px) {
+    .gpp-entry-dossier { width: calc(100% - 25px); max-width: none; margin: 0 auto 24px; padding: 20px 16px; border-radius: 12px; }
+    .gpp-entry-dossier__header-main { gap: 14px; align-items: flex-start; }
+    .gpp-entry-dossier__header h1 { font-size: 22px; }
+    .gpp-entry-dossier__header-summary { display: block; }
+    .gpp-entry-dossier__header-fact,
+    .gpp-entry-dossier__header-fact + .gpp-entry-dossier__header-fact { display: flex; margin: 3px 0 0; padding: 0; border: 0; }
+    .gpp-entry-dossier__task { padding: 18px 16px; }
+    .gpp-entry-dossier .gpp-entry-dossier__task-heading,
+    #poststuff .gpp-entry-dossier .gpp-entry-dossier__task-heading { font-size: 19px; }
+    .gpp-entry-dossier__section { padding: 24px 0 26px; }
+    .gpp-entry-dossier__section-title { font-size: 19px; }
+    .gpp-entry-dossier__facts,
+    .gpp-entry-dossier__facts--education,
+    .gpp-entry-dossier__facts--personal,
+    .gpp-entry-dossier__facts--contact,
+    .gpp-entry-dossier__facts--school,
+    .gpp-entry-dossier__facts--financial { grid-template-columns: minmax(0, 1fr); }
+    .gpp-entry-dossier__facts .gpp-entry-dossier__fact { border-inline-end: 0 !important; border-top: 0 !important; }
+    .gpp-entry-dossier__facts .gpp-entry-dossier__fact + .gpp-entry-dossier__fact { border-top: 1px solid var(--gpp-entry-group-line) !important; }
+    .gpp-entry-dossier__student-photo,
+    .gpp-entry-dossier__student-photo img,
+    .gpp-entry-dossier__student-photo.gpp-entry-dossier__slot-state { width: 64px; height: 64px; flex-basis: 64px; }
 }

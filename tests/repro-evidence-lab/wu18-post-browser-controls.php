@@ -159,16 +159,16 @@ foreach ( $beta_form['fields'] as $field ) {
 $update_form = GFAPI::update_form( $beta_form );
 if ( is_wp_error( $update_form ) ) throw new RuntimeException( $update_form->get_error_message() );
 list( $hidden_html, $hidden_trace ) = $render_beta();
-$facts_start = strpos( $hidden_html, '<section class="gpp-entry-dossier__section" data-gpp-section="facts">' );
-$facts_end = false === $facts_start ? false : strpos( $hidden_html, '</section>', $facts_start );
-if ( false === $facts_start || false === $facts_end ) {
-    throw new RuntimeException( 'Flow-hidden privacy control could not isolate the GPP Facts region.' );
+$contact_start = strpos( $hidden_html, '<section class="gpp-entry-dossier__section" data-gpp-entry-region="contact" data-gpp-section="contact">' );
+$contact_end = false === $contact_start ? false : strpos( $hidden_html, '</section>', $contact_start );
+if ( false === $contact_start || false === $contact_end ) {
+    throw new RuntimeException( 'Flow-hidden privacy control could not isolate the GPP Contact region.' );
 }
-$hidden_facts_html = substr( $hidden_html, $facts_start, $facts_end + strlen( '</section>' ) - $facts_start );
-if ( false !== strpos( $hidden_facts_html, $hidden_sentinel ) ) {
-    throw new RuntimeException( 'Flow-hidden field value leaked through the GPP Facts region.' );
+$hidden_contact_html = substr( $hidden_html, $contact_start, $contact_end + strlen( '</section>' ) - $contact_start );
+if ( false !== strpos( $hidden_contact_html, $hidden_sentinel ) ) {
+    throw new RuntimeException( 'Flow-hidden field value leaked through the GPP Contact region.' );
 }
-if ( false !== strpos( $hidden_facts_html, 'data-gpp-slot="student.home_phone"' ) ) {
+if ( false !== strpos( $hidden_contact_html, 'data-gpp-slot="student.home_phone"' ) ) {
     throw new RuntimeException( 'Flow-hidden semantic rendered a GPP placeholder/value instead of being omitted.' );
 }
 $host_hidden_diagnostic = false;

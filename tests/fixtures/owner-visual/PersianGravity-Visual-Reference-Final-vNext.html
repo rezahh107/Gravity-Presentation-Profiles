@@ -1,0 +1,2921 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="مرجع نهایی شش‌نما برای کارهای من، پروندهٔ دانش‌آموز و چاپ وفادار دوصفحه‌ای A4 در اکوسیستم PersianGravity">
+<title>کارهای من و پروندهٔ دانش‌آموز | مرجع PersianGravity vNext</title>
+<style>
+/* Local Repository Typography Strategy (No External CDN Dependency) */
+@font-face {
+  font-family: 'Vazir';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: local('Vazir Light'), local('Vazir-Light'), url('fonts/Vazir-Light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Vazir';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Vazir'), local('Vazir-Regular'), url('fonts/Vazir-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Vazir';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Vazir Medium'), local('Vazir-Medium'), url('fonts/Vazir-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Vazir';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Vazir Bold'), local('Vazir-Bold'), url('fonts/Vazir-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Vazir';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: local('Vazir Black'), local('Vazir-Black'), url('fonts/Vazir-Black.woff2') format('woff2');
+}
+
+:root {
+  --bg: #F6F8FB;
+  --surface: #FFFFFF;
+  --text: #172033;
+  --secondary: #475467;
+  --muted: #667085;
+  --primary: #1D4ED8;
+  --pressed: #1E40AF;
+  --control: #8690A1;
+  --line: #E4E7EC;
+  --error: #B42318;
+  --success: #18794E;
+  --warning: #8A5700;
+  --radius: 14px;
+  --shadow: 0 2px 4px rgba(23, 32, 51, 0.05);
+  --font: 'Vazir', Tahoma, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { font-size: 16px; scrollbar-gutter: stable; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.85;
+}
+button, input, select, textarea { font: inherit; font-synthesis: none; }
+button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+button { cursor: pointer; min-height: 44px; }
+button:disabled { cursor: default; opacity: 0.48; }
+a { color: var(--primary); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: 28px; line-height: 1.6; font-weight: 700; }
+h2 { font-size: 21px; line-height: 1.7; font-weight: 700; }
+h3 { font-size: 18px; font-weight: 700; }
+strong, b { font-weight: 700; }
+small { font-size: 14px; }
+svg.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+button .icon { pointer-events: none; }
+[hidden] { display: none !important; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip {
+  position: fixed;
+  top: -100px;
+  right: 20px;
+  background: #fff;
+  padding: 10px;
+  z-index: 100;
+}
+.skip:focus { top: 10px; }
+.secondary { color: var(--secondary); }
+.muted { color: var(--muted); }
+.digits {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid var(--control);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: normal;
+  line-height: 1.8;
+}
+.btn:hover { background: #F6F8FB; }
+.btn.primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.btn.primary:hover { background: var(--pressed); }
+.btn.danger {
+  color: var(--error);
+  border-color: var(--error);
+  background: #fff;
+}
+.btn.danger:hover { background: #FFF5F4; }
+.btn.text {
+  border-color: transparent;
+  color: var(--primary);
+  background: transparent;
+  padding-inline: 4px;
+}
+.btn.small { font-size: 14px; padding: 6px 12px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.split { display: flex; justify-content: space-between; gap: 20px; align-items: center; flex-wrap: wrap; }
+
+/* Controller Navigation Bar */
+.design-bar {
+  background: #fff;
+  border-top: 3px solid var(--primary);
+  border-bottom: 1px solid var(--line);
+  padding: 14px max(24px, calc((100% - 1160px)/2));
+}
+.design-title { font-size: 16px; font-weight: 700; }
+.design-caption { font-size: 13px; color: var(--muted); max-width: 760px; margin-top: 3px; }
+.design-nav {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.design-nav button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 9px;
+  padding: 10px 12px;
+  color: var(--secondary);
+  font-size: 14px;
+  min-height: 64px;
+  text-align: right;
+  line-height: 1.6;
+}
+.design-nav button[aria-pressed="true"] {
+  background: #F4F7FF;
+  border-color: #AFC2EA;
+  color: var(--primary);
+  font-weight: 700;
+}
+.design-nav .surface-letter {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  margin-bottom: 3px;
+}
+.design-nav .surface-device {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.reference-status {
+  font-size: 12px;
+  color: var(--secondary);
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Outer Shell */
+.stage {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 1120px;
+  margin: 26px auto 0;
+}
+.stage.is-mobile {
+  max-width: 414px;
+  border: 1px solid #D4DAE3;
+  border-radius: 16px;
+  overflow: clip;
+  background: var(--bg);
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 30px 23px;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand img {
+  width: 36px;
+  height: 51px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.brand strong { font-size: 17px; }
+.brand small { display: block; color: var(--secondary); font-size: 13px; }
+.operator { font-size: 14px; text-align: left; color: var(--secondary); }
+.operator small { display: block; font-size: 13px; color: var(--muted); }
+
+/* Main Screens */
+.app-main { padding: 28px 30px 32px; }
+.page-heading { margin-bottom: 24px; }
+.page-heading p { color: var(--secondary); margin-top: 5px; font-size: 16px; }
+.search-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.search-field { flex: 1; min-width: 230px; }
+.search-field label { font-size: 14px; font-weight: 500; display: block; margin-bottom: 6px; }
+.search-box { position: relative; }
+.search-box > .icon {
+  position: absolute;
+  right: 15px;
+  top: 15px;
+  color: var(--muted);
+}
+input, select, textarea {
+  color: var(--text);
+  background: white;
+  border: 1px solid var(--control);
+  border-radius: 8px;
+  min-height: 48px;
+  width: 100%;
+  padding: 10px 12px;
+  outline: none;
+}
+input[type="search"] { padding: 10px 45px 10px 15px; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+.advanced {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  margin: 12px 0;
+  display: flex;
+  align-items: end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.advanced > div { flex: 1; min-width: 190px; }
+.advanced label { display: block; font-size: 14px; margin-bottom: 6px; }
+.results-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 12px;
+  font-size: 14px;
+  color: var(--secondary);
+}
+
+/* Inbox Two-Column Soft Cards */
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.case-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px 18px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+  min-height: 236px;
+  display: flex;
+  flex-direction: column;
+}
+.case-card:hover { border-color: #BCC6D5; }
+.identity-mini {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.avatar {
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #EEF1F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: var(--secondary);
+}
+.avatar.fallback { font-size: 13px; font-weight: 500; }
+.student-photo-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.identity-mini h2 { font-size: 20px; }
+.identity-mini .idline { color: var(--secondary); font-size: 14px; margin-top: 3px; }
+.card-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin: 0;
+  font-size: 15px;
+}
+.card-meta > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.card-meta dt { color: var(--secondary); font-size: 14px; }
+.card-meta dd { margin: 0; font-weight: 500; }
+.card-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.card-footer .btn {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  padding: 7px 16px;
+  font-size: 15px;
+}
+.card-footer .btn:hover { background: var(--pressed); }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 26px;
+  align-items: center;
+}
+.pagination button {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 8px;
+  min-width: 44px;
+  padding: 6px 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+.pagination button[aria-current="page"] {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  font-weight: 700;
+}
+.empty {
+  padding: 46px 20px;
+  text-align: center;
+  border: 1px dashed #CBD3DE;
+  border-radius: 12px;
+  background: #fff;
+}
+.empty p { color: var(--secondary); margin: 6px 0 15px; }
+.app-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 14px 22px 23px;
+  border-top: 1px solid var(--line);
+}
+
+/* Entry Detail Surface — vNext proximity, hierarchy and predictable review-grid pass */
+.breadcrumb {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dossier {
+  --entry-group-surface: #FCFDFE;
+  --entry-group-line: #E7EAF0;
+  --entry-title-to-content: 12px;
+  --entry-label-to-value: 5px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 30px 36px;
+}
+.dossier-header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding-bottom: 24px;
+}
+.dossier-header .avatar { width: 72px; height: 72px; flex-basis: 72px; }
+.dossier-header h1 { font-size: 27px; }
+.dossier-header .identity-lines {
+  display: flex;
+  gap: 0;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--secondary);
+}
+.dossier-header .identity-lines > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+}
+.dossier-header .identity-lines > span + span {
+  margin-inline-start: 20px;
+  padding-inline-start: 20px;
+  border-inline-start: 1px solid var(--line);
+}
+.dossier-header .school { margin-top: 0; font-size: 15px; color: var(--secondary); }
+
+/* Current Task Panel — explicit task identity + safer action separation */
+.task {
+  border: 1px solid #C9D6F0;
+  background: #F8FAFE;
+  border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: var(--shadow);
+  margin: 0 0 18px;
+}
+.task-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.task-heading > .icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  box-sizing: border-box;
+  padding: 9px;
+  color: var(--primary);
+  background: #EAF0FF;
+  border-radius: 10px;
+  margin-top: 0;
+}
+.task .context {
+  margin-top: 1px;
+  font-size: 14px;
+  color: var(--primary);
+  font-weight: 500;
+}
+.task p {
+  margin: 12px 0 18px;
+  max-width: 860px;
+  color: var(--secondary);
+  font-size: 16px;
+}
+.task .actions {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.task .actions .btn { min-width: 132px; }
+.task .feedback {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  color: var(--secondary);
+  font-size: 14px;
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+/* Dossier Sections — title owns the content immediately below it */
+.dossier-section {
+  padding: 27px 0 30px;
+  border-bottom: 1px solid var(--line);
+}
+.section-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-bottom: var(--entry-title-to-content);
+}
+.section-title h2 { font-size: 20px; }
+.section-title .icon { color: var(--muted); width: 20px; height: 20px; }
+
+/* Read-only review grids: semantic grouping without turning every section into a heavy card. */
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--entry-group-line);
+  border-radius: 11px;
+  background: var(--entry-group-surface);
+}
+.data-grid--education,
+.data-grid--contact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.data-grid--school { grid-template-columns: 1fr; }
+.data-grid > div {
+  min-width: 0;
+  padding: 13px 18px 14px;
+}
+.data-grid--personal > div:not(:nth-child(3n)),
+.data-grid--financial > div:not(:nth-child(3n)) { border-inline-end: 1px solid var(--entry-group-line); }
+.data-grid--personal > div:nth-child(n+4),
+.data-grid--financial > div:nth-child(n+4) { border-top: 1px solid var(--entry-group-line); }
+.data-grid--education > div:first-child,
+.data-grid--contact > div:nth-child(odd) { border-inline-end: 1px solid var(--entry-group-line); }
+.data-grid--contact > div:nth-child(n+3) { border-top: 1px solid var(--entry-group-line); }
+.data-grid dt {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin-bottom: var(--entry-label-to-value);
+}
+.data-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.8;
+  font-weight: 500;
+  color: var(--text);
+}
+.data-grid .wide { grid-column: span 2; }
+.data-grid .full { grid-column: 1 / -1; }
+.data-grid dd[data-value="nid"],
+.data-grid dd[data-value="dob"],
+.data-grid dd[data-value="phone"],
+.data-grid dd[data-value="landline"],
+.data-grid dd[data-value="fphone"],
+.data-grid dd[data-value="mphone"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: right;
+}
+.muted-value { color: var(--muted) !important; font-weight: 400 !important; }
+
+/* Documents Section */
+.documents { display: flex; gap: 24px; flex-wrap: wrap; }
+.image-document {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex: 1;
+  min-width: 240px;
+}
+.document-preview {
+  width: 114px;
+  height: 154px;
+  flex: 0 0 114px;
+  padding: 0;
+  background: #fff;
+  border: 1px solid var(--control);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  cursor: zoom-in;
+}
+.doc-thumb-mini-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.document-preview .preview-hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #F6F8FB;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 2.2;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.document-copy h3 { font-size: 16px; }
+.document-copy p { font-size: 13px; color: var(--secondary); margin: 3px 0 8px; }
+.document-copy .file-name { font-size: 14px; overflow-wrap: anywhere; color: var(--text); }
+.file-document {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex: 1;
+  min-width: 230px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.file-glyph {
+  border: 1px solid #C9CFD9;
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 13px;
+  direction: ltr;
+  color: var(--secondary);
+  background: var(--bg);
+}
+.inline-feedback {
+  font-size: 14px;
+  color: var(--secondary);
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+/* History / Review Flow */
+.history { padding: 26px 0 0; }
+.history summary {
+  list-style: none;
+  cursor: pointer;
+  position: relative;
+  padding-left: 45px;
+  min-height: 44px;
+}
+.history summary::-webkit-details-marker { display: none; }
+.history summary:after {
+  content: '+';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  border: 1px solid var(--line);
+  width: 32px;
+  height: 32px;
+  text-align: center;
+  line-height: 30px;
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 21px;
+}
+.history[open] summary:after { content: '−'; }
+.history summary strong { display: block; font-size: 20px; }
+.history summary span {
+  display: block;
+  font-size: 14px;
+  color: var(--secondary);
+  font-weight: 400;
+  max-width: 780px;
+  margin-top: 5px;
+  line-height: 1.9;
+}
+.history-content { margin-top: 20px; }
+.history-note { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.history-event {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.history-event time { font-size: 14px; color: var(--secondary); }
+.history-event p { font-size: 14px; color: var(--secondary); margin-top: 3px; }
+.history-result { font-weight: 500; }
+.history-result.success { color: var(--success); }
+
+/* ==========================================================================
+   PRINT DOSSIER SURFACE (Canonical Plain White A4 Paper, Front & Back)
+   ========================================================================== */
+.print-view { padding: 0 30px 30px; }
+.print-intro {
+  border: 1px solid #BCC3CC;
+  background: white;
+  border-radius: 9px;
+  padding: 16px 22px;
+  margin-bottom: 22px;
+  color: #222;
+  font-size: 14px;
+  line-height: 1.85;
+}
+.print-intro strong { font-size: 17px; }
+.print-intro p { margin-top: 5px; }
+.print-actions { margin-bottom: 18px; }
+.print-spread { display: grid; grid-template-columns: 1fr; gap: 24px; }
+.print-sheet {
+  --paper-ink: #111111;
+  --paper-ink-soft: #222222;
+  --paper-ink-muted: #555555;
+  --paper-line-dark: #777777;
+  --paper-line-strong: #888888;
+  --paper-line: #999999;
+  --paper-line-soft: #AAAAAA;
+  --paper-line-subtle: #BBBBBB;
+  --paper-fill-header: #EDEDED;
+  --paper-fill-section: #EFEFEF;
+  --paper-fill-table: #F0F0F0;
+  --paper-fill-table-subtle: #F7F7F7;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  background: white;
+  color: var(--paper-ink);
+  border: 1px solid var(--paper-line);
+  padding: 28px 32px;
+  font-size: 13.5px;
+  line-height: 1.8;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.print-sheet * { color: inherit; }
+
+/* Print Front: Refined Header (Left & Right Logo Slots, NO Center Logo) */
+#print-front .cardboard-header {
+  display: grid;
+  grid-template-columns: minmax(115px, 1fr) minmax(0, 3fr) minmax(115px, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 0 0 16px;
+  border-bottom: 1.5px solid var(--paper-line-dark);
+}
+#print-front .front-brand-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+#print-front .front-brand-center {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+#print-front .front-brand-center h2 {
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.6;
+  margin: 0;
+}
+#print-front .front-brand-center p {
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.7;
+  margin: 0;
+  color: var(--paper-ink-soft);
+}
+#print-front .front-logo-slot {
+  border: 1px dashed var(--paper-line);
+  color: var(--paper-ink-muted);
+  min-height: 84px;
+  width: 102px;
+  padding: 10px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.7;
+}
+#print-front .front-unlabeled {
+  border: 1px solid var(--paper-line);
+  border-radius: 6px;
+  background: #fff;
+}
+#print-front .front-header-blank {
+  width: 100%;
+  min-height: 38px;
+}
+#print-front .front-identifiers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  margin: 22px 0 26px;
+}
+#print-front .front-id-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+#print-front .front-id-blank {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  border: 1.5px solid var(--paper-line-strong);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+}
+#print-front .cardboard-candidate {
+  border: 1.5px solid var(--paper-line-strong);
+  border-radius: 10px;
+  padding: 0 22px 22px;
+  break-inside: avoid;
+}
+#print-front .cardboard-candidate > h2 {
+  width: 48%;
+  margin: -16px auto 16px;
+  background: var(--paper-fill-header);
+  border: 1px solid var(--paper-line-soft);
+  border-radius: 4px;
+  padding: 4px 16px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.8;
+}
+#print-front .front-candidate-body { display: grid; gap: 20px; }
+#print-front .front-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 24px;
+}
+#print-front .front-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 33px;
+  font-size: 13.5px;
+}
+#print-front .front-blank {
+  flex: 1;
+  min-width: 30px;
+  min-height: 25px;
+  border-bottom: 1px dotted var(--paper-line-strong);
+  display: flex;
+  align-items: baseline;
+  padding: 0 5px;
+}
+#print-front .front-study-admin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 195px;
+  gap: 26px;
+  align-items: start;
+}
+#print-front .front-study { display: grid; gap: 20px; }
+
+/* Historical Unified Grade & Academic Year Continuous Line */
+#print-front .front-education-combined {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 33px;
+  width: 100%;
+}
+#print-front .front-edu-label {
+  flex-shrink: 0;
+  font-weight: 500;
+}
+#print-front .front-grade-slot {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+#print-front .front-year-label {
+  font-size: 13px;
+  color: var(--paper-ink-soft);
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+#print-front .front-year-blanks {
+  display: flex;
+  direction: ltr;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+#print-front .front-year-blanks i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px dotted var(--paper-line-strong);
+  width: 44px;
+  min-height: 23px;
+  font-style: normal;
+}
+#print-front .front-registration-boxes { display: grid; gap: 14px; }
+#print-front .front-registration-boxes > div { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+#print-front .front-registration-boxes > div > span { white-space: nowrap; }
+#print-front .front-manual-box {
+  flex: 1;
+  min-height: 56px;
+  border: 1px solid var(--paper-line);
+  border-radius: 6px;
+}
+#print-front .front-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 13.5px;
+}
+#print-front .front-label { font-weight: 500; }
+#print-front .paper-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+#print-front .paper-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+#print-front .paper-choice i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--paper-line-dark);
+  flex: 0 0 12px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+}
+#print-front .front-school-row { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+#print-front .front-school-row > .front-line { flex: 1; }
+#print-front .front-office-row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+#print-front .front-office-row > .front-line { flex: 1 1 220px; }
+#print-front .front-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 195px;
+  gap: 26px;
+  align-items: stretch;
+}
+#print-front .front-review-data { display: grid; gap: 24px; align-content: start; }
+#print-front .front-stamp-space {
+  min-height: 135px;
+  border: 1px dotted var(--paper-line-subtle);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--paper-ink-muted);
+}
+#print-front .front-contact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 195px;
+  gap: 24px;
+  align-items: center;
+}
+#print-front .front-contact-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+#print-front .front-contact-fields .front-line { font-size: 13px; }
+#print-front .front-bottom-blank { min-height: 60px; }
+.paper-footer {
+  margin-top: auto;
+  border-top: 1.5px solid var(--paper-line-strong);
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  font-size: 11px;
+  color: var(--paper-ink-muted);
+}
+
+/* Print Back: Financial Form Header & Dedicated Identity Area */
+.paper-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1.5px solid var(--paper-line-dark);
+}
+.paper-org span { font-size: 19px; display: block; font-weight: 700; }
+.paper-org strong { font-size: 14px; font-weight: 400; display: block; margin-top: 3px; }
+.paper-logo-reserve {
+  width: 90px;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px dashed var(--paper-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 10.5px;
+  flex-shrink: 0;
+  color: var(--paper-ink-muted);
+}
+.paper-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0 8px;
+  gap: 15px;
+}
+.paper-title-row h2 { font-size: 23px; font-weight: 700; }
+.paper-title-row > span { font-size: 11px; color: var(--paper-ink-soft); }
+
+/* Dedicated Tailored Identity Area for Long Values (No Wrapping on Grade) */
+.paper-student-identity {
+  display: grid;
+  grid-template-columns: minmax(105px, 1fr) minmax(0, 2.4fr) minmax(120px, 1.2fr);
+  column-gap: 16px;
+  row-gap: 6px;
+  padding: 6px 2px;
+}
+.paper-student-identity .print-field.grade-field {
+  grid-column: span 2;
+}
+
+.paper-fields {
+  display: grid;
+  column-gap: 18px;
+  row-gap: 6px;
+  padding: 8px 2px;
+}
+.paper-fields.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.print-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 30px;
+  font-size: 13px;
+}
+.print-field .blank {
+  flex: 1;
+  border-bottom: 1px dotted var(--paper-line-strong);
+  min-width: 20px;
+  min-height: 23px;
+  display: flex;
+  align-items: baseline;
+  padding: 0 5px;
+}
+.print-field.wide { grid-column: span 2; }
+
+/* 5 Receipt + 6 Cheque Table Layout */
+.paper-finance {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 14px 0 6px;
+  font-size: 12.5px;
+  border: 1.5px solid var(--paper-line-strong);
+}
+.paper-finance col.col-type { width: 13%; }
+.paper-finance col.col-serial { width: 17%; }
+.paper-finance col.col-date { width: 14%; }
+.paper-finance col.col-account { width: 18%; }
+.paper-finance col.col-bank { width: 20%; }
+.paper-finance col.col-amount { width: 18%; }
+
+.paper-finance th {
+  font-weight: 500;
+  padding: 7px 4px;
+  background: var(--paper-fill-table);
+  border: 1px solid var(--paper-line);
+  line-height: 1.7;
+  text-align: center;
+}
+.paper-finance td {
+  height: 34px;
+  border: 1px solid var(--paper-line-soft);
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+.paper-finance tbody th { background: var(--paper-fill-table-subtle); font-size: 12px; }
+.paper-finance tbody tr:nth-child(6) > * { border-top: 2px solid var(--paper-line-strong); }
+.paper-finance small { display: block; font-size: 10.5px; }
+.paper-finance tfoot td { height: 60px; font-size: 12px; }
+.sum-blank { min-height: 24px; border-bottom: 1px dotted var(--paper-line); margin-top: 4px; }
+.paper-finance-summary { margin: 13px 0 15px; }
+.paper-help { font-size: 11px; color: var(--paper-ink-muted); margin-top: 4px; }
+.paper-inline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+.paper-approval-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 16px;
+}
+.paper-approval { border: 1.5px solid var(--paper-line-strong); padding: 10px 11px; }
+.paper-approval h3, .paper-management h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  margin-bottom: 7px;
+}
+.paper-approval h3 b, .paper-management h3 b {
+  border: 1px solid var(--paper-line);
+  background: #EEE;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+.paper-approval p { font-size: 12px; min-height: 44px; line-height: 1.7; }
+.paper-approval .paper-choices { gap: 5px; font-size: 11px; margin: 8px 0; }
+.paper-write {
+  border: 1px solid var(--paper-line-soft);
+  padding: 8px 9px;
+  font-size: 11px;
+  background: white;
+  min-height: 80px;
+}
+.paper-write--management { min-height: 85px !important; }
+.paper-management {
+  border: 1.5px solid var(--paper-line-strong);
+  padding: 12px 14px;
+  margin-top: 12px;
+  break-inside: avoid;
+}
+.paper-management p { font-size: 12px; display: inline-block; margin-left: 15px; }
+.paper-management > .paper-choices { display: inline-flex; }
+.paper-section { margin-top: 13px; break-inside: avoid; }
+.paper-section > h3 {
+  background: var(--paper-fill-section);
+  border-top: 1px solid #8B8B8B;
+  border-bottom: 1px solid #B8B8B8;
+  padding: 4px 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.writing-lines div { height: 27px; border-bottom: 1px dotted var(--paper-line); }
+
+/* In-Field Print Value Styling */
+.print-sheet .print-value {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--paper-ink);
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: inherit;
+  line-height: 1.8;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  text-align: right;
+}
+.print-sheet .print-value:empty { display: none; }
+.print-sheet .print-value-digits { direction: ltr; font-variant-numeric: tabular-nums; }
+#print-front .front-id-blank .print-value {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.7;
+  text-align: center;
+}
+
+/* Lightbox Modal & Cleaned Transcript Classes */
+.preview-dialog {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: min(760px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  box-shadow: 0 16px 60px rgba(23, 32, 51, 0.18);
+  background: #fff;
+  color: var(--text);
+}
+.preview-dialog::backdrop { background: rgba(23, 32, 51, 0.5); }
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-header h2 { font-size: 19px; }
+.modal-header p { font-size: 13px; color: var(--secondary); margin-top: 2px; }
+.modal-content {
+  background: #E9EDF2;
+  padding: 20px;
+  overflow: auto;
+  max-height: calc(100dvh - 170px);
+}
+.modal-footer {
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--secondary);
+}
+
+.demo-transcript {
+  background: #fff;
+  padding: 28px 30px;
+  border-radius: 8px;
+  border: 1px solid #C4CBD6;
+  max-width: 540px;
+  margin: 0 auto;
+  text-align: center;
+}
+.demo-transcript__title {
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: #172033;
+}
+.demo-transcript__meta {
+  font-size: 14px;
+  color: #475467;
+  margin-bottom: 20px;
+}
+.demo-transcript__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 20px;
+  text-align: right;
+}
+.demo-transcript__head-row {
+  background: #F0F4FA;
+  border-bottom: 2px solid #1D4ED8;
+}
+.demo-transcript__cell {
+  padding: 8px 10px;
+}
+.demo-transcript__row {
+  border-bottom: 1px solid #E4E7EC;
+}
+.demo-transcript__footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #667085;
+  border-top: 1px dashed #C4CBD6;
+  padding-top: 12px;
+}
+
+/* Utilities */
+.page-buttons { gap: 7px; }
+
+/* Design Resolution Notes (Screen Only) */
+.resolution-notes {
+  max-width: 1100px;
+  margin: 28px auto 35px;
+  padding: 18px 24px 0;
+  border-top: 1px solid var(--line);
+  color: var(--secondary);
+}
+.resolution-notes h2 {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--secondary);
+  margin-bottom: 16px;
+}
+.resolution-notes dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 36px;
+}
+.resolution-notes dt { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--text); }
+.resolution-notes dd { font-size: 13px; line-height: 1.95; margin: 0; }
+.resolution-notes p { font-size: 12px; margin-top: 16px; line-height: 1.9; }
+
+/* Responsive Container Queries */
+@container (max-width: 760px) {
+  .data-grid--personal,
+  .data-grid--financial { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .data-grid--personal > div,
+  .data-grid--financial > div { border-inline-end: 0; border-top: 0; }
+  .data-grid--personal > div:nth-child(odd),
+  .data-grid--financial > div:nth-child(odd) { border-inline-end: 1px solid var(--entry-group-line); }
+  .data-grid--personal > div:nth-child(n+3),
+  .data-grid--financial > div:nth-child(n+3) { border-top: 1px solid var(--entry-group-line); }
+  .dossier { padding: 25px; }
+  .case-card { padding: 19px; }
+  .app-main { padding-inline: 22px; }
+  #print-front { padding: 22px 18px; }
+  #print-front .cardboard-header { grid-template-columns: 95px minmax(0, 1fr) 95px; gap: 12px; }
+  #print-front .front-study-admin, #print-front .front-review-row, #print-front .front-contact-row {
+    grid-template-columns: minmax(0, 1fr) 155px;
+    gap: 18px;
+  }
+}
+@container (max-width: 600px) {
+  .app-header { padding: 18px 16px; gap: 10px; }
+  .brand img { width: 30px; height: 42px; }
+  .brand strong { font-size: 15px; }
+  .brand small { font-size: 12px; }
+  .app-main { padding: 22px 16px; }
+  .page-heading { margin-bottom: 20px; }
+  h1 { font-size: 24px; }
+  .case-grid { grid-template-columns: 1fr; gap: 14px; }
+  .case-card { min-height: 0; padding: 18px 16px; }
+  .search-row { gap: 10px; }
+  .search-field { min-width: 100%; flex-basis: 100%; }
+  .dossier { padding: 20px 16px; border-radius: 12px; }
+  .dossier-header { gap: 14px; align-items: flex-start; }
+  .dossier-header h1 { font-size: 22px; }
+  .dossier-header .identity-lines { display: block; font-size: 14px; }
+  .dossier-header .identity-lines > span,
+  .dossier-header .identity-lines > span + span {
+    display: block;
+    margin: 3px 0 0;
+    padding: 0;
+    border: 0;
+  }
+  .task { padding: 18px 16px; }
+  .task h2 { font-size: 19px; }
+  .task-heading > .icon { width: 38px; height: 38px; flex-basis: 38px; padding: 8px; }
+  .task .actions { gap: 12px; }
+  .task .actions .btn { min-width: 108px; }
+  .data-grid,
+  .data-grid--education,
+  .data-grid--personal,
+  .data-grid--contact,
+  .data-grid--school,
+  .data-grid--financial { grid-template-columns: 1fr; }
+  .data-grid > div,
+  .data-grid--education > div,
+  .data-grid--personal > div,
+  .data-grid--contact > div,
+  .data-grid--financial > div {
+    border-inline-end: 0 !important;
+    border-top: 0 !important;
+  }
+  .data-grid > div + div { border-top: 1px solid var(--entry-group-line) !important; }
+  .data-grid .wide,
+  .data-grid .full { grid-column: auto; }
+  .documents { gap: 20px; }
+  .image-document { gap: 14px; align-items: flex-start; }
+  .file-document { padding: 14px 12px; gap: 10px; flex-wrap: wrap; }
+  .history summary strong { font-size: 19px; }
+  .history-event { grid-template-columns: 1fr; gap: 4px; }
+  #print-front { padding: 18px 12px; font-size: 12px; }
+  #print-front .cardboard-header { grid-template-columns: 68px minmax(0, 1fr) 68px; gap: 8px; }
+  #print-front .front-brand-center h2 { font-size: 16px; }
+  #print-front .front-brand-center p { font-size: 11.5px; }
+  #print-front .front-logo-slot { width: 66px; min-height: 68px; font-size: 9px; padding: 4px; }
+  #print-front .front-identifiers { grid-template-columns: 1fr; gap: 14px; }
+  #print-front .front-id-field { font-size: 14px; }
+  #print-front .cardboard-candidate > h2 { width: 75%; font-size: 16px; }
+  #print-front .front-name-row, #print-front .front-study-admin, #print-front .front-review-row, #print-front .front-contact-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  #print-front .front-school-row > .front-line { flex-basis: 100%; }
+  .print-sheet { padding: 16px 12px; }
+  .paper-header { gap: 10px; }
+  .paper-org span { font-size: 15px; }
+  .paper-logo-reserve { width: 60px; min-height: 52px; font-size: 9px; }
+  .paper-title-row h2 { font-size: 18px; }
+  .paper-fields.cols-3 { grid-template-columns: 1fr; }
+  .print-field.wide { grid-column: auto; }
+  .paper-finance { font-size: 9.5px; }
+  .paper-finance td { height: 32px; padding: 3px; }
+  .paper-approval-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .design-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .design-nav button { padding: 8px 10px; min-height: 60px; }
+  .design-bar { padding: 12px 16px; }
+  .stage { margin-top: 16px; }
+  .stage.is-mobile { border: 0; border-radius: 0; }
+  .resolution-notes dl { grid-template-columns: 1fr; gap: 15px; }
+  .reference-status { display: none; }
+}
+
+/* ==========================================================================
+   EXACT A4 PORTRAIT PRINT MEDIA STYLES (Full Vertical Proportions, Zero Clipping)
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+  html {
+    font-size: 10.5pt;
+    scrollbar-gutter: auto;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .design-bar,
+  .app-header,
+  .app-footer,
+  .reference-notes,
+  .resolution-notes,
+  #design-resolution-notes,
+  .screen-view,
+  .print-intro,
+  .print-actions,
+  .print-mobile-caption,
+  .skip,
+  dialog {
+    display: none !important;
+  }
+  .stage,
+  .stage.is-mobile {
+    max-width: none !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    container-type: normal !important;
+  }
+  .print-view {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-spread {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .print-sheet,
+  .print-sheet[hidden] {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 281mm !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    color: #000 !important;
+    background: white !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  /* One Deterministic Page Break: break-after on Front; no redundant break-before on Back */
+  #print-front {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+  #print-back {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page 1 (Front) A4 Vertical Rhythm Optimization (90-94% Full A4 Height & Expanded Manual Spaces) */
+  #print-front .cardboard-header {
+    grid-template-columns: 88px minmax(0, 1fr) 88px;
+    padding-bottom: 16px;
+    gap: 14px;
+    border-bottom: 1.5px solid var(--paper-line-dark);
+  }
+  #print-front .front-brand-center h2 { font-size: 17pt; line-height: 1.4; }
+  #print-front .front-brand-center p { font-size: 12pt; line-height: 1.45; }
+  #print-front .front-logo-slot { width: 88px; min-height: 76px; font-size: 8pt; padding: 6px 4px; }
+  #print-front .front-header-blank { min-height: 38px; }
+  #print-front .front-identifiers { gap: 26px; margin: 18px 0 22px; }
+  #print-front .front-id-field { font-size: 11pt; }
+  #print-front .front-id-blank { min-height: 48px; border: 1.5px solid var(--paper-line-strong); }
+  #print-front .cardboard-candidate { padding: 0 20px 22px; border: 1.5px solid var(--paper-line-strong); }
+  #print-front .cardboard-candidate > h2 {
+    font-size: 12.5pt;
+    margin-top: -15px;
+    margin-bottom: 14px;
+    padding: 4px 18px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #print-front .front-candidate-body { gap: 18px; }
+  #print-front .front-name-row { gap: 24px; }
+  #print-front .front-study-admin,
+  #print-front .front-review-row,
+  #print-front .front-contact-row {
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 22px;
+  }
+  #print-front .front-study { gap: 18px; }
+  #print-front .front-line,
+  #print-front .front-options,
+  #print-front .front-registration-boxes > div { font-size: 10pt; }
+  #print-front .front-line { min-height: 33px; }
+  #print-front .front-blank { min-height: 22px; }
+  #print-front .front-manual-box { min-height: 65px; } /* Highly functional handwriting space for ثبت مالی / ثبت آمار */
+  #print-front .front-stamp-space { min-height: 145px; font-size: 9pt; padding: 10px; } /* Generous official stamp space */
+  #print-front .front-bottom-blank { min-height: 68px; } /* Generous lower write-in/manual box */
+  #print-front .paper-choice { font-size: 9.5pt; }
+  #print-front .paper-choice i { width: 13px; height: 13px; flex-basis: 13px; font-size: 11px; }
+
+  /* Page 2 (Back) Space Optimization: Zero Clipping with 11 Table Rows & ~49mm Headroom Budget */
+  .paper-header { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1.5px solid var(--paper-line-dark); }
+  .paper-org span { font-size: 13pt; line-height: 1.25; }
+  .paper-org strong { font-size: 9.5pt; line-height: 1.25; }
+  .paper-logo-reserve { min-height: 48px; width: 70px; font-size: 7.5pt; padding: 4px; }
+  .paper-title-row { padding: 5px 0 3px; }
+  .paper-title-row h2 { font-size: 14pt; margin: 0; line-height: 1.2; }
+  .paper-title-row > span { font-size: 8pt; }
+
+  /* Dedicated Tailored Identity Area for Long Values (Grade spans 2 columns, never wraps!) */
+  .paper-student-identity {
+    display: grid;
+    grid-template-columns: minmax(95px, 0.9fr) minmax(0, 2.5fr) minmax(110px, 1.1fr);
+    column-gap: 14px;
+    row-gap: 4px;
+    padding: 3px 0;
+  }
+  .paper-student-identity .print-field.grade-field {
+    grid-column: span 2;
+  }
+
+  /* 5 Fish + 6 Cheque Rows (Engineered for 2-page guarantee with comfortable height) */
+  .paper-finance { margin-top: 7px; margin-bottom: 5px; font-size: 8.5pt; border: 1.5px solid var(--paper-line-strong); }
+  .paper-finance td { height: 20px; padding: 2px 5px; line-height: 1.2; }
+  .paper-finance th {
+    font-size: 8.5pt;
+    padding: 3px 2px;
+    line-height: 1.3;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .paper-finance tfoot td { height: 34px; font-size: 8pt; padding: 3px 6px; }
+  .sum-blank { min-height: 19px; margin-top: 2px; }
+
+  .paper-finance-summary { margin: 5px 0 7px; }
+  .paper-finance-summary .paper-fields { padding: 2px 0; row-gap: 3px; }
+  .paper-help { font-size: 7pt; margin-top: 2px; }
+  .paper-inline { margin-top: 3px; font-size: 8pt; gap: 8px; }
+
+  .paper-approval-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7px; gap: 7px; }
+  .paper-approval { padding: 6px 7px; border: 1.5px solid var(--paper-line-strong); }
+  .paper-approval h3, .paper-management h3 { font-size: 8.5pt; margin-bottom: 3px; }
+  .paper-approval h3 b, .paper-management h3 b { width: 18px; height: 18px; font-size: 8pt; }
+  .paper-approval p { font-size: 7pt; min-height: 26px; line-height: 1.4; }
+  .paper-approval .paper-choices { gap: 3px; font-size: 7pt; margin: 3px 0; }
+  .paper-write { min-height: 48px !important; padding: 3px 5px; font-size: 7pt; }
+
+  .paper-management { padding: 7px 9px; margin-top: 7px; border: 1.5px solid var(--paper-line-strong); }
+  .paper-management h3 { font-size: 8.5pt; margin-bottom: 3px; }
+  .paper-management p { font-size: 8pt; margin-left: 10px; }
+  .paper-management .paper-write { min-height: 54px !important; }
+
+  .paper-section { margin-top: 5px; }
+  .paper-section > h3 {
+    padding: 2px 7px;
+    font-size: 8.5pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .writing-lines div { height: 20px; }
+  .paper-footer { font-size: 7.5pt; margin-top: auto; padding-top: 6px; border-top: 1.5px solid var(--paper-line-strong); }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main-content">رفتن به محتوای اصلی</a>
+
+<!-- vNext revision: Entry detail proximity/hierarchy/read-only grid refinement; Inbox and Print surfaces intentionally preserved. -->
+
+<!-- Controller Header Bar -->
+<header class="design-bar">
+  <div class="split">
+    <div>
+      <div class="design-title">مرجع Visual/UX vNext • پروندهٔ دانش‌آموز (PersianGravity)</div>
+      <div class="design-caption">شش نمای کامل و پیوسته برای محیط کاربری دیجیتال و خروجی چاپی A4 دوصفحه‌ای. داده‌های نمونه نمایشی هستند.</div>
+    </div>
+    <span class="reference-status">۶ سطح کانونی • Entry UX vNext</span>
+  </div>
+  <nav class="design-nav" aria-label="شش سطح کانونی مرجع">
+    <button type="button" data-surface="inbox-desktop" aria-pressed="true">
+      <span class="surface-letter">A</span>کارهای من <span class="surface-device">• دسکتاپ</span>
+    </button>
+    <button type="button" data-surface="inbox-mobile" aria-pressed="false">
+      <span class="surface-letter">B</span>کارهای من <span class="surface-device">• موبایل</span>
+    </button>
+    <button type="button" data-surface="detail-desktop" aria-pressed="false">
+      <span class="surface-letter">C</span>پرونده <span class="surface-device">• دسکتاپ</span>
+    </button>
+    <button type="button" data-surface="detail-mobile" aria-pressed="false">
+      <span class="surface-letter">D</span>پرونده <span class="surface-device">• موبایل</span>
+    </button>
+    <button type="button" data-surface="print-front" aria-pressed="false">
+      <span class="surface-letter">E</span>چاپ <span class="surface-device">• روی پرونده (A4)</span>
+    </button>
+    <button type="button" data-surface="print-back" aria-pressed="false">
+      <span class="surface-letter">F</span>چاپ <span class="surface-device">• پشت پرونده (A4)</span>
+    </button>
+  </nav>
+</header>
+
+<!-- Main Stage Container -->
+<div class="stage" id="stage">
+  <!-- Application Shell Header -->
+  <header class="app-header" id="app-header">
+    <div class="brand">
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='51' viewBox='0 0 36 51'><rect width='36' height='51' fill='%231D4ED8' rx='4'/><text x='18' y='32' fill='%23fff' font-family='Arial' font-size='18' font-weight='bold' text-anchor='middle'>K</text></svg>" alt="نشان کانون فرهنگی آموزش قلم‌چی" width="36" height="51">
+      <div>
+        <strong>امور ثبت‌نام دانش‌آموزان</strong>
+        <small>کانون فرهنگی آموزش • نمایندگی شیراز</small>
+      </div>
+    </div>
+    <div class="operator">
+      مسئول ثبت‌نام
+      <small>مرکز اصلی شیراز</small>
+    </div>
+  </header>
+
+  <!-- Surface A & B: INBOX («کارهای من») -->
+  <main id="main-content" tabindex="-1">
+    <section id="inbox-view" class="app-main screen-view" aria-labelledby="inbox-title">
+      <div class="page-heading">
+        <h1 id="inbox-title">کارهای من</h1>
+        <p>پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.</p>
+      </div>
+      <div class="search-row">
+        <div class="search-field">
+          <label for="case-search">جستجوی پرونده</label>
+          <div class="search-box">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <input type="search" id="case-search" placeholder="نام دانش‌آموز یا کد ملی را بنویسید..." autocomplete="off">
+          </div>
+        </div>
+        <button type="button" class="btn" id="filter-toggle" aria-expanded="false" aria-controls="filter-panel">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg> فیلترها
+        </button>
+        <button type="button" class="btn" id="sort-toggle" aria-expanded="false" aria-controls="sort-panel">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16m-3-3 3 3 3-3M14 6h6M14 11h4M14 16h2"/></svg> مرتب‌سازی
+        </button>
+      </div>
+      <!-- Secondary Filter Panel (Clean Employee UI, Grounded Categorical Filter) -->
+      <div class="advanced" id="filter-panel" hidden>
+        <div>
+          <label for="school-filter">مدرسه</label>
+          <select id="school-filter">
+            <option value="all">همهٔ مدرسه‌ها</option>
+            <option>دبیرستان شهید دستغیب</option>
+            <option>دبیرستان فرزانگان</option>
+            <option>دبیرستان نمونه دولتی توحید</option>
+          </select>
+        </div>
+        <button type="button" class="btn text small" id="reset-filters">پاک کردن فیلترها</button>
+      </div>
+      <!-- Secondary Sort Panel -->
+      <div class="advanced" id="sort-panel" hidden>
+        <div>
+          <label for="case-sort">ترتیب نمایش</label>
+          <select id="case-sort">
+            <option value="default">ترتیب پیش‌فرض</option>
+            <option value="newest">تاریخ ورود اطلاعات (جدیدتر اول)</option>
+            <option value="oldest">تاریخ ورود اطلاعات (قدیمی‌تر اول)</option>
+            <option value="name">نام دانش‌آموز (الفبایی)</option>
+          </select>
+        </div>
+      </div>
+      <div class="results-meta">
+        <span id="result-count" role="status" aria-live="polite">نمایش ۱ تا ۴ از ۵ پرونده</span>
+        <span id="active-filter-label" hidden>فیلتر فعال است</span>
+      </div>
+      <!-- Inbox Case Cards Grid -->
+      <div id="case-grid" class="case-grid">
+        <!-- Card 0: Ali Rezaei -->
+        <article class="case-card" data-case="0" aria-labelledby="student-0">
+          <div class="identity-mini">
+            <div class="avatar p0" aria-label="عکس پرسنلی علی رضایی">
+              <svg class="student-photo-svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="عکس پرسنلی علی رضایی">
+  <rect width="64" height="64" fill="#E2E8F0"/>
+  <circle cx="32" cy="24" r="13" fill="#D4A373"/>
+  <!-- Hair -->
+  <path d="M19 22c0-8 6-13 13-13s13 5 13 13c0 2-1 4-2 4-2-4-5-6-11-6s-9 2-11 6c-1 0-2-2-2-4z" fill="#2B2D42"/>
+  <!-- Eyes & Eyebrows -->
+  <path d="M25 18c2-1 4-1 5 0M34 18c1-1 3-1 5 0" stroke="#1A1C29" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <circle cx="27" cy="23" r="1.5" fill="#1A1C29"/>
+  <circle cx="37" cy="23" r="1.5" fill="#1A1C29"/>
+  <!-- Mouth -->
+  <path d="M29 30c2 1.5 4 1.5 6 0" stroke="#9A6148" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <!-- Neck & Clothes -->
+  <path d="M28 35v6h8v-6z" fill="#C58F63"/>
+  <path d="M12 64c0-11 9-18 20-18s20 7 20 18z" fill="#1D4ED8"/>
+  <path d="M28 41l4 7 4-7z" fill="#F8FAFC"/>
+  <path d="M25 46l7 6 7-6" stroke="#1E40AF" stroke-width="1.5" fill="none"/>
+</svg>
+            </div>
+            <div>
+              <h2 id="student-0">علی رضایی</h2>
+              <p class="idline">کد ملی: <bdi class="digits">۰۰۱۲۳۴۵۶۷۹</bdi></p>
+            </div>
+          </div>
+          <dl class="card-meta">
+            <div><dt>مرحله:</dt><dd>بررسی ثبت‌نام</dd></div>
+            <div><dt>تاریخ ورود اطلاعات:</dt><dd>۱۸ شهریور ۱۴۰۵</dd></div>
+          </dl>
+          <div class="card-footer">
+            <button type="button" class="btn primary" data-open="0" aria-label="باز کردن پروندهٔ علی رضایی">
+              باز کردن پرونده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg>
+            </button>
+          </div>
+        </article>
+        <!-- Card 1: Fatemeh Ahmadi (Real Female Student Photo, Cleaned Due) -->
+        <article class="case-card" data-case="1" aria-labelledby="student-1">
+          <div class="identity-mini">
+            <div class="avatar p1" aria-label="عکس پرسنلی فاطمه احمدی">
+              <svg class="student-photo-svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="عکس پرسنلی فاطمه احمدی">
+  <rect width="64" height="64" fill="#E2E8F0"/>
+  <!-- Formal Student Maghna'eh (Headscarf) -->
+  <path d="M16 64c0-14 7-22 16-22s16 8 16 22z" fill="#1E293B"/>
+  <path d="M18 26c0-9 6-17 14-17s14 8 14 17c0 10-6 20-14 20s-14-10-14-20z" fill="#1E293B"/>
+  <!-- Face Oval inside Maghna'eh -->
+  <ellipse cx="32" cy="26" rx="9" ry="12" fill="#E5B287"/>
+  <!-- Eyebrows & Eyes -->
+  <path d="M26 21c1.5-0.8 3.5-0.8 5 0M33 21c1.5-0.8 3.5-0.8 5 0" stroke="#0F172A" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+  <circle cx="28.5" cy="24.5" r="1.3" fill="#0F172A"/>
+  <circle cx="35.5" cy="24.5" r="1.3" fill="#0F172A"/>
+  <!-- Nose & Smile -->
+  <path d="M32 25v3l-1 1h2" stroke="#B87D56" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M29.5 32c1.5 1.2 3.5 1.2 5 0" stroke="#9A4848" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+</svg>
+            </div>
+            <div>
+              <h2 id="student-1">فاطمه احمدی</h2>
+              <p class="idline">کد ملی: <bdi class="digits">۲۲۸۱۰۴۵۶۲۵</bdi></p>
+            </div>
+          </div>
+          <dl class="card-meta">
+            <div><dt>مرحله:</dt><dd>بررسی ثبت‌نام</dd></div>
+            <div><dt>تاریخ ورود اطلاعات:</dt><dd>۱۶ شهریور ۱۴۰۵</dd></div>
+          </dl>
+          <div class="card-footer">
+            <button type="button" class="btn primary" data-open="1" aria-label="باز کردن پروندهٔ فاطمه احمدی">
+              باز کردن پرونده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg>
+            </button>
+          </div>
+        </article>
+        <!-- Card 2: Amirhossein Mohammadi -->
+        <article class="case-card" data-case="2" aria-labelledby="student-2">
+          <div class="identity-mini">
+            <div class="avatar p2" aria-label="عکس پرسنلی امیرحسین محمدی">
+              <svg class="student-photo-svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="عکس پرسنلی امیرحسین محمدی">
+  <rect width="64" height="64" fill="#E2E8F0"/>
+  <circle cx="32" cy="25" r="12" fill="#DBA375"/>
+  <!-- Hair -->
+  <path d="M20 23c0-7 5-13 12-13s12 6 12 13c0 2-1 3-2 3-2-3-4-5-10-5s-8 2-10 5c-1 0-2-1-2-3z" fill="#3B2F2F"/>
+  <!-- Eyes -->
+  <circle cx="28" cy="24" r="1.4" fill="#1E1E24"/>
+  <circle cx="36" cy="24" r="1.4" fill="#1E1E24"/>
+  <!-- Mouth -->
+  <path d="M29.5 31c1.5 1 3.5 1 5 0" stroke="#8C533E" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <!-- Clothes -->
+  <path d="M12 64c0-11 9-17 20-17s20 6 20 17z" fill="#2E5A44"/>
+  <path d="M29 37l3 5 3-5z" fill="#C68B5E"/>
+  <path d="M26 42l6 5 6-5" stroke="#1C382A" stroke-width="1.5" fill="none"/>
+</svg>
+            </div>
+            <div>
+              <h2 id="student-2">امیرحسین محمدی</h2>
+              <p class="idline">کد ملی: <bdi class="digits">۲۲۸۱۰۳۲۴۵۰</bdi></p>
+            </div>
+          </div>
+          <dl class="card-meta">
+            <div><dt>مرحله:</dt><dd>بررسی ثبت‌نام</dd></div>
+            <div><dt>تاریخ ورود اطلاعات:</dt><dd>۱۸ شهریور ۱۴۰۵</dd></div>
+          </dl>
+          <div class="card-footer">
+            <button type="button" class="btn primary" data-open="2" aria-label="باز کردن پروندهٔ امیرحسین محمدی">
+              باز کردن پرونده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg>
+            </button>
+          </div>
+        </article>
+        <!-- Card 3: Narges Karimi (PDF Sample, Real Student Photo) -->
+        <article class="case-card" data-case="3" aria-labelledby="student-3">
+          <div class="identity-mini">
+            <div class="avatar p3" aria-label="عکس پرسنلی نرگس کریمی">
+              <svg class="student-photo-svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="عکس پرسنلی نرگس کریمی">
+  <rect width="64" height="64" fill="#E2E8F0"/>
+  <!-- Maghna'eh -->
+  <path d="M16 64c0-14 7-22 16-22s16 8 16 22z" fill="#0F172A"/>
+  <path d="M18 26c0-9 6-17 14-17s14 8 14 17c0 10-6 20-14 20s-14-10-14-20z" fill="#0F172A"/>
+  <ellipse cx="32" cy="26" rx="9" ry="12" fill="#E8B58D"/>
+  <!-- Glasses -->
+  <rect x="25" y="22" width="6" height="5" rx="1.5" fill="none" stroke="#334155" stroke-width="1.2"/>
+  <rect x="33" y="22" width="6" height="5" rx="1.5" fill="none" stroke="#334155" stroke-width="1.2"/>
+  <line x1="31" y1="24" x2="33" y2="24" stroke="#334155" stroke-width="1.2"/>
+  <circle cx="28" cy="24.5" r="1.2" fill="#1E293B"/>
+  <circle cx="36" cy="24.5" r="1.2" fill="#1E293B"/>
+  <!-- Mouth -->
+  <path d="M30 32c1.2 1 2.8 1 4 0" stroke="#8C4242" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+</svg>
+            </div>
+            <div>
+              <h2 id="student-3">نرگس کریمی</h2>
+              <p class="idline">کد ملی: <bdi class="digits">۲۲۸۲۰۵۶۷۸۷</bdi></p>
+            </div>
+          </div>
+          <dl class="card-meta">
+            <div><dt>مرحله:</dt><dd>بررسی ثبت‌نام</dd></div>
+            <div><dt>تاریخ ورود اطلاعات:</dt><dd>۱۷ شهریور ۱۴۰۵</dd></div>
+          </dl>
+          <div class="card-footer">
+            <button type="button" class="btn primary" data-open="3" aria-label="باز کردن پروندهٔ نرگس کریمی">
+              باز کردن پرونده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg>
+            </button>
+          </div>
+        </article>
+        <!-- Card 4: Mohammadmehdi Hosseini (Fallback Avatar Clearly Demonstrated) -->
+        <article class="case-card" data-case="4" hidden aria-labelledby="student-4">
+          <div class="identity-mini">
+            <span class="avatar fallback" aria-label="عکس ثبت نشده است">بدون عکس</span>
+            <div>
+              <h2 id="student-4">محمدمهدی حسینی‌نژاد شیرازی</h2>
+              <p class="idline">کد ملی: <bdi class="digits">۲۲۸۳۰۶۷۸۹۸</bdi></p>
+            </div>
+          </div>
+          <dl class="card-meta">
+            <div><dt>مرحله:</dt><dd>بررسی ثبت‌نام</dd></div>
+            <div><dt>تاریخ ورود اطلاعات:</dt><dd>۱۷ شهریور ۱۴۰۵</dd></div>
+          </dl>
+          <div class="card-footer">
+            <button type="button" class="btn primary" data-open="4" aria-label="باز کردن پروندهٔ محمدمهدی حسینی">
+              باز کردن پرونده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg>
+            </button>
+          </div>
+        </article>
+      </div>
+      <!-- Empty State -->
+      <div class="empty" id="empty-state" hidden>
+        <h2>پرونده‌ای پیدا نشد</h2>
+        <p>نام یا کد ملی را دوباره بررسی کنید، یا فیلترهای فعال را پاک نمایید.</p>
+        <button type="button" class="btn" id="clear-search">نمایش همهٔ پرونده‌ها</button>
+      </div>
+      <!-- Pagination Controls (Class page-buttons, Zero Inline Styles, Safe type=button) -->
+      <nav class="pagination" id="pagination" aria-label="صفحه‌بندی پرونده‌ها">
+        <button type="button" id="prev-page" disabled>قبلی</button>
+        <span id="page-buttons" class="row page-buttons">
+          <button type="button" data-page="1" aria-current="page" aria-label="صفحهٔ ۱">۱</button>
+          <button type="button" data-page="2" aria-label="صفحهٔ ۲">۲</button>
+        </span>
+        <button type="button" id="next-page">بعدی</button>
+      </nav>
+    </section>
+
+    <!-- Surface C & D: ENTRY DETAIL («پروندهٔ دانش‌آموز») -->
+    <section id="detail-view" class="app-main screen-view" aria-labelledby="dossier-name" hidden>
+      <nav class="breadcrumb" aria-label="مسیر پرونده">
+        <button type="button" class="btn text" id="back-inbox">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 6 6-6 6M20 12H4"/></svg> بازگشت به کارهای من
+        </button>
+        <button type="button" class="btn text small" data-jump="print-front">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3M6 14h12v7H6v-7Zm11-2h1"/></svg> مشاهده و چاپ پرونده (A4)
+        </button>
+      </nav>
+      <!-- Single Continuous Case Dossier Surface -->
+      <article class="dossier">
+        <!-- 1. Header: Student Identity -->
+        <header class="dossier-header">
+          <div id="detail-avatar">
+            <div class="avatar p0" aria-label="عکس پرسنلی علی رضایی">
+              <svg class="student-photo-svg" viewBox="0 0 64 64" width="100%" height="100%" role="img" aria-label="عکس پرسنلی علی رضایی">
+  <rect width="64" height="64" fill="#E2E8F0"/>
+  <circle cx="32" cy="24" r="13" fill="#D4A373"/>
+  <!-- Hair -->
+  <path d="M19 22c0-8 6-13 13-13s13 5 13 13c0 2-1 4-2 4-2-4-5-6-11-6s-9 2-11 6c-1 0-2-2-2-4z" fill="#2B2D42"/>
+  <!-- Eyes & Eyebrows -->
+  <path d="M25 18c2-1 4-1 5 0M34 18c1-1 3-1 5 0" stroke="#1A1C29" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <circle cx="27" cy="23" r="1.5" fill="#1A1C29"/>
+  <circle cx="37" cy="23" r="1.5" fill="#1A1C29"/>
+  <!-- Mouth -->
+  <path d="M29 30c2 1.5 4 1.5 6 0" stroke="#9A6148" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <!-- Neck & Clothes -->
+  <path d="M28 35v6h8v-6z" fill="#C58F63"/>
+  <path d="M12 64c0-11 9-18 20-18s20 7 20 18z" fill="#1D4ED8"/>
+  <path d="M28 41l4 7 4-7z" fill="#F8FAFC"/>
+  <path d="M25 46l7 6 7-6" stroke="#1E40AF" stroke-width="1.5" fill="none"/>
+</svg>
+            </div>
+          </div>
+          <div>
+            <h1 id="dossier-name">علی رضایی</h1>
+            <div class="identity-lines">
+              <span>کد ملی: <bdi class="digits" id="dossier-nid">۰۰۱۲۳۴۵۶۷۹</bdi></span>
+              <span id="dossier-grade">یازدهم ریاضی</span>
+              <span class="school" id="dossier-school">دبیرستان شهید دستغیب</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- 2. Current Task Panel (Distinct Soft Card; Neutral Microcopy; Approve/Reject Only) -->
+        <section class="task" aria-labelledby="task-title">
+          <div class="task-heading">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM8 5H5v16h14V5h-3M8 12l2 2 5-5M8 18h8"/></svg>
+            <div>
+              <h2 id="task-title">بررسی پرونده</h2>
+              <div class="context">مرحله جاری: بررسی ثبت‌نام</div>
+            </div>
+          </div>
+          <p>اطلاعات دانش‌آموز، سوابق تحصیلی و مدارک ارسالی را بررسی کنید و سپس نتیجهٔ بررسی را ثبت نمایید.</p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="approve-action">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg> تأیید پرونده
+            </button>
+            <button type="button" class="btn danger" id="reject-action">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg> رد پرونده
+            </button>
+          </div>
+          <p class="feedback" id="action-feedback" role="status" aria-live="polite" hidden></p>
+        </section>
+
+        <!-- 3. Education Level -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 8 10-5 10 5-10 5L2 8Zm4 3v6c3 3 9 3 12 0v-6M22 8v9"/></svg>
+            <h2>مقطع و گروه تحصیلی</h2>
+          </div>
+          <dl class="data-grid data-grid--education">
+            <div><dt>مقطع تحصیلی</dt><dd data-value="level">متوسطه دوم</dd></div>
+            <div><dt>پایه / گروه آزمایشی</dt><dd data-value="grade">یازدهم ریاضی</dd></div>
+          </dl>
+        </section>
+
+        <!-- 4. Candidate Personal Details -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
+            <h2>مشخصات داوطلب</h2>
+          </div>
+          <dl class="data-grid data-grid--personal">
+            <div><dt>نام</dt><dd data-value="first">علی</dd></div>
+            <div><dt>نام خانوادگی</dt><dd data-value="last">رضایی</dd></div>
+            <div><dt>نام پدر</dt><dd data-value="father">محمدرضا</dd></div>
+            <div><dt>کد ملی</dt><dd data-value="nid">۰۰۱۲۳۴۵۶۷۹</dd></div>
+            <div><dt>تاریخ تولد</dt><dd data-value="dob">۱۳۸۹/۰۵/۱۲</dd></div>
+            <div><dt>جنسیت</dt><dd data-value="sex">پسر</dd></div>
+          </dl>
+        </section>
+
+        <!-- 5. Contact Information (Strictly Read-Only Label/Value in Canonical Specimen) -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1c0 10 7 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a16 16 0 0 1-7-7l2-2-2-5Z"/></svg>
+            <h2>راه‌های ارتباطی پشتیبان با داوطلب</h2>
+          </div>
+          <dl class="data-grid data-grid--contact">
+            <div><dt>تلفن همراه داوطلب</dt><dd data-value="phone">۰۹۱۷۱۲۳۴۵۶۷</dd></div>
+            <div><dt>تلفن ثابت منزل</dt><dd data-value="landline">۰۷۱۳۲۳۴۵۶۷۸</dd></div>
+            <div><dt>تلفن همراه پدر</dt><dd data-value="fphone">۰۹۱۷۲۳۴۵۶۷۸</dd></div>
+            <div><dt>تلفن همراه مادر</dt><dd data-value="mphone">۰۹۱۷۳۴۵۶۷۸۹</dd></div>
+          </dl>
+        </section>
+
+        <!-- 6. School Information -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 8 10-5 10 5-10 5L2 8Zm4 3v6c3 3 9 3 12 0v-6M22 8v9"/></svg>
+            <h2>اطلاعات مدرسه</h2>
+          </div>
+          <dl class="data-grid data-grid--school">
+            <div class="full"><dt>نام مدرسهٔ سال جاری</dt><dd data-value="school">دبیرستان شهید دستغیب</dd></div>
+          </dl>
+        </section>
+
+        <!-- 7. Uploaded Documents (Realistic Miniature Transcript Thumbnail) -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6"/></svg>
+            <h2>مدارک ارائه‌شده</h2>
+          </div>
+          <div id="ali-documents" class="documents">
+            <div class="image-document">
+              <button type="button" class="document-preview" data-preview aria-label="بزرگ‌نمایی کارنامهٔ تحصیلی">
+                <svg class="doc-thumb-mini-svg" viewBox="0 0 114 154" width="100%" height="100%" role="img" aria-label="پیش‌نمایش کوچک کارنامه تحصیلی">
+  <rect width="114" height="154" fill="#FFFFFF"/>
+  <!-- Document Border -->
+  <rect x="5" y="5" width="104" height="144" rx="3" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+  <!-- Report Card Header Band -->
+  <rect x="12" y="14" width="90" height="14" rx="2" fill="#F1F5F9"/>
+  <rect x="26" y="18" width="62" height="3" rx="1" fill="#1D4ED8"/>
+  <rect x="34" y="23" width="46" height="2" rx="1" fill="#64748B"/>
+  <!-- Mini Student Metadata Row -->
+  <line x1="12" y1="34" x2="102" y2="34" stroke="#E2E8F0" stroke-width="0.8"/>
+  <rect x="16" y="38" width="30" height="2" rx="1" fill="#94A3B8"/>
+  <rect x="68" y="38" width="30" height="2" rx="1" fill="#94A3B8"/>
+  <!-- Mini Transcript Table -->
+  <rect x="12" y="46" width="90" height="66" rx="2" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="0.8"/>
+  <!-- Table Header -->
+  <rect x="12" y="46" width="90" height="12" fill="#F8FAFC"/>
+  <line x1="12" y1="58" x2="102" y2="58" stroke="#CBD5E1" stroke-width="0.8"/>
+  <rect x="16" y="50" width="20" height="3" rx="1" fill="#475467"/>
+  <rect x="46" y="50" width="22" height="3" rx="1" fill="#475467"/>
+  <rect x="76" y="50" width="22" height="3" rx="1" fill="#475467"/>
+  <!-- Row 1 -->
+  <line x1="12" y1="71" x2="102" y2="71" stroke="#F1F5F9" stroke-width="0.8"/>
+  <rect x="16" y="63" width="18" height="2.5" rx="1" fill="#64748B"/>
+  <rect x="50" y="63" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <rect x="80" y="63" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <!-- Row 2 -->
+  <line x1="12" y1="84" x2="102" y2="84" stroke="#F1F5F9" stroke-width="0.8"/>
+  <rect x="16" y="76" width="16" height="2.5" rx="1" fill="#64748B"/>
+  <rect x="50" y="76" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <rect x="80" y="76" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <!-- Row 3 -->
+  <line x1="12" y1="97" x2="102" y2="97" stroke="#F1F5F9" stroke-width="0.8"/>
+  <rect x="16" y="89" width="15" height="2.5" rx="1" fill="#64748B"/>
+  <rect x="50" y="89" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <rect x="80" y="89" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <!-- Row 4 -->
+  <rect x="16" y="102" width="17" height="2.5" rx="1" fill="#64748B"/>
+  <rect x="50" y="102" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <rect x="80" y="102" width="14" height="2.5" rx="1" fill="#0F172A"/>
+  <!-- Mini Summary / Stamp Area -->
+  <rect x="16" y="120" width="34" height="3" rx="1" fill="#18794E"/>
+  <circle cx="86" cy="124" r="7" fill="none" stroke="#DC2626" stroke-width="0.8" stroke-dasharray="2 1"/>
+  <rect x="82" y="123" width="8" height="2" fill="#DC2626"/>
+</svg>
+                <span class="preview-hint">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg> بزرگ‌نمایی
+                </span>
+              </button>
+              <div class="document-copy">
+                <h3>کارنامهٔ تحصیلی</h3>
+                <p>تصویر کارنامه • سال تحصیلی <bdi>۱۴۰۴–۱۴۰۵</bdi></p>
+                <p class="file-name">کارنامه-علی-رضایی.jpg</p>
+                <button type="button" class="btn text small" data-preview>مشاهدهٔ تصویر <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <div class="file-format-demo" id="pdf-documents" hidden>
+            <div class="file-document">
+              <span class="file-glyph" aria-hidden="true">PDF</span>
+              <div class="document-copy">
+                <h3>کارنامهٔ تحصیلی</h3>
+                <p class="file-name">کارنامه-نرگس-کریمی.pdf</p>
+                <p>فایل ضمیمهٔ غیرتصویری</p>
+              </div>
+              <button type="button" class="btn small" data-file>مشاهده <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M4 12h16"/></svg></button>
+            </div>
+          </div>
+          <p id="file-feedback" class="inline-feedback" role="status" hidden></p>
+        </section>
+
+        <!-- 8. Registration & Financial Context (Cleaned: No Schema Names, No Paper Claims) -->
+        <section class="dossier-section">
+          <div class="section-title">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V4h7l2 3h9v13H3V7Z"/></svg>
+            <h2>اطلاعات ثبت‌نام و وضعیت مالی</h2>
+          </div>
+          <dl class="data-grid data-grid--financial">
+            <div><dt>تاریخ ورود اطلاعات</dt><dd data-value="date">۱۸ شهریور ۱۴۰۵</dd></div>
+            <div><dt>وضعیت بررسی پرونده</dt><dd>در حال بررسی</dd></div>
+            <div><dt>وضعیت مالی</dt><dd class="muted-value">ثبت نشده</dd></div>
+            <div><dt>شهریهٔ مصوب (ریال)</dt><dd class="muted-value">ثبت نشده</dd></div>
+            <div><dt>مبلغ تخفیف (ریال)</dt><dd class="muted-value">ثبت نشده</dd></div>
+            <div><dt>مبلغ خالص قابل پرداخت (ریال)</dt><dd class="muted-value">ثبت نشده</dd></div>
+          </dl>
+        </section>
+
+        <!-- 9. History / Review Flow (Collapsed by Default with Outside Helper Copy) -->
+        <details class="history" id="history">
+          <summary>
+            <strong>روند بررسی پرونده</strong>
+            <span>اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.</span>
+          </summary>
+          <div class="history-content">
+            <div class="history-event">
+              <time datetime="2026-09-09T09:10:00+03:30">۱۸ شهریور ۱۴۰۵<br>ساعت ۰۹:۱۰</time>
+              <div>
+                <div class="history-result">اطلاعات اولیه ثبت شد</div>
+                <p>ثبت‌کننده: کاربر سامانه ثبت‌نام</p>
+              </div>
+            </div>
+            <div class="history-event">
+              <time datetime="2026-09-09T10:30:00+03:30">۱۸ شهریور ۱۴۰۵<br>ساعت ۱۰:۳۰</time>
+              <div>
+                <div class="history-result success">تأیید مدارک هویتی</div>
+                <p>بررسی‌کننده: مسئول پذیرش و ثبت‌نام</p>
+                <p class="secondary">توضیحات: مدارک و تصویر کارنامه با اطلاعات فرم تطبیق داده شد.</p>
+              </div>
+            </div>
+          </div>
+        </details>
+      </article>
+    </section>
+
+    <!-- Surface E & F: PRINT DOSSIER (Canonical A4 Plain White Paper, Front & Back) -->
+    <section id="print-view" class="print-view" hidden aria-labelledby="print-view-title">
+      <div class="print-intro">
+        <strong id="print-view-title">پروندهٔ چاپی داوطلب • بازطراحی وفادار به پروندهٔ تاریخی</strong>
+        <p>قطع استاندارد خروجی: <strong>کاغذ A4 سفید معمولی • دو صفحهٔ پرتره</strong> • صفحهٔ ۱: روی پرونده • صفحهٔ ۲: پشت پرونده (فرم مالی)</p>
+        <p>این طراحی برای چاپ مستقیم از طریق مرورگر با کلید «چاپ پرونده» تنظیم شده است. تنها فیلدهای دارای دادهٔ معتبر دیجیتال در کادرهای متناظر چاپ می‌شوند و سایر بخش‌ها برای تکمیل دستی با خودکار، مهر و امضا کاملاً خالی می‌مانند. حاشیهٔ ۸ و ۱۰ میلی‌متر به عنوان کف ایمن چاپگر در نظر گرفته شده است.</p>
+      </div>
+      <div class="print-actions row">
+        <button type="button" class="btn primary" id="print-button">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3M6 14h12v7H6v-7Zm11-2h1"/></svg> چاپ پرونده (دو صفحهٔ A4)
+        </button>
+        <button type="button" class="btn text" data-jump="detail">بازگشت به پرونده دیجیتال</button>
+      </div>
+      <p class="print-mobile-caption">نمای باریک صفحه صرفاً برای مرور چشمی است؛ خروجی اصلی چاپ بر روی کاغذ قطع A4 تنظیم شده است.</p>
+
+      <div class="print-spread">
+        <!-- Page 1: FRONT (روی پرونده - ۲ نشان چپ و راست، بدون نشان وسط، پوشش بهینهٔ ارتفاع A4 و کادرهای دستی گسترش‌یافته) -->
+        <article class="print-sheet" id="print-front" aria-label="صفحهٔ ۱؛ روی پرونده (A4)">
+          <!-- Header with 2 Logos: Right = Rezavi, Left = Kanoon, Center = Text Only -->
+          <header class="cardboard-header">
+            <div class="front-brand-side front-brand-right">
+              <div class="front-unlabeled front-header-blank" role="img" aria-label="کادر بدون عنوانِ بالای روی پرونده؛ خالی برای تکمیل دستی"></div>
+              <div class="front-logo-slot">نشان<br>مجتمع رضوی</div>
+            </div>
+            <div class="front-brand-center">
+              <h2>مجتمع فرهنگی آموزشی رضوی</h2>
+              <p>نمایندگی بنیاد علمی آموزشی (قلم‌چی)</p>
+            </div>
+            <div class="front-brand-side front-brand-left">
+              <div class="front-logo-slot">نشان کانون<br>فرهنگی آموزش</div>
+            </div>
+          </header>
+
+          <!-- Top Identifiers -->
+          <div class="front-identifiers">
+            <div class="front-id-field">
+              <span>شمارنده:</span>
+              <span class="front-id-blank"><bdi class="print-value print-value-digits" data-print="counter" dir="ltr"></bdi></span>
+            </div>
+            <div class="front-id-field">
+              <span>کد ملی:</span>
+              <span class="front-id-blank"><bdi class="print-value print-value-digits" data-print="nid" dir="ltr"></bdi></span>
+            </div>
+          </div>
+
+          <!-- Main Cardboard Candidate Body (Natural 92% Height Coverage) -->
+          <section class="cardboard-candidate" aria-labelledby="front-candidate-title">
+            <h2 id="front-candidate-title">مشخصات داوطلب</h2>
+            <div class="front-candidate-body">
+              <div class="front-name-row">
+                <div class="front-line">
+                  <span>نام و نام خانوادگی:</span>
+                  <span class="front-blank"><bdi class="print-value" data-print="name" dir="auto"></bdi></span>
+                </div>
+                <div class="front-line">
+                  <span>نام پدر:</span>
+                  <span class="front-blank"><bdi class="print-value" data-print="father" dir="auto"></bdi></span>
+                </div>
+              </div>
+              <div class="front-study-admin">
+                <div class="front-study">
+                  <!-- Unified Historical Grade & Academic Year Continuous Line (No "سال" duplicate) -->
+                  <div class="front-line front-education-combined">
+                    <span class="front-edu-label">رشته و پایهٔ تحصیلی:</span>
+                    <span class="front-blank front-grade-slot"><bdi class="print-value" data-print="grade" dir="auto"></bdi></span>
+                    <span class="front-year-label">سال:</span>
+                    <span class="front-year-blanks">
+                      <i aria-label="سال آغاز"><bdi class="print-value print-value-digits" data-print="year_start" dir="ltr"></bdi></i>
+                      <span>—</span>
+                      <i aria-label="سال پایان"><bdi class="print-value print-value-digits" data-print="year_end" dir="ltr"></bdi></i>
+                    </span>
+                  </div>
+                  <div class="front-options">
+                    <span class="front-label">جنسیت:</span>
+                    <div class="paper-choices">
+                      <span class="paper-choice"><i data-print-check="female"><bdi class="print-value" dir="auto"></bdi></i>زن</span>
+                      <span class="paper-choice"><i data-print-check="male"><bdi class="print-value" dir="auto"></bdi></i>مرد</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="front-registration-boxes">
+                  <div><span>ثبت مالی:</span><div class="front-manual-box" aria-label="محل ثبت مالی؛ خالی"></div></div>
+                  <div><span>ثبت آمار:</span><div class="front-manual-box" aria-label="محل ثبت آمار؛ خالی"></div></div>
+                </div>
+              </div>
+              <div class="front-options">
+                <span class="front-label">نوع ثبت‌نام:</span>
+                <div class="paper-choices">
+                  <span class="paper-choice"><i data-print-check="reg_normal"><bdi class="print-value" dir="auto"></bdi></i>عادی</span>
+                  <span class="paper-choice"><i data-print-check="reg_school"><bdi class="print-value" dir="auto"></bdi></i>مدرسه‌ای</span>
+                  <span class="paper-choice"><i data-print-check="reg_shaheed"><bdi class="print-value" dir="auto"></bdi></i>بنیاد شهید</span>
+                  <span class="paper-choice"><i data-print-check="reg_komite"><bdi class="print-value" dir="auto"></bdi></i>کمیته</span>
+                  <span class="paper-choice"><i data-print-check="reg_behzisti"><bdi class="print-value" dir="auto"></bdi></i>بهزیستی</span>
+                  <span class="paper-choice"><i data-print-check="reg_maskan"><bdi class="print-value" dir="auto"></bdi></i>بنیاد مسکن</span>
+                </div>
+              </div>
+              <div class="front-options">
+                <span class="front-label">زمان ثبت‌نام:</span>
+                <div class="paper-choices">
+                  <span class="paper-choice"><i data-print-check="time_early"><bdi class="print-value" dir="auto"></bdi></i>زودهنگام</span>
+                  <span class="paper-choice"><i data-print-check="time_continue"><bdi class="print-value" dir="auto"></bdi></i>ادامهٔ آزمون</span>
+                </div>
+              </div>
+              <div class="front-school-row">
+                <div class="front-line">
+                  <span>نام مدرسهٔ جاری:</span>
+                  <span class="front-blank"><bdi class="print-value" data-print="school" dir="auto"></bdi></span>
+                </div>
+                <span class="paper-choice"><i data-print-check="graduated"><bdi class="print-value" dir="auto"></bdi></i>فارغ‌التحصیل</span>
+              </div>
+              <div class="front-office-row">
+                <div class="front-options">
+                  <span class="front-label">محل ثبت‌نام:</span>
+                  <div class="paper-choices">
+                    <span class="paper-choice"><i data-print-check="loc_central"><bdi class="print-value" dir="auto"></bdi></i>دفتر مرکزی</span>
+                    <span class="paper-choice"><i data-print-check="loc_golestan"><bdi class="print-value" dir="auto"></bdi></i>دفتر گلستان</span>
+                    <span class="paper-choice"><i data-print-check="loc_sadra"><bdi class="print-value" dir="auto"></bdi></i>دفتر صدرا</span>
+                  </div>
+                </div>
+                <div class="front-line">
+                  <span>دفاتر اقماری؛ شهرستان:</span>
+                  <span class="front-blank"><bdi class="print-value" data-print="sub_office" dir="auto"></bdi></span>
+                </div>
+              </div>
+              <div class="front-review-row">
+                <div class="front-review-data">
+                  <div class="front-line">
+                    <span>تاریخ اولین آزمون:</span>
+                    <span class="front-blank"><bdi class="print-value print-value-digits" data-print="first_exam" dir="ltr"></bdi></span>
+                  </div>
+                  <div class="front-options">
+                    <span class="front-label">نحوهٔ پرداخت:</span>
+                    <div class="paper-choices">
+                      <span class="paper-choice"><i data-print-check="pay_cash"><bdi class="print-value" dir="auto"></bdi></i>نقد</span>
+                      <span class="paper-choice"><i data-print-check="pay_installment"><bdi class="print-value" dir="auto"></bdi></i>اقساط</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="front-stamp-space"><span>محل مهر و امضا</span></div>
+              </div>
+              <div class="front-contact-row">
+                <div class="front-contact-fields">
+                  <div class="front-line">
+                    <span>تلفن همراه ۱:</span>
+                    <span class="front-blank"><bdi class="print-value print-value-digits" data-print="phone" dir="ltr"></bdi></span>
+                  </div>
+                  <div class="front-line">
+                    <span>تلفن همراه ۲:</span>
+                    <span class="front-blank"><bdi class="print-value print-value-digits" data-print="parent_phone" dir="ltr"></bdi></span>
+                  </div>
+                </div>
+                <div class="front-unlabeled front-bottom-blank" role="img" aria-label="کادر بدون عنوانِ پایین روی پرونده؛ خالی برای تکمیل دستی"></div>
+              </div>
+            </div>
+          </section>
+          <footer class="paper-footer">
+            <span>فیلدهای دارای داده الکترونیکی چاپ می‌شوند و سایر محل‌ها برای تکمیل دستی با خودکار خالی می‌مانند.</span>
+            <span>روی پرونده • صفحهٔ ۱ (A4)</span>
+          </footer>
+        </article>
+
+        <!-- Page 2: BACK (پشت پرونده - فرم مالی با ۵ فیش + ۶ چک، بدون سرریز و با Headroom کافی) -->
+        <article class="print-sheet" id="print-back" aria-label="صفحهٔ ۲؛ پشت پرونده (A4)" hidden>
+          <header class="paper-header">
+            <div class="paper-org">
+              <span>مجتمع فرهنگی آموزشی رضوی</span>
+              <strong>نمایندگی بنیاد علمی آموزشی (قلم‌چی) ـ شیراز</strong>
+            </div>
+            <div class="paper-logo-reserve">نشان کانون<br>فرهنگی آموزش</div>
+          </header>
+          <div class="paper-title-row">
+            <h2>فرم مالی</h2>
+            <span>صفحهٔ ۲ • پشت پرونده (A4)</span>
+          </div>
+          <!-- Tailored Student Identity Area: 2-column span for Grade to prevent ANY line-wrapping -->
+          <div class="paper-student-identity">
+            <div class="print-field">
+              <span>تاریخ:</span>
+              <span class="blank"><bdi class="print-value print-value-digits" data-print-back="date" dir="ltr"></bdi></span>
+            </div>
+            <div class="print-field name-field">
+              <span>نام و نام خانوادگی داوطلب:</span>
+              <span class="blank"><bdi class="print-value" data-print-back="name" dir="auto"></bdi></span>
+            </div>
+            <div class="print-field father-field">
+              <span>نام پدر:</span>
+              <span class="blank"><bdi class="print-value" data-print-back="father" dir="auto"></bdi></span>
+            </div>
+            <div class="print-field grade-field">
+              <span>رشته و پایهٔ تحصیلی:</span>
+              <span class="blank"><bdi class="print-value" data-print-back="grade" dir="auto"></bdi></span>
+            </div>
+            <div class="print-field year-field">
+              <span>سال تحصیلی:</span>
+              <span class="blank"><bdi class="print-value print-value-digits" data-print-back="academic_year" dir="ltr"></bdi></span>
+            </div>
+          </div>
+          <!-- Financial Receipts & Cheques Table (5 Fish + 6 Cheque) -->
+          <table class="paper-finance">
+            <caption class="sr-only">جدول ثبت اسناد مالی داوطلب (واریز نقدی و چک‌های اقساط)</caption>
+            <colgroup>
+              <col class="col-type">
+              <col class="col-serial">
+              <col class="col-date">
+              <col class="col-account">
+              <col class="col-bank">
+              <col class="col-amount">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">نوع سند</th>
+                <th scope="col">شمارهٔ سریال</th>
+                <th scope="col">تاریخ</th>
+                <th scope="col">شمارهٔ حساب</th>
+                <th scope="col">نام بانک و شعبه</th>
+                <th scope="col">مبلغ به ریال</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 5 Fish Rows -->
+              <tr><th scope="rowgroup" rowspan="5">فیش<small>(واریز نقدی)</small></th><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <!-- 6 Cheque Rows -->
+              <tr><th scope="rowgroup" rowspan="6">چک<small>(اقساط)</small></th><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3">جمع مبلغ دریافتی به حروف:<div class="sum-blank"></div></td>
+                <td colspan="3">جمع مبلغ دریافتی به عدد:<div class="sum-blank"></div></td>
+              </tr>
+            </tfoot>
+          </table>
+          <!-- Financial Summary Section -->
+          <div class="paper-finance-summary">
+            <div class="paper-fields cols-3">
+              <div class="print-field"><span>کل مبلغ شهریه به ریال:</span><span class="blank"><bdi class="print-value print-value-digits" data-print-back="tuition" dir="ltr"></bdi></span></div>
+              <div class="print-field"><span>مبلغ تخفیف به ریال:</span><span class="blank"><bdi class="print-value print-value-digits" data-print-back="discount" dir="ltr"></bdi></span></div>
+              <div class="print-field"><span>مبلغ قابل دریافت به ریال:</span><span class="blank"><bdi class="print-value print-value-digits" data-print-back="payable" dir="ltr"></bdi></span></div>
+            </div>
+            <div class="paper-fields cols-3">
+              <div class="print-field wide"><span>نوع و مبلغ تخفیف:</span><span class="blank"><bdi class="print-value" data-print-back="discount_title" dir="auto"></bdi></span></div>
+              <div class="print-field"><span>معرف:</span><span class="blank"></span></div>
+            </div>
+            <div class="paper-inline">
+              <span>سابقهٔ داوطلب:</span>
+              <div class="paper-choices">
+                <span class="paper-choice"><i></i>کانونی</span>
+                <span class="paper-choice"><i></i>غیرکانونی</span>
+              </div>
+            </div>
+            <p class="paper-help">هر داوطلب فقط از یک نوع تخفیف می‌تواند استفاده کند.</p>
+            <div class="paper-fields cols-3">
+              <div class="print-field"><span>تعداد آزمون:</span><span class="blank"></span></div>
+              <div class="print-field wide"><span>تاریخ اولین آزمون:</span><span class="blank"></span></div>
+            </div>
+          </div>
+          <!-- Sequential Approvals Grid (1, 2, 3) -->
+          <div class="paper-approval-grid">
+            <section class="paper-approval">
+              <h3><b>۱</b>مسئول ثبت‌نام</h3>
+              <p>اسناد و مدارک بالا را کنترل نمودم.</p>
+              <div class="paper-choices"><span class="paper-choice"><i></i>تأیید می‌نمایم</span><span class="paper-choice"><i></i>تأیید نمی‌نمایم</span></div>
+              <div class="paper-write"><span>محل مهر و امضا</span></div>
+            </section>
+            <section class="paper-approval">
+              <h3><b>۲</b>مسئول بررسی مالی</h3>
+              <p>اسناد مالی را کنترل نموده و صحت آن را بررسی کردم.</p>
+              <div class="paper-choices"><span class="paper-choice"><i></i>تأیید می‌نمایم</span><span class="paper-choice"><i></i>تأیید نمی‌نمایم</span></div>
+              <div class="paper-write"><span>محل مهر و امضا</span></div>
+            </section>
+            <section class="paper-approval">
+              <h3><b>۳</b>مسئول ثبت مالی</h3>
+              <p>صحت ورود اطلاعات ثبت مالی را بررسی کردم.</p>
+              <div class="paper-choices"><span class="paper-choice"><i></i>تأیید می‌نمایم</span><span class="paper-choice"><i></i>تأیید نمی‌نمایم</span></div>
+              <div class="paper-write"><span>محل مهر و امضا</span></div>
+            </section>
+          </div>
+          <!-- Final Management Approval (4) -->
+          <section class="paper-management">
+            <h3><b>۴</b>مدیریت — تأیید نهایی</h3>
+            <p>صحت اطلاعات ثبت‌نام و بررسی مالی را:</p>
+            <div class="paper-choices"><span class="paper-choice"><i></i>تأیید می‌نمایم</span><span class="paper-choice"><i></i>تأیید نمی‌نمایم</span></div>
+            <div class="paper-write paper-write--management"><span>امضا و مهر مدیریت</span></div>
+          </section>
+          <section class="paper-section">
+            <h3>توضیحات در صورت عدم تأیید / یادداشت‌های دستی</h3>
+            <div class="writing-lines"><div></div><div></div></div>
+          </section>
+          <footer class="paper-footer">
+            <span>مبالغ، تاریخ‌ها، تأییدها و امضاهای ناموجود برای تکمیل دستی خالی می‌مانند.</span>
+            <span>پشت پرونده • صفحهٔ ۲ (A4)</span>
+          </footer>
+        </article>
+      </div>
+    </section>
+  </main>
+  <footer class="app-footer" id="app-footer">کانون فرهنگی آموزش (قلم‌چی) ـ نمایندگی شیراز</footer>
+</div>
+
+<!-- Bottom Resolution Documentation (Screen Only, Explicitly Hidden in @media print) -->
+<aside class="resolution-notes" id="design-resolution-notes">
+  <h2 lang="en" dir="ltr">DESIGN RESOLUTION NOTES (vNext ENTRY UX REFINEMENT &amp; PLUGIN-HANDOFF BASELINE)</h2>
+  <dl>
+    <div>
+      <dt>۱. تعهدات قفل‌شدهٔ بصری (Locked Visual Contract)</dt>
+      <dd>شش سطح کانونی، قطع قطعی A4 پرتره، خروجی دقیقاً دوصفحه‌ای در پرینت مرورگر، سربرگ دوشانه‌ای (راست: نشان مجتمع رضوی / چپ: نشان کانون / مرکز: عنوان متنی بدون نشان)، جدول مالی با ۵ ردیف فیش و ۶ ردیف چک، انضباط سخت‌گیرانهٔ بایندینگ بدون داده‌های ساختگی، و پوشش کامل و متوازن ارتفاع A4 در روی پرونده با گسترش نواحی دستی تثبیت گردیدند.</dd>
+    </div>
+    <div>
+      <dt>۲. تفکیک معماری گرید هویتی و تاب‌آوری مقادیر بلند (Page 2 Resilience)</dt>
+      <dd>گرید هویتی بالای فرم مالی (.paper-student-identity) از گریدهای مالی تفکیک شد و ستون «رشته و پایهٔ تحصیلی» به پهنای دوسوم سطر (بیش از ۱۳۰ میلی‌متر) گسترش یافت تا مقادیر بلند نظیر «دوازدهم ریاضی و فیزیک» یا «دوازدهم علوم و معارف اسلامی» بدون شکست خط جا شوند. همچنین با بهینه‌سازی ارتفاع جدول مالی (۲۰px) و کادرهای امضا، حدود ۴۹ میلی‌متر بافر عمودی ایمن (headroom budget) در صفحهٔ ۲ ذخیره شد تا حتی در صورت طولانی شدن نام‌ها، فرم تحت هیچ شرایطی به صفحهٔ سوم سرریز نکند.</dd>
+    </div>
+    <div>
+      <dt>۳. حل فضای سفید انتهای صفحهٔ ۱ (Page 1 Vertical Utilization)</dt>
+      <dd>فضای خالی ۴ تا ۵ سانتی‌متری انتهای صفحهٔ ۱ برطرف گردید. به جای هدایت صِرف فوتر به پایین، کادر مشخصات داوطلب خود مساحت عمودی را جذب کرد: کادرهای دستی «ثبت مالی» و «ثبت آمار» به ۶۵px، کادر «محل مهر و امضا» به ۱۴۵px، کادر دستی پایین به ۶۸px و فواصل بین سطرهای هویتی به ۱۸px ارتقا یافتند تا نگارش فیزیکی با خودکار کاملاً آسان و عملیاتی شود.</dd>
+    </div>
+    <div>
+      <dt>۴. الزامات تحویل و اتصال به پلاگین (Production Plugin Requirements)</dt>
+      <dd>این سند یک مرجع بصری/رفتاری استاندارد است. دیتای JSON، شبیه‌ساز ناوبری و پرتره‌های برداری دانش‌آموزان صرفاً زیرساخت دمو هستند. در پیاده‌سازی پلاگین: (الف) داده‌ها از گرویتی‌فرم و گرویتی‌فلو خوانده می‌شوند؛ (ب) مدیاها از فایل‌های آپلودشدهٔ واقعی بایند خواهند شد؛ (ج) فونت وزیر از دارایی‌های محلی پلاگین (بدون وابستگی به اینترنت) لود می‌شود؛ (د) کلیدها با صفت type="button" ایمن‌سازی شده‌اند؛ (هـ) فیلتر مدرسه یک نمونهٔ فیلتر دسته‌بندی است و متادیتای آزمایشی ندارد.</dd>
+    </div>
+    <div>
+      <dt>۵. قرارداد ریتم و گروه‌بندی نمای پرونده (Entry UX vNext)</dt>
+      <dd>در نمای پرونده، رابطهٔ بصری «تیتر بخش ← محتوای همان بخش» با کاهش فاصلهٔ عنوان تا داده تقویت شد؛ Label و Value با فاصلهٔ کم و کنتراست سلسله‌مراتبی مشخص نمایش داده می‌شوند؛ گریدهای فقط‌خواندنی بر اساس معنای داده به چیدمان‌های پایدار ۱، ۲ یا ۳ ستونه تقسیم شده‌اند؛ و دو اقدام متضاد «تأیید» و «رد» فاصلهٔ عملیاتی بیشتری دارند. این مقادیر در این فایل قرارداد بصری‌اند؛ هنگام انتقال به Gravity Forms Theme Framework باید با توکن‌ها و قابلیت‌های رسمی همان فریم‌ورک نگاشت شوند، نه با وابستگی به DOM آزمایشی این مرجع.</dd>
+    </div>
+  </dl>
+  <p><strong>مسیر عملیاتی چاپ:</strong> چاپ مستقیم با مرورگر از طریق دکمهٔ «چاپ پرونده (دو صفحهٔ A4)» مسیر اصلی عملیاتی است. هر دو صفحه تمام ارتفاع A4 را به نحوی کارآمد پوشش می‌دهند و کادرهای دستی (ثبت مالی، ثبت آمار، مهر و امضا و ردیف‌های مالی) فضای کافی برای نگارش با قلم واقعی دارند.</p>
+</aside>
+
+<!-- Lightbox Modal for Image Previews (Cleaned: No Inline Styles) -->
+<dialog id="document-dialog" class="preview-dialog" aria-labelledby="preview-title">
+  <header class="modal-header">
+    <div>
+      <h2 id="preview-title">پیش‌نمایش سند تحصیلی</h2>
+      <p>نمایش روی همان صفحه بدون خروج از پرونده</p>
+    </div>
+    <button type="button" class="btn" id="close-preview">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg> بستن
+    </button>
+  </header>
+  <div class="modal-content">
+    <div class="demo-transcript">
+      <h3 class="demo-transcript__title">کارنامهٔ تحصیلی سال دهم — دورهٔ دوم متوسطه</h3>
+      <p class="demo-transcript__meta">داوطلب: علی رضایی • کد ملی: ۰۰۱۲۳۴۵۶۷۹ • دبیرستان شهید دستغیب</p>
+      <table class="demo-transcript__table">
+        <caption class="sr-only">ریز نمرات دروس سال دهم دبیرستان شهید دستغیب</caption>
+        <thead>
+          <tr class="demo-transcript__head-row">
+            <th class="demo-transcript__cell">درس</th>
+            <th class="demo-transcript__cell">نمره مستمر</th>
+            <th class="demo-transcript__cell">نمره پایانی</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="demo-transcript__row"><td class="demo-transcript__cell">ریاضی ۱</td><td class="demo-transcript__cell">۱۹.۵</td><td class="demo-transcript__cell">۱۹.۲۵</td></tr>
+          <tr class="demo-transcript__row"><td class="demo-transcript__cell">فیزیک ۱</td><td class="demo-transcript__cell">۲۰</td><td class="demo-transcript__cell">۱۹.۵</td></tr>
+          <tr class="demo-transcript__row"><td class="demo-transcript__cell">شیمی ۱</td><td class="demo-transcript__cell">۱۸.۵</td><td class="demo-transcript__cell">۱۹</td></tr>
+          <tr class="demo-transcript__row"><td class="demo-transcript__cell">هندسه ۱</td><td class="demo-transcript__cell">۱۹</td><td class="demo-transcript__cell">۱۸.۷۵</td></tr>
+        </tbody>
+      </table>
+      <div class="demo-transcript__footer">
+        <span>معدل کل: ۱۹.۱۲</span>
+        <span>مهر و امضای مدیر آموزشگاه</span>
+      </div>
+    </div>
+  </div>
+  <footer class="modal-footer">با بستن این پنجره (یا فشردن کلید Escape)، دقیقاً به موقعیت قبلی پرونده برمی‌گردید.</footer>
+</dialog>
+
+<!-- JSON Data Store (Cleaned: Realistic Long-Value Resilience Tested) -->
+<script id="reference-data" type="application/json">
+[
+  {
+    "id": 0,
+    "name": "علی رضایی",
+    "first": "علی",
+    "last": "رضایی",
+    "father": "محمدرضا",
+    "nid": "0012345679",
+    "grade": "یازدهم ریاضی",
+    "level": "متوسطه دوم",
+    "school": "دبیرستان شهید دستغیب",
+    "day": 18,
+    "dob": "۱۳۸۹/۰۵/۱۲",
+    "sex": "پسر",
+    "phone": "۰۹۱۷۱۲۳۴۵۶۷",
+    "landline": "۰۷۱۳۲۳۴۵۶۷۸",
+    "fphone": "۰۹۱۷۲۳۴۵۶۷۸",
+    "mphone": "۰۹۱۷۳۴۵۶۷۸۹",
+    "step": "بررسی ثبت‌نام",
+    "photo": 0
+  },
+  {
+    "id": 1,
+    "name": "فاطمه احمدی",
+    "first": "فاطمه",
+    "last": "احمدی",
+    "father": "علیرضا",
+    "nid": "2281045625",
+    "grade": "دهم تجربی",
+    "level": "متوسطه دوم",
+    "school": "دبیرستان فرزانگان",
+    "day": 16,
+    "dob": "۱۳۹۰/۰۲/۱۵",
+    "sex": "دختر",
+    "phone": "۰۹۱۷۵۵۵۴۴۳۳",
+    "landline": "۰۷۱۳۶۲۸۰۰۱۱",
+    "fphone": "۰۹۱۷۱۱۱۸۸۲۲",
+    "mphone": "۰۹۱۷۳۳۳۹۹۴۴",
+    "step": "بررسی ثبت‌نام",
+    "photo": 1
+  },
+  {
+    "id": 2,
+    "name": "امیرحسین محمدی",
+    "first": "امیرحسین",
+    "last": "محمدی",
+    "father": "حسین",
+    "nid": "2281032450",
+    "grade": "نهم",
+    "level": "متوسطه اول",
+    "school": "دبیرستان نمونه دولتی توحید",
+    "day": 18,
+    "dob": "۱۳۹۱/۰۷/۱۰",
+    "sex": "پسر",
+    "phone": "۰۹۱۷۹۹۹۱۱۲۲",
+    "landline": "۰۷۱۳۸۲۱۴۴۵۵",
+    "fphone": "۰۹۱۷۸۸۸۲۲۳۳",
+    "mphone": "۰۹۱۷۷۷۷۳۳۴۴",
+    "step": "بررسی ثبت‌نام",
+    "photo": 2
+  },
+  {
+    "id": 3,
+    "name": "نرگس کریمی",
+    "first": "نرگس",
+    "last": "کریمی",
+    "father": "مسعود",
+    "nid": "2282056787",
+    "grade": "یازدهم تجربی",
+    "level": "متوسطه دوم",
+    "school": "دبیرستان فرزانگان",
+    "day": 17,
+    "dob": "۱۳۸۹/۱۱/۲۸",
+    "sex": "دختر",
+    "phone": "۰۹۱۷۴۴۴۳۳۲۲",
+    "landline": "۰۷۱۳۶۳۰۵۵۶۶",
+    "fphone": "۰۹۱۷۳۳۳۲۲۱۱",
+    "mphone": "۰۹۱۷۲۲۲۱۱۰۰",
+    "step": "بررسی ثبت‌نام",
+    "photo": 3
+  },
+  {
+    "id": 4,
+    "name": "محمدمهدی حسینی‌نژاد شیرازی",
+    "first": "محمدمهدی",
+    "last": "حسینی‌نژاد شیرازی",
+    "father": "عبدالحمیدرضا",
+    "nid": "2283067898",
+    "grade": "دوازدهم ریاضی و فیزیک",
+    "level": "کنکوری",
+    "school": "دبیرستان نمونه دولتی علوم و معارف اسلامی شهید دستغیب",
+    "day": 17,
+    "dob": "۱۳۸۸/۰۳/۰۴",
+    "sex": "پسر",
+    "phone": "۰۹۱۷۱۲۳۹۹۸۸",
+    "landline": "۰۷۱۳۷۲۵۱۱۰۲",
+    "fphone": "۰۹۱۷۴۴۴۷۷۸۸",
+    "mphone": "۰۹۱۷۵۵۵۸۸۹۹",
+    "step": "بررسی ثبت‌نام",
+    "photo": -1
+  }
+]
+</script>
+
+<!-- Interactive Logic -->
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const people = JSON.parse($('#reference-data').textContent);
+const fa = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+const normalize = s => s.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/\s+/g,' ').trim();
+
+const surfaces = ['inbox-desktop', 'inbox-mobile', 'detail-desktop', 'detail-mobile', 'print-front', 'print-back'];
+const cards = new Map($$('[data-case]').map(el => [Number(el.dataset.case), el]));
+const PAGE_SIZE = 4;
+
+/* Script State Organization (Consolidated at Top Level) */
+let page = 1;
+let selected = 0;
+let surface = 'inbox-desktop';
+let dossierDevice = 'desktop';
+let inboxScroll = 0;
+let lastOpener = null;
+let previewFocus = null;
+let previewScroll = 0;
+
+function applyResults() {
+  const query = normalize($('#case-search').value);
+  const school = $('#school-filter').value;
+  const items = people.filter(p => 
+    (normalize(p.name).includes(query) || p.nid.includes(query)) &&
+    (school === 'all' || school === p.school)
+  );
+
+  const sort = $('#case-sort').value;
+  if (sort === 'newest') items.sort((a, b) => b.day - a.day);
+  if (sort === 'oldest') items.sort((a, b) => a.day - b.day);
+  if (sort === 'name') items.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+
+  const total = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  page = Math.max(1, Math.min(page, total));
+  cards.forEach(c => c.hidden = true);
+
+  items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).forEach(p => {
+    const c = cards.get(p.id);
+    c.hidden = false;
+    $('#case-grid').append(c);
+  });
+
+  $('#result-count').textContent = items.length 
+    ? `نمایش ${fa((page - 1) * PAGE_SIZE + 1)} تا ${fa(Math.min(page * PAGE_SIZE, items.length))} از ${fa(items.length)} پرونده`
+    : 'هیچ پرونده‌ای پیدا نشد';
+
+  $('#empty-state').hidden = items.length > 0;
+  $('#pagination').hidden = items.length === 0;
+  $('#prev-page').disabled = page <= 1;
+  $('#next-page').disabled = page >= total;
+  $('#active-filter-label').hidden = (school === 'all');
+
+  $('#page-buttons').replaceChildren(...Array.from({ length: total }, (_, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.page = i + 1;
+    b.textContent = fa(i + 1);
+    b.setAttribute('aria-label', `صفحهٔ ${fa(i + 1)}`);
+    if (i + 1 === page) b.setAttribute('aria-current', 'page');
+    return b;
+  }));
+}
+
+function changePage(next) {
+  page = next;
+  applyResults();
+  $('#result-count').scrollIntoView({ block: 'center', behavior: 'instant' });
+  $(`[data-page="${page}"]`)?.focus({ preventScroll: true });
+}
+
+function device() { return surface.endsWith('mobile') ? 'mobile' : 'desktop'; }
+
+function showSurface(next, resetScroll = true) {
+  if (!surfaces.includes(next)) return;
+  if (surface.startsWith('inbox') && !next.startsWith('inbox')) inboxScroll = window.scrollY;
+
+  surface = next;
+  const inbox = next.startsWith('inbox');
+  const detail = next.startsWith('detail');
+  const print = next.startsWith('print');
+
+  $('#stage').classList.toggle('is-mobile', next.endsWith('mobile'));
+  $('#inbox-view').hidden = !inbox;
+  $('#detail-view').hidden = !detail;
+  $('#print-view').hidden = !print;
+  $('#app-header').hidden = print;
+  $('#app-footer').hidden = print;
+
+  $('#print-front').hidden = (next === 'print-back');
+  $('#print-back').hidden = (next !== 'print-back');
+
+  $$('[data-surface]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.surface === next)));
+
+  if (resetScroll) {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    $('#main-content').focus({ preventScroll: true });
+  }
+}
+
+function updatePrintValues() {
+  const p = people[selected];
+  if (!p) return;
+
+  // Print Front - Bind ONLY verified digital form fields
+  $$('#print-front [data-print]').forEach(el => {
+    const key = el.dataset.print;
+    if (key === 'name') el.textContent = p.name || '';
+    else if (key === 'father') el.textContent = p.father || '';
+    else if (key === 'nid') el.textContent = p.nid ? fa(p.nid) : '';
+    else if (key === 'grade') el.textContent = p.grade || '';
+    else if (key === 'school') el.textContent = p.school || '';
+    else if (key === 'phone') el.textContent = p.phone || '';
+    // Unconfirmed or separate fields stay completely blank
+    else if (key === 'parent_phone') el.textContent = p.print_phone_2 || '';
+    else if (key === 'counter') el.textContent = p.counter ? fa(p.counter) : '';
+    else if (key === 'year_start') el.textContent = p.year_start ? fa(p.year_start) : '';
+    else if (key === 'year_end') el.textContent = p.year_end ? fa(p.year_end) : '';
+    else if (key === 'first_exam') el.textContent = p.first_exam || '';
+    else if (key === 'sub_office') el.textContent = p.sub_office || '';
+    else el.textContent = '';
+  });
+
+  // Print Front - Checkboxes (ONLY verified digital fields receive a checkmark)
+  $$('#print-front [data-print-check]').forEach(el => {
+    const check = el.dataset.printCheck;
+    const bdi = el.querySelector('bdi');
+    if (!bdi) return;
+    // Gender is a verified required field in the digital registration form
+    if (check === 'male' && p.sex === 'پسر') { bdi.textContent = '✓'; }
+    else if (check === 'female' && p.sex === 'دختر') { bdi.textContent = '✓'; }
+    // All other checkboxes are historical/paper-only and remain blank unless explicitly mapped
+    else if (check === 'reg_normal' && p.reg_type === 'عادی') { bdi.textContent = '✓'; }
+    else if (check === 'time_early' && p.reg_time === 'زودهنگام') { bdi.textContent = '✓'; }
+    else if (check === 'loc_central' && p.reg_location === 'دفتر مرکزی') { bdi.textContent = '✓'; }
+    else { bdi.textContent = ''; }
+  });
+
+  // Print Back - Bindings (Only verified digital fields; financial date must not be derived from entry date)
+  $$('#print-back [data-print-back]').forEach(el => {
+    const key = el.dataset.printBack;
+    if (key === 'name') el.textContent = p.name || '';
+    else if (key === 'father') el.textContent = p.father || '';
+    else if (key === 'grade') el.textContent = p.grade || '';
+    // Financial date and financial fields must NOT be inferred or derived from entry date
+    else if (key === 'date') el.textContent = p.print_back_date || '';
+    else if (key === 'academic_year') el.textContent = p.academic_year || '';
+    else if (key === 'tuition') el.textContent = p.tuition ? fa(p.tuition) : '';
+    else if (key === 'discount') el.textContent = p.discount ? fa(p.discount) : '';
+    else if (key === 'payable') el.textContent = p.payable ? fa(p.payable) : '';
+    else if (key === 'discount_title') el.textContent = p.discount_title || '';
+    else el.textContent = '';
+  });
+}
+
+function populateDetail(id) {
+  selected = id;
+  const p = people[id];
+
+  $('#dossier-name').textContent = p.name;
+  $('#dossier-nid').textContent = fa(p.nid);
+  $('#dossier-grade').textContent = p.grade;
+  $('#dossier-school').textContent = p.school;
+
+  const cardAvatar = cards.get(id).querySelector('.avatar');
+  if (cardAvatar) {
+    $('#detail-avatar').replaceChildren(cardAvatar.cloneNode(true));
+  }
+
+  $$('[data-value]').forEach(el => {
+    const key = el.dataset.value;
+    if (key === 'date') el.textContent = `${fa(p.day)} شهریور ۱۴۰۵`;
+    else if (key === 'nid') el.textContent = fa(p.nid);
+    else el.textContent = p[key] || 'ثبت نشده';
+    el.classList.toggle('muted-value', !p[key] && key !== 'date');
+  });
+
+  $('#action-feedback').hidden = true;
+
+  // Documents demo handling
+  $('#ali-documents').hidden = (id !== 0);
+  $('#pdf-documents').hidden = (id !== 3);
+  $('#file-feedback').hidden = true;
+
+  // History section
+  $('#history').open = false;
+  updatePrintValues();
+}
+
+function openPreview() {
+  const d = $('#document-dialog');
+  if (d.open) return;
+  previewFocus = document.activeElement;
+  previewScroll = window.scrollY;
+  d.showModal();
+  document.body.style.overflow = 'hidden';
+  $('#close-preview').focus({ preventScroll: true });
+}
+
+function closePreview() {
+  const d = $('#document-dialog');
+  if (d.open) d.close();
+}
+
+$('#document-dialog').addEventListener('close', () => {
+  document.body.style.overflow = '';
+  window.scrollTo({ top: previewScroll, behavior: 'instant' });
+  previewFocus?.focus({ preventScroll: true });
+});
+
+$('#document-dialog').addEventListener('click', e => {
+  if (e.target !== $('#document-dialog')) return;
+  const r = e.target.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+    closePreview();
+  }
+});
+
+document.addEventListener('click', e => {
+  const nav = e.target.closest('[data-surface]');
+  if (nav) {
+    showSurface(nav.dataset.surface);
+    return;
+  }
+
+  const jump = e.target.closest('[data-jump]');
+  if (jump) {
+    if (jump.dataset.jump === 'detail') {
+      showSurface('detail-' + dossierDevice);
+    } else {
+      dossierDevice = device();
+      showSurface(jump.dataset.jump);
+    }
+    return;
+  }
+
+  const opener = e.target.closest('[data-open]');
+  if (opener) {
+    lastOpener = opener;
+    populateDetail(Number(opener.dataset.open));
+    showSurface('detail-' + device());
+    return;
+  }
+
+  const b = e.target.closest('[data-page]');
+  if (b) {
+    changePage(Number(b.dataset.page));
+    return;
+  }
+
+  if (e.target.closest('[data-preview]')) openPreview();
+
+  if (e.target.closest('[data-file]')) {
+    const f = $('#file-feedback');
+    f.hidden = false;
+    f.textContent = 'باز کردن فایل PDF در این نسخهٔ نمایشی شبیه‌سازی شده است؛ در پیاده‌سازی نهایی فایل کارنامه باز خواهد شد.';
+  }
+});
+
+$('#back-inbox').addEventListener('click', () => {
+  showSurface('inbox-' + device(), false);
+  window.scrollTo({ top: inboxScroll, behavior: 'instant' });
+  lastOpener?.focus({ preventScroll: true });
+});
+
+['filter', 'sort'].forEach(type => {
+  $(`#${type}-toggle`).addEventListener('click', () => {
+    const p = $(`#${type}-panel`);
+    p.hidden = !p.hidden;
+    $(`#${type}-toggle`).setAttribute('aria-expanded', String(!p.hidden));
+  });
+});
+
+$('#case-search').addEventListener('input', () => { page = 1; applyResults(); });
+$('#school-filter').addEventListener('change', () => { page = 1; applyResults(); });
+$('#case-sort').addEventListener('change', () => { page = 1; applyResults(); });
+
+function resetFilters() {
+  $('#school-filter').value = 'all';
+  $('#case-search').value = '';
+  page = 1;
+  applyResults();
+}
+
+$('#reset-filters').addEventListener('click', () => resetFilters());
+$('#clear-search').addEventListener('click', () => { resetFilters(); $('#case-search').focus(); });
+$('#prev-page').addEventListener('click', () => changePage(page - 1));
+$('#next-page').addEventListener('click', () => changePage(page + 1));
+$('#close-preview').addEventListener('click', closePreview);
+
+['approve', 'reject'].forEach(type => {
+  $('#' + type + '-action').addEventListener('click', () => {
+    const f = $('#action-feedback');
+    f.hidden = false;
+    f.textContent = (type === 'approve')
+      ? 'تصمیم تأیید پرونده ثبت شد.'
+      : 'تصمیم رد پرونده ثبت شد.';
+  });
+});
+
+$('#print-button').addEventListener('click', () => window.print());
+
+populateDetail(0);
+applyResults();
+</script>
+</body>
+</html>

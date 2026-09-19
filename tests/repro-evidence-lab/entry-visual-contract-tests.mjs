@@ -9,306 +9,621 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
-const ownerHtml = process.env.GPP_OWNER_HTML;
-const expectedHtml = { size: 115728, sha256: '666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81' };
+const ownerHtml = process.env.GPP_ENTRY_OWNER_HTML;
+const expectedHtml = { size: 119765, sha256: '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69' };
+const comparatorVersion = 'entry-vnext-browser-comparator-v1';
+const evidenceSchemaVersion = '2.0.0';
+const canonical = ['header', 'current-task', 'education', 'candidate-details', 'contact', 'school', 'documents', 'registration-finance', 'history'];
+const expectedPlacements = {
+  'student.first_name': 'candidate-details',
+  'student.last_name': 'candidate-details',
+  'student.father_name': 'candidate-details',
+  'student.birth_date_jalali': 'candidate-details',
+  'student.gender': 'candidate-details',
+  'student.mobile': 'contact',
+  'student.home_phone': 'contact',
+  'student.father_mobile': 'contact',
+  'student.mother_mobile': 'contact',
+  'education.level': 'education',
+  'education.grade_group': 'education',
+  'school.name': 'school',
+  'entry.created_at': 'registration-finance',
+  'review.status': 'registration-finance',
+  'finance.status': 'registration-finance',
+  'finance.tuition_amount': 'registration-finance',
+  'finance.discount_amount': 'registration-finance',
+  'finance.net_payable_amount': 'registration-finance',
+};
+const personalHeaderExclusions = ['student.first_name', 'student.last_name', 'student.father_name', 'student.birth_date_jalali', 'student.gender'];
+const gridRegions = ['education', 'candidate-details', 'contact', 'school', 'registration-finance'];
 const results = [];
 
-if (!artifactDir || !wpPath || !wpCli || !ownerHtml) throw new Error('Entry visual qualification environment is incomplete.');
+const referenceProfile = {
+  root: '.dossier',
+  regionMatchers: [
+    { name: 'header', selector: '.dossier-header', mode: 'self' },
+    { name: 'current-task', selector: '.task', mode: 'self' },
+    { name: 'education', selector: '.data-grid--education', mode: 'descendant' },
+    { name: 'candidate-details', selector: '.data-grid--personal', mode: 'descendant' },
+    { name: 'contact', selector: '.data-grid--contact', mode: 'descendant' },
+    { name: 'school', selector: '.data-grid--school', mode: 'descendant' },
+    { name: 'documents', selector: '.documents', mode: 'descendant' },
+    { name: 'registration-finance', selector: '.data-grid--financial', mode: 'descendant' },
+    { name: 'history', selector: '.history', mode: 'self' },
+  ],
+  grids: {
+    education: '.data-grid--education',
+    'candidate-details': '.data-grid--personal',
+    contact: '.data-grid--contact',
+    school: '.data-grid--school',
+    'registration-finance': '.data-grid--financial',
+  },
+  h1: '.dossier-header h1',
+  taskHeading: '.task h2',
+  placementSelector: null,
+  genericFactsSelector: null,
+};
+
+const productionProfile = {
+  root: '.gpp-entry-dossier--composed',
+  regionMatchers: canonical.map(name => ({ name, selector: `[data-gpp-entry-region="${name}"]`, mode: 'self' })),
+  grids: {
+    education: '[data-gpp-entry-region="education"] .gpp-entry-dossier__facts',
+    'candidate-details': '[data-gpp-entry-region="candidate-details"] .gpp-entry-dossier__facts',
+    contact: '[data-gpp-entry-region="contact"] .gpp-entry-dossier__facts',
+    school: '[data-gpp-entry-region="school"] .gpp-entry-dossier__facts',
+    'registration-finance': '[data-gpp-entry-region="registration-finance"] .gpp-entry-dossier__facts',
+  },
+  h1: '[data-gpp-entry-region="header"] h1',
+  taskHeading: '[data-gpp-entry-region="current-task"] .gpp-entry-dossier__task-heading',
+  placementSelector: '[data-gpp-slot]',
+  genericFactsSelector: '[data-gpp-entry-region="facts"], [data-gpp-section="facts"]',
+};
+
+if (!artifactDir || !wpPath || !wpCli || !ownerHtml) throw new Error('Entry vNext visual qualification environment is incomplete.');
 
 function identity(file) {
   const data = fs.readFileSync(file);
   return { size: data.length, sha256: createHash('sha256').update(data).digest('hex') };
 }
-function assertIdentity(file, expected, label) {
-  const actual = identity(file);
-  if (actual.size !== expected.size || actual.sha256 !== expected.sha256) throw new Error(`${label} authority mismatch: ${JSON.stringify(actual)}`);
-  return actual;
+
+function command(args) {
+  const cp = spawnSync(args[0], args.slice(1), { encoding: 'utf8', env: process.env });
+  if (cp.status !== 0) throw new Error(`${args.join(' ')} failed:\n${cp.stderr}\n${cp.stdout}`);
+  return cp.stdout.trim();
 }
-const htmlIdentity = assertIdentity(ownerHtml, expectedHtml, 'Owner HTML');
+
+const htmlIdentity = identity(ownerHtml);
+if (htmlIdentity.size !== expectedHtml.size || htmlIdentity.sha256 !== expectedHtml.sha256) {
+  throw new Error(`Entry vNext authority mismatch: ${JSON.stringify(htmlIdentity)}`);
+}
+const repositoryHead = command(['git', 'rev-parse', 'HEAD']);
+if (!/^[0-9a-f]{40}$/.test(repositoryHead)) throw new Error('Exact repository Head is unavailable.');
 
 function wpEval(code) {
   const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
   if (cp.status !== 0) throw new Error(`${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
+
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
 const runtimePassword = `gppv-${randomBytes(18).toString('hex')}-A1!`;
 wpEval(`wp_set_password(${JSON.stringify(runtimePassword)}, ${Number(manifest.bootstrap_id)}); echo 'credential-ready';`);
 const entryUrl = `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id=${alpha.form_id}&lid=${alpha.entry_id}`;
 
-function record(id, name, status, details = null) { results.push({ id, name, status, details }); }
-async function test(id, name, fn) {
-  try { record(id, name, 'PASS', await fn()); }
-  catch (error) { record(id, name, 'FAIL', { error: String(error?.stack || error).slice(0, 10000) }); }
+function closeEnough(actual, expected, tolerance) {
+  return Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
 }
-async function login(page) {
+
+function sameArray(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+function executableResultBase(id, scenarioType, viewport, comparatorResult, failedRuleIds) {
+  return {
+    id,
+    status: 'PASS',
+    scenario_type: scenarioType,
+    viewport,
+    repository_head: repositoryHead,
+    owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+    comparator_version: comparatorVersion,
+    comparator_executed: true,
+    comparator_result: comparatorResult,
+    failed_rule_ids: failedRuleIds,
+  };
+}
+
+async function collectRenderedEntryDetailState(page, profile) {
+  return page.evaluate(({ profile, canonicalNames }) => {
+    const root = document.querySelector(profile.root);
+    if (!root) return { missing: true };
+
+    const rect = element => {
+      if (!element) return null;
+      const value = element.getBoundingClientRect();
+      return {
+        top: value.top,
+        right: value.right,
+        bottom: value.bottom,
+        left: value.left,
+        width: value.width,
+        height: value.height,
+      };
+    };
+    const style = element => {
+      if (!element) return null;
+      const value = getComputedStyle(element);
+      return {
+        backgroundColor: value.backgroundColor,
+        borderTopColor: value.borderTopColor,
+        borderTopStyle: value.borderTopStyle,
+        borderTopWidth: parseFloat(value.borderTopWidth),
+        borderRadius: parseFloat(value.borderRadius),
+        paddingInlineStart: parseFloat(value.paddingInlineStart),
+        paddingInlineEnd: parseFloat(value.paddingInlineEnd),
+        fontSize: parseFloat(value.fontSize),
+        fontWeight: value.fontWeight,
+        lineHeight: parseFloat(value.lineHeight),
+        transform: value.transform,
+      };
+    };
+    const matchesRegion = (child, matcher) => matcher.mode === 'self'
+      ? child.matches(matcher.selector)
+      : Boolean(child.querySelector(matcher.selector));
+
+    const order = [];
+    const regionElements = {};
+    for (const child of root.children) {
+      const matcher = profile.regionMatchers.find(candidate => matchesRegion(child, candidate));
+      if (!matcher) continue;
+      order.push(matcher.name);
+      regionElements[matcher.name] = child;
+    }
+
+    const grids = {};
+    for (const [name, selector] of Object.entries(profile.grids)) {
+      const element = root.querySelector(selector);
+      if (!element) continue;
+      const columns = getComputedStyle(element).gridTemplateColumns.trim();
+      grids[name] = columns ? columns.split(/\s+/).length : 0;
+    }
+
+    const placements = {};
+    if (profile.placementSelector) {
+      root.querySelectorAll(profile.placementSelector).forEach(node => {
+        const slot = node.dataset.gppSlot;
+        if (!slot) return;
+        const region = node.closest('[data-gpp-entry-region]')?.dataset.gppEntryRegion || null;
+        (placements[slot] ||= []).push(region);
+      });
+    }
+
+    const header = regionElements.header || null;
+    const task = regionElements['current-task'] || null;
+    const education = regionElements.education || null;
+    const h1 = root.querySelector(profile.h1);
+    const taskHeading = root.querySelector(profile.taskHeading);
+    const rootRect = rect(root);
+    const headerRect = rect(header);
+    const taskRect = rect(task);
+    const educationRect = rect(education);
+
+    return {
+      missing: false,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      order,
+      grids,
+      placements,
+      genericFacts: profile.genericFactsSelector ? root.querySelectorAll(profile.genericFactsSelector).length : 0,
+      rootOverflow: root.scrollWidth > root.clientWidth + 1,
+      viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      geometry: {
+        root: rootRect,
+        header: headerRect,
+        task: taskRect,
+        education: educationRect,
+        taskGapFromHeader: headerRect && taskRect ? taskRect.top - headerRect.bottom : null,
+        educationGapFromTask: taskRect && educationRect ? educationRect.top - taskRect.bottom : null,
+      },
+      tokens: {
+        root: style(root),
+        task: style(task),
+        h1: style(h1),
+        taskHeading: style(taskHeading),
+      },
+      knownRegions: canonicalNames.reduce((out, name) => {
+        out[name] = Boolean(regionElements[name]);
+        return out;
+      }, {}),
+    };
+  }, { profile, canonicalNames: canonical });
+}
+
+function compareAgainstVNextContract(actual, reference, context) {
+  const failedRuleIds = [];
+  const ruleDetails = {};
+  const fail = (ruleId, details) => {
+    failedRuleIds.push(ruleId);
+    ruleDetails[ruleId] = details;
+  };
+
+  if (actual?.missing || reference?.missing) {
+    fail('DOSSIER_PRESENT', { actualMissing: Boolean(actual?.missing), referenceMissing: Boolean(reference?.missing) });
+    return { comparator_result: 'REJECTED', failed_rule_ids: failedRuleIds, rule_details: ruleDetails };
+  }
+
+  if (!sameArray(reference.order, canonical) || !sameArray(actual.order, canonical)) {
+    fail('ENTRY_REGION_ORDER', { reference: reference.order, actual: actual.order, expected: canonical });
+  }
+
+  const placementFailures = [];
+  for (const [slot, expectedRegion] of Object.entries(expectedPlacements)) {
+    const actualRegions = actual.placements[slot] || [];
+    if (!actualRegions.includes(expectedRegion)) placementFailures.push({ slot, expectedRegion, actualRegions });
+  }
+  for (const slot of personalHeaderExclusions) {
+    if ((actual.placements[slot] || []).includes('header')) placementFailures.push({ slot, forbiddenRegion: 'header' });
+  }
+  if (actual.genericFacts !== 0 || placementFailures.length) {
+    fail('SEMANTIC_REGION_PLACEMENT', { genericFacts: actual.genericFacts, placementFailures });
+  }
+
+  const gridFailures = gridRegions.filter(name => actual.grids[name] !== reference.grids[name]);
+  if (gridFailures.length) {
+    fail('GRID_STRUCTURE', {
+      failures: gridFailures.map(name => ({ name, actual: actual.grids[name], reference: reference.grids[name] })),
+    });
+  }
+
+  if (actual.rootOverflow || actual.viewportOverflow) {
+    fail('HORIZONTAL_OVERFLOW', { rootOverflow: actual.rootOverflow, viewportOverflow: actual.viewportOverflow });
+  }
+
+  const referenceWidth = reference.geometry.root?.width;
+  const actualWidth = actual.geometry.root?.width;
+  const widthTolerance = Math.max(10, (referenceWidth || 0) * 0.02);
+  const rootPaddingStartOk = closeEnough(actual.tokens.root?.paddingInlineStart, reference.tokens.root?.paddingInlineStart, 0.75);
+  const rootPaddingEndOk = closeEnough(actual.tokens.root?.paddingInlineEnd, reference.tokens.root?.paddingInlineEnd, 0.75);
+  if (!closeEnough(actualWidth, referenceWidth, widthTolerance) || !rootPaddingStartOk || !rootPaddingEndOk) {
+    fail('DOSSIER_INLINE_GEOMETRY', {
+      actualWidth,
+      referenceWidth,
+      widthTolerance,
+      actualPaddingInlineStart: actual.tokens.root?.paddingInlineStart,
+      referencePaddingInlineStart: reference.tokens.root?.paddingInlineStart,
+      actualPaddingInlineEnd: actual.tokens.root?.paddingInlineEnd,
+      referencePaddingInlineEnd: reference.tokens.root?.paddingInlineEnd,
+    });
+  }
+
+  if (!closeEnough(actual.geometry.taskGapFromHeader, reference.geometry.taskGapFromHeader, 2)
+      || !closeEnough(actual.geometry.educationGapFromTask, reference.geometry.educationGapFromTask, 2)) {
+    fail('CURRENT_TASK_RELATIVE_POSITION', {
+      actualTaskGapFromHeader: actual.geometry.taskGapFromHeader,
+      referenceTaskGapFromHeader: reference.geometry.taskGapFromHeader,
+      actualEducationGapFromTask: actual.geometry.educationGapFromTask,
+      referenceEducationGapFromTask: reference.geometry.educationGapFromTask,
+    });
+  }
+
+  const typographyRules = [
+    ['H1_TYPOGRAPHY', actual.tokens.h1, reference.tokens.h1],
+    ['TASK_HEADING_TYPOGRAPHY', actual.tokens.taskHeading, reference.tokens.taskHeading],
+  ];
+  for (const [ruleId, actualStyle, referenceStyle] of typographyRules) {
+    if (!actualStyle || !referenceStyle
+        || !closeEnough(actualStyle.fontSize, referenceStyle.fontSize, 0.5)
+        || String(actualStyle.fontWeight) !== String(referenceStyle.fontWeight)
+        || !closeEnough(actualStyle.lineHeight, referenceStyle.lineHeight, 0.75)) {
+      fail(ruleId, { actual: actualStyle, reference: referenceStyle });
+    }
+  }
+
+  if (!closeEnough(actual.tokens.root?.borderRadius, reference.tokens.root?.borderRadius, 0.5)) {
+    fail('DOSSIER_RADIUS', { actual: actual.tokens.root?.borderRadius, reference: reference.tokens.root?.borderRadius });
+  }
+  if (actual.tokens.root?.backgroundColor !== reference.tokens.root?.backgroundColor) {
+    fail('DOSSIER_BACKGROUND', { actual: actual.tokens.root?.backgroundColor, reference: reference.tokens.root?.backgroundColor });
+  }
+  if (!closeEnough(actual.tokens.root?.borderTopWidth, reference.tokens.root?.borderTopWidth, 0.25)
+      || actual.tokens.root?.borderTopStyle !== reference.tokens.root?.borderTopStyle
+      || actual.tokens.root?.borderTopColor !== reference.tokens.root?.borderTopColor) {
+    fail('DOSSIER_BORDER', { actual: actual.tokens.root, reference: reference.tokens.root });
+  }
+  if (!closeEnough(actual.tokens.task?.borderRadius, reference.tokens.task?.borderRadius, 0.5)) {
+    fail('CURRENT_TASK_RADIUS', { actual: actual.tokens.task?.borderRadius, reference: reference.tokens.task?.borderRadius });
+  }
+  if (actual.tokens.task?.backgroundColor !== reference.tokens.task?.backgroundColor) {
+    fail('CURRENT_TASK_BACKGROUND', { actual: actual.tokens.task?.backgroundColor, reference: reference.tokens.task?.backgroundColor });
+  }
+
+  return {
+    comparator_result: failedRuleIds.length ? 'REJECTED' : 'PASS',
+    failed_rule_ids: failedRuleIds,
+    rule_details: ruleDetails,
+    context,
+  };
+}
+
+function requireComparatorPass(comparison, label) {
+  if (comparison.comparator_result !== 'PASS') {
+    throw new Error(`${label} comparator rejected: ${JSON.stringify(comparison)}`);
+  }
+}
+
+async function login(context) {
+  const page = await context.newPage();
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
   await page.fill('#user_login', 'bootstrap_admin');
   await page.fill('#user_pass', runtimePassword);
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
+  await page.close();
 }
-function rgbHex(rgb) {
-  const nums = rgb.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-  return nums?.length === 3 ? `#${nums.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`.toUpperCase() : rgb.toUpperCase();
+
+async function freshProductionPage(context, viewport) {
+  const page = await context.newPage();
+  await page.setViewportSize(viewport);
+  await page.goto(entryUrl, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
+  return page;
 }
-function rect(el) {
-  const x = el.getBoundingClientRect();
-  return { x: x.x, y: x.y, width: x.width, height: x.height, right: x.right, bottom: x.bottom };
+
+async function collectReference(referencePage, surface, viewport) {
+  await referencePage.setViewportSize(viewport);
+  await referencePage.evaluate(name => window.showSurface(name), surface);
+  return collectRenderedEntryDetailState(referencePage, referenceProfile);
 }
-async function referenceEntryMetrics(page, surface) {
-  await page.evaluate(s => window.showSurface(s), surface);
-  return page.evaluate(() => {
-    const r = el => { const x = el.getBoundingClientRect(); return { x: x.x, y: x.y, width: x.width, height: x.height, right: x.right, bottom: x.bottom }; };
-    const root = document.querySelector('.dossier');
-    const identity = document.querySelector('.dossier-header');
-    const task = document.querySelector('.task');
-    const documents = document.querySelector('.documents')?.closest('.dossier-section');
-    const history = document.querySelector('#history');
-    const stage = document.querySelector('#stage');
-    const vars = getComputedStyle(document.documentElement);
+
+async function runPositive(context, reference, viewport, resultId, viewportId, screenshotName) {
+  const page = await freshProductionPage(context, viewport);
+  try {
+    const actual = await collectRenderedEntryDetailState(page, productionProfile);
+    const comparison = compareAgainstVNextContract(actual, reference, { scenario: 'positive', viewport: viewportId });
+    requireComparatorPass(comparison, resultId);
+    if (screenshotName) await page.screenshot({ path: path.join(artifactDir, screenshotName), fullPage: true });
     return {
-      stage: r(stage), root: r(root), identity: r(identity), task: r(task), documents: documents ? r(documents) : null, history: history ? r(history) : null,
-      tokens: { page: vars.getPropertyValue('--bg').trim(), surface: vars.getPropertyValue('--surface').trim(), primary: vars.getPropertyValue('--primary').trim(), text: vars.getPropertyValue('--text').trim(), secondary: vars.getPropertyValue('--secondary').trim(), muted: vars.getPropertyValue('--muted').trim(), divider: vars.getPropertyValue('--line').trim(), error: vars.getPropertyValue('--error').trim(), success: vars.getPropertyValue('--success').trim() },
-      h1: { size: parseFloat(getComputedStyle(root.querySelector('h1')).fontSize), weight: getComputedStyle(root.querySelector('h1')).fontWeight },
-      h2: { size: parseFloat(getComputedStyle(task.querySelector('h2')).fontSize), weight: getComputedStyle(task.querySelector('h2')).fontWeight },
+      ...executableResultBase(resultId, 'positive', viewportId, comparison.comparator_result, comparison.failed_rule_ids),
+      mutation_id: null,
+      mutation_confirmed: null,
+      comparison_summary: {
+        actual_root_width: actual.geometry.root?.width,
+        reference_root_width: reference.geometry.root?.width,
+        actual_task_gap_from_header: actual.geometry.taskGapFromHeader,
+        reference_task_gap_from_header: reference.geometry.taskGapFromHeader,
+      },
     };
-  });
+  } finally {
+    await page.close();
+  }
 }
-async function productionEntryMetrics(page) {
-  return page.evaluate(() => {
-    const r = el => { const x = el.getBoundingClientRect(); return { x: x.x, y: x.y, width: x.width, height: x.height, right: x.right, bottom: x.bottom }; };
-    const root = document.querySelector('.gpp-entry-dossier--composed');
-    if (!root) return { missing: true };
-    const identity = root.querySelector('[data-gpp-section="identity"]');
-    const task = root.querySelector('[data-gpp-section="current-task"]');
-    const documents = root.querySelector('[data-gpp-section="documents"]');
-    const history = root.querySelector('[data-gpp-section="history"]');
-    const actions = task?.querySelector('.gravityflow-action-buttons');
-    const sections = [...root.querySelectorAll(':scope > [data-gpp-section]')];
-    const weights = [];
-    for (const el of root.querySelectorAll('.gpp-entry-dossier__fact dt, .gpp-entry-dossier__fact dd, .gpp-entry-dossier__section h1, .gpp-entry-dossier__section h2, .gpp-entry-dossier__task-step, .gpp-entry-dossier__document-label, .gpp-entry-dossier__history-help, .gpp-entry-dossier__history details > summary')) {
-      weights.push({ selector: el.tagName.toLowerCase(), weight: getComputedStyle(el).fontWeight });
+
+async function runNegativeControl({
+  context,
+  reference,
+  viewport,
+  viewportId,
+  resultId,
+  mutationId,
+  expectedRuleId,
+  mutate,
+}) {
+  const page = await freshProductionPage(context, viewport);
+  try {
+    const baseline = await collectRenderedEntryDetailState(page, productionProfile);
+    const baselineComparison = compareAgainstVNextContract(baseline, reference, { scenario: 'falsification-baseline', viewport: viewportId, mutationId });
+    requireComparatorPass(baselineComparison, `${resultId} baseline`);
+
+    const mutationEvidence = await mutate(page, baseline);
+    if (!mutationEvidence?.confirmed) throw new Error(`${resultId} mutation did not materially apply: ${JSON.stringify(mutationEvidence)}`);
+
+    const mutated = await collectRenderedEntryDetailState(page, productionProfile);
+    const comparison = compareAgainstVNextContract(mutated, reference, { scenario: 'falsification', viewport: viewportId, mutationId });
+    if (comparison.comparator_result !== 'REJECTED') throw new Error(`${resultId} comparator failed to reject the mutated DOM.`);
+    if (!comparison.failed_rule_ids.includes(expectedRuleId)) {
+      throw new Error(`${resultId} rejected for unrelated rules: ${JSON.stringify(comparison.failed_rule_ids)}`);
     }
-    const csRoot = getComputedStyle(root); const csSection = getComputedStyle(identity); const csTask = getComputedStyle(task);
-    const h1 = identity.querySelector('h1'); const h2 = task.querySelector('.gpp-entry-dossier__task-heading');
-    if (!h2) return { missing: true, reason: 'owned current-task heading missing' };
-    const nativeHeading = task.querySelector('[data-gpp-native-editor] h1, [data-gpp-native-editor] h2, [data-gpp-native-editor] h3, [data-gpp-native-editor] h4, [data-gpp-native-editor] .gsection_title');
-    const nativeAction = task.querySelector('[data-gpp-native-actions] button, [data-gpp-native-actions] input[type="submit"], [data-gpp-native-actions] input[type="button"]');
-    const fontSizeCascade = (() => {
-      const candidates = [];
-      const visit = (rules, href) => {
-        for (const rule of rules) {
-          if (rule.type === CSSRule.STYLE_RULE) {
-            let matches = false;
-            try { matches = h2.matches(rule.selectorText); } catch {}
-            const value = rule.style?.fontSize || '';
-            if (matches && value) candidates.push({ rule, href: href || 'inline', selector: rule.selectorText, value, priority: rule.style.getPropertyPriority('font-size') || '' });
-          }
-          if (rule.cssRules) { try { visit(rule.cssRules, href); } catch {} }
-        }
-      };
-      for (const sheet of document.styleSheets) { try { visit(sheet.cssRules, sheet.href); } catch {} }
-      let winner = null;
-      for (const candidate of candidates) {
-        const oldValue = candidate.rule.style.getPropertyValue('font-size');
-        const oldPriority = candidate.rule.style.getPropertyPriority('font-size');
-        candidate.rule.style.setProperty('font-size', '101px', oldPriority);
-        const wins = Math.abs(parseFloat(getComputedStyle(h2).fontSize) - 101) < 0.1;
-        candidate.rule.style.setProperty('font-size', oldValue, oldPriority);
-        if (wins) winner = { href: candidate.href, selector: candidate.selector, value: candidate.value, priority: candidate.priority || 'normal' };
-      }
-      return { computed_px: parseFloat(getComputedStyle(h2).fontSize), winner, candidates: candidates.map(({href,selector,value,priority}) => ({ href, selector, value, priority: priority || 'normal' })) };
-    })();
-    const ownedTypographyIsolation = (() => {
-      const headingMatches = []; const actionMatches = [];
-      const visit = rules => {
-        for (const rule of rules) {
-          if (rule.type === CSSRule.STYLE_RULE && rule.selectorText?.includes('gpp-entry-dossier__task-heading')) {
-            try { if (nativeHeading?.matches(rule.selectorText)) headingMatches.push(rule.selectorText); } catch {}
-            try { if (nativeAction?.matches(rule.selectorText)) actionMatches.push(rule.selectorText); } catch {}
-          }
-          if (rule.cssRules) { try { visit(rule.cssRules); } catch {} }
-        }
-      };
-      for (const sheet of document.styleSheets) { try { visit(sheet.cssRules); } catch {} }
-      return { task_heading_has_owned_class: h2.classList.contains('gpp-entry-dossier__task-heading'), native_heading_present: Boolean(nativeHeading), native_action_present: Boolean(nativeAction), native_heading_owned_rule_matches: headingMatches, native_action_owned_rule_matches: actionMatches };
-    })();
+
     return {
-      missing: false, root: r(root), identity: r(identity), task: r(task), documents: documents ? r(documents) : null, history: history ? r(history) : null, actions: actions ? r(actions) : null,
-      sectionOrder: sections.map(el => el.dataset.gppSection), sectionRects: sections.map(el => ({ section: el.dataset.gppSection, ...r(el) })),
-      styles: { text: csRoot.color, fontSynthesis: csRoot.fontSynthesis, identityBorderTop: csSection.borderTopColor, identityBackground: csSection.backgroundColor, identityBorder: csSection.borderRightColor, taskBackground: csTask.backgroundColor },
-      h1: { size: parseFloat(getComputedStyle(h1).fontSize), weight: getComputedStyle(h1).fontWeight }, h2: { size: parseFloat(getComputedStyle(h2).fontSize), weight: getComputedStyle(h2).fontWeight },
-      h2FontSizeCascade: fontSizeCascade,
-      ownedTypographyIsolation,
-      weights,
-      rootOverflow: root.scrollWidth > root.clientWidth + 1,
-      viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      ...executableResultBase(resultId, 'falsification', viewportId, comparison.comparator_result, comparison.failed_rule_ids),
+      mutation_id: mutationId,
+      mutation_confirmed: true,
+      baseline_comparator_result: baselineComparison.comparator_result,
+      expected_failed_rule_id: expectedRuleId,
+      mutation_evidence: mutationEvidence,
     };
-  });
-}
-
-const regionNames = ['identity', 'task', 'documents', 'history'];
-function geometryJitter(repeated) {
-  const base = repeated[0];
-  let geometryPx = 0;
-  let typographyPx = 0;
-  const geometryKeys = ['x', 'y', 'width', 'height', 'right', 'bottom'];
-  for (const sample of repeated.slice(1)) {
-    for (const name of ['stage', 'root', ...regionNames]) {
-      if (!base[name] || !sample[name]) continue;
-      for (const key of geometryKeys) geometryPx = Math.max(geometryPx, Math.abs(sample[name][key] - base[name][key]));
-    }
-    typographyPx = Math.max(typographyPx, Math.abs(sample.h1.size - base.h1.size), Math.abs(sample.h2.size - base.h2.size));
+  } finally {
+    await page.close();
   }
-  return {
-    measured_geometry_px: geometryPx,
-    measured_typography_px: typographyPx,
-    geometry_tolerance_px: Math.max(1, Math.ceil(geometryPx + 1)),
-    typography_tolerance_px: Math.max(0.25, typographyPx + 0.25),
-  };
 }
-function horizontalGeometry(region, root) {
-  return {
-    inset_start_px: region.x - root.x,
-    inset_end_px: root.right - region.right,
-    width_px: region.width,
-  };
-}
-function comparePx(failures, label, actual, expected, tolerance) {
-  if (Math.abs(actual - expected) > tolerance) failures.push(`${label}: actual=${actual.toFixed(2)} reference=${expected.toFixed(2)} tolerance=${tolerance}`);
-}
-function validateLegacyGenericGeometry(actual, reference, viewport, tolerancePx) {
-  const failures = [];
-  if (actual.missing) return { pass: false, failures: ['production dossier missing'] };
-  const required = ['identity', 'current-task', 'facts', 'documents', 'history'];
-  const positions = Object.fromEntries(actual.sectionOrder.map((name, index) => [name, index]));
-  for (const name of required) if (!(name in positions)) failures.push(`missing section ${name}`);
-  for (let i = 1; i < required.length; i++) if ((positions[required[i - 1]] ?? 999) >= (positions[required[i]] ?? -1)) failures.push(`section order ${required[i - 1]} -> ${required[i]}`);
-  if (actual.identity.bottom > actual.task.y + tolerancePx) failures.push('identity/task overlap');
-  if (actual.actions && (actual.actions.x < actual.task.x - tolerancePx || actual.actions.right > actual.task.right + tolerancePx || actual.actions.y < actual.task.y - tolerancePx || actual.actions.bottom > actual.task.bottom + tolerancePx)) failures.push('actions escaped current-task region');
-  for (let i = 1; i < actual.sectionRects.length; i++) if (actual.sectionRects[i - 1].bottom > actual.sectionRects[i].y + tolerancePx) failures.push(`section overlap ${actual.sectionRects[i - 1].section}/${actual.sectionRects[i].section}`);
-  if (actual.root.width > reference.stage.width + tolerancePx) failures.push(`dossier wider than locked stage: ${actual.root.width} > ${reference.stage.width}`);
-  if (actual.root.width > viewport.width + tolerancePx) failures.push('dossier wider than viewport');
-  if (actual.rootOverflow || actual.viewportOverflow) failures.push('horizontal overflow');
-  return { pass: failures.length === 0, failures };
-}
-function validateEntryContract(actual, reference, viewport, tolerances) {
-  const failures = [];
-  if (actual.missing) return { pass: false, failures: ['production dossier missing'] };
-  const tolerancePx = tolerances.geometry_tolerance_px;
-  const required = ['identity', 'current-task', 'facts', 'documents', 'history'];
-  const positions = Object.fromEntries(actual.sectionOrder.map((name, index) => [name, index]));
-  for (const name of required) if (!(name in positions)) failures.push(`missing section ${name}`);
-  for (let i = 1; i < required.length; i++) if ((positions[required[i - 1]] ?? 999) >= (positions[required[i]] ?? -1)) failures.push(`section order ${required[i - 1]} -> ${required[i]}`);
-  if (actual.identity.bottom > actual.task.y + tolerancePx) failures.push('identity/task overlap');
-  if (actual.actions && (actual.actions.x < actual.task.x - tolerancePx || actual.actions.right > actual.task.right + tolerancePx || actual.actions.y < actual.task.y - tolerancePx || actual.actions.bottom > actual.task.bottom + tolerancePx)) failures.push('actions escaped current-task region');
-  for (let i = 1; i < actual.sectionRects.length; i++) if (actual.sectionRects[i - 1].bottom > actual.sectionRects[i].y + tolerancePx) failures.push(`section overlap ${actual.sectionRects[i - 1].section}/${actual.sectionRects[i].section}`);
 
-  if (reference.root.width > reference.stage.width + tolerancePx) failures.push('locked reference root exceeds locked stage');
-  comparePx(failures, 'root width vs Owner C/D', actual.root.width, reference.root.width, tolerancePx);
-  for (const name of regionNames) {
-    if (!reference[name] || !actual[name]) {
-      failures.push(`missing comparable geometry for ${name}`);
-      continue;
-    }
-    const expected = horizontalGeometry(reference[name], reference.root);
-    const observed = horizontalGeometry(actual[name], actual.root);
-    comparePx(failures, `${name} inline-start`, observed.inset_start_px, expected.inset_start_px, tolerancePx);
-    comparePx(failures, `${name} inline-end`, observed.inset_end_px, expected.inset_end_px, tolerancePx);
-    comparePx(failures, `${name} width`, observed.width_px, expected.width_px, tolerancePx);
+async function runCase(name, fn) {
+  try {
+    const result = await fn();
+    results.push(result);
+    console.log(`PASS ${result.id} ${name}`);
+  } catch (error) {
+    const failed = {
+      id: name,
+      status: 'FAIL',
+      scenario_type: 'qualification',
+      repository_head: repositoryHead,
+      owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+      comparator_version: comparatorVersion,
+      comparator_executed: false,
+      comparator_result: 'FAIL',
+      failed_rule_ids: [],
+      error: String(error?.stack || error).slice(0, 10000),
+    };
+    results.push(failed);
+    console.log(`FAIL ${name}`);
   }
-  comparePx(failures, 'identity top inset', actual.identity.y - actual.root.y, reference.identity.y - reference.root.y, tolerancePx);
-  comparePx(failures, 'identity/current-task gap', actual.task.y - actual.identity.bottom, reference.task.y - reference.identity.bottom, tolerancePx);
-
-  if (actual.root.width > viewport.width + tolerancePx) failures.push('dossier wider than viewport');
-  if (actual.rootOverflow || actual.viewportOverflow) failures.push('horizontal overflow');
-  if (rgbHex(actual.styles.text) !== reference.tokens.text.toUpperCase()) failures.push(`primary text token ${rgbHex(actual.styles.text)}`);
-  if (rgbHex(actual.styles.identityBorderTop) !== reference.tokens.primary.toUpperCase()) failures.push(`primary accent token ${rgbHex(actual.styles.identityBorderTop)}`);
-  if (rgbHex(actual.styles.identityBackground) !== reference.tokens.surface.toUpperCase()) failures.push(`surface token ${rgbHex(actual.styles.identityBackground)}`);
-  if (rgbHex(actual.styles.identityBorder) !== reference.tokens.divider.toUpperCase()) failures.push(`divider token ${rgbHex(actual.styles.identityBorder)}`);
-  comparePx(failures, 'H1 size', actual.h1.size, reference.h1.size, tolerances.typography_tolerance_px);
-  comparePx(failures, 'current-task H2 size', actual.h2.size, reference.h2.size, tolerances.typography_tolerance_px);
-  if (actual.h1.weight !== reference.h1.weight) failures.push(`H1 weight actual=${actual.h1.weight} reference=${reference.h1.weight}`);
-  if (actual.h2.weight !== reference.h2.weight) failures.push(`H2 weight actual=${actual.h2.weight} reference=${reference.h2.weight}`);
-  if (!(actual.h1.size > actual.h2.size)) failures.push(`typography hierarchy h1=${actual.h1.size} h2=${actual.h2.size}`);
-  const forbidden = actual.weights.filter(row => Number(row.weight) === 600);
-  if (forbidden.length) failures.push(`forbidden synthetic 600 weight (${forbidden.length})`);
-  if (actual.styles.fontSynthesis !== 'none') failures.push(`font-synthesis must be none, got ${actual.styles.fontSynthesis}`);
-  if (!actual.ownedTypographyIsolation?.task_heading_has_owned_class) failures.push('current-task H2 is not owned by the GPP task-heading class');
-  if (actual.ownedTypographyIsolation?.native_heading_owned_rule_matches?.length) failures.push('owned task-heading typography selector matches a native editor heading');
-  if (actual.ownedTypographyIsolation?.native_action_owned_rule_matches?.length) failures.push('owned task-heading typography selector matches a native Approval action');
-  if (!actual.h2FontSizeCascade?.winner?.selector?.includes('gpp-entry-dossier__task-heading')) failures.push(`current-task H2 cascade winner is not the owned GPP rule: ${JSON.stringify(actual.h2FontSizeCascade?.winner)}`);
-  if (actual.h2FontSizeCascade?.winner?.priority !== 'normal') failures.push(`owned current-task H2 unexpectedly requires !important: ${actual.h2FontSizeCascade?.winner?.priority}`);
-  return { pass: failures.length === 0, failures };
 }
 
 const browser = await chromium.launch({ headless: true });
-const referenceContext = await browser.newContext();
+const referenceContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
 const referencePage = await referenceContext.newPage();
 await referencePage.goto(pathToFileURL(ownerHtml).href, { waitUntil: 'load' });
-const productionContext = await browser.newContext();
-const productionPage = await productionContext.newPage();
-await login(productionPage);
+await referencePage.waitForFunction(() => typeof window.showSurface === 'function');
+const referenceDesktop = await collectReference(referencePage, 'detail-desktop', { width: 1440, height: 1100 });
+const referenceMobile = await collectReference(referencePage, 'detail-mobile', { width: 390, height: 844 });
 
-const entryRuns = {};
-for (const [key, surface, viewport] of [ ['C', 'detail-desktop', { width: 1440, height: 1000 }], ['D', 'detail-mobile', { width: 390, height: 844 }] ]) {
-  await test(`VISUAL-ENTRY-${key}`, `Owner reference ${key} geometry/style contract`, async () => {
-    await referencePage.setViewportSize(viewport);
-    const repeated = [];
-    for (let i = 0; i < 3; i++) repeated.push(await referenceEntryMetrics(referencePage, surface));
-    const tolerances = geometryJitter(repeated);
-    const reference = repeated[0];
-    await productionPage.setViewportSize(viewport);
-    await productionPage.goto(entryUrl, { waitUntil: 'networkidle' });
-    await productionPage.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
-    const actual = await productionEntryMetrics(productionPage);
-    const validation = validateEntryContract(actual, reference, viewport, tolerances);
-    await referencePage.locator('.dossier').screenshot({ path: path.join(artifactDir, `entry-reference-${key}.png`) });
-    await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, `entry-actual-${key}.png`) });
-    fs.writeFileSync(path.join(artifactDir, `entry-visual-metrics-${key}.json`), JSON.stringify({ surface: key, viewport, tolerance_derivation: tolerances, reference, actual, validation }, null, 2) + '\n');
-    if (!validation.pass) throw new Error(`Entry ${key} visual contract failed: ${JSON.stringify(validation.failures)}`);
-    entryRuns[key] = { reference, viewport, tolerances };
-    return { tolerance_derivation: tolerances, owner_root_width_px: reference.root.width, owner_stage_width_px: reference.stage.width, major_regions_compared: regionNames, no_overlap: true, no_horizontal_overflow: true, palette_contract: true, typography_reference_conformance: true, current_task_h2_px: actual.h2.size, current_task_h2_weight: actual.h2.weight, cascade_winner: actual.h2FontSizeCascade.winner, native_host_typography_rule_isolation: actual.ownedTypographyIsolation, forbidden_weight_600: false };
-  });
-}
+const context = await browser.newContext();
+await login(context);
 
-await test('VISUAL-ENTRY-REGRESSION', 'Entry visual gate rejects the existing 120px task-position regression control', async () => {
-  const run = entryRuns.C; if (!run) throw new Error('Desktop baseline did not pass; deliberate regression proof cannot run.');
-  await productionPage.setViewportSize(run.viewport); await productionPage.goto(entryUrl, { waitUntil: 'networkidle' }); await productionPage.waitForSelector('.gpp-entry-dossier--composed');
-  await productionPage.addStyleTag({ content: '.gpp-entry-dossier__task{transform:translateY(120px)!important;}' });
-  const mutated = await productionEntryMetrics(productionPage); const validation = validateEntryContract(mutated, run.reference, run.viewport, run.tolerances);
-  await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, 'entry-deliberate-regression.png') });
-  if (validation.pass) throw new Error('Entry visual gate accepted the deliberate 120px task displacement.');
-  return { injected_only_in_test: true, rejected: true, failure_classes: validation.failures };
+await runCase('ENTRY-VNEXT-POSITIVE-DESKTOP-C', () => runPositive(
+  context,
+  referenceDesktop,
+  { width: 1440, height: 1100 },
+  'ENTRY-VNEXT-POSITIVE-DESKTOP-C',
+  'desktop-C',
+  'entry-vnext-desktop.png',
+));
+
+await runCase('ENTRY-VNEXT-POSITIVE-MOBILE-D', () => runPositive(
+  context,
+  referenceMobile,
+  { width: 390, height: 844 },
+  'ENTRY-VNEXT-POSITIVE-MOBILE-D',
+  'mobile-D',
+  'entry-vnext-mobile.png',
+));
+
+await runCase('ENTRY-VNEXT-NEGATIVE-TASK-DISPLACEMENT', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-TASK-DISPLACEMENT',
+  mutationId: 'task_translate_y_120px',
+  expectedRuleId: 'CURRENT_TASK_RELATIVE_POSITION',
+  mutate: async page => page.evaluate(() => {
+    const task = document.querySelector('[data-gpp-entry-region="current-task"]');
+    if (!task) return { confirmed: false, reason: 'task_missing' };
+    const before = task.getBoundingClientRect();
+    task.style.setProperty('transform', 'translateY(120px)', 'important');
+    const after = task.getBoundingClientRect();
+    const deltaTop = after.top - before.top;
+    return {
+      confirmed: Math.abs(deltaTop) >= 110,
+      before_top: before.top,
+      after_top: after.top,
+      delta_top: deltaTop,
+      computed_transform: getComputedStyle(task).transform,
+    };
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT',
+  mutationId: 'dossier_width_72_percent',
+  expectedRuleId: 'DOSSIER_INLINE_GEOMETRY',
+  mutate: async page => page.evaluate(() => {
+    const root = document.querySelector('.gpp-entry-dossier--composed');
+    if (!root) return { confirmed: false, reason: 'dossier_missing' };
+    const before = root.getBoundingClientRect();
+    root.style.setProperty('width', '72%', 'important');
+    const after = root.getBoundingClientRect();
+    const ratio = before.width > 0 ? after.width / before.width : 1;
+    return {
+      confirmed: before.width - after.width >= 120 && ratio <= 0.82,
+      before_width: before.width,
+      after_width: after.width,
+      width_ratio: ratio,
+      computed_width: getComputedStyle(root).width,
+    };
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN',
+  mutationId: 'h1_font_size_plus_7px',
+  expectedRuleId: 'H1_TYPOGRAPHY',
+  mutate: async page => page.evaluate(() => {
+    const h1 = document.querySelector('[data-gpp-entry-region="header"] h1');
+    if (!h1) return { confirmed: false, reason: 'h1_missing' };
+    const before = parseFloat(getComputedStyle(h1).fontSize);
+    h1.style.setProperty('font-size', `${before + 7}px`, 'important');
+    const after = parseFloat(getComputedStyle(h1).fontSize);
+    return {
+      confirmed: Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) >= 6.5,
+      before_font_size: before,
+      after_font_size: after,
+      delta_font_size: after - before,
+    };
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-FLOW-OWNERSHIP', async () => {
+  const page = await freshProductionPage(context, { width: 1440, height: 1100 });
+  try {
+    const state = await page.evaluate(() => {
+      const form = document.querySelector('form[id^="gform_"]');
+      const task = document.querySelector('[data-gpp-entry-region="current-task"]');
+      const status = document.querySelector('.gravityflow-status-box');
+      const actions = document.querySelector('.gravityflow-action-buttons');
+      return {
+        forms: document.querySelectorAll('form[id^="gform_"]').length,
+        statusBoxes: document.querySelectorAll('.gravityflow-status-box').length,
+        actionContainers: document.querySelectorAll('.gravityflow-action-buttons').length,
+        approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+        rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+        statusInsideTask: Boolean(status && task?.contains(status)),
+        actionsInsideStatus: Boolean(actions && status?.contains(actions)),
+        statusInForm: Boolean(status && status.closest('form') === form),
+        actionsInForm: Boolean(actions && actions.closest('form') === form),
+        orphanVisible: [...document.querySelectorAll('.gravityflow-status-box')].filter(node => !node.closest('.gpp-entry-dossier') && getComputedStyle(node).display !== 'none').length,
+      };
+    });
+    if (state.forms !== 1 || state.statusBoxes !== 1 || state.actionContainers !== 1 || state.approved !== 1 || state.rejected !== 1
+        || !state.statusInsideTask || !state.actionsInsideStatus || !state.statusInForm || !state.actionsInForm || state.orphanVisible !== 0) {
+      throw new Error(`Native Flow ownership changed: ${JSON.stringify(state)}`);
+    }
+    return {
+      id: 'ENTRY-VNEXT-FLOW-OWNERSHIP',
+      status: 'PASS',
+      scenario_type: 'runtime-invariant',
+      viewport: 'desktop-C',
+      repository_head: repositoryHead,
+      owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+      comparator_version: comparatorVersion,
+      comparator_executed: false,
+      comparator_result: 'NOT_APPLICABLE',
+      failed_rule_ids: [],
+      details: state,
+    };
+  } finally {
+    await page.close();
+  }
 });
 
-await test('VISUAL-ENTRY-OLD-GATE-BYPASS', 'Reference comparator rejects material narrowing that legacy generic geometry would accept', async () => {
-  const run = entryRuns.C; if (!run) throw new Error('Desktop baseline did not pass; old-gate-bypass proof cannot run.');
-  await productionPage.setViewportSize(run.viewport); await productionPage.goto(entryUrl, { waitUntil: 'networkidle' }); await productionPage.waitForSelector('.gpp-entry-dossier--composed');
-  await productionPage.addStyleTag({ content: '.gpp-entry-dossier--composed{width:72%!important;max-width:none!important;margin-inline:auto!important;}' });
-  const mutated = await productionEntryMetrics(productionPage);
-  const legacy = validateLegacyGenericGeometry(mutated, run.reference, run.viewport, run.tolerances.geometry_tolerance_px);
-  const repaired = validateEntryContract(mutated, run.reference, run.viewport, run.tolerances);
-  await productionPage.locator('.gpp-entry-dossier--composed').screenshot({ path: path.join(artifactDir, 'entry-old-gate-bypass-regression.png') });
-  if (!legacy.pass) throw new Error(`Regression precondition invalid: legacy generic geometry would already reject mutation: ${JSON.stringify(legacy.failures)}`);
-  if (repaired.pass) throw new Error('Repaired Owner-reference comparator accepted the narrowed dossier that legacy geometry would accept.');
-  return { injected_only_in_test: true, legacy_generic_geometry: 'WOULD_ACCEPT', repaired_reference_comparator: 'REJECTED_AS_EXPECTED', failure_classes: repaired.failures };
-});
-
-await referenceContext.close(); await productionContext.close(); await browser.close();
-
+const positiveDesktop = results.find(result => result.id === 'ENTRY-VNEXT-POSITIVE-DESKTOP-C');
+const positiveMobile = results.find(result => result.id === 'ENTRY-VNEXT-POSITIVE-MOBILE-D');
 const output = {
-  schema_version: '1.0.0', suite: 'Owner Entry Visual Contract Qualification', data_class: 'SYNTHETIC_NON_PII',
-  owner_reference_sha256: htmlIdentity.sha256,
+  schema_version: evidenceSchemaVersion,
+  suite: 'Entry Detail vNext shared browser/runtime visual contract',
+  comparator_version: comparatorVersion,
+  repository_head: repositoryHead,
+  authority: { file: path.basename(ownerHtml), ...htmlIdentity },
   surfaces: {
-    entry_desktop_C: results.find(r => r.id === 'VISUAL-ENTRY-C')?.status || 'FAIL',
-    entry_mobile_D: results.find(r => r.id === 'VISUAL-ENTRY-D')?.status || 'FAIL',
+    entry_desktop_C: positiveDesktop?.status === 'PASS' && positiveDesktop.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
+    entry_mobile_D: positiveMobile?.status === 'PASS' && positiveMobile.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
   },
-  deliberate_regression: results.find(r => r.id === 'VISUAL-ENTRY-REGRESSION')?.status === 'PASS' ? 'REJECTED_AS_EXPECTED' : 'NOT_PROVEN',
-  old_gate_bypass_regression: results.find(r => r.id === 'VISUAL-ENTRY-OLD-GATE-BYPASS')?.status === 'PASS' ? 'REJECTED_AS_EXPECTED' : 'NOT_PROVEN',
   results,
 };
 fs.writeFileSync(path.join(artifactDir, 'entry-visual-contract-results.json'), JSON.stringify(output, null, 2) + '\n');
-for (const result of results) console.log(`${result.status} ${result.id} ${result.name}`);
+
+await referenceContext.close();
+await context.close();
+await browser.close();
+
 if (results.some(result => result.status !== 'PASS')) process.exit(1);
