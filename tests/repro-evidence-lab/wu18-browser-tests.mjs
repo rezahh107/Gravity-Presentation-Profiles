@@ -130,9 +130,12 @@ await test('WU18-BROWSER-000', 'native-chrome CSS values and Timeline pattern ar
   const noteRule = requireMatch(timelineCss, /\.gravityflow-timeline \.gravityflow-note\s*\{([\s\S]*?)\}/, 'Timeline note rule');
   if (/display\s*:\s*grid\b/i.test(noteRule)) throw new Error('Unauthorized per-event grid/card composition returned.');
   if (/\bborder\s*:\s*1px\b/i.test(noteRule)) throw new Error('Unauthorized full per-event card border returned.');
-  if (/border-radius\s*:\s*(?!0(?:px)?\s*;)[^;]+;/i.test(noteRule)) throw new Error('Unauthorized per-event card radius returned.');
-  if (/background\s*:\s*(?!transparent\s*;)[^;]+;/i.test(noteRule)) throw new Error('Unauthorized per-event card surface returned.');
-  if (/box-shadow\s*:\s*(?!none\s*;)[^;]+;/i.test(noteRule)) throw new Error('Unauthorized per-event card shadow returned.');
+  const noteRadius = requireMatch(noteRule, /border-radius:\s*([^;]+);/, 'Timeline note radius');
+  const noteBackground = requireMatch(noteRule, /background:\s*([^;]+);/, 'Timeline note background');
+  const noteShadow = requireMatch(noteRule, /box-shadow:\s*([^;]+);/, 'Timeline note shadow');
+  if (numericPx(noteRadius) !== 0) throw new Error(`Unauthorized per-event card radius returned: ${noteRadius}`);
+  if (noteBackground.toLowerCase() !== 'transparent') throw new Error(`Unauthorized per-event card surface returned: ${noteBackground}`);
+  if (noteShadow.toLowerCase() !== 'none') throw new Error(`Unauthorized per-event card shadow returned: ${noteShadow}`);
   if (!new RegExp(`border-top:\\s*1px solid\\s*${authority.line.replace('#', '\\#')}`, 'i').test(noteRule)) throw new Error('Timeline event chronology is not using the admitted line token.');
   if (/approved|rejected|revert|approve|reject|success|error|warning|تأیید|رد|اصلاح/i.test(timelineCss)) throw new Error('Timeline styling contains outcome classification instead of neutral chronology.');
 
@@ -317,7 +320,7 @@ await test('WU18-BROWSER-003', 'native Timeline stays in place and follows admit
       heading_padding_top: heading ? getComputedStyle(heading).paddingTop : null,
       heading_font_size: heading ? getComputedStyle(heading).fontSize : null,
       heading_color: heading ? getComputedStyle(heading).color : null,
-      inside_margin_top: inside ? getComputedStyle(inside).marginTop : null,
+      inside_padding_top: inside ? getComputedStyle(inside).paddingTop : null,
       note_display: noteStyle?.display || null,
       note_background: noteStyle?.backgroundColor || null,
       note_border_top_style: noteStyle?.borderTopStyle || null,
@@ -346,7 +349,7 @@ await test('WU18-BROWSER-003', 'native Timeline stays in place and follows admit
   if (state.count !== 1 || state.parent_id !== 'postbox-container-2' || state.inside_dossier) throw new Error(`Timeline native ownership changed: ${JSON.stringify(state)}`);
   if (state.note_count < 1 || !state.title_present || !state.meta_present || !state.avatar_present || !state.avatar_width) throw new Error(`Authentic Timeline event structure unavailable: ${JSON.stringify(state)}`);
   if (state.timeline_background !== authorityRgb.surface || state.timeline_border_style !== 'none' || state.timeline_radius !== '0px' || state.timeline_shadow !== 'none') throw new Error(`Timeline outer chrome does not match neutral admitted History language: ${JSON.stringify(state)}`);
-  if (numericPx(state.heading_padding_top) !== authority.historyPaddingTop || numericPx(state.heading_font_size) !== authority.historyTitleSize || state.heading_color !== authorityRgb.text || numericPx(state.inside_margin_top) !== authority.historyContentMargin) throw new Error(`Timeline heading/content rhythm drifted from admitted History: ${JSON.stringify(state)}`);
+  if (numericPx(state.heading_padding_top) !== authority.historyPaddingTop || numericPx(state.heading_font_size) !== authority.historyTitleSize || state.heading_color !== authorityRgb.text || numericPx(state.inside_padding_top) !== authority.historyContentMargin) throw new Error(`Timeline heading/content rhythm drifted from admitted History: ${JSON.stringify(state)}`);
   if (state.note_display === 'grid' || state.note_background !== 'rgba(0, 0, 0, 0)' || state.note_border_top_style !== 'solid' || state.note_border_top_width !== '1px' || state.note_border_top_color !== authorityRgb.line || state.note_border_radius !== '0px' || state.note_shadow !== 'none') throw new Error(`Timeline event returned to unauthorized card treatment: ${JSON.stringify(state)}`);
   if (numericPx(state.note_padding_top) !== authority.historyEventPadding || numericPx(state.note_padding_bottom) !== authority.historyEventPadding) throw new Error(`Timeline chronology spacing drifted from admitted History event rhythm: ${JSON.stringify(state)}`);
   if (state.body_wrap_border_style !== 'none' || state.body_wrap_background !== 'rgba(0, 0, 0, 0)' || numericPx(state.body_wrap_margin_inline_start) <= 0) throw new Error(`Timeline host avatar/body ownership was not conservatively preserved: ${JSON.stringify(state)}`);
