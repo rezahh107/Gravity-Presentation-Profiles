@@ -11,10 +11,11 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const ownerHtml = process.env.GPP_ENTRY_OWNER_HTML;
 const expectedHtml = { size: 119765, sha256: '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69' };
-const comparatorVersion = 'entry-vnext-browser-comparator-v2-server-review';
+const comparatorVersion = 'entry-vnext-browser-comparator-v3-native-history';
 const evidenceSchemaVersion = '2.0.0';
 const admittedReviewSelector = '.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]';
 const canonical = ['header', 'current-task', 'education', 'candidate-details', 'contact', 'school', 'documents', 'registration-finance', 'history'];
+const dossierCanonical = canonical.filter(name => name !== 'history');
 const expectedPlacements = {
   'student.first_name': 'candidate-details',
   'student.last_name': 'candidate-details',
@@ -67,7 +68,7 @@ const referenceProfile = {
 
 const productionProfile = {
   root: admittedReviewSelector,
-  regionMatchers: canonical.map(name => ({ name, selector: `[data-gpp-entry-region="${name}"]`, mode: 'self' })),
+  regionMatchers: dossierCanonical.map(name => ({ name, selector: `[data-gpp-entry-region="${name}"]`, mode: 'self' })),
   grids: {
     education: '[data-gpp-entry-region="education"] .gpp-entry-dossier__facts',
     'candidate-details': '[data-gpp-entry-region="candidate-details"] .gpp-entry-dossier__facts',
@@ -255,8 +256,14 @@ function compareAgainstVNextContract(actual, reference, context) {
     return { comparator_result: 'REJECTED', failed_rule_ids: failedRuleIds, rule_details: ruleDetails };
   }
 
-  if (!sameArray(reference.order, canonical) || !sameArray(actual.order, canonical)) {
-    fail('ENTRY_REGION_ORDER', { reference: reference.order, actual: actual.order, expected: canonical });
+  if (!sameArray(reference.order, canonical) || !sameArray(actual.order, dossierCanonical)) {
+    fail('ENTRY_REGION_ORDER', {
+      reference: reference.order,
+      actual: actual.order,
+      expected_reference: canonical,
+      expected_gpp_dossier: dossierCanonical,
+      history_owner: 'native_gravity_flow_timeline',
+    });
   }
 
   const placementFailures = [];
@@ -371,16 +378,26 @@ async function freshProductionPage(context, viewport) {
   const admission = await page.evaluate(reviewSelector => {
     const root = document.querySelector(reviewSelector);
     const native = document.querySelector('.entry-detail-view');
+    const timeline = document.querySelector('.gravityflow-timeline');
+    const timelineStyle = timeline ? getComputedStyle(timeline) : null;
     return {
       profile: root?.dataset.gppProfileId || null,
       suppression: root?.dataset.gppNativeTableSuppression || null,
       native_present: Boolean(native),
       native_display: native ? getComputedStyle(native).display : null,
+      timeline_count: document.querySelectorAll('.gravityflow-timeline').length,
+      timeline_visible: Boolean(timeline && timelineStyle.display !== 'none' && timelineStyle.visibility !== 'hidden'),
+      timeline_inside_dossier: Boolean(timeline && root?.contains(timeline)),
     };
   }, admittedReviewSelector);
-  if (admission.suppression !== 'read-only-review' || !admission.native_present || admission.native_display !== 'none') {
+  if (admission.suppression !== 'read-only-review'
+      || !admission.native_present
+      || admission.native_display !== 'none'
+      || admission.timeline_count !== 1
+      || !admission.timeline_visible
+      || admission.timeline_inside_dossier) {
     await page.close();
-    throw new Error(`Server-admitted Review suppression contract failed: ${JSON.stringify(admission)}`);
+    throw new Error(`Server-admitted Review/native-history contract failed: ${JSON.stringify(admission)}`);
   }
   return page;
 }
@@ -404,6 +421,7 @@ async function runPositive(context, reference, viewport, resultId, viewportId, s
       mutation_confirmed: null,
       server_review_admission: true,
       native_duplicate_suppressed: true,
+      native_history_owned_by_gravity_flow: true,
       comparison_summary: {
         actual_root_width: actual.geometry.root?.width,
         reference_root_width: reference.geometry.root?.width,
@@ -679,6 +697,7 @@ const output = {
   comparator_version: comparatorVersion,
   repository_head: repositoryHead,
   admission_oracle: 'server_admitted_read_only_review',
+  history_oracle: 'native_gravity_flow_timeline_outside_gpp_dossier',
   authority: { file: path.basename(ownerHtml), ...htmlIdentity },
   surfaces: {
     entry_desktop_C: positiveDesktop?.status === 'PASS' && positiveDesktop.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
