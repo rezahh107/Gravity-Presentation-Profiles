@@ -7,6 +7,7 @@ surface: gravity_flow.entry_detail
 scope: SRWF operations Entry Detail presentation architecture
 selected_duplicate_suppression_method: server-conditioned GPP-scoped CSS suppression of native read-only Entry Detail table
 selected_correction_method: native Gravity Flow Revert -> User Input -> Review
+correction_return_route_capability: Gravity Flow User Input explicit Next Step -> Review Approval is host-native and selected
 supersedes_forward_target:
   - transactional client-side recomposition of native Gravity Flow read-only/editor/status/timeline regions into the GPP dossier for visual composition
   - changing Gravity Flow field-visibility semantics merely to remove duplicate native read-only rendering
@@ -349,7 +350,11 @@ Rejected in [R]:
     explicit rejection destination
 ```
 
-The exact:
+The host-capability question for the User Input completion route back to Review is **closed**: Gravity Flow natively supports selecting the Review Approval Step [R] as the User Input Step [U]'s explicit **Next Step**.
+
+Therefore `User Input Complete -> Review Approval` is no longer an architectural or host-capability unknown. The implementation work unit must configure and verify the selected native route; it does not need to discover or invent a return mechanism.
+
+The remaining open items are Owner/configuration choices:
 
 - editable field set;
 - correction assignee;
@@ -357,11 +362,9 @@ The exact:
 - notifications;
 - Save Progress behavior;
 - Approved destination;
-- Rejected destination;
+- Rejected destination.
 
-remain Owner/configuration decisions for the later implementation work unit.
-
-The exact supported mechanism for the User Input completion route back to Review must be runtime/configuration validated against the pinned Gravity Flow host before production acceptance.
+These are configuration decisions for the later implementation work unit, not architecture gaps.
 
 ## 5. Locked Entry Detail mental model
 
@@ -401,11 +404,13 @@ This decision supersedes the **forward target direction** in which native Gravit
 
 It also closes the previously open implementation-method question for duplicate read-only field suppression: the selected target is server-conditioned GPP-scoped CSS suppression, not mutation of Gravity Flow field visibility semantics and not JavaScript structural removal.
 
+It further closes the previously open host-capability question for the correction return route: User Input may explicitly select the Review Approval Step as its native Next Step.
+
 It does **not** rewrite historical evidence or claim that previous implementation/qualification never existed.
 
 Historical PRs, runtime qualification and evidence remain valid descriptions of the code/runtime they actually tested.
 
-Where another current forward-looking Entry Detail document conflicts on structural composition or duplicate-field suppression method, this architecture record controls that narrow question.
+Where another current forward-looking Entry Detail document conflicts on structural composition, duplicate-field suppression method, or whether the User Input return route is a host-capability unknown, this architecture record controls that narrow question.
 
 ## 7. Relationship to visual authority
 
@@ -435,9 +440,11 @@ The next implementation work unit must implement and prove the selected method, 
 - native Revert from Review Approval to the dedicated User Input correction step;
 - User Input restricted to the Owner-approved editable field set;
 - explicit Review Approved / Rejected destinations that cannot accidentally enter correction;
-- proof of the User Input completion route back to Review;
+- configuration and verification of the already-selected native User Input explicit Next Step back to Review Approval;
 - scoped visual coordination of the native workflow box using admitted Entry Detail visual tokens;
 - regression proof for Print, Timeline, host actions, authorization and non-GPP/native fallback behavior.
+
+The return-route mechanism itself is not an implementation discovery item; only its concrete workflow configuration and runtime verification remain.
 
 Until that work is completed, implementation/validation/migration/production acceptance remain **NOT_PROVEN**.
 
