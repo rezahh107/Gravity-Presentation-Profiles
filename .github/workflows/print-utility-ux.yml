@@ -1,0 +1,209 @@
+name: Print Utility UX Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/print-utility-ux.yml'
+      - 'src/SRWF/GravityFlow/PrintDossierPresentationAdapter.php'
+      - 'assets/css/srwf-gravity-flow-print-utility.css'
+      - 'assets/js/srwf-gravity-flow-print-utility.js'
+      - 'tests/repro-evidence-lab/print-utility-ux-runtime-tests.php'
+      - 'tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  print-utility-ux:
+    name: Pinned Print utility UX + native lifecycle regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-print-utility-root
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-print-utility-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      WU21_WP_PATH: /tmp/print-utility-wordpress
+      WU21_ARTIFACT_DIR: /tmp/print-utility-artifacts
+      WU21_PACKAGE_DIR: /tmp/print-utility-packages
+      WU21_GF_ZIP: /tmp/print-utility-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      WU21_FLOW_ZIP: /tmp/print-utility-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+      WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU21_FLOW_SHA256: ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404
+      WU21_GF_SIZE: '5300290'
+      WU21_FLOW_SIZE: '2603034'
+      WU21_WP_CLI: /tmp/wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+      GPP_OWNER_HTML: ${{ github.workspace }}/tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html
+      GPP_ENTRY_OWNER_HTML: ${{ github.workspace }}/tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html
+      GPP_OWNER_PDF: ${{ github.workspace }}/tests/fixtures/owner-visual/PersianGravity-Final-Print-Sample.pdf
+
+    steps:
+      - name: Checkout exact PR Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Assert exact repository identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+
+      - name: Verify immutable Owner visual fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/repro-evidence-lab/verify-owner-visual-fixtures.sh "$GITHUB_WORKSPACE"
+          test "$GPP_OWNER_HTML" = "$GITHUB_WORKSPACE/tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html"
+          test "$GPP_OWNER_PDF" = "$GITHUB_WORKSPACE/tests/fixtures/owner-visual/PersianGravity-Final-Print-Sample.pdf"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Repository-native validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(php -r 'echo PHP_VERSION;')" = "8.2.33"
+          composer validate --no-check-publish
+          bash scripts/validate-visual-governance.sh .
+          bash tests/visual-governance-guardrail.sh
+          bash scripts/validate-production-reachability.sh .
+          find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/run.php
+          node --check assets/js/srwf-gravity-flow-print-utility.js
+          node --check tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs
+
+      - name: Install exact WordPress runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          mkdir -p "$WU21_WP_PATH"
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-print-utility-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='Print Utility UX Lab' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
+          php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" rewrite structure '/%postname%/'
+
+      - name: Fetch and byte-verify owner-supplied Gravity packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 4 -o "$WU21_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
+          test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
+          test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
+          echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
+          echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
+          unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+
+      - name: Activate exact plugins and create WU19 fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-wu18-fixtures.php
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-wu19-fixtures.php
+          test -s "$WU21_ARTIFACT_DIR/wu19-fixture-manifest.json"
+
+      - name: Verify native Print runtime and focused utility markup
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu19-runtime-tests.php
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/print-utility-ux-runtime-tests.php
+          test -s "$WU21_ARTIFACT_DIR/wu19-runtime-results.json"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-ux-runtime-results.json"
+
+      - name: Set up exact Node/browser runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install exact Playwright, Chromium and PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1);"
+          pdfinfo -v 2>&1 | head -1
+
+      - name: Start WordPress and prove Print utility browser lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/print-utility-wp-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null
+          node tests/repro-evidence-lab/wu19-browser-tests.mjs
+          node tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/wu19-browser-results.json"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-ux-browser-results.json"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-idle-desktop.png"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-busy-desktop.png"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-focus-visible.png"
+          test -s "$WU21_ARTIFACT_DIR/print-utility-mobile.png"
+          test -s "$WU21_ARTIFACT_DIR/wu19-canonical.pdf"
+          test -s "$WU21_ARTIFACT_DIR/wu19-long-content.pdf"
+
+      - name: Execute Stateful Core Spine qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/core-spine-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/core-spine-results.json"
+
+      - name: Execute existing Print visual qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          GPP_WU19_VISUAL_CONTROL_NORMALIZE=1 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/normalize-wu19-visual-control-data.php
+          node tests/repro-evidence-lab/capture-wu19-visual-control-pdf.mjs
+          test -s "$WU21_ARTIFACT_DIR/wu19-browser-canonical.pdf"
+          test -s "$WU21_ARTIFACT_DIR/wu19-canonical.pdf"
+          node tests/repro-evidence-lab/print-visual-contract-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/print-visual-contract-results.json"
+
+      - name: Upload Print utility UX evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-utility-ux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/print-utility-artifacts/**
+            /tmp/print-utility-wp-server.log
+          if-no-files-found: warn
+          retention-days: 30
