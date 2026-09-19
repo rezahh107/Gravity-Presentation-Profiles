@@ -90,7 +90,7 @@
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box textarea[name="gravityflow_note"] {
     box-sizing: border-box;
     width: 100%;
-    min-block-size: 112px;
+    min-block-size: 129px;
     margin: 0;
     padding: 12px 14px;
     border: 1px solid #dde3ee;
@@ -113,7 +113,7 @@
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 13px;
+    gap: 16px;
     margin: 16px 0 22px;
     padding: 0 0 22px;
     border-bottom: 1px solid #e4e8f0;
@@ -121,7 +121,7 @@
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button {
     width: 100%;
-    min-block-size: 48px;
+    min-block-size: 57px;
     padding: 10px 16px;
     border-width: 1px;
     border-style: solid;
