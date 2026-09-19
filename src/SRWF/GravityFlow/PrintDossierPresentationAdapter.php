@@ -13,6 +13,8 @@ final class PrintDossierPresentationAdapter {
     const INTENT_VALUE = 'dossier';
     const STYLE_VERSION = '1.0.1';
     const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
+    const UTILITY_STYLE_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
+    const UTILITY_SCRIPT_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
 
     private static $print_rendered = false;
     private static $last_trace = null;
@@ -26,6 +28,12 @@ final class PrintDossierPresentationAdapter {
         // generated URL is presentation intent only; the Print request will be
         // re-authorized by Gravity Flow on every request.
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderPrintUtility' ), 15, 2 );
+
+        // Dedicated Print-utility assets are limited to Gravity Flow Entry Detail
+        // routes. If a future host route differs, the inline button fallback still
+        // dispatches the unchanged native Print request without the enhancement.
+        add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueUtilityAssets' ), 20 );
+        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueUtilityAssets' ), 20 );
 
         // Deliberately no gravityflow_print_entry_header callback: that hook is
         // pre-permission in Gravity Flow 3.1.0 and must never expose Entry data.
@@ -54,7 +62,7 @@ final class PrintDossierPresentationAdapter {
             return $styles;
         }
 
-        if ( ! class_exists( '\VazirFont_Loader' ) || ! method_exists( '\VazirFont_Loader', 'get_instance' ) ) {
+        if ( ! class_exists( '\\VazirFont_Loader' ) || ! method_exists( '\\VazirFont_Loader', 'get_instance' ) ) {
             return $styles;
         }
 
@@ -93,6 +101,40 @@ final class PrintDossierPresentationAdapter {
             : array();
     }
 
+    /**
+     * Enqueue the small progressive-enhancement bundle only on Gravity Flow
+     * Entry Detail routes where the Print dossier capability itself is active.
+     * The actual utility still has an inline native-dispatch fallback.
+     */
+    public static function enqueueUtilityAssets() {
+        if ( ! self::isEntryDetailRequest() || ! self::printUtilityAssetsAvailable() || ! defined( 'GPP_PLUGIN_FILE' ) ) {
+            return;
+        }
+
+        $plugin_root = dirname( GPP_PLUGIN_FILE );
+        $style_path = 'assets/css/srwf-gravity-flow-print-utility.css';
+        $script_path = 'assets/js/srwf-gravity-flow-print-utility.js';
+
+        if ( function_exists( 'wp_enqueue_style' ) ) {
+            wp_enqueue_style(
+                self::UTILITY_STYLE_HANDLE,
+                plugins_url( $style_path, GPP_PLUGIN_FILE ),
+                array(),
+                self::assetVersion( $plugin_root . '/' . $style_path )
+            );
+        }
+
+        if ( function_exists( 'wp_enqueue_script' ) ) {
+            wp_enqueue_script(
+                self::UTILITY_SCRIPT_HANDLE,
+                plugins_url( $script_path, GPP_PLUGIN_FILE ),
+                array(),
+                self::assetVersion( $plugin_root . '/' . $script_path ),
+                true
+            );
+        }
+    }
+
     public static function renderPrintUtility( $form, $entry ) {
         if ( ! is_array( $form ) || ! is_array( $entry ) || empty( $entry['id'] ) || ! function_exists( 'admin_url' ) ) {
             return;
@@ -115,15 +157,67 @@ final class PrintDossierPresentationAdapter {
             admin_url( 'admin-ajax.php' )
         );
 
+        $idle_label = esc_html__( 'چاپ پرونده', 'gravity-presentation-profiles' );
+        $busy_label = esc_html__( 'در حال آماده‌سازی چاپ…', 'gravity-presentation-profiles' );
+
         echo '<div class="gpp-entry-print-utility" data-gpp-print-utility="dossier">';
-        echo '<a href="javascript:;" class="button button-secondary" data-gpp-dossier-print-url="' . esc_url( $url ) . '"';
-        echo ' onclick="if(typeof printPage===\'function\'){printPage(\'' . esc_js( $url ) . '\');}else{window.open(\'' . esc_js( $url ) . '\',\'_blank\',\'noopener\');}return false;">';
-        echo esc_html__( 'چاپ پرونده (دو صفحهٔ A4)', 'gravity-presentation-profiles' );
-        echo '</a></div>';
+        echo '<button type="button" class="gpp-entry-print-utility__button" data-gpp-dossier-print-button data-gpp-dossier-print-url="' . esc_url( $url ) . '"';
+        echo ' data-gpp-print-idle-label="' . esc_attr( $idle_label ) . '" data-gpp-print-busy-label="' . esc_attr( $busy_label ) . '"';
+        echo ' aria-label="' . esc_attr( $idle_label ) . '" aria-busy="false" aria-disabled="false"';
+        echo ' onclick="var u=this.getAttribute(\'data-gpp-dossier-print-url\');if(window.gppPrintUtilityActivate){return window.gppPrintUtilityActivate(this);}if(typeof printPage===\'function\'){printPage(u);}else{window.open(u,\'_blank\',\'noopener\');}return false;">';
+        echo '<span class="gpp-entry-print-utility__icon" data-gpp-print-icon aria-hidden="true">';
+        echo '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7v-7Z"/><path d="M17 11h.01"/></svg>';
+        echo '</span>';
+        echo '<span class="gpp-entry-print-utility__spinner" data-gpp-print-spinner aria-hidden="true" hidden></span>';
+        echo '<span class="gpp-entry-print-utility__label" data-gpp-print-label aria-hidden="true">' . $idle_label . '</span>';
+        echo '</button>';
+        echo '<span class="gpp-entry-print-utility__status" data-gpp-print-status role="status" aria-live="polite" aria-atomic="true"></span>';
+        echo '</div>';
     }
 
     private static function printUtilityAvailable( $entry ) {
         return PrintDossierRuntime::utilityAvailable( $entry );
+    }
+
+    private static function printUtilityAssetsAvailable() {
+        $resolution = self::modelResolution();
+        if ( ! is_array( $resolution ) || empty( $resolution['model'] ) ) {
+            return false;
+        }
+
+        $assets = PrintDossierAssets::integrity();
+        return ! empty( $assets['ready'] );
+    }
+
+    private static function isEntryDetailRequest() {
+        $view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+        $lid = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
+
+        if ( 'entry' !== $view || $lid < 1 ) {
+            return false;
+        }
+
+        if ( function_exists( 'is_admin' ) && is_admin() ) {
+            $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+            return 'gravityflow-inbox' === $page;
+        }
+
+        return true;
+    }
+
+    private static function assetVersion( $absolute_path ) {
+        if ( ! is_string( $absolute_path ) || '' === $absolute_path || ! is_file( $absolute_path ) || ! is_readable( $absolute_path ) ) {
+            return false;
+        }
+
+        if ( function_exists( 'hash_file' ) ) {
+            $hash = hash_file( 'sha256', $absolute_path );
+            if ( is_string( $hash ) && '' !== $hash ) {
+                return substr( $hash, 0, 16 );
+            }
+        }
+
+        return false;
     }
 
     public static function renderPrintDossier( $form, $entry ) {
