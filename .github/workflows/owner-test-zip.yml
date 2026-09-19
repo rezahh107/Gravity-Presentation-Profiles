@@ -1,0 +1,115 @@
+name: Entry vNext Owner Test ZIP
+
+on:
+  push:
+    branches: [tmp/entry-vnext-owner-zip-85cfea91]
+
+permissions:
+  contents: read
+
+env:
+  GPP_RELEASE_DB_NAME: wordpress
+  GPP_RELEASE_DB_USER: root
+  GPP_RELEASE_DB_PASS: gpp-release-root
+  GPP_RELEASE_DB_HOST: 127.0.0.1:3306
+  GPP_RELEASE_BASE_URL: http://127.0.0.1:8090
+  GPP_RELEASE_SOURCE_SHA: 85cfea91aeb9d4633359761cace3378e634289c6
+  GPP_RELEASE_DRY_VERSION: 9999.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-release-root
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-release-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - name: Checkout exact qualified source candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 85cfea91aeb9d4633359761cace3378e634289c6
+          fetch-depth: 0
+      - name: Assert exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GPP_RELEASE_SOURCE_SHA"
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+      - name: Install release test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+      - name: Run release contract and mutation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/release/release-contract-tests.sh
+          bash tests/release/license-identity-tests.sh
+      - name: Verify dry-run publication prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/release
+          php scripts/release/check-publication-prerequisites.php --root=. --mode=dry-run | tee build/release/publication-prerequisites.json
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+      - name: Prepare synthetic non-production overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/release/prepare-candidate.php --root=. --version="$GPP_RELEASE_DRY_VERSION" --date=2099-01-01
+          git diff --name-only | sort > /tmp/release-prepared-files.txt
+          printf '%s\n' CHANGELOG.md gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/release-expected-files.txt
+          diff -u /tmp/release-expected-files.txt /tmp/release-prepared-files.txt
+      - name: Build validate and smoke exact canonical ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$(bash scripts/release/build-release.sh . "$GPP_RELEASE_DRY_VERSION" build/release | head -n1)"
+          test -s "$ZIP"
+          SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
+          bash scripts/release/validate-release.sh . "$ZIP" "$GPP_RELEASE_DRY_VERSION" "$SHA"
+          bash scripts/release/smoke-zip.sh . "$ZIP" /tmp/gpp-owner-test-wordpress
+          COUNT="$(unzip -Z1 "$ZIP" | grep -v '/$' | wc -l | tr -d ' ')"
+          SIZE="$(stat -c '%s' "$ZIP")"
+          printf 'source_sha=%s\nversion=%s\nzip=%s\nsha256=%s\nbyte_size=%s\nfile_count=%s\nvalidation=PASS\nsmoke=PASS\n' \
+            "$GPP_RELEASE_SOURCE_SHA" "$GPP_RELEASE_DRY_VERSION" "$(basename "$ZIP")" "$SHA" "$SIZE" "$COUNT" > build/release/owner-test-zip-metadata.txt
+          php scripts/release/write-manifest.php \
+            --output=build/release/release-manifest.json \
+            --mode=dry-run \
+            --source-sha="$GPP_RELEASE_SOURCE_SHA" \
+            --version="$GPP_RELEASE_DRY_VERSION" \
+            --zip="$ZIP" \
+            --sha256="$SHA" \
+            --validation=PASS \
+            --smoke=PASS \
+            --qualification=PRODUCT_GATES_SEPARATE_EXACT_HEAD \
+            --run-id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Upload exact Owner-test artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: entry-vnext-owner-test-85cfea91
+          path: |
+            build/release/gravity-presentation-profiles-9999.0.0.zip
+            build/release/gravity-presentation-profiles-9999.0.0.zip.sha256
+            build/release/release-manifest.json
+            build/release/publication-prerequisites.json
+            build/release/owner-test-zip-metadata.txt
+          if-no-files-found: error
+          retention-days: 30
