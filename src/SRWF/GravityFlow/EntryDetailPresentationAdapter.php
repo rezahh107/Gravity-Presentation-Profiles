@@ -139,28 +139,15 @@ final class EntryDetailPresentationAdapter {
         echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '"';
         echo ' data-gpp-actions-expected="' . ( $actionable ? '1' : '0' ) . '" data-gpp-composition-state="pending">';
 
-        self::renderIdentitySection( $model, $form, $entry, $current_step );
-
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__task" data-gpp-section="current-task">';
-        echo '<h2 class="gpp-entry-dossier__task-heading">' . esc_html__( 'کاری که الان باید انجام دهید', 'gravity-presentation-profiles' ) . '</h2>';
-        self::renderFact( $model, $form, $entry, $current_step, 'workflow.current_step', 'مرحله جاری', 'gpp-entry-dossier__task-step' );
-        echo '<div class="gpp-entry-dossier__native-instructions" data-gpp-native-instructions></div>';
-        echo '<div class="gpp-entry-dossier__native-editor" data-gpp-native-editor></div>';
-        if ( $actionable ) {
-            echo '<div class="gpp-entry-dossier__native-actions" data-gpp-native-actions></div>';
-        }
-        echo '</section>';
-
-        self::renderFactsSection( $model, $form, $entry, $current_step );
+        self::renderHeader( $model, $form, $entry, $current_step );
+        self::renderCurrentTask( $model, $form, $entry, $current_step, $actionable );
+        self::renderEducationSection( $model, $form, $entry, $current_step );
+        self::renderCandidateDetailsSection( $model, $form, $entry, $current_step );
+        self::renderContactSection( $model, $form, $entry, $current_step );
+        self::renderSchoolSection( $model, $form, $entry, $current_step );
         self::renderDocumentsSection( $model, $form, $entry, $current_step );
-
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-section="history" data-gpp-optional-history>';
-        echo '<details data-gpp-history-details>';
-        echo '<summary>' . esc_html__( 'سوابق بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
-        echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
-        echo '<div data-gpp-native-history></div>';
-        echo '</details>';
-        echo '</section>';
+        self::renderRegistrationFinanceSection( $model, $form, $entry, $current_step );
+        self::renderHistorySection();
 
         echo self::previewDialogMarkup();
         echo '</div>';
@@ -235,9 +222,9 @@ final class EntryDetailPresentationAdapter {
         return (string) $form['id'] === (string) $entry['form_id'];
     }
 
-    private static function renderIdentitySection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__identity" data-gpp-section="identity">';
-        echo '<div class="gpp-entry-dossier__identity-main">';
+    private static function renderHeader( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        echo '<header class="gpp-entry-dossier__header" data-gpp-entry-region="header" data-gpp-section="header">';
+        echo '<div class="gpp-entry-dossier__header-main">';
 
         $photo_state = self::semanticDecision( $model, $form, $entry, $current_step, 'student.photo' );
         self::recordSemanticDecision( 'student.photo', $photo_state );
@@ -250,40 +237,147 @@ final class EntryDetailPresentationAdapter {
             echo '<div class="gpp-entry-dossier__student-photo gpp-entry-dossier__slot-state" data-gpp-slot="student.photo">' . esc_html( self::placeholderForState( $photo_state['state'] ) ) . '</div>';
         }
 
-        echo '<div class="gpp-entry-dossier__identity-text">';
+        echo '<div class="gpp-entry-dossier__header-text">';
         $name_state = self::semanticDecision( $model, $form, $entry, $current_step, 'student.full_name' );
         self::recordSemanticDecision( 'student.full_name', $name_state );
         $name = self::displayTextForDecision( $name_state );
         echo '<h1 data-gpp-slot="student.full_name">' . esc_html( null === $name ? '—' : $name ) . '</h1>';
-        echo '<dl class="gpp-entry-dossier__facts gpp-entry-dossier__facts--identity">';
-        self::renderFact( $model, $form, $entry, $current_step, 'student.national_id', 'کد ملی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.father_name', 'نام پدر' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.birth_date_jalali', 'تاریخ تولد' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.gender', 'جنسیت' );
+        echo '<dl class="gpp-entry-dossier__header-summary">';
+        self::renderFact( $model, $form, $entry, $current_step, 'student.national_id', 'کد ملی', 'gpp-entry-dossier__header-fact' );
+        self::renderFact( $model, $form, $entry, $current_step, 'education.grade_group', 'پایه / گروه', 'gpp-entry-dossier__header-fact' );
+        self::renderFact( $model, $form, $entry, $current_step, 'school.name', 'مدرسه', 'gpp-entry-dossier__header-fact' );
         echo '</dl>';
-        echo '</div></div></section>';
+        echo '</div></div></header>';
     }
 
-    private static function renderFactsSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
-        echo '<section class="gpp-entry-dossier__section" data-gpp-section="facts">';
-        echo '<h2>' . esc_html__( 'اطلاعات پرونده', 'gravity-presentation-profiles' ) . '</h2>';
-        echo '<dl class="gpp-entry-dossier__facts">';
-        self::renderFact( $model, $form, $entry, $current_step, 'student.mobile', 'تلفن همراه دانش‌آموز' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.home_phone', 'تلفن منزل' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.father_mobile', 'تلفن همراه پدر' );
-        self::renderFact( $model, $form, $entry, $current_step, 'student.mother_mobile', 'تلفن همراه مادر' );
-        self::renderFact( $model, $form, $entry, $current_step, 'education.level', 'مقطع تحصیلی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'education.grade_group', 'پایه / گروه' );
-        self::renderFact( $model, $form, $entry, $current_step, 'education.graduation_status', 'وضعیت تحصیلی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'school.name', 'مدرسه' );
-        self::renderFact( $model, $form, $entry, $current_step, 'registration.center', 'مرکز ثبت‌نام' );
-        self::renderFact( $model, $form, $entry, $current_step, 'review.status', 'وضعیت بررسی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'review.reason', 'توضیح بررسی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'finance.status', 'وضعیت مالی' );
-        self::renderFact( $model, $form, $entry, $current_step, 'finance.tuition_amount', 'شهریه' );
-        self::renderFact( $model, $form, $entry, $current_step, 'finance.discount_amount', 'تخفیف' );
-        self::renderFact( $model, $form, $entry, $current_step, 'finance.discount_title', 'عنوان تخفیف' );
-        self::renderFact( $model, $form, $entry, $current_step, 'finance.net_payable_amount', 'خالص قابل پرداخت' );
+    private static function renderCurrentTask( EntryDetailPresentationModel $model, $form, $entry, $current_step, $actionable ) {
+        echo '<section class="gpp-entry-dossier__task" data-gpp-entry-region="current-task" data-gpp-section="current-task">';
+        echo '<h2 class="gpp-entry-dossier__task-heading">' . esc_html__( 'بررسی پرونده', 'gravity-presentation-profiles' ) . '</h2>';
+        echo '<dl class="gpp-entry-dossier__task-context">';
+        self::renderFact( $model, $form, $entry, $current_step, 'workflow.current_step', 'مرحله جاری', 'gpp-entry-dossier__task-step' );
+        echo '</dl>';
+        echo '<div class="gpp-entry-dossier__native-instructions" data-gpp-native-instructions></div>';
+        echo '<div class="gpp-entry-dossier__native-editor" data-gpp-native-editor></div>';
+        if ( $actionable ) {
+            echo '<div class="gpp-entry-dossier__native-status" data-gpp-native-status></div>';
+        }
+        echo '</section>';
+    }
+
+    private static function renderEducationSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        self::renderSemanticSection(
+            $model,
+            $form,
+            $entry,
+            $current_step,
+            'education',
+            'مقطع و گروه تحصیلی',
+            array(
+                array( 'education.level', 'مقطع تحصیلی' ),
+                array( 'education.grade_group', 'پایه / گروه' ),
+            ),
+            'gpp-entry-dossier__facts--education'
+        );
+    }
+
+    private static function renderCandidateDetailsSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        self::renderSemanticSection(
+            $model,
+            $form,
+            $entry,
+            $current_step,
+            'candidate-details',
+            'مشخصات داوطلب',
+            array(
+                array( 'student.first_name', 'نام' ),
+                array( 'student.last_name', 'نام خانوادگی' ),
+                array( 'student.father_name', 'نام پدر' ),
+                array( 'student.national_id', 'کد ملی' ),
+                array( 'student.birth_date_jalali', 'تاریخ تولد' ),
+                array( 'student.gender', 'جنسیت' ),
+            ),
+            'gpp-entry-dossier__facts--personal'
+        );
+    }
+
+    private static function renderContactSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        self::renderSemanticSection(
+            $model,
+            $form,
+            $entry,
+            $current_step,
+            'contact',
+            'راه‌های ارتباطی پشتیبان با داوطلب',
+            array(
+                array( 'student.mobile', 'تلفن همراه دانش‌آموز' ),
+                array( 'student.home_phone', 'تلفن منزل' ),
+                array( 'student.father_mobile', 'تلفن همراه پدر' ),
+                array( 'student.mother_mobile', 'تلفن همراه مادر' ),
+            ),
+            'gpp-entry-dossier__facts--contact'
+        );
+    }
+
+    private static function renderSchoolSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        self::renderSemanticSection(
+            $model,
+            $form,
+            $entry,
+            $current_step,
+            'school',
+            'اطلاعات مدرسه',
+            array(
+                array( 'school.name', 'مدرسه سال جاری' ),
+            ),
+            'gpp-entry-dossier__facts--school'
+        );
+    }
+
+    private static function renderRegistrationFinanceSection( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
+        self::renderSemanticSection(
+            $model,
+            $form,
+            $entry,
+            $current_step,
+            'registration-finance',
+            'اطلاعات ثبت‌نام و وضعیت مالی',
+            array(
+                array( 'entry.created_at', 'تاریخ ورود اطلاعات' ),
+                array( 'review.status', 'وضعیت بررسی پرونده' ),
+                array( 'finance.status', 'وضعیت مالی' ),
+                array( 'finance.tuition_amount', 'شهریه مصوب (ریال)' ),
+                array( 'finance.discount_amount', 'مبلغ تخفیف (ریال)' ),
+                array( 'finance.net_payable_amount', 'خالص قابل پرداخت (ریال)' ),
+            ),
+            'gpp-entry-dossier__facts--financial'
+        );
+    }
+
+    private static function renderSemanticSection( EntryDetailPresentationModel $model, $form, $entry, $current_step, $region, $title, $rows, $grid_class ) {
+        $visible = array();
+        foreach ( $rows as $row ) {
+            $slot = $row[0];
+            $decision = self::semanticDecision( $model, $form, $entry, $current_step, $slot );
+            self::recordSemanticDecision( $slot, $decision );
+            if ( in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ) {
+                continue;
+            }
+            if ( null === self::displayTextForDecision( $decision ) ) {
+                continue;
+            }
+            $visible[] = array( $slot, $row[1], $decision );
+        }
+
+        if ( empty( $visible ) ) {
+            return;
+        }
+
+        echo '<section class="gpp-entry-dossier__section" data-gpp-entry-region="' . esc_attr( $region ) . '" data-gpp-section="' . esc_attr( $region ) . '">';
+        echo '<h2 class="gpp-entry-dossier__section-title">' . esc_html( $title ) . '</h2>';
+        echo '<dl class="gpp-entry-dossier__facts ' . esc_attr( $grid_class ) . '">';
+        foreach ( $visible as $row ) {
+            self::renderFactDecision( $row[0], $row[1], $row[2] );
+        }
         echo '</dl></section>';
     }
 
@@ -316,8 +410,8 @@ final class EntryDetailPresentationAdapter {
             }
         }
 
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents" data-gpp-section="documents">';
-        echo '<h2>' . esc_html__( 'مدارک', 'gravity-presentation-profiles' ) . '</h2>';
+        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents" data-gpp-entry-region="documents" data-gpp-section="documents">';
+        echo '<h2 class="gpp-entry-dossier__section-title">' . esc_html__( 'مدارک ارائه‌شده', 'gravity-presentation-profiles' ) . '</h2>';
         echo '<div class="gpp-entry-dossier__document" data-gpp-slot="documents.report_card">';
         echo '<span class="gpp-entry-dossier__document-label">' . esc_html__( 'کارنامه', 'gravity-presentation-profiles' ) . '</span>';
 
@@ -331,6 +425,16 @@ final class EntryDetailPresentationAdapter {
         echo '</div></section>';
     }
 
+    private static function renderHistorySection() {
+        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-entry-region="history" data-gpp-section="history" data-gpp-optional-history>';
+        echo '<details data-gpp-history-details>';
+        echo '<summary>' . esc_html__( 'روند بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
+        echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<div data-gpp-native-history></div>';
+        echo '</details>';
+        echo '</section>';
+    }
+
     private static function renderFact( EntryDetailPresentationModel $model, $form, $entry, $current_step, $slot, $label, $class_name = '' ) {
         $decision = self::semanticDecision( $model, $form, $entry, $current_step, $slot );
         self::recordSemanticDecision( $slot, $decision );
@@ -338,7 +442,10 @@ final class EntryDetailPresentationAdapter {
         if ( in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ) {
             return;
         }
+        self::renderFactDecision( $slot, $label, $decision, $class_name );
+    }
 
+    private static function renderFactDecision( $slot, $label, $decision, $class_name = '' ) {
         $value = self::displayTextForDecision( $decision );
         if ( null === $value ) {
             return;
