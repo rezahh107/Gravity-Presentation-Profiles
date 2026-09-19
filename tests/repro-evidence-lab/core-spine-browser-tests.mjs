@@ -11,6 +11,7 @@ const wpCli = process.env.WU21_WP_CLI;
 const repoRoot = process.env.GITHUB_WORKSPACE || process.cwd();
 const controlFile = path.join(repoRoot, 'tests/repro-evidence-lab/qualification-control.php');
 const results = [];
+const admittedReviewSelector = '.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]';
 
 if (!artifactDir || !wpPath || !wpCli) throw new Error('Qualification runtime environment is incomplete.');
 
@@ -51,20 +52,41 @@ async function openEntry(page) {
   await page.waitForSelector('form[id^="gform_"]', { timeout: 30000 });
 }
 async function entryState(page) {
-  return page.evaluate(() => {
-    const dossier = document.querySelector('.gpp-entry-dossier--composed');
+  return page.evaluate(reviewSelector => {
+    const dossier = document.querySelector(reviewSelector);
     const slot = dossier?.querySelector('[data-gpp-entry-region="candidate-details"] [data-gpp-slot="student.national_id"] dd');
     const native = document.querySelector('.entry-detail-view');
     return {
       ready: Boolean(dossier),
       profile: dossier?.dataset.gppProfileId || null,
+      suppression: dossier?.dataset.gppNativeTableSuppression || null,
       full_name: dossier?.querySelector('[data-gpp-entry-region="header"] h1')?.textContent?.trim() || null,
       national_id: slot?.textContent?.trim() || null,
+      native_present: Boolean(native),
       native_visible: Boolean(native && getComputedStyle(native).display !== 'none'),
-      native_editor_text: dossier?.querySelector('[data-gpp-native-editor]')?.innerText?.replace(/\s+/g, ' ').trim() || '',
       body: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
-  });
+  }, admittedReviewSelector);
+}
+function requireAdmittedReview(entry, label) {
+  if (!entry.ready || entry.profile !== currentEntryProfile || entry.suppression !== 'read-only-review' || !entry.native_present || entry.native_visible) {
+    throw new Error(`${label}: ${JSON.stringify(entry)}`);
+  }
+}
+function schemaDriftHostState(drift) {
+  const code = `
+    $form=GFAPI::get_form(${Number(alpha.form_id)});
+    $entry=GFAPI::get_entry(${Number(alpha.entry_id)});
+    $removed=${Number(drift.removed_field_id)};
+    $replacement=${Number(drift.replacement_field_id)};
+    $ids=array();
+    foreach($form['fields'] as $field){$ids[]=(int)$field->id;}
+    echo wp_json_encode(array(
+      'removed_field_present'=>in_array($removed,$ids,true),
+      'replacement_field_present'=>in_array($replacement,$ids,true),
+      'replacement_value'=>is_array($entry)&&isset($entry[(string)$replacement])?(string)$entry[(string)$replacement]:null
+    ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);`;
+  return JSON.parse(wpEval(code));
 }
 async function openPrint(page) {
   await page.goto(dossierUrl(alpha), { waitUntil: 'networkidle' });
@@ -104,7 +126,7 @@ let happySemantics = null;
 await test('CORE-SPINE-001', 'happy path carries one authoritative entry through Entry Detail into dossier Print', async () => {
   await openEntry(page);
   const entry = await entryState(page);
-  if (!entry.ready || entry.profile !== currentEntryProfile) throw new Error(`Entry Detail not admitted: ${JSON.stringify(entry)}`);
+  requireAdmittedReview(entry, 'Entry Detail not admitted with current server-owned Review/suppression state');
   const utility = page.locator('[data-gpp-print-utility="dossier"] [data-gpp-dossier-print-url]');
   if (await utility.count() !== 1) throw new Error('Dedicated dossier Print utility missing from the admitted Entry Detail.');
   const url = await utility.getAttribute('data-gpp-dossier-print-url');
@@ -120,25 +142,30 @@ await test('CORE-SPINE-001', 'happy path carries one authoritative entry through
   if (entry.full_name !== print.full_name || entry.national_id !== print.national_id) throw new Error('Cross-surface semantic values diverged on the same entry.');
   if (!traceHas(print, 'PRINT_COMPOSITION_READY', 'ready_two_pages')) throw new Error('Print decision trace did not reach ready_two_pages.');
   happySemantics = { full_name: entry.full_name, national_id: entry.national_id };
-  return { form_id: Number(alpha.form_id), entry_id: Number(alpha.entry_id), entry_profile: entry.profile, print_profile: print.profile, same_entry_continuity: true, cross_surface_semantic_consistency: true, print_full_name_derived: true, print_pages: print.pages };
+  return { form_id: Number(alpha.form_id), entry_id: Number(alpha.entry_id), entry_profile: entry.profile, print_profile: print.profile, same_entry_continuity: true, cross_surface_semantic_consistency: true, server_review_admission: true, native_duplicate_suppressed: true, print_full_name_derived: true, print_pages: print.pages };
 });
 
 await test('CORE-SPINE-002', 'schema drift never guesses a similar replacement and explicit remap repairs both consumers', async () => {
   const drift = control('schema-drift-on');
   try {
+    const hostState = schemaDriftHostState(drift);
+    if (hostState.removed_field_present || !hostState.replacement_field_present || hostState.replacement_value !== drift.replacement_value) {
+      throw new Error(`Schema-drift host-authoritative falsification control is invalid: ${JSON.stringify({ drift, hostState })}`);
+    }
+
     await openEntry(page); const entryDrift = await entryState(page);
+    requireAdmittedReview(entryDrift, 'Entry Detail did not preserve current Review admission during schema drift');
     await openPrint(page); const printDrift = await printState(page);
-    const replacementVisibleInNativeEditor = entryDrift.native_editor_text.includes(drift.replacement_value);
-    if (!replacementVisibleInNativeEditor) throw new Error('Schema-drift falsification control is invalid: replacement value is not visible in the native editor.');
     if (entryDrift.national_id === drift.replacement_value) throw new Error('Entry Detail semantic national-id rebound to the similar-looking replacement field.');
     if (printDrift.national_id === drift.replacement_value) throw new Error('Print semantic national-id rebound to the similar-looking replacement field.');
     if (printDrift.national_id !== '' || !traceHas(printDrift, 'PRINT_BINDINGS_EVALUATED', 'source_unavailable')) throw new Error(`Print did not fail closed at the stale source: ${JSON.stringify(printDrift)}`);
 
     const repair = control('schema-drift-repair');
     await openEntry(page); const entryRepair = await entryState(page);
+    requireAdmittedReview(entryRepair, 'Entry Detail did not preserve current Review admission after explicit schema repair');
     await openPrint(page); const printRepair = await printState(page);
     if (entryRepair.national_id !== repair.replacement_value || printRepair.national_id !== repair.replacement_value) throw new Error('Explicit authoritative remap did not propagate to both surfaces.');
-    return { source_field_removed: true, similar_field_created: true, replacement_visible_in_native_editor: replacementVisibleInNativeEditor, semantic_oracle_scope: 'authoritative_slot_and_print_trace_only', fuzzy_rebind: false, stale_source_failed_closed: true, explicit_repair_observed_by_entry_detail: true, explicit_repair_observed_by_print: true };
+    return { source_field_removed: true, similar_field_created: true, similar_field_host_readback_value: hostState.replacement_value, semantic_oracle_scope: 'gravity_forms_host_readback_plus_authoritative_slot_and_print_trace', fuzzy_rebind: false, stale_source_failed_closed: true, explicit_repair_observed_by_entry_detail: true, explicit_repair_observed_by_print: true };
   } finally {
     control('schema-drift-off');
   }
@@ -148,6 +175,7 @@ await test('CORE-SPINE-003', 'overlapping general and exact-entry bindings resol
   const overlap = control('ambiguity-on');
   try {
     await openEntry(page); const entry = await entryState(page);
+    requireAdmittedReview(entry, 'Entry Detail did not preserve current Review admission for exact-entry binding precedence');
     await openPrint(page); const print = await printState(page);
     if (entry.national_id !== overlap.override_value || print.national_id !== overlap.override_value) throw new Error(`Exact-entry authority did not deterministically win: ${JSON.stringify({ entry: entry.national_id, print: print.national_id })}`);
     return { general_and_exact_entry_bindings_active: true, deterministic_exact_entry_resolution: true, cross_surface_semantic_contradiction: false };
@@ -170,8 +198,9 @@ await test('CORE-SPINE-005', 'evidence degradation to NOT_PROVEN isolates Entry 
   control('degradation-on');
   try {
     await openEntry(page); const entry = await entryState(page);
-    if (!entry.ready || entry.profile !== currentEntryProfile || entry.native_visible || entry.national_id !== 'نگاشت نشده') {
-      throw new Error(`Entry Detail did not preserve the admitted dossier with isolated semantic degradation: ${JSON.stringify(entry)}`);
+    requireAdmittedReview(entry, 'Entry Detail did not preserve current Review admission with isolated semantic degradation');
+    if (entry.national_id !== 'نگاشت نشده') {
+      throw new Error(`Entry Detail did not isolate the degraded semantic slot: ${JSON.stringify(entry)}`);
     }
     if (happySemantics?.national_id && entry.national_id === happySemantics.national_id) throw new Error('Entry Detail reused stale admitted national-id data after evidence degradation.');
     await openPrint(page); const print = await printState(page);
@@ -187,14 +216,14 @@ await test('CORE-SPINE-006', 'lifecycle deactivation and replacement are observe
   control('lifecycle-deactivate');
   try {
     await openEntry(page); const entryInactive = await entryState(page);
-    if (entryInactive.ready || !entryInactive.native_visible) throw new Error(`Deactivated Entry binding remained cached/admitted: ${JSON.stringify(entryInactive)}`);
+    if (entryInactive.ready || !entryInactive.native_present || !entryInactive.native_visible) throw new Error(`Deactivated Entry binding remained cached/admitted or native fallback was not restored: ${JSON.stringify(entryInactive)}`);
     await openPrint(page); const printInactive = await printState(page);
     if (printInactive.state !== 'failure' || printInactive.failure !== 'binding_context_missing') throw new Error(`Deactivated Print binding did not fail closed: ${JSON.stringify(printInactive)}`);
 
     control('lifecycle-replace');
     await openEntry(page); const entryActive = await entryState(page);
+    requireAdmittedReview(entryActive, 'Replacement Entry binding was not observed by a fresh request');
     await openPrint(page); const printActive = await printState(page);
-    if (!entryActive.ready || entryActive.profile !== currentEntryProfile) throw new Error('Replacement Entry binding was not observed by a fresh request.');
     if (printActive.state !== 'ready' || printActive.profile !== 'shared.print.v1' || !traceHas(printActive, 'PRINT_COMPOSITION_READY', 'ready_two_pages')) throw new Error('Replacement Print binding was not observed by a fresh request.');
     if (happySemantics && (entryActive.full_name !== happySemantics.full_name || printActive.full_name !== happySemantics.full_name || entryActive.national_id !== printActive.national_id)) throw new Error('Replacement lifecycle state changed authoritative semantic meaning unexpectedly.');
     return { deactivation_observed: true, inactive_entry_native_fallback: true, inactive_print_failure: 'binding_context_missing', replacement_activation_observed: true, stale_lifecycle_cache: false };
@@ -207,9 +236,10 @@ await context.close();
 await browser.close();
 
 const output = {
-  schema_version: '1.0.0',
+  schema_version: '1.1.0',
   suite: 'Stateful Core Spine Qualification',
   data_class: 'SYNTHETIC_NON_PII',
+  admission_oracle: 'server_admitted_read_only_review',
   scenarios: Object.fromEntries(results.map(result => [result.id, result.status])),
   same_entry_continuity: results.find(r => r.id === 'CORE-SPINE-001')?.status === 'PASS' ? 'PASS' : 'FAIL',
   cross_surface_semantic_consistency: results.find(r => r.id === 'CORE-SPINE-001')?.status === 'PASS' ? 'PASS' : 'FAIL',

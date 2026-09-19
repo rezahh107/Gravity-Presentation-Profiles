@@ -39,6 +39,7 @@ $cases = array(
     'inbox-field-presentation.php',
     'inbox-asset-versioning.php',
     'entry-detail-presentation-model.php',
+    'entry-detail-review-architecture.php',
     'entry-detail-asset-versioning.php',
     'entry-detail-report-card-selection.php',
     'entry-detail-print-utility-availability.php',

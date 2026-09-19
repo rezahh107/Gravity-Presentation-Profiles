@@ -52,16 +52,6 @@
 .gpp-entry-dossier__task-step { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; background: transparent; }
 .gpp-entry-dossier__task-step dt,
 .gpp-entry-dossier__task-step dd { margin: 0; color: #1d4ed8; font-size: 14px; line-height: 1.8; font-weight: 500; }
-.gpp-entry-dossier__native-instructions .gravityflow-instructions,
-.gpp-entry-dossier__native-editor .gform_wrapper,
-.gpp-entry-dossier__native-status .gravityflow-status-box { margin: 14px 0 0; }
-.gpp-entry-dossier__native-instructions:empty,
-.gpp-entry-dossier__native-editor:empty,
-.gpp-entry-dossier__native-status:empty { display: none; }
-.gpp-entry-dossier__native-status .gravityflow-status-box { float: none; width: auto; max-width: 100%; }
-.gpp-entry-dossier__native-status .gravityflow-action-buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.gpp-entry-dossier__native-status button[value="approved"] { border-color: #18794e; }
-.gpp-entry-dossier__native-status button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
 
 .gpp-entry-dossier__section {
     box-sizing: border-box;
@@ -72,6 +62,7 @@
     border-radius: 0;
     background: transparent;
 }
+.gpp-entry-dossier__section:last-of-type { border-bottom: 0; padding-bottom: 0; }
 .gpp-entry-dossier__section-title { margin: 0 0 12px; color: #172033; font-size: 20px; line-height: 1.7; font-weight: 700; }
 .gpp-entry-dossier__facts {
     display: grid;
@@ -118,19 +109,58 @@
 .gpp-entry-dossier__document-label { font-weight: 700; }
 .gpp-entry-dossier__document-thumbnail img { display: block; width: 120px; height: 88px; object-fit: cover; border-radius: 8px; }
 .gpp-entry-dossier__file-link { overflow-wrap: anywhere; }
-.gpp-entry-dossier__history { border-bottom: 0; padding-bottom: 0; }
-.gpp-entry-dossier__history details > summary { cursor: pointer; font-weight: 700; font-size: 20px; line-height: 1.7; }
-.gpp-entry-dossier__history-help { margin: 12px 0; color: #475467; line-height: 1.9; }
-.gpp-entry-dossier__history .gravityflow-timeline { margin: 14px 0 0; }
-.gpp-entry-dossier__history .gravityflow-timeline > h3 { display: none; }
-.gpp-entry-dossier__history .postbox.gravityflow-timeline { border: 0; box-shadow: none; }
 .gpp-entry-dossier__preview { box-sizing: border-box; width: min(92vw, 960px); max-height: 90vh; padding: 42px 18px 18px; border: 0; border-radius: 14px; }
 .gpp-entry-dossier__preview::backdrop { background: rgba(17, 24, 39, .72); }
 .gpp-entry-dossier__preview img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: auto; object-fit: contain; }
 .gpp-entry-dossier__preview-close { position: absolute; top: 8px; inset-inline-end: 10px; width: 34px; height: 34px; border: 0; background: transparent; font-size: 26px; cursor: pointer; }
 
-/* Native Entry Detail remains visible unless JS proves the entire composition. */
-.gpp-entry-dossier--composed ~ .entry-detail-view { display: none; }
+/*
+ * The server owns this marker. It is emitted only after post-permission,
+ * structurally ready, read-only Review admission and complete dossier output.
+ * CSS only removes the duplicate visual field table; Gravity Flow remains the
+ * privacy/visibility authority and the native values may remain in the HTML.
+ */
+.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"] ~ .entry-detail-view {
+    display: none;
+}
+
+/*
+ * Keep the workflow/status/action box structurally native. When it is rendered
+ * in the main Entry Detail column, coordinate it with the admitted dossier
+ * visual language without moving or rebuilding any host controls.
+ */
+.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box {
+    box-sizing: border-box;
+    float: none;
+    clear: both;
+    width: 1060px;
+    max-width: min(1060px, calc(100vw - 32px));
+    margin: 0 0 24px;
+    padding: 24px 28px;
+    border: 1px solid #c9d6f0;
+    border-radius: 12px;
+    background: #f8fafe;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+    color: #172033;
+}
+.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box .gravityflow-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box button[value="approved"] { border-color: #18794e; }
+.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box button[value="rejected"] { border-color: #b42318; color: #b42318; background: #fff; }
+
+/* Sidebar-enabled host layouts keep the same native box in another host column. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
+    box-sizing: border-box;
+    border: 1px solid #c9d6f0;
+    border-radius: 12px;
+    background: #f8fafe;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+    color: #172033;
+}
 
 @media (max-width: 760px) {
     .gpp-entry-dossier { padding: 25px; }
@@ -167,4 +197,10 @@
     .gpp-entry-dossier__student-photo,
     .gpp-entry-dossier__student-photo img,
     .gpp-entry-dossier__student-photo.gpp-entry-dossier__slot-state { width: 64px; height: 64px; flex-basis: 64px; }
+    .gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"] ~ .gravityflow-status-box {
+        width: calc(100% - 25px);
+        max-width: none;
+        margin: 0 auto 24px;
+        padding: 18px 16px;
+    }
 }
