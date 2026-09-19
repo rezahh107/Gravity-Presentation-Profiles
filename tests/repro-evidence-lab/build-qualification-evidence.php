@@ -22,6 +22,16 @@ $wu18_browser = gppq_read_json( $dir, 'wu18-browser-results.json' );
 $wu19_runtime = gppq_read_json( $dir, 'wu19-runtime-results.json' );
 $wu19_browser = gppq_read_json( $dir, 'wu19-browser-results.json' );
 
+$legacy_html_sha = '666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81';
+$entry_vnext_sha = '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69';
+$print_pdf_sha = '34d9b4e137667ca103d5c6e7752f7148f0c92e36f0f1d182d7d87a890c55fec5';
+if ( empty( $entry_visual['authority']['sha256'] ) || $entry_vnext_sha !== $entry_visual['authority']['sha256'] ) {
+    throw new RuntimeException( 'Entry Detail qualification did not use the current vNext Owner authority.' );
+}
+if ( empty( $print_visual['owner_reference_sha256'] ) || $print_pdf_sha !== $print_visual['owner_reference_sha256'] ) {
+    throw new RuntimeException( 'Print qualification did not preserve the locked Print authority.' );
+}
+
 $evidence = array(
     'schema_version' => '1.0.0',
     'repository_sha' => $repository_sha,
@@ -53,9 +63,19 @@ $evidence = array(
         'deliberate_print_regression' => $print_visual['deliberate_regression'],
         'deliberate_print_management_regression' => isset( $print_visual['deliberate_management_regression'] ) ? $print_visual['deliberate_management_regression'] : 'MISSING',
     ),
+    // Keep the historical html/pdf keys for consumers of the existing evidence
+    // schema, while recording the current Entry Detail authority separately.
     'owner_reference_sha256' => array(
-        'html' => '666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81',
-        'pdf' => '34d9b4e137667ca103d5c6e7752f7148f0c92e36f0f1d182d7d87a890c55fec5',
+        'html' => $legacy_html_sha,
+        'entry_vnext_html' => $entry_vnext_sha,
+        'pdf' => $print_pdf_sha,
+    ),
+    'entry_detail_authority_supersession' => array(
+        'scope' => 'gravity_flow.entry_detail',
+        'superseded_html_sha256' => $legacy_html_sha,
+        'current_html_sha256' => $entry_vnext_sha,
+        'inbox_authority_changed' => false,
+        'print_authority_changed' => false,
     ),
     'focused_runtime_reuse' => array(
         'wu18_php_runtime' => isset( $wu18_runtime['profile_id'], $wu18_runtime['runtime_decision_trace']['status'] )
