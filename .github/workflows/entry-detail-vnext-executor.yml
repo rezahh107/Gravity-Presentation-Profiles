@@ -33,9 +33,9 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import base64, gzip
-          parts = ''.join(p.read_text() for p in sorted(Path('.gpp-executor/apply').glob('chunk-*')))
-          parts += '=' * (-len(parts) % 4)
-          Path('/tmp/apply_entry_vnext.py').write_bytes(gzip.decompress(base64.b64decode(parts)))
+          payload = Path('.gpp-executor/apply_entry_vnext.py.gz.b64').read_text()
+          payload += '=' * (-len(payload) % 4)
+          Path('/tmp/apply_entry_vnext.py').write_bytes(gzip.decompress(base64.b64decode(payload)))
           PY
           python /tmp/apply_entry_vnext.py
           php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
