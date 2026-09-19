@@ -26,37 +26,10 @@ jobs:
           cat .gpp-executor/vnext-html/chunk-* | base64 -d | gzip -d > "$target"
           test "$(stat -c '%s' "$target")" = '119765'
           echo '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69  '"$target" | sha256sum -c -
-      - name: Apply bounded vNext migration and structural repair
+      - name: Inspect recovered executor tail
         shell: bash
         run: |
           set -euo pipefail
           python .gpp-executor/run-apply.py
-          python /tmp/apply_entry_vnext.py
-          php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
-          node --check assets/js/srwf-gravity-flow-entry-detail.js
-          node --check tests/repro-evidence-lab/entry-visual-contract-tests.mjs
-          node --check tests/repro-evidence-lab/wu18-browser-tests.mjs
-          bash -n tests/repro-evidence-lab/verify-owner-visual-fixtures.sh
-          bash tests/repro-evidence-lab/verify-owner-visual-fixtures.sh .
-          git diff --check
-      - name: Commit bounded implementation
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php \
-                  assets/js/srwf-gravity-flow-entry-detail.js \
-                  assets/css/srwf-gravity-flow-entry-detail.css \
-                  tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html \
-                  tests/repro-evidence-lab/verify-owner-visual-fixtures.sh \
-                  tests/repro-evidence-lab/entry-visual-contract-tests.mjs \
-                  tests/repro-evidence-lab/wu18-browser-tests.mjs \
-                  tests/repro-evidence-lab/wu18-post-browser-controls.php \
-                  tests/repro-evidence-lab/core-spine-browser-tests.mjs \
-                  tests/repro-evidence-lab/build-qualification-evidence.php \
-                  .github/workflows/wu19-a4-print-runtime.yml \
-                  docs/visual/ENTRY_DETAIL_VNEXT_AUTHORITY_MIGRATION_V1.md
-          test -n "$(git diff --cached --name-only)"
-          git commit -m '[vnext-executor] Entry Detail vNext authority and structural convergence'
-          git push origin HEAD:feat/entry-detail-vnext-convergence
+          nl -ba /tmp/apply_entry_vnext.py | sed -n '820,990p'
+          python -m py_compile /tmp/apply_entry_vnext.py
