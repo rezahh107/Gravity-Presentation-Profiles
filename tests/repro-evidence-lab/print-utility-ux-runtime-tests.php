@@ -81,6 +81,29 @@ gpp_print_utility_assert( $style && false !== strpos( $style->src, 'assets/css/s
 gpp_print_utility_assert( $script && false !== strpos( $script->src, 'assets/js/srwf-gravity-flow-print-utility.js' ), 'Dedicated Print utility script path mismatch.' );
 gpp_print_utility_assert( ! empty( $style->ver ) && ! empty( $script->ver ), 'Print utility assets must use repository cache-busting versions.' );
 
+// The optional Full Width variant is presentation-only. It must reuse the
+// existing PR44/PR47 Print ownership boundary rather than creating another
+// native-Print suppression rule or a parallel Print affordance.
+$plugin_root = defined( 'GPP_PLUGIN_FILE' ) ? dirname( GPP_PLUGIN_FILE ) : '';
+$entry_css_path = $plugin_root . '/assets/css/srwf-gravity-flow-entry-detail.css';
+$full_width_css_path = $plugin_root . '/assets/css/srwf-gravity-flow-entry-detail-full-width.css';
+$entry_css = is_readable( $entry_css_path ) ? file_get_contents( $entry_css_path ) : false;
+$full_width_css = is_readable( $full_width_css_path ) ? file_get_contents( $full_width_css_path ) : false;
+gpp_print_utility_assert( is_string( $entry_css ) && is_string( $full_width_css ), 'Entry Detail Print-boundary stylesheets must be readable.' );
+gpp_print_utility_assert(
+    false !== strpos( $entry_css, '.detail-view-print' )
+        && false !== strpos( $entry_css, '.gpp-entry-print-utility[data-gpp-print-utility="dossier"]' ),
+    'Existing dual-marker native Print suppression contract changed.'
+);
+gpp_print_utility_assert(
+    false === strpos( $full_width_css, '.detail-view-print' ),
+    'Full Width must not create a second native Print suppression architecture.'
+);
+gpp_print_utility_assert(
+    false === strpos( $full_width_css, 'printPage(' ) && false === strpos( $full_width_css, 'gravityflow_print_entries' ),
+    'Full Width CSS must not own Print dispatch behavior.'
+);
+
 $results = array(
     'suite' => 'GPP Print utility UX runtime',
     'semantic_button' => true,
@@ -89,6 +112,7 @@ $results = array(
     'progressive_fallback_present' => true,
     'idle_aria_busy' => false,
     'dedicated_assets_scoped' => true,
+    'full_width_reuses_existing_print_boundary' => true,
     'style_handle' => PrintDossierPresentationAdapter::UTILITY_STYLE_HANDLE,
     'script_handle' => PrintDossierPresentationAdapter::UTILITY_SCRIPT_HANDLE,
 );

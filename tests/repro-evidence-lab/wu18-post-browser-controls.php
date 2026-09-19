@@ -96,6 +96,26 @@ if ( ! is_array( $mapping_evidence )
     throw new RuntimeException( 'Real Entry Detail batch mapping browser evidence is incomplete.' );
 }
 
+// Reuse the existing WU18 browser/runtime environment for the optional visual
+// variant. This preserves the workflow configuration file while making Full
+// Width a mandatory part of the same exact-Head qualification path.
+$variant_script = __DIR__ . '/wu18-entry-detail-variant-browser-control.mjs';
+$variant_output = array();
+$variant_status = 0;
+exec( 'node ' . escapeshellarg( $variant_script ) . ' 2>&1', $variant_output, $variant_status );
+if ( 0 !== $variant_status || empty( $variant_output ) ) {
+    throw new RuntimeException( 'Entry Detail visual variant browser control failed: ' . implode( "\n", array_slice( $variant_output, -12 ) ) );
+}
+$variant_evidence = json_decode( end( $variant_output ), true );
+if ( ! is_array( $variant_evidence )
+    || 'PASS' !== ( isset( $variant_evidence['status'] ) ? $variant_evidence['status'] : null )
+    || empty( $variant_evidence['settings_selector_reached'] )
+    || empty( $variant_evidence['stale_action_conflict_proven'] )
+    || empty( $variant_evidence['css_only_grid_proven'] )
+    || empty( $variant_evidence['js_blocked_proven'] ) ) {
+    throw new RuntimeException( 'Entry Detail visual variant browser evidence is incomplete.' );
+}
+
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
 if ( ! is_array( $results ) ) $results = array();
@@ -113,6 +133,7 @@ $results['post_browser_controls'] = array(
     ),
 );
 $results['real_mapping_browser_control'] = $mapping_evidence;
+$results['entry_detail_visual_variant_browser_control'] = $variant_evidence;
 file_put_contents(
     $results_path,
     wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
@@ -120,3 +141,4 @@ file_put_contents(
 
 echo "WU18_POST_BROWSER_USER_INPUT_FALLBACK_PASS\n";
 echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
+echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";

@@ -1,0 +1,471 @@
+/*
+ * Optional SRWF Entry Detail Full Width variant.
+ *
+ * Runtime layout is CSS-only. The selector is admitted only when the server has
+ * emitted the read-only Review dossier under the lifecycle-backed Full Width
+ * profile. No GeneratePress global container is targeted and no native node is
+ * moved, cloned or reconstructed.
+ */
+
+.gravityflow_workflow_detail:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) {
+    box-sizing: border-box;
+    /* Keep WordPress .wrap margins inside the admin content width. */
+    width: auto;
+    max-width: none;
+    padding: 28px clamp(24px, 3vw, 40px);
+    background: #f8fafc;
+    color: #172033;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #post-body {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+}
+
+/*
+ * Authentic Gravity Flow 3.1.0 exposes these three direct #post-body children:
+ * main Entry Detail content, native workflow/status sidebar, native Timeline.
+ * Grid uses those existing siblings in normal flow; source/tab order is intact.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #post-body {
+    display: grid;
+    grid-template-columns: minmax(0, 72fr) minmax(280px, 28fr);
+    grid-template-areas:
+        "main workflow"
+        "timeline workflow";
+    gap: 28px;
+    align-items: start;
+    direction: rtl;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #post-body-content {
+    grid-area: main;
+    float: none;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    direction: rtl;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #postbox-container-1 {
+    grid-area: workflow;
+    float: none;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    direction: rtl;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #postbox-container-2 {
+    grid-area: timeline;
+    float: none;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    direction: rtl;
+}
+
+/* GPP Print stays the one visible Print affordance and remains host-flow-adjacent. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-print-utility {
+    justify-content: flex-start;
+    margin-bottom: 18px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-print-utility__button {
+    min-block-size: 44px;
+    min-inline-size: 0;
+    padding: 9px 18px;
+    border-color: #bfdbfe;
+    border-radius: 12px;
+    background: #fff;
+    color: #2563eb;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+}
+
+/* Full Width dossier becomes a collection of coordinated cards. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__header,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__task,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__section {
+    box-sizing: border-box;
+    margin: 0 0 18px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, .045);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__header {
+    align-items: center;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__header h1 {
+    font-size: 28px;
+    line-height: 1.55;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__task {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    box-shadow: 0 6px 22px rgba(37, 99, 235, .04);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__section:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__section-title {
+    margin-bottom: 16px;
+    font-size: 20px;
+    line-height: 1.65;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__facts {
+    border-color: #e5e7eb;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__fact {
+    padding: 15px 18px 16px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__fact dt {
+    color: #667085;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) .gpp-entry-dossier__fact dd {
+    color: #172033;
+    font-weight: 600;
+}
+
+/* Authentic Gravity Flow instruction content is styled in its existing main-column position. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-instructions {
+    box-sizing: border-box;
+    margin: 18px 0 0;
+    overflow: hidden;
+    border: 1px solid #fde68a;
+    border-radius: 16px;
+    background: #fff7d6;
+    box-shadow: none;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-instructions > .inside {
+    margin: 0;
+    padding: 16px 18px;
+    color: #475467;
+    line-height: 1.85;
+}
+
+/* Native workflow/status/actions remain the original host-owned box. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #gravityflow-status-box-container {
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .055);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #gravityflow-status-box-container > h3.hndle {
+    padding: 20px 22px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+    color: #172033;
+    font-size: 21px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
+    padding: 22px;
+    background: #fff;
+    color: #172033;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-status-box-field-step-status {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid #bfdbfe;
+    border-radius: 14px;
+    background: #eff6ff;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-status-box-field-step-status h4 {
+    margin: 0;
+    color: #172033;
+    font-weight: 700;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-status-box-field-assignees {
+    margin: 0 0 18px;
+    padding: 0 0 18px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #475467;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box textarea[name="gravityflow_note"] {
+    min-block-size: 118px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-color: #cbd5e1;
+    border-radius: 12px;
+    background: #fff;
+    color: #172033;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, .025);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box textarea[name="gravityflow_note"]:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 3px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button {
+    width: 100%;
+    min-block-size: 48px;
+    padding: 10px 16px;
+    border-width: 1px;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, .06);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button[value="approved"] {
+    border-color: #16a34a;
+    background: #16a34a;
+    color: #fff;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button[value="rejected"] {
+    border-color: #f43f5e;
+    background: #f43f5e;
+    color: #fff;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button[value="revert"] {
+    border-color: #f59e0b;
+    background: #fff;
+    color: #b45309;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button:disabled,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button[aria-disabled="true"] {
+    opacity: .48;
+    cursor: default;
+    box-shadow: none;
+}
+
+/*
+ * Timeline stays native. Stable .gravityflow-note wrappers become neutral event
+ * cards. No visible event text is inspected and no semantic outcome tint is
+ * invented because Gravity Flow 3.1.0 exposes no proven machine-readable state.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 22px 24px 24px;
+    overflow: visible;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, .045);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline > h3 {
+    margin: 0;
+    padding: 0 0 18px;
+    border: 0;
+    background: transparent;
+    color: #172033;
+    font-size: 22px;
+    line-height: 1.6;
+    font-weight: 700;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff .gravityflow-timeline > .inside {
+    margin: 0;
+    padding: 0 22px 0 0;
+    border-inline-start: 2px solid #dbeafe;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note {
+    clear: both;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0 0 14px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #f8fafc;
+    color: #172033;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .035);
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note:last-child {
+    margin-bottom: 0;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-body-wrap {
+    min-width: 0;
+    margin-inline-start: 78px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-title {
+    color: #172033;
+    font-size: 16px;
+    line-height: 1.75;
+    font-weight: 700;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-title::before {
+    content: "";
+    display: inline-block;
+    inline-size: 10px;
+    block-size: 10px;
+    margin-inline-end: 8px;
+    border: 3px solid #93c5fd;
+    border-radius: 50%;
+    background: #fff;
+    vertical-align: -1px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-meta {
+    color: #667085;
+    font-size: 13px;
+    line-height: 1.8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-body {
+    color: #475467;
+    font-size: 15px;
+    line-height: 1.85;
+}
+
+/*
+ * Keep responsive rules on the same admitted read-only selector strength as
+ * the desktop declarations they override. Otherwise the desktop :has() rule
+ * wins the cascade even when the media query matches, leaving the narrow view
+ * in the two-column desktop grid and squeezing dossier content past the viewport.
+ */
+@media (max-width: 1100px) {
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #post-body {
+        grid-template-columns: minmax(0, 68fr) minmax(250px, 32fr);
+        gap: 20px;
+    }
+
+    .gravityflow_workflow_detail:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) {
+        padding: 24px;
+    }
+}
+
+@media (max-width: 820px) {
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #post-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "main"
+            "workflow"
+            "timeline";
+        gap: 18px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__header,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__task,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__section {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 600px) {
+    .gravityflow_workflow_detail:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) {
+        padding: 16px 12px 22px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__header,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__task,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__section,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline {
+        padding: 18px 16px;
+        border-radius: 16px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-entry-dossier__header h1 {
+        font-size: 23px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box {
+        padding: 18px 16px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note {
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-avatar {
+        max-width: 56px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-body-wrap {
+        margin-inline-start: 66px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) *,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) *::before,
+    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"]) *::after {
+        scroll-behavior: auto;
+    }
+}
+
+/*
+ * WordPress admin's legacy columns-2 layout uses ID-heavy positive/negative
+ * margins. Once Full Width admits #post-body as the grid owner, those offsets
+ * must be neutralized with equally local, higher-specificity selectors so the
+ * native nodes stay in normal flow at every viewport.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body {
+    margin: 0;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #post-body-content,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #postbox-container-1,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) #poststuff #post-body > #postbox-container-2 {
+    float: none;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+}
