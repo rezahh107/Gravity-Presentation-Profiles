@@ -62,6 +62,11 @@ $patterns = array(
     'editable_fields_method'            => 'function get_editable_fields',
     'editable_fields_setting_method'    => 'function get_editable_fields_setting',
     'user_input_step_class'             => 'class Gravity_Flow_Step_User_Input',
+    'assignee_constructor'              => 'class Gravity_Flow_Assignee',
+    'assignee_factory'                  => 'Gravity_Flow_Assignee(',
+    'editable_fields_array_key'         => "'editable_fields'",
+    'step_assignee_filter'              => 'gravityflow_step_assignees',
+    'get_assignees_method'              => 'function get_assignees',
 );
 
 $occurrences = array();
@@ -94,7 +99,7 @@ foreach ( $iterator as $file ) {
                 'line' => $index + 1,
                 'snippet' => $snippet,
             );
-            if ( count( $occurrences[ $key ] ) >= 12 ) {
+            if ( count( $occurrences[ $key ] ) >= 20 ) {
                 break;
             }
         }
@@ -139,7 +144,7 @@ $method_source = static function ( ReflectionMethod $method, $root, $parameter_s
 };
 
 $reflection = array();
-foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_Step_Approval' ) as $class ) {
+foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_Step', 'Gravity_Flow_Step_Approval', 'Gravity_Flow_Assignee', 'Gravity_Flow_Assignees' ) as $class ) {
     if ( ! class_exists( $class ) ) {
         $reflection[ $class ] = array( 'exists' => false );
         continue;
@@ -164,6 +169,7 @@ foreach ( array( 'Gravity_Flow_API', 'Gravity_Flow_Entry_Detail', 'Gravity_Flow_
     $reflection[ $class ] = array(
         'exists' => true,
         'file' => $rc->getFileName() ? ltrim( str_replace( $flow_root, '', $rc->getFileName() ), '/\\' ) : null,
+        'parent' => $rc->getParentClass() ? $rc->getParentClass()->getName() : null,
         'methods' => $methods,
     );
 }
@@ -183,14 +189,18 @@ $selected_methods = array(
         'maybe_show_instructions',
         'maybe_show_timeline',
     ),
+    'Gravity_Flow_Step' => array( 'get_assignees', 'assign', 'get_setting_assignees', 'get_setting_assignee_routing', 'get_setting_assignee_type' ),
     'Gravity_Flow_Step_Approval' => array(
         'get_actions',
         'get_editable_fields',
         'get_editable_fields_setting',
+        'get_settings',
         'workflow_detail_box',
         'workflow_detail_status_box_actions',
         'workflow_detail_status_box_status',
     ),
+    'Gravity_Flow_Assignee' => array( '__construct', 'get_editable_fields' ),
+    'Gravity_Flow_Assignees' => array( 'create' ),
 );
 foreach ( $selected_methods as $class => $methods ) {
     if ( ! class_exists( $class ) ) {
@@ -291,7 +301,7 @@ foreach ( $addon_iterator as $file ) {
 }
 
 $result = array(
-    'schema_version' => '1.5.0',
+    'schema_version' => '1.6.0',
     'gravity_forms_version' => $gf_version,
     'gravity_flow_version' => $flow_version,
     'gravity_flow_main_sha256' => hash_file( 'sha256', $flow_root . '/gravityflow.php' ),
