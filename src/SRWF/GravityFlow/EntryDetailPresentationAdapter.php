@@ -12,10 +12,11 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 /**
  * Presentation-only adapter for Gravity Flow's native Entry Detail surface.
  *
- * Permission, workflow, edit/save, validation, actions, uploaded-file storage,
- * timeline and print remain owned by Gravity Forms / Gravity Flow. GPP only
- * projects independently evidenced semantic values and re-composes already
- * rendered native controls in-place.
+ * Gravity Flow owns authorization, edit/save, workflow controls, transitions,
+ * status, timeline and native field visibility. GPP emits only an admitted
+ * read-only semantic dossier. Duplicate native read-only field presentation is
+ * suppressed by server-conditioned, GPP-scoped CSS and never by JS or by
+ * changing Gravity Flow's visibility predicate.
  */
 final class EntryDetailPresentationAdapter {
     const SURFACE = 'gravity_flow.entry_detail';
@@ -38,8 +39,8 @@ final class EntryDetailPresentationAdapter {
             return;
         }
 
-        // Source-proven Gravity Flow 3.1.0 seam. It executes only after the
-        // host's own Entry Detail permission gate has admitted this request.
+        // Gravity Flow 3.1.0 invokes this only after its Entry Detail permission
+        // gate has admitted the request. GPP deliberately adds no second gate.
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderDossier' ), 20, 2 );
         add_filter( 'gravityflow_approve_label_workflow_detail', array( __CLASS__, 'filterApproveLabel' ), 20, 2 );
         add_filter( 'gravityflow_reject_label_workflow_detail', array( __CLASS__, 'filterRejectLabel' ), 20, 2 );
@@ -64,6 +65,7 @@ final class EntryDetailPresentationAdapter {
 
         $model = self::model();
         if ( null === $model ) {
+            self::recordSuppressionSkip( 'profile_inactive' );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_PRESENTATION_OUTPUT',
@@ -82,6 +84,7 @@ final class EntryDetailPresentationAdapter {
                 'invalid_or_mismatched_host_context',
                 'native_gravity_flow_entry_detail'
             );
+            self::recordSuppressionSkip( 'structural_readiness_not_satisfied' );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_PRESENTATION_OUTPUT',
@@ -102,6 +105,7 @@ final class EntryDetailPresentationAdapter {
                 self::structuralFailureReason( $decision ),
                 'native_gravity_flow_entry_detail'
             );
+            self::recordSuppressionSkip( 'structural_readiness_not_satisfied' );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_PRESENTATION_OUTPUT',
@@ -111,16 +115,29 @@ final class EntryDetailPresentationAdapter {
             );
             return;
         }
+
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_BINDING_READINESS',
             RuntimeDecisionTrace::RESULT_PASS,
             'structural_readiness_satisfied'
         );
-
         self::recordOptionalRegionCapabilities( $capabilities );
 
         $current_step = self::currentStep( $entry );
+        $review_admission = self::readOnlyReviewAdmission( $current_step );
+        if ( empty( $review_admission['eligible'] ) ) {
+            self::recordSuppressionSkip( $review_admission['reason'] );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                $review_admission['reason'],
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+
         $eligibility = self::approvalProcessingEligibility( $current_step );
         $actionable = ! empty( $eligibility['eligible'] );
         RuntimeDiagnostics::recordOnce(
@@ -130,33 +147,78 @@ final class EntryDetailPresentationAdapter {
             $actionable ? 'native_current_assignee_can_update' : $eligibility['reason']
         );
 
-        // Gravity Flow's can_update() predicate governs host editability for
-        // every current step, not only Approval. Keep that independent from
-        // the narrower Approve/Reject eligibility decision above.
-        $editable_fields = self::hostEditableFields( $current_step );
+        // Buffer the complete dossier. The suppression marker reaches the host
+        // DOM only if every dossier render step completes successfully.
+        $buffer_level = ob_get_level();
+        if ( false === ob_start() ) {
+            self::recordSuppressionSkip( 'dossier_not_emitted' );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'dossier_not_emitted',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
 
-        echo '<div class="gpp-entry-dossier" dir="rtl" data-gpp-entry-detail="ready" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '"';
-        echo ' data-gpp-host-editable="' . ( empty( $editable_fields ) ? '0' : '1' ) . '"';
-        echo ' data-gpp-actions-expected="' . ( $actionable ? '1' : '0' ) . '" data-gpp-composition-state="pending">';
+        try {
+            echo '<div class="gpp-entry-dossier" dir="rtl" data-gpp-entry-detail="ready" data-gpp-profile-id="' . esc_attr( $model->profileId() ) . '"';
+            echo ' data-gpp-review-mode="read-only" data-gpp-native-table-suppression="read-only-review">';
 
-        self::renderHeader( $model, $form, $entry, $current_step );
-        self::renderCurrentTask( $model, $form, $entry, $current_step, $actionable );
-        self::renderEducationSection( $model, $form, $entry, $current_step );
-        self::renderCandidateDetailsSection( $model, $form, $entry, $current_step );
-        self::renderContactSection( $model, $form, $entry, $current_step );
-        self::renderSchoolSection( $model, $form, $entry, $current_step );
-        self::renderDocumentsSection( $model, $form, $entry, $current_step );
-        self::renderRegistrationFinanceSection( $model, $form, $entry, $current_step );
-        self::renderHistorySection();
+            self::renderHeader( $model, $form, $entry, $current_step );
+            self::renderCurrentTask( $model, $form, $entry, $current_step );
+            self::renderEducationSection( $model, $form, $entry, $current_step );
+            self::renderCandidateDetailsSection( $model, $form, $entry, $current_step );
+            self::renderContactSection( $model, $form, $entry, $current_step );
+            self::renderSchoolSection( $model, $form, $entry, $current_step );
+            self::renderDocumentsSection( $model, $form, $entry, $current_step );
+            self::renderRegistrationFinanceSection( $model, $form, $entry, $current_step );
+            echo self::previewDialogMarkup();
+            echo '</div>';
 
-        echo self::previewDialogMarkup();
-        echo '</div>';
+            $html = ob_get_clean();
+        } catch ( \Throwable $exception ) {
+            while ( ob_get_level() > $buffer_level ) {
+                ob_end_clean();
+            }
+            self::recordSuppressionSkip( 'dossier_not_emitted' );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'dossier_not_emitted',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+
+        if ( ! is_string( $html ) || '' === $html ) {
+            self::recordSuppressionSkip( 'dossier_not_emitted' );
+            RuntimeDiagnostics::recordOnce(
+                self::SURFACE,
+                'ENTRY_DETAIL_PRESENTATION_OUTPUT',
+                RuntimeDecisionTrace::RESULT_SKIP,
+                'dossier_not_emitted',
+                'native_gravity_flow_entry_detail'
+            );
+            return;
+        }
+
+        echo $html;
 
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_PRESENTATION_OUTPUT',
             RuntimeDecisionTrace::RESULT_PASS,
-            'gpp_enhanced_entry_detail_emitted'
+            'gpp_read_only_review_dossier_emitted'
+        );
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION',
+            RuntimeDecisionTrace::RESULT_PASS,
+            'server_admitted_read_only_gpp_review',
+            'marker_emitted_css_suppression_expected_not_browser_proven'
         );
     }
 
@@ -204,14 +266,12 @@ final class EntryDetailPresentationAdapter {
         if ( ! is_string( $absolute_path ) || '' === $absolute_path || ! is_file( $absolute_path ) || ! is_readable( $absolute_path ) ) {
             return false;
         }
-
         if ( function_exists( 'hash_file' ) ) {
             $hash = hash_file( 'sha256', $absolute_path );
             if ( is_string( $hash ) && '' !== $hash ) {
                 return substr( $hash, 0, 16 );
             }
         }
-
         return false;
     }
 
@@ -250,17 +310,12 @@ final class EntryDetailPresentationAdapter {
         echo '</div></div></header>';
     }
 
-    private static function renderCurrentTask( EntryDetailPresentationModel $model, $form, $entry, $current_step, $actionable ) {
+    private static function renderCurrentTask( EntryDetailPresentationModel $model, $form, $entry, $current_step ) {
         echo '<section class="gpp-entry-dossier__task" data-gpp-entry-region="current-task" data-gpp-section="current-task">';
         echo '<h2 class="gpp-entry-dossier__task-heading">' . esc_html__( 'بررسی پرونده', 'gravity-presentation-profiles' ) . '</h2>';
         echo '<dl class="gpp-entry-dossier__task-context">';
         self::renderFact( $model, $form, $entry, $current_step, 'workflow.current_step', 'مرحله جاری', 'gpp-entry-dossier__task-step' );
         echo '</dl>';
-        echo '<div class="gpp-entry-dossier__native-instructions" data-gpp-native-instructions></div>';
-        echo '<div class="gpp-entry-dossier__native-editor" data-gpp-native-editor></div>';
-        if ( $actionable ) {
-            echo '<div class="gpp-entry-dossier__native-status" data-gpp-native-status></div>';
-        }
         echo '</section>';
     }
 
@@ -425,20 +480,9 @@ final class EntryDetailPresentationAdapter {
         echo '</div></section>';
     }
 
-    private static function renderHistorySection() {
-        echo '<section class="gpp-entry-dossier__section gpp-entry-dossier__history" data-gpp-entry-region="history" data-gpp-section="history" data-gpp-optional-history>';
-        echo '<details data-gpp-history-details>';
-        echo '<summary>' . esc_html__( 'روند بررسی پرونده', 'gravity-presentation-profiles' ) . '</summary>';
-        echo '<p class="gpp-entry-dossier__history-help">' . esc_html__( 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.', 'gravity-presentation-profiles' ) . '</p>';
-        echo '<div data-gpp-native-history></div>';
-        echo '</details>';
-        echo '</section>';
-    }
-
     private static function renderFact( EntryDetailPresentationModel $model, $form, $entry, $current_step, $slot, $label, $class_name = '' ) {
         $decision = self::semanticDecision( $model, $form, $entry, $current_step, $slot );
         self::recordSemanticDecision( $slot, $decision );
-
         if ( in_array( $decision['state'], array( self::VALUE_HIDDEN, self::VALUE_UNAVAILABLE ), true ) ) {
             return;
         }
@@ -450,7 +494,6 @@ final class EntryDetailPresentationAdapter {
         if ( null === $value ) {
             return;
         }
-
         $class = 'gpp-entry-dossier__fact' . ( '' !== $class_name ? ' ' . $class_name : '' );
         echo '<div class="' . esc_attr( $class ) . '" data-gpp-slot="' . esc_attr( $slot ) . '">';
         echo '<dt>' . esc_html( $label ) . '</dt><dd>' . esc_html( $value ) . '</dd></div>';
@@ -594,7 +637,6 @@ final class EntryDetailPresentationAdapter {
         if ( ! is_scalar( $value ) ) {
             return null;
         }
-
         $text = trim( wp_strip_all_tags( (string) $value ) );
         return '' === $text ? null : $text;
     }
@@ -643,7 +685,6 @@ final class EntryDetailPresentationAdapter {
         if ( ! is_array( $files ) ) {
             return null;
         }
-
         $candidates = array_values(
             array_filter(
                 $files,
@@ -652,7 +693,6 @@ final class EntryDetailPresentationAdapter {
                 }
             )
         );
-
         return 1 === count( $candidates ) ? trim( (string) $candidates[0] ) : null;
     }
 
@@ -677,28 +717,89 @@ final class EntryDetailPresentationAdapter {
         }
     }
 
-    private static function hostEditableFields( $current_step ) {
-        if ( ! $current_step || ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
-            return array();
+    /**
+     * Determine whether this post-permission host request is safe for the
+     * read-only GPP Review projection. The host's own can_update() predicate is
+     * consulted only to learn whether an editor can be required; it is never a
+     * replacement permission check.
+     */
+    private static function readOnlyReviewAdmission( $current_step ) {
+        if ( ! is_object( $current_step ) || ! method_exists( $current_step, 'get_type' ) ) {
+            return array( 'eligible' => false, 'reason' => 'unsupported_or_ambiguous_request_state' );
         }
-        if ( ! \Gravity_Flow_Entry_Detail::can_update( $current_step ) || ! method_exists( $current_step, 'get_editable_fields' ) ) {
-            return array();
+
+        try {
+            $step_type = (string) $current_step->get_type();
+        } catch ( \Throwable $exception ) {
+            return array( 'eligible' => false, 'reason' => 'unsupported_or_ambiguous_request_state' );
         }
-        $fields = $current_step->get_editable_fields();
-        return is_array( $fields ) ? $fields : array();
+
+        if ( 'user_input' === $step_type ) {
+            return array( 'eligible' => false, 'reason' => 'active_user_input_editing' );
+        }
+
+        if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
+            return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
+        }
+
+        try {
+            $can_update = \Gravity_Flow_Entry_Detail::can_update( $current_step );
+        } catch ( \Throwable $exception ) {
+            return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
+        }
+
+        // A viewer who cannot update is authentically read-only at this seam.
+        if ( ! $can_update ) {
+            return array( 'eligible' => true, 'reason' => null );
+        }
+
+        if ( ! method_exists( $current_step, 'get_editable_fields' ) ) {
+            return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
+        }
+
+        try {
+            $editable_fields = $current_step->get_editable_fields();
+        } catch ( \Throwable $exception ) {
+            return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
+        }
+
+        if ( ! is_array( $editable_fields ) ) {
+            return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
+        }
+
+        foreach ( $editable_fields as $field_id ) {
+            if ( is_scalar( $field_id ) && '' !== trim( (string) $field_id ) ) {
+                return array( 'eligible' => false, 'reason' => 'native_editor_required' );
+            }
+        }
+
+        return array( 'eligible' => true, 'reason' => null );
+    }
+
+    private static function recordSuppressionSkip( $reason ) {
+        RuntimeDiagnostics::recordOnce(
+            self::SURFACE,
+            'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION',
+            RuntimeDecisionTrace::RESULT_SKIP,
+            $reason,
+            'native_gravity_flow_entry_detail'
+        );
     }
 
     private static function approvalProcessingEligibility( $current_step ) {
         if ( ! is_object( $current_step ) || ! method_exists( $current_step, 'get_type' ) ) {
             return array( 'eligible' => false, 'reason' => 'current_step_unavailable' );
         }
-        if ( 'approval' !== $current_step->get_type() ) {
-            return array( 'eligible' => false, 'reason' => 'current_step_not_approval' );
+        try {
+            if ( 'approval' !== $current_step->get_type() ) {
+                return array( 'eligible' => false, 'reason' => 'current_step_not_approval' );
+            }
+        } catch ( \Throwable $exception ) {
+            return array( 'eligible' => false, 'reason' => 'current_step_unavailable' );
         }
         if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
             return array( 'eligible' => false, 'reason' => 'native_update_predicate_unavailable' );
         }
-
         try {
             if ( ! \Gravity_Flow_Entry_Detail::can_update( $current_step ) ) {
                 return array( 'eligible' => false, 'reason' => 'current_assignee_not_eligible' );
@@ -706,7 +807,6 @@ final class EntryDetailPresentationAdapter {
         } catch ( \Throwable $exception ) {
             return array( 'eligible' => false, 'reason' => 'native_update_predicate_failed' );
         }
-
         return array( 'eligible' => true, 'reason' => null );
     }
 
@@ -714,17 +814,14 @@ final class EntryDetailPresentationAdapter {
         if ( ! is_object( $step ) || ! method_exists( $step, 'get_entry' ) ) {
             return false;
         }
-
         $entry = $step->get_entry();
         $model = self::model();
         if ( null === $model || ! is_array( $entry ) ) {
             return false;
         }
-
         if ( ! $model->isPresentationReady( $entry, self::structuralCapabilities( $entry ) ) ) {
             return false;
         }
-
         $eligibility = self::approvalProcessingEligibility( $step );
         return ! empty( $eligibility['eligible'] );
     }
