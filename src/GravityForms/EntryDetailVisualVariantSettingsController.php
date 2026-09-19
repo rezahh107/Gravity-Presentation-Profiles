@@ -7,7 +7,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
 /**
  * Adds one transient visual-activation command to the existing GPP Entry Detail
- * plugin-settings section without creating a second persisted style setting.
+ * plugin-settings renderer without creating a second persisted style setting.
  */
 final class EntryDetailVisualVariantSettingsController {
     private static $renderer_mutated = false;
@@ -18,9 +18,10 @@ final class EntryDetailVisualVariantSettingsController {
             return;
         }
 
-        // GFAddOn initializes its plugin-settings renderer during its admin
-        // lifecycle. admin_init normally reaches it after that initialization;
-        // admin_head is a conservative pre-render retry for host timing variants.
+        // GFAddOn constructs the plugin-settings renderer during its init-admin
+        // lifecycle. Use the framework's own add_field_after() mutation seam so
+        // prepared Settings field objects, callbacks, posted values and sibling
+        // Mapping & Binding Health fields remain intact.
         add_action( 'admin_init', array( __CLASS__, 'augmentSettingsRenderer' ), 999 );
         add_action( 'admin_head', array( __CLASS__, 'augmentSettingsRenderer' ), 1 );
     }
@@ -31,35 +32,25 @@ final class EntryDetailVisualVariantSettingsController {
         }
 
         $addon = AddOn::get_instance();
-        if ( ! is_object( $addon ) || ! method_exists( $addon, 'get_settings_renderer' ) ) {
+        if ( ! is_object( $addon )
+            || ! method_exists( $addon, 'get_settings_renderer' )
+            || ! method_exists( $addon, 'add_field_after' )
+            || ! method_exists( $addon, 'get_field' ) ) {
             return;
         }
-        $renderer = $addon->get_settings_renderer();
-        if ( ! is_object( $renderer ) || ! method_exists( $renderer, 'set_fields' ) ) {
-            return;
-        }
-
-        $sections = $addon->plugin_settings_fields();
-        if ( ! is_array( $sections ) ) {
+        if ( ! is_object( $addon->get_settings_renderer() ) ) {
             return;
         }
 
-        foreach ( $sections as &$section ) {
-            if ( ! is_array( $section ) || 'Operations Setup (Entry Detail)' !== ( isset( $section['title'] ) ? $section['title'] : null ) ) {
-                continue;
-            }
-            if ( ! isset( $section['fields'] ) || ! is_array( $section['fields'] ) ) {
-                return;
-            }
+        // Retry hooks are intentionally idempotent. When another call has
+        // already inserted the selector into the native renderer, do nothing.
+        if ( $addon->get_field( 'entry_detail_visual_variant_action', array() ) ) {
+            self::$renderer_mutated = true;
+            return;
+        }
 
-            foreach ( $section['fields'] as $field ) {
-                if ( is_array( $field ) && 'entry_detail_visual_variant_action' === ( isset( $field['name'] ) ? $field['name'] : null ) ) {
-                    self::$renderer_mutated = true;
-                    return;
-                }
-            }
-
-            $section['fields'][] = array(
+        $fields = array(
+            array(
                 'name'                => 'entry_detail_visual_variant_action',
                 'label'               => esc_html__( 'Entry Detail design', 'gravity-presentation-profiles' ),
                 'description'         => esc_html__( 'Appearance only. Gravity Flow workflow, data, permissions, mappings, Inbox and Print are unchanged. Current / Safe is the stable rollback design.', 'gravity-presentation-profiles' ),
@@ -67,17 +58,21 @@ final class EntryDetailVisualVariantSettingsController {
                 'choices'             => self::choices(),
                 'validation_callback' => array( __CLASS__, 'validateSelection' ),
                 'save_callback'       => array( __CLASS__, 'discardSelection' ),
-            );
-            $section['fields'][] = array(
+            ),
+            array(
                 'name'     => 'entry_detail_visual_variant_feedback',
                 'label'    => esc_html__( 'Active Entry Detail design', 'gravity-presentation-profiles' ),
                 'type'     => 'gpp_entry_detail_visual_variant_feedback',
                 'callback' => array( __CLASS__, 'renderFeedback' ),
-            );
+            ),
+        );
 
-            $renderer->set_fields( $sections );
+        // The Settings renderer owns the prepared section model. Never replace
+        // it wholesale: doing so would discard host-prepared field state and can
+        // break unrelated settings controls on later requests.
+        $addon->add_field_after( 'entry_detail_setup_action', $fields, array() );
+        if ( $addon->get_field( 'entry_detail_visual_variant_action', array() ) ) {
             self::$renderer_mutated = true;
-            return;
         }
     }
 
