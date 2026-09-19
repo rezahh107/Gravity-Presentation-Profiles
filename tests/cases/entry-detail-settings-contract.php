@@ -31,7 +31,39 @@ class GFForms {
 
 class GppSettingsRendererStub {
     public $fields = array();
-    public function set_fields( $fields ) { $this->fields = $fields; }
+
+    public function __construct( $fields = array() ) {
+        $this->fields = $fields;
+    }
+
+    public function add_field( $name, $fields, $pos, $settings = array() ) {
+        unset( $settings );
+        if ( isset( $fields['name'] ) ) {
+            $fields = array( $fields );
+        }
+        $modifier = 'before' === $pos ? 0 : 1;
+        foreach ( $this->fields as &$section ) {
+            foreach ( $section['fields'] as $index => $field ) {
+                if ( isset( $field['name'] ) && $name === $field['name'] ) {
+                    array_splice( $section['fields'], $index + $modifier, 0, $fields );
+                    return $this->fields;
+                }
+            }
+        }
+        return $this->fields;
+    }
+
+    public function get_field( $name, $settings = array() ) {
+        unset( $settings );
+        foreach ( $this->fields as $section ) {
+            foreach ( $section['fields'] as $field ) {
+                if ( isset( $field['name'] ) && $name === $field['name'] ) {
+                    return $field;
+                }
+            }
+        }
+        return false;
+    }
 }
 
 class GFAddOn {
@@ -44,6 +76,12 @@ class GFAddOn {
 
     public function get_settings_renderer() { return $this->gpp_test_renderer; }
     public function set_settings_renderer( $renderer ) { $this->gpp_test_renderer = $renderer; }
+    public function add_field_after( $name, $fields, $settings ) {
+        return $this->gpp_test_renderer->add_field( $name, $fields, 'after', $settings );
+    }
+    public function get_field( $name, $settings ) {
+        return $this->gpp_test_renderer->get_field( $name, $settings );
+    }
 }
 
 require dirname( __DIR__, 2 ) . '/gravity-presentation-profiles.php';
@@ -90,11 +128,12 @@ gpp_assert_true( in_array( 'admin_post_gpp_initialize_entry_detail_presentation'
 gpp_assert_true( ! in_array( 'admin_notices', $hooks, true ), 'Entry Detail setup UI must not depend on the admin_notices lifecycle.' );
 gpp_assert_true( in_array( 'admin_init', $hooks, true ) && in_array( 'admin_head', $hooks, true ), 'Entry Detail design selector must use the existing native plugin-settings renderer lifecycle.' );
 
-// Prove the bounded controller augments the existing Entry Detail section only,
-// while its value remains a transient lifecycle command rather than an option.
+// Prove the bounded controller uses GFAddOn's native add_field_after() seam.
+// It must not rebuild or replace the prepared renderer because neighboring
+// Mapping & Binding Health fields depend on that renderer-owned state.
 $_GET['page'] = 'gf_settings';
 $_GET['subview'] = 'gravity-presentation-profiles';
-$renderer = new GppSettingsRendererStub();
+$renderer = new GppSettingsRendererStub( $sections );
 $addon->set_settings_renderer( $renderer );
 \GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController::augmentSettingsRenderer();
 
@@ -116,5 +155,18 @@ gpp_assert_same( array( 'GravityPresentationProfiles\\GravityForms\\EntryDetailV
 gpp_assert_same( array( 'GravityPresentationProfiles\\GravityForms\\EntryDetailVisualVariantSettingsController', 'discardSelection' ), $visual['save_callback'], 'Visual selector command must not persist as plugin settings state.' );
 gpp_assert_same( '', \GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController::discardSelection( null, 'opaque-command' ), 'Visual selector must discard every submitted command after lifecycle processing.' );
 gpp_assert_true( false !== strpos( $visual['description'], 'Appearance only' ) && false !== strpos( $visual['description'], 'Current / Safe' ), 'Selector description must explain appearance-only switching and rollback.' );
+
+// A second augmentation attempt must be idempotent and preserve every sibling.
+\GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController::augmentSettingsRenderer();
+$second = null;
+foreach ( $renderer->fields as $section ) {
+    if ( isset( $section['title'] ) && 'Operations Setup (Entry Detail)' === $section['title'] ) {
+        $second = $section;
+        break;
+    }
+}
+gpp_assert_same( 3, count( $second['fields'] ), 'Renderer retry must not duplicate visual controls.' );
+gpp_assert_true( false !== $renderer->get_field( 'binding_health' ), 'Mapping & Binding Health field must survive visual selector augmentation.' );
+gpp_assert_true( false !== $renderer->get_field( 'entry_detail_mapping' ), 'Entry Detail mapping field must survive visual selector augmentation.' );
 
 echo "ENTRY_DETAIL_SETTINGS_CONTRACT_PASS\n";
