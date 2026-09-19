@@ -162,7 +162,8 @@ await test('WU18-BROWSER-005', 'UNMAPPED data degrades one slot without restorin
 
 await test('WU18-BROWSER-006', 'dedicated Approval editor fixture falls back to native editor with no suppression marker', async () => {
   await page.goto(entryUrl(manifest.editor), { waitUntil: 'networkidle' });
-  const state = await page.evaluate(() => {
+  const intendedFieldSelector = `#input_${manifest.editor.form_id}_${manifest.editor.editable_field_id}`;
+  const state = await page.evaluate(selector => {
     const table = document.querySelector('.entry-detail-view');
     const editor = table?.querySelector('.gform_wrapper');
     const status = document.querySelector('.gravityflow-status-box');
@@ -171,10 +172,10 @@ await test('WU18-BROWSER-006', 'dedicated Approval editor fixture falls back to 
       marker_count: document.querySelectorAll('[data-gpp-native-table-suppression]').length,
       native_table_display: table ? getComputedStyle(table).display : null,
       native_editor_visible: Boolean(editor && getComputedStyle(editor).display !== 'none'),
-      intended_field_visible: Boolean(document.querySelector(`#input_${manifest.editor.form_id}_${manifest.editor.editable_field_id}`)),
+      intended_field_visible: Boolean(document.querySelector(selector)),
       status_visible: Boolean(status && getComputedStyle(status).display !== 'none'),
     };
-  });
+  }, intendedFieldSelector);
   if (state.dossier_count !== 0 || state.marker_count !== 0 || !state.native_editor_visible || !state.intended_field_visible || state.native_table_display === 'none' || !state.status_visible) throw new Error(`Native editor fallback failed: ${JSON.stringify(state)}`);
   return state;
 });
