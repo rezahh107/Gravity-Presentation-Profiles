@@ -16,7 +16,7 @@ final class EntryDetailFullWidthPresentationAdapter {
     }
 
     public static function enqueueAssets() {
-        if ( ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+        if ( ! self::isEntryDetailRequest() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
             return;
         }
 
@@ -45,6 +45,28 @@ final class EntryDetailFullWidthPresentationAdapter {
             array( EntryDetailPresentationAdapter::STYLE_HANDLE ),
             self::assetVersion( $absolute )
         );
+    }
+
+    /**
+     * Match the existing Entry Detail/Print utility request boundary: a concrete
+     * Entry Detail view and entry ID are required, and admin rendering is
+     * limited to Gravity Flow Inbox Entry Detail. Frontend Entry Detail keeps
+     * the same view/lid seam without introducing theme-wide asset delivery.
+     */
+    private static function isEntryDetailRequest() {
+        $view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+        $lid = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
+
+        if ( 'entry' !== $view || $lid < 1 ) {
+            return false;
+        }
+
+        if ( function_exists( 'is_admin' ) && is_admin() ) {
+            $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+            return 'gravityflow-inbox' === $page;
+        }
+
+        return true;
     }
 
     private static function assetVersion( $absolute_path ) {
