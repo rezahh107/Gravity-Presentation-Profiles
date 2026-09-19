@@ -108,9 +108,9 @@ const referenceContext = await browser.newContext({ viewport: { width: 1440, hei
 const referencePage = await referenceContext.newPage();
 await referencePage.goto(pathToFileURL(ownerHtml).href, { waitUntil: 'load' });
 await referencePage.waitForFunction(() => typeof window.showSurface === 'function');
-const referenceDesktop = await referenceSnapshot(referencePage, 'C');
+const referenceDesktop = await referenceSnapshot(referencePage, 'detail-desktop');
 await referencePage.setViewportSize({ width: 390, height: 844 });
-const referenceMobile = await referenceSnapshot(referencePage, 'D');
+const referenceMobile = await referenceSnapshot(referencePage, 'detail-mobile');
 
 const context = await browser.newContext();
 const page = await context.newPage();
