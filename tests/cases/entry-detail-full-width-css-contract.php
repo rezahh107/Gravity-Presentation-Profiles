@@ -18,6 +18,8 @@ gpp_assert_true( false !== strpos( $full, 'data-gpp-review-mode="read-only"' ), 
 gpp_assert_true( false !== strpos( $full, '#post-body-content' ) && false !== strpos( $full, '#postbox-container-1' ) && false !== strpos( $full, '#postbox-container-2' ), 'Full Width grid must use authentic Gravity Flow sibling regions.' );
 gpp_assert_true( false !== strpos( $full, 'display: grid' ), 'Full Width desktop composition must use normal-flow CSS Grid.' );
 gpp_assert_true( false !== strpos( $full, '72fr' ) && false !== strpos( $full, '28fr' ), 'Full Width desktop geometry must keep the approved dominant-main/bounded-workflow relationship.' );
+gpp_assert_true( 1 === preg_match( '/#poststuff #post-body\s*\{[^}]*margin:\s*0;/s', $full ), 'Full Width must neutralize WordPress columns-2 parent offset after becoming the grid owner.' );
+gpp_assert_true( false !== strpos( $full, '#poststuff #post-body > #postbox-container-1' ) && false !== strpos( $full, '#poststuff #post-body > #postbox-container-2' ), 'Full Width must use sufficiently specific, profile-scoped native-column offset resets.' );
 
 foreach ( array( '.site-content', '.grid-container', '.inside-article', '.site-main' ) as $global_selector ) {
     gpp_assert_true( false === strpos( $full, $global_selector ), 'Full Width must not globally rewrite GeneratePress selector ' . $global_selector );
