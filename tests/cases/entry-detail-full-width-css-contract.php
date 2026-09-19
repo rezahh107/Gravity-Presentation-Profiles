@@ -60,6 +60,7 @@ gpp_assert_true( false !== strpos( $panel, 'border-radius: 18px' ), 'Workflow ou
 gpp_assert_true( false !== strpos( $panel, 'background: #fbfcfe' ), 'Workflow card must use the calibrated cool near-white surface.' );
 gpp_assert_true( false !== strpos( $panel, 'box-shadow: 0 4px 14px rgba(15, 23, 42, .055)' ), 'Workflow card must use the restrained target-calibrated shadow.' );
 gpp_assert_true( false !== strpos( $panel, 'padding: 22px clamp(20px, 6.75%, 24px) 24px' ), 'Workflow content inset must preserve the normalized target control/card width relationship.' );
+gpp_assert_true( false !== strpos( $panel, '#poststuff #gravityflow-status-box-container .gravityflow-status-box' ), 'Workflow content inset must carry enough local specificity to beat WordPress #poststuff .inside padding without broadening scope.' );
 
 gpp_assert_true( false !== strpos( $panel, 'min-block-size: 112px' ) && false !== strpos( $panel, 'border: 1px solid #dde3ee' ) && false !== strpos( $panel, 'border-radius: 11px' ), 'Native note textarea must remain spacious with calibrated border/radius.' );
 gpp_assert_true( false !== strpos( $panel, 'gap: 13px' ), 'Workflow actions must preserve the target vertical gap.' );
