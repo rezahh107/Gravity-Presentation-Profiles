@@ -26,10 +26,30 @@ jobs:
           cat .gpp-executor/vnext-html/chunk-* | base64 -d | gzip -d > "$target"
           test "$(stat -c '%s' "$target")" = '119765'
           echo '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69  '"$target" | sha256sum -c -
-      - name: Inspect recovered executor tail
+      - name: Apply recovered vNext core only
         shell: bash
         run: |
           set -euo pipefail
           python .gpp-executor/run-apply.py
-          nl -ba /tmp/apply_entry_vnext.py | sed -n '820,990p'
-          python -m py_compile /tmp/apply_entry_vnext.py
+          head -n 956 /tmp/apply_entry_vnext.py > /tmp/apply_entry_vnext_safe.py
+          python -m py_compile /tmp/apply_entry_vnext_safe.py
+          python /tmp/apply_entry_vnext_safe.py
+          php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
+          node --check assets/js/srwf-gravity-flow-entry-detail.js
+          node --check tests/repro-evidence-lab/entry-visual-contract-tests.mjs
+          bash -n tests/repro-evidence-lab/verify-owner-visual-fixtures.sh
+          bash tests/repro-evidence-lab/verify-owner-visual-fixtures.sh .
+          git diff --check
+          git status --short
+          git diff --stat
+      - name: Commit recovered vNext core
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git reset -- .gpp-executor .github/workflows/entry-detail-vnext-executor.yml
+          test -n "$(git diff --cached --name-only)"
+          git commit -m '[vnext-executor] Apply Entry Detail vNext core convergence'
+          git push origin HEAD:feat/entry-detail-vnext-convergence
