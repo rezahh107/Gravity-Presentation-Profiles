@@ -30,7 +30,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .gpp-executor/apply/chunk-* | base64 -d | gzip -d > /tmp/apply_entry_vnext.py
+          python - <<'PY'
+          from pathlib import Path
+          import base64, gzip
+          parts = ''.join(p.read_text() for p in sorted(Path('.gpp-executor/apply').glob('chunk-*')))
+          parts += '=' * (-len(parts) % 4)
+          Path('/tmp/apply_entry_vnext.py').write_bytes(gzip.decompress(base64.b64decode(parts)))
+          PY
           python /tmp/apply_entry_vnext.py
           php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
           node --check assets/js/srwf-gravity-flow-entry-detail.js
