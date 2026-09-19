@@ -51,7 +51,20 @@ $success->record( 'ENTRY_DETAIL_PROFILE_RESOLUTION', RuntimeDecisionTrace::RESUL
 $success->record( 'ENTRY_DETAIL_BINDING_READINESS', RuntimeDecisionTrace::RESULT_PASS );
 $success->record( 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', RuntimeDecisionTrace::RESULT_PASS, 'native_current_assignee_can_update' );
 $success->record( 'ENTRY_DETAIL_PRESENTATION_OUTPUT', RuntimeDecisionTrace::RESULT_PASS );
-$store->recordTrace( $success->snapshot() );
+gpp_assert_true(
+    $success->record(
+        'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION',
+        RuntimeDecisionTrace::RESULT_PASS,
+        'server_admitted_read_only_gpp_review',
+        'marker_emitted_css_suppression_expected_not_browser_proven'
+    ),
+    'Entry Detail native-table suppression must be a registered diagnostics stage.'
+);
+$success_snapshot = $success->snapshot();
+gpp_assert_true( RuntimeDecisionTrace::validateSnapshot( $success_snapshot ), 'Entry Detail suppression diagnostics must remain valid under the shared trace schema.' );
+gpp_assert_same( 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', end( $success_snapshot['events'] )['stage'], 'Suppression evidence must be retained as its own stage.' );
+gpp_assert_same( 'server_admitted_read_only_gpp_review', end( $success_snapshot['events'] )['reason_code'], 'Suppression stage must retain the server admission reason.' );
+$store->recordTrace( $success_snapshot );
 $persisted = $store->snapshot();
 gpp_assert_same( 'PASS', $persisted['recent_success']['gravity_flow.entry_detail']['status'], 'Successful requests must be compacted to one recent-success reference per surface.' );
 
