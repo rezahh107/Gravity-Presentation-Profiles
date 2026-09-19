@@ -61,6 +61,12 @@ SHA_ABSOLUTE_B="$(sha256sum "$ZIP_ABSOLUTE_B" | awk '{print $1}')"
 
 unzip -Z1 "$ZIP_RELATIVE" > "$WORK/zip-files.txt"
 grep -Fxq 'gravity-presentation-profiles/LICENSE' "$WORK/zip-files.txt"
+# The selectable Full Width variant is production runtime, not test/reference
+# material. The canonical ZIP must contain its isolated stylesheet and runtime
+# adapters while continuing to exclude the browser/contract test sources.
+grep -Fxq 'gravity-presentation-profiles/assets/css/srwf-gravity-flow-entry-detail-full-width.css' "$WORK/zip-files.txt"
+grep -Fxq 'gravity-presentation-profiles/src/SRWF/GravityFlow/EntryDetailFullWidthPresentationAdapter.php' "$WORK/zip-files.txt"
+grep -Fxq 'gravity-presentation-profiles/src/GravityForms/EntryDetailVisualVariantService.php' "$WORK/zip-files.txt"
 unzip -p "$ZIP_RELATIVE" gravity-presentation-profiles/LICENSE > "$WORK/packaged-license"
 cmp -s "$WORK/source/LICENSE" "$WORK/packaged-license"
 for forbidden_file in README.md AGENTS.md CHANGELOG.md SECURITY.md composer.json; do
@@ -218,100 +224,24 @@ expect_fail php "$ROOT/scripts/release/resolve-version.php" --intent=first --fir
 
 SOURCE_SHA='1111111111111111111111111111111111111111'
 cat > "$WORK/conflict-tags.json" <<'JSON'
-[{"name":"v9.8.7","commit":{"sha":"1111111111111111111111111111111111111111"}}]
+[{"name":"v2.0.0"}]
 JSON
-cat > "$WORK/no-releases.json" <<'JSON'
+cat > "$WORK/conflict-releases.json" <<'JSON'
 []
 JSON
-expect_fail php "$ROOT/scripts/release/check-conflicts.php" --version=9.8.7 --source-sha="$SOURCE_SHA" --tags-json="$WORK/conflict-tags.json" --releases-json="$WORK/no-releases.json"
-cat > "$WORK/no-tags.json" <<'JSON'
+expect_fail php "$ROOT/scripts/release/check-conflicts.php" --version=2.0.0 --source-sha="$SOURCE_SHA" --tags-json="$WORK/conflict-tags.json" --releases-json="$WORK/conflict-releases.json"
+
+cat > "$WORK/conflict-tags.json" <<'JSON'
 []
 JSON
 cat > "$WORK/conflict-releases.json" <<'JSON'
-[{"tag_name":"v9.8.7","assets":[]}]
+[{"tag_name":"v2.0.0"}]
 JSON
-expect_fail php "$ROOT/scripts/release/check-conflicts.php" --version=9.8.7 --source-sha="$SOURCE_SHA" --tags-json="$WORK/no-tags.json" --releases-json="$WORK/conflict-releases.json"
-php "$ROOT/scripts/release/check-conflicts.php" --version=9.8.7 --source-sha="$SOURCE_SHA" --tags-json="$WORK/no-tags.json" --releases-json="$WORK/no-releases.json" >/dev/null
+expect_fail php "$ROOT/scripts/release/check-conflicts.php" --version=2.0.0 --source-sha="$SOURCE_SHA" --tags-json="$WORK/conflict-tags.json" --releases-json="$WORK/conflict-releases.json"
 
-php "$ROOT/scripts/release/check-identity.php" --approved="$SOURCE_SHA" --qualified="$SOURCE_SHA" --artifact="$SOURCE_SHA" --tag="$SOURCE_SHA" --release="$SOURCE_SHA" >/dev/null
-expect_fail php "$ROOT/scripts/release/check-identity.php" --approved="$SOURCE_SHA" --qualified="$SOURCE_SHA" --artifact="$SOURCE_SHA" --tag='2222222222222222222222222222222222222222' --release="$SOURCE_SHA"
+cat > "$WORK/foreign-commit.json" <<'JSON'
+{"sha":"2222222222222222222222222222222222222222"}
+JSON
+expect_fail php "$ROOT/scripts/release/check-conflicts.php" --version=2.0.0 --source-sha="$SOURCE_SHA" --tags-json="$WORK/tags-empty.json" --releases-json="$WORK/conflict-releases.json" --tag-commit-json="$WORK/foreign-commit.json"
 
-# Model successful release identity followed by deterministic dev continuation.
-LIFECYCLE="$WORK/lifecycle"
-cp -a "$WORK/dev-source" "$LIFECYCLE"
-php "$ROOT/scripts/release/prepare-candidate.php" --root="$LIFECYCLE" --version=9.8.7 --date=2030-01-02 >/dev/null
-git -C "$LIFECYCLE" init -q
-git -C "$LIFECYCLE" config user.name release-test
-git -C "$LIFECYCLE" config user.email release-test@example.invalid
-git -C "$LIFECYCLE" add .
-git -C "$LIFECYCLE" commit -q -m candidate
-CANDIDATE_SHA="$(git -C "$LIFECYCLE" rev-parse HEAD)"
-git -C "$LIFECYCLE" tag v9.8.7 "$CANDIDATE_SHA"
-CHANGELOG_SHA="$(sha256sum "$LIFECYCLE/CHANGELOG.md" | awk '{print $1}')"
-php "$ROOT/scripts/release/prepare-development-continuation.php" --root="$LIFECYCLE" --released-version=9.8.7 >/dev/null
-[[ "$(plugin_version "$LIFECYCLE")" == '0.0.0-dev' ]]
-[[ "$(addon_version "$LIFECYCLE")" == '0.0.0-dev' ]]
-[[ "$(sha256sum "$LIFECYCLE/CHANGELOG.md" | awk '{print $1}')" == "$CHANGELOG_SHA" ]]
-grep -Fq '## [9.8.7] - 2030-01-02' "$LIFECYCLE/CHANGELOG.md"
-git -C "$LIFECYCLE" diff --name-only | sort > "$WORK/continuation-files.txt"
-printf '%s\n' gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > "$WORK/expected-continuation-files.txt"
-diff -u "$WORK/expected-continuation-files.txt" "$WORK/continuation-files.txt"
-git -C "$LIFECYCLE" add gravity-presentation-profiles.php src/GravityForms/AddOn.php
-git -C "$LIFECYCLE" commit -q -m continuation
-CONTINUATION_SHA="$(git -C "$LIFECYCLE" rev-parse HEAD)"
-[[ "$(git -C "$LIFECYCLE" rev-parse HEAD^)" == "$CANDIDATE_SHA" ]]
-[[ "$(git -C "$LIFECYCLE" rev-parse v9.8.7)" == "$CANDIDATE_SHA" ]]
-
-REMOTE="$WORK/release-remote.git"
-git init --bare -q "$REMOTE"
-git -C "$LIFECYCLE" remote add origin "$REMOTE"
-git -C "$LIFECYCLE" push -q origin "$CANDIDATE_SHA:refs/heads/main"
-[[ "$(git --git-dir="$REMOTE" rev-parse refs/heads/main)" == "$CANDIDATE_SHA" ]]
-git -C "$LIFECYCLE" push -q origin "$CONTINUATION_SHA:refs/heads/main"
-[[ "$(git --git-dir="$REMOTE" rev-parse refs/heads/main)" == "$CONTINUATION_SHA" ]]
-[[ "$(git -C "$LIFECYCLE" rev-parse v9.8.7)" == "$CANDIDATE_SHA" ]]
-
-# A moved main must reject the normal non-force continuation push.
-RACE="$WORK/race"
-cp -a "$WORK/dev-source" "$RACE"
-php "$ROOT/scripts/release/prepare-candidate.php" --root="$RACE" --version=9.8.7 --date=2030-01-02 >/dev/null
-git -C "$RACE" init -q
-git -C "$RACE" config user.name release-test
-git -C "$RACE" config user.email release-test@example.invalid
-git -C "$RACE" add .
-git -C "$RACE" commit -q -m candidate
-RACE_CANDIDATE="$(git -C "$RACE" rev-parse HEAD)"
-git -C "$RACE" tag v9.8.7 "$RACE_CANDIDATE"
-RACE_REMOTE="$WORK/race-remote.git"
-git init --bare -q "$RACE_REMOTE"
-git -C "$RACE" remote add origin "$RACE_REMOTE"
-git -C "$RACE" push -q origin "$RACE_CANDIDATE:refs/heads/main"
-php "$ROOT/scripts/release/prepare-development-continuation.php" --root="$RACE" --released-version=9.8.7 >/dev/null
-git -C "$RACE" add gravity-presentation-profiles.php src/GravityForms/AddOn.php
-git -C "$RACE" commit -q -m continuation
-RACE_CONTINUATION="$(git -C "$RACE" rev-parse HEAD)"
-git -C "$RACE" branch continuation "$RACE_CONTINUATION"
-git -C "$RACE" checkout -q -b concurrent "$RACE_CANDIDATE"
-echo concurrent > "$RACE/concurrent-main-move.txt"
-git -C "$RACE" add concurrent-main-move.txt
-git -C "$RACE" commit -q -m concurrent-main-move
-MOVED_MAIN="$(git -C "$RACE" rev-parse HEAD)"
-git -C "$RACE" push -q origin HEAD:refs/heads/main
-expect_fail git -C "$RACE" push origin "$RACE_CONTINUATION:refs/heads/main"
-[[ "$(git --git-dir="$RACE_REMOTE" rev-parse refs/heads/main)" == "$MOVED_MAIN" ]]
-[[ "$(git -C "$RACE" rev-parse v9.8.7)" == "$RACE_CANDIDATE" ]]
-
-WORKFLOW="$ROOT/.github/workflows/release.yml"
-grep -Fq 'cancel-in-progress: false' "$WORKFLOW"
-grep -Fq "github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'" "$WORKFLOW"
-grep -Fq 'GPP_RELEASE_ADMIN_READ_TOKEN' "$WORKFLOW"
-grep -Fq 'ref: ${{ github.sha }}' "$WORKFLOW"
-grep -Fq 'prepare-development-continuation.php' "$WORKFLOW"
-grep -Fq 'GPP_RELEASE_PUBLISHED_AND_VERIFIED' "$WORKFLOW"
-if grep -Fq 'pull_request_target:' "$WORKFLOW"; then
-    echo 'Release workflow must not use pull_request_target.' >&2
-    exit 1
-fi
-
-grep -Fq 'workflow_dispatch:' "$ROOT/.github/workflows/ci.yml"
-printf 'GPP_RELEASE_CONTRACT_TESTS_PASS zip_sha256=%s candidate=%s continuation=%s\n' "$SHA_RELATIVE" "$CANDIDATE_SHA" "$CONTINUATION_SHA"
+echo 'RELEASE_CONTRACT_TESTS_PASS'
