@@ -30,22 +30,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d .gpp-executor/apply_entry_vnext.py.gz.b64 | gzip -d > /tmp/apply_entry_vnext.py
+          cat .gpp-executor/apply/chunk-* | base64 -d | gzip -d > /tmp/apply_entry_vnext.py
           python /tmp/apply_entry_vnext.py
-
-          # Strengthen the generated host-node composition to make the move
-          # transaction fully reversible until post-move form ownership is proven.
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('assets/js/srwf-gravity-flow-entry-detail.js')
-          text = path.read_text()
-          old = '''        // All destructive/reparenting prerequisites have now been proven.\n        if (instructions.length === 1) instructionsTarget.append(instructions[0]);\n        editorTarget.append(editor);\n        if (approvalStatusBox) statusTarget.append(approvalStatusBox);\n        if (timelines.length === 1) historyTarget.append(timelines[0]);\n        else historyRegion?.remove();\n\n        // Prove state-changing controls still belong to their original form\n        // after reparenting before native fallback is visually replaced.\n        if (actionsExpected) {\n            const actions = unique(dossier, '.gravityflow-action-buttons');\n            if (!actions || actions.closest('form') !== form || !statusTarget.contains(actions)) {\n                fail(dossier, form, 'post-move-form-ownership');\n                return;\n            }\n        }\n'''
-          new = '''        // All destructive/reparenting prerequisites have now been proven.\n        // Preserve exact native anchors so any unexpected post-move failure\n        // can restore the host UI before GPP falls back.\n        const movingNodes = [\n            instructions.length === 1 ? instructions[0] : null,\n            editor,\n            approvalStatusBox,\n            timelines.length === 1 ? timelines[0] : null,\n        ].filter(Boolean);\n        const anchors = movingNodes.map(node => ({ node, parent: node.parentNode, next: node.nextSibling }));\n        const rollback = () => {\n            for (const anchor of anchors.slice().reverse()) {\n                if (!anchor.parent) continue;\n                if (anchor.next && anchor.next.parentNode === anchor.parent) anchor.parent.insertBefore(anchor.node, anchor.next);\n                else anchor.parent.append(anchor.node);\n            }\n        };\n\n        try {\n            if (instructions.length === 1) instructionsTarget.append(instructions[0]);\n            editorTarget.append(editor);\n            if (approvalStatusBox) statusTarget.append(approvalStatusBox);\n            if (timelines.length === 1) historyTarget.append(timelines[0]);\n\n            // Re-prove state-changing controls still belong to their original\n            // form after movement and before marking composition successful.\n            if (actionsExpected) {\n                const actions = unique(dossier, '.gravityflow-action-buttons');\n                if (!actions || actions.closest('form') !== form || !statusTarget.contains(actions)) {\n                    throw new Error('post-move-form-ownership');\n                }\n            }\n        } catch (error) {\n            rollback();\n            fail(dossier, form, error?.message || 'composition-move-failed');\n            return;\n        }\n\n        // Optional GPP history chrome is removed only after host movement has\n        // succeeded, so rollback never needs to recreate GPP-owned markup.\n        if (timelines.length === 0) historyRegion?.remove();\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'transactional composition patch expected 1 block, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
-          PY
-
           php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
           node --check assets/js/srwf-gravity-flow-entry-detail.js
           node --check tests/repro-evidence-lab/entry-visual-contract-tests.mjs
