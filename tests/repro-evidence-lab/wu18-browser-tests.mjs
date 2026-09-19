@@ -33,14 +33,6 @@ async function login(page) {
 async function waitDossier(page) {
   await page.waitForSelector('.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]', { timeout: 30000 });
 }
-function setApprovalEditable(item, fieldIds) {
-  const php = '$e=GFAPI::get_entry(' + Number(item.entry_id) + ');'
-    + '$api=new Gravity_Flow_API(' + Number(item.form_id) + ');'
-    + '$s=$api->get_current_step($e);if(!$s||"approval"!==$s->get_type()){throw new RuntimeException("approval unavailable");}'
-    + '$m=$s->get_feed_meta();$m["editable_fields"]=' + JSON.stringify(fieldIds.map(String)) + ';'
-    + 'gravity_flow()->update_feed_meta($s->get_id(),$m);echo "ok";';
-  if (wpEval(php) !== 'ok') throw new Error('Unable to mutate native Approval editable fields.');
-}
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
@@ -168,28 +160,23 @@ await test('WU18-BROWSER-005', 'UNMAPPED data degrades one slot without restorin
   return state;
 });
 
-await test('WU18-BROWSER-006', 'Approval editable fields conservatively fall back to native editor with no suppression marker', async () => {
-  const reviewField = manifest.alpha.fields['review.reason'];
-  setApprovalEditable(manifest.alpha, [reviewField]);
-  try {
-    await page.goto(entryUrl(manifest.alpha), { waitUntil: 'networkidle' });
-    const state = await page.evaluate(() => {
-      const table = document.querySelector('.entry-detail-view');
-      const editor = table?.querySelector('.gform_wrapper');
-      const status = document.querySelector('.gravityflow-status-box');
-      return {
-        dossier_count: document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').length,
-        marker_count: document.querySelectorAll('[data-gpp-native-table-suppression]').length,
-        native_table_display: table ? getComputedStyle(table).display : null,
-        native_editor_visible: Boolean(editor && getComputedStyle(editor).display !== 'none'),
-        status_visible: Boolean(status && getComputedStyle(status).display !== 'none'),
-      };
-    });
-    if (state.dossier_count !== 0 || state.marker_count !== 0 || !state.native_editor_visible || state.native_table_display === 'none' || !state.status_visible) throw new Error(`Native editor fallback failed: ${JSON.stringify(state)}`);
-    return state;
-  } finally {
-    setApprovalEditable(manifest.alpha, []);
-  }
+await test('WU18-BROWSER-006', 'dedicated Approval editor fixture falls back to native editor with no suppression marker', async () => {
+  await page.goto(entryUrl(manifest.editor), { waitUntil: 'networkidle' });
+  const state = await page.evaluate(() => {
+    const table = document.querySelector('.entry-detail-view');
+    const editor = table?.querySelector('.gform_wrapper');
+    const status = document.querySelector('.gravityflow-status-box');
+    return {
+      dossier_count: document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').length,
+      marker_count: document.querySelectorAll('[data-gpp-native-table-suppression]').length,
+      native_table_display: table ? getComputedStyle(table).display : null,
+      native_editor_visible: Boolean(editor && getComputedStyle(editor).display !== 'none'),
+      intended_field_visible: Boolean(document.querySelector(`#input_${manifest.editor.form_id}_${manifest.editor.editable_field_id}`)),
+      status_visible: Boolean(status && getComputedStyle(status).display !== 'none'),
+    };
+  });
+  if (state.dossier_count !== 0 || state.marker_count !== 0 || !state.native_editor_visible || !state.intended_field_visible || state.native_table_display === 'none' || !state.status_visible) throw new Error(`Native editor fallback failed: ${JSON.stringify(state)}`);
+  return state;
 });
 
 await test('WU18-BROWSER-007', 'native Approval transition reaches native User Input with GPP suppression disabled', async () => {
@@ -219,7 +206,7 @@ await test('WU18-BROWSER-007', 'native Approval transition reaches native User I
 await browser.close();
 
 const failures = results.filter(result => result.status === 'FAIL');
-const output = { schema_version: '4.0.0', surface: 'gravity_flow.entry_detail', results };
+const output = { schema_version: '5.0.0', surface: 'gravity_flow.entry_detail', results };
 fs.mkdirSync(artifactDir, { recursive: true });
 fs.writeFileSync(path.join(artifactDir, 'wu18-browser-results.json'), `${JSON.stringify(output, null, 2)}\n`);
 
