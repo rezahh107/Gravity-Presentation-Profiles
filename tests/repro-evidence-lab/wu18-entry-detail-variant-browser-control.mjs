@@ -111,6 +111,35 @@ async function inspectReview(page) {
     const titlePseudo = firstTitle ? getComputedStyle(firstTitle, '::before') : null;
     const fullStyle = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find(link => (link.id || '').includes('entry-detail-full-width'));
     const rootStyle = document.querySelector('.gravityflow_workflow_detail') ? getComputedStyle(document.querySelector('.gravityflow_workflow_detail')) : null;
+    const viewportWidth = document.documentElement.clientWidth;
+    const overflowers = Array.from(document.querySelectorAll('body *'))
+      .map(node => {
+        const style = getComputedStyle(node);
+        const bounds = node.getBoundingClientRect();
+        return { node, style, bounds };
+      })
+      .filter(({ style, bounds }) => style.display !== 'none' && style.visibility !== 'hidden' && bounds.width > 0 && bounds.height > 0)
+      .filter(({ bounds }) => bounds.left < -1 || bounds.right > viewportWidth + 1)
+      .sort((a, b) => Math.max(b.bounds.right - viewportWidth, -b.bounds.left) - Math.max(a.bounds.right - viewportWidth, -a.bounds.left))
+      .slice(0, 20)
+      .map(({ node, style, bounds }) => ({
+        tag: node.tagName.toLowerCase(),
+        id: node.id || null,
+        class: typeof node.className === 'string' ? node.className : null,
+        rect: { left: bounds.left, right: bounds.right, width: bounds.width },
+        scroll_width: node.scrollWidth,
+        client_width: node.clientWidth,
+        box_sizing: style.boxSizing,
+        width: style.width,
+        min_width: style.minWidth,
+        max_width: style.maxWidth,
+        margin_left: style.marginLeft,
+        margin_right: style.marginRight,
+        padding_left: style.paddingLeft,
+        padding_right: style.paddingRight,
+        overflow_x: style.overflowX,
+        position: style.position,
+      }));
     return {
       profile: dossier?.dataset.gppProfileId || null,
       dossier_count: document.querySelectorAll('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').length,
@@ -157,8 +186,9 @@ async function inspectReview(page) {
       },
       full_width_stylesheet_loaded: Boolean(fullStyle),
       root_background: rootStyle?.backgroundColor || null,
-      viewport_width: document.documentElement.clientWidth,
+      viewport_width: viewportWidth,
       document_scroll_width: document.documentElement.scrollWidth,
+      overflowers,
       tab_order_signature: Array.from(document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]'))
         .filter(node => !node.disabled && node.getAttribute('tabindex') !== '-1' && visible(node))
         .slice(0, 80)
@@ -168,7 +198,9 @@ async function inspectReview(page) {
 }
 
 function assertNoHorizontalOverflow(state, label) {
-  if (state.document_scroll_width > state.viewport_width + 1) throw new Error(`${label} horizontal overflow: ${JSON.stringify({ viewport: state.viewport_width, scroll: state.document_scroll_width })}`);
+  if (state.document_scroll_width > state.viewport_width + 1) {
+    throw new Error(`${label} horizontal overflow: ${JSON.stringify({ viewport: state.viewport_width, scroll: state.document_scroll_width, overflowers: state.overflowers })}`);
+  }
 }
 
 function assertOnePrintAndNativeOwnership(state, label) {
