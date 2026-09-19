@@ -42,6 +42,12 @@ final class GPP_Entry_Review_Test_Step {
     }
 }
 
+final class GPP_Entry_Review_Throwing_Step {
+    public function get_type() {
+        throw new RuntimeException( 'synthetic type failure' );
+    }
+}
+
 $adapter = new ReflectionClass( EntryDetailPresentationAdapter::class );
 $admission = $adapter->getMethod( 'readOnlyReviewAdmission' );
 $admission->setAccessible( true );
@@ -57,6 +63,18 @@ gpp_entry_review_assert( false === $user_input['eligible'] && 'active_user_input
 
 $viewer = $admission->invoke( null, new GPP_Entry_Review_Test_Step( 'approval', array( '17' ), false ) );
 gpp_entry_review_assert( true === $viewer['eligible'], 'Authorized non-editor read-only viewer was not admitted.' );
+
+$unsupported = $admission->invoke( null, new GPP_Entry_Review_Test_Step( 'notification', array(), false ) );
+gpp_entry_review_assert(
+    false === $unsupported['eligible'] && 'unsupported_or_ambiguous_request_state' === $unsupported['reason'],
+    'Unsupported non-Approval step was incorrectly admitted as read-only Review.'
+);
+
+$throwing = $admission->invoke( null, new GPP_Entry_Review_Throwing_Step() );
+gpp_entry_review_assert(
+    false === $throwing['eligible'] && 'unsupported_or_ambiguous_request_state' === $throwing['reason'],
+    'Throwing current-step type did not fail closed.'
+);
 
 $root = dirname( __DIR__, 2 );
 $php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php' );
