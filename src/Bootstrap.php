@@ -6,6 +6,7 @@ use GravityPresentationProfiles\GravityForms\BindingRowAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailMappingAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
@@ -57,6 +58,7 @@ final class Bootstrap {
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
+        EntryDetailFullWidthPresentationAdapter::register();
         PrintDossierPresentationAdapter::register();
 
         return true;
