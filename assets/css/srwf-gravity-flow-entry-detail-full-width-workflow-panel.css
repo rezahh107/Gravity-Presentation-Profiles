@@ -92,6 +92,7 @@
     background: #fff;
     color: #172033;
     font: inherit;
+    font-weight: 400;
     line-height: 1.6;
     box-shadow: inset 0 1px 2px rgba(15, 23, 42, .02);
     resize: vertical;
@@ -123,6 +124,12 @@
     line-height: 1.4;
     font-weight: 700;
     box-shadow: 0 2px 6px rgba(15, 23, 42, .04);
+}
+
+/* Gravity Flow supplies real Font Awesome action icons; keep them native, but
+ * override host inline/icon palette so each icon follows its calibrated button. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button .fa {
+    color: inherit !important;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-status-box .gravityflow-action-buttons button[value="approved"] {
