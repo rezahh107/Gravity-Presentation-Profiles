@@ -7,6 +7,7 @@ on:
       - '.github/workflows/print-utility-ux.yml'
       - 'src/SRWF/GravityFlow/PrintDossierPresentationAdapter.php'
       - 'assets/css/srwf-gravity-flow-print-utility.css'
+      - 'assets/css/srwf-gravity-flow-entry-detail.css'
       - 'assets/js/srwf-gravity-flow-print-utility.js'
       - 'tests/repro-evidence-lab/print-utility-ux-runtime-tests.php'
       - 'tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs'
