@@ -30,13 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import base64, gzip
-          payload = Path('.gpp-executor/apply_entry_vnext.py.gz.b64').read_text()
-          payload += '=' * (-len(payload) % 4)
-          Path('/tmp/apply_entry_vnext.py').write_bytes(gzip.decompress(base64.b64decode(payload)))
-          PY
+          python .gpp-executor/run-apply.py
           python /tmp/apply_entry_vnext.py
           php -l src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php
           node --check assets/js/srwf-gravity-flow-entry-detail.js
