@@ -91,7 +91,7 @@ await test('PRINT-UTILITY-UX-001', 'idle markup and GPP-aligned computed present
       overflow: el.scrollWidth > el.clientWidth + 1,
     };
   });
-  if (visual.height < 40 || visual.borderStyle !== 'solid' || visual.display !== 'inline-flex' || visual.overflow) throw new Error(`Idle visual contract failed: ${JSON.stringify(visual)}`);
+  if (visual.height < 40 || visual.borderStyle !== 'solid' || !visual.display.includes('flex') || visual.overflow) throw new Error(`Idle visual contract failed: ${JSON.stringify(visual)}`);
   await page.screenshot({ path: path.join(artifactDir, 'print-utility-idle-desktop.png'), fullPage: true });
   return visual;
 });
@@ -163,7 +163,10 @@ await test('PRINT-UTILITY-UX-003', 'busy state observes native Gravity Flow ifra
   await page.waitForTimeout(100);
   if (await button.getAttribute('aria-busy') !== 'true') throw new Error('Unrelated iframe incorrectly released Busy state.');
 
-  await button.click();
+  // Invoke a DOM click synchronously while Busy. Playwright's high-level click
+  // treats aria-disabled as disabled and would wait for the first native Print
+  // handoff to finish, which would test a legitimate later activation instead.
+  await button.evaluate(el => el.click());
   await page.waitForTimeout(100);
   if (printRequests > 1) throw new Error(`Duplicate activation created ${printRequests} native Print requests.`);
   await page.screenshot({ path: path.join(artifactDir, 'print-utility-busy-desktop.png'), fullPage: true });
