@@ -62,9 +62,9 @@ gpp_assert_true( false !== strpos( $panel, 'box-shadow: 0 4px 14px rgba(15, 23, 
 gpp_assert_true( false !== strpos( $panel, 'padding: 22px clamp(20px, 6.75%, 24px) 24px' ), 'Workflow content inset must preserve the normalized target control/card width relationship.' );
 gpp_assert_true( false !== strpos( $panel, '#poststuff #gravityflow-status-box-container .gravityflow-status-box' ), 'Workflow content inset must carry enough local specificity to beat WordPress #poststuff .inside padding without broadening scope.' );
 
-gpp_assert_true( false !== strpos( $panel, 'min-block-size: 112px' ) && false !== strpos( $panel, 'border: 1px solid #dde3ee' ) && false !== strpos( $panel, 'border-radius: 11px' ), 'Native note textarea must remain spacious with calibrated border/radius.' );
-gpp_assert_true( false !== strpos( $panel, 'gap: 13px' ), 'Workflow actions must preserve the target vertical gap.' );
-gpp_assert_true( false !== strpos( $panel, 'min-block-size: 48px' ), 'Full Width actions must retain the 48px target interaction height.' );
+gpp_assert_true( false !== strpos( $panel, 'min-block-size: 129px' ) && false !== strpos( $panel, 'border: 1px solid #dde3ee' ) && false !== strpos( $panel, 'border-radius: 11px' ), 'Native note textarea must retain the target-normalized height with calibrated border/radius.' );
+gpp_assert_true( false !== strpos( $panel, 'gap: 16px' ), 'Workflow actions must preserve the target-normalized vertical gap.' );
+gpp_assert_true( false !== strpos( $panel, 'min-block-size: 57px' ), 'Full Width actions must retain the target-normalized interaction height while exceeding accessible target size.' );
 gpp_assert_true( false !== strpos( $panel, 'border-radius: 9px' ), 'Workflow action radius must match the target button family.' );
 gpp_assert_true( false !== strpos( $panel, 'font-size: 15px' ), 'Workflow actions/current-stage typography must retain the calibrated scale.' );
 gpp_assert_true( false !== strpos( $panel, 'border-color: #379b52' ) && false !== strpos( $panel, 'background: #379b52' ), 'Approve action must use the measured target green.' );
