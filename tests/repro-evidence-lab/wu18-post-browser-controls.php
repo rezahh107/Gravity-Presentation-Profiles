@@ -104,14 +104,7 @@ $variant_output = array();
 $variant_status = 0;
 exec( 'node ' . escapeshellarg( $variant_script ) . ' 2>&1', $variant_output, $variant_status );
 if ( 0 !== $variant_status || empty( $variant_output ) ) {
-    $overflow_script = __DIR__ . '/wu18-entry-detail-overflow-diagnostic.mjs';
-    $overflow_output = array();
-    $overflow_status = 0;
-    exec( 'node ' . escapeshellarg( $overflow_script ) . ' 2>&1', $overflow_output, $overflow_status );
-    throw new RuntimeException(
-        'Entry Detail visual variant browser control failed: ' . implode( "\n", array_slice( $variant_output, -12 ) )
-        . "\nOverflow diagnostic (status " . $overflow_status . '): ' . implode( "\n", array_slice( $overflow_output, -4 ) )
-    );
+    throw new RuntimeException( 'Entry Detail visual variant browser control failed: ' . implode( "\n", array_slice( $variant_output, -12 ) ) );
 }
 $variant_evidence = json_decode( end( $variant_output ), true );
 if ( ! is_array( $variant_evidence )
