@@ -59,6 +59,8 @@ $patterns = array(
     'approval_actions_method'           => 'function workflow_detail_status_box_actions',
     'approval_get_actions'              => 'function get_actions',
     'status_box_method'                 => 'function workflow_detail_status_box',
+    'editable_fields_method'            => 'function get_editable_fields',
+    'editable_fields_setting_method'    => 'function get_editable_fields_setting',
     'user_input_step_class'             => 'class Gravity_Flow_Step_User_Input',
 );
 
@@ -181,7 +183,14 @@ $selected_methods = array(
         'maybe_show_instructions',
         'maybe_show_timeline',
     ),
-    'Gravity_Flow_Step_Approval' => array( 'get_actions', 'workflow_detail_box', 'workflow_detail_status_box_actions', 'workflow_detail_status_box_status' ),
+    'Gravity_Flow_Step_Approval' => array(
+        'get_actions',
+        'get_editable_fields',
+        'get_editable_fields_setting',
+        'workflow_detail_box',
+        'workflow_detail_status_box_actions',
+        'workflow_detail_status_box_status',
+    ),
 );
 foreach ( $selected_methods as $class => $methods ) {
     if ( ! class_exists( $class ) ) {
@@ -282,7 +291,7 @@ foreach ( $addon_iterator as $file ) {
 }
 
 $result = array(
-    'schema_version' => '1.4.0',
+    'schema_version' => '1.5.0',
     'gravity_forms_version' => $gf_version,
     'gravity_flow_version' => $flow_version,
     'gravity_flow_main_sha256' => hash_file( 'sha256', $flow_root . '/gravityflow.php' ),
