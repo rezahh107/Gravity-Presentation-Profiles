@@ -2,7 +2,9 @@
 
 ## Status
 
-Owner-authorized implementation target. Browser/runtime qualification and Owner-site visual acceptance remain separate evidence gates.
+Implemented and merged by PR #49 (`Add reversible Full Width Entry Detail visual variant`). Exact qualified PR Head: `0879d71646c140b2b0b26d00bcad1b5fc749af2b`. Merge commit/current integrated main at the synchronization checkpoint: `272c07f781f8afc9f1c416a935aef67cf200a9b8`.
+
+Exact-head repository/pinned-runtime qualification passed. Final Owner-site Full Width visual acceptance remains a separate evidence gate and is still `NOT_PROVEN`.
 
 ## Purpose
 
@@ -61,8 +63,14 @@ GeneratePress supplies the page canvas. Full Width does not globally rewrite `.g
 
 The Owner can select **Current / Safe** from the same GPP settings surface. The transition uses lifecycle compare-and-set semantics so a stale settings page cannot silently overwrite a newer Entry Detail activation.
 
-Real browser qualification must prove that rollback restores the exact Current / Safe activation and that its desktop, narrow, Timeline, workflow, Print and no-JS presentation remain equivalent before this implementation is treated as release-ready.
+Exact-head WU18 browser qualification proved the lifecycle-backed Full Width selection and rollback path in the pinned runtime, including desktop/narrow behavior and restoration of Current / Safe. That evidence does not substitute for Owner-site acceptance on the real GeneratePress page.
+
+## Qualification recorded for PR49
+
+Exact Head `0879d71646c140b2b0b26d00bcad1b5fc749af2b` passed the repository validation set exercised for this change, including Repository CI, WU18 Entry Detail Runtime, WU19 Print/Core Spine/C-D-E-F qualification, WU21 Reproducible Evidence Lab, Print Utility UX regression, GF/PersianGravity runtime, and Release dry-run + exact ZIP smoke. Merge-result/push validation also passed after merge.
+
+These results prove the exercised repository/pinned-runtime behavior. They do not prove target-production visual equivalence.
 
 ## Acceptance boundary
 
-CI/browser evidence may prove architecture, switching, responsive behavior, no-JS behavior, native ownership and visual-contract facts. It does not by itself prove final Owner-site visual acceptance. That remains `NOT_PROVEN` until the Owner evaluates the installable exact-Head artifact in the real target environment.
+Final Owner-site Full Width visual acceptance remains `NOT_PROVEN` until the merged implementation is exercised in the real target environment. Acceptance should confirm the selected Full Width design, responsive behavior, native workflow box, Timeline, Print utility, and Current / Safe rollback while preserving the host-ownership boundaries above.
