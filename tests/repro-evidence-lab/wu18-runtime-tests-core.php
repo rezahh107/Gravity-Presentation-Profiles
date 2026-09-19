@@ -3,26 +3,28 @@ if ( ! defined( 'ABSPATH' ) ) exit( 1 );
 
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
-use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
-use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
-use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierRuntime;
 
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu18_fixture_manifest' );
-$base_manifest = get_option( 'gpp_wu21_fixture_manifest' );
-if ( ! $artifact_dir || ! is_array( $manifest ) || ! is_array( $base_manifest ) ) {
+if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['alpha'] ) || empty( $manifest['beta'] ) || empty( $manifest['negative'] ) || empty( $manifest['transition'] ) ) {
     throw new RuntimeException( 'WU18 fixture manifest unavailable.' );
 }
+
 $operator = get_user_by( 'login', 'bootstrap_admin' );
 $viewer = get_user_by( 'login', 'wu21_viewer' );
-if ( ! $operator || ! $viewer ) throw new RuntimeException( 'Pinned users unavailable.' );
-if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+if ( ! $operator || ! $viewer ) {
+    throw new RuntimeException( 'Pinned WU18 users unavailable.' );
+}
+if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) {
+    require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+}
 
 function wu18_assert( $condition, $message ) {
-    if ( ! $condition ) throw new RuntimeException( $message );
+    if ( ! $condition ) {
+        throw new RuntimeException( $message );
+    }
 }
 
 function wu18_render_entry( $form_id, $entry_id ) {
@@ -30,45 +32,17 @@ function wu18_render_entry( $form_id, $entry_id ) {
     $entry = GFAPI::get_entry( $entry_id );
     $api = new Gravity_Flow_API( $form_id );
     $step = $api->get_current_step( $entry );
+    EntryDetailPresentationAdapter::resetRuntimeCache();
     ob_start();
     Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, array( 'show_header' => false ) );
-    return array( ob_get_clean(), $form, $entry, $step );
-}
-
-function wu18_base_form_meta( $base_manifest, $form_id ) {
-    foreach ( $base_manifest['forms'] as $form_meta ) {
-        if ( (int) $form_meta['form_id'] === (int) $form_id ) return $form_meta;
-    }
-    throw new RuntimeException( 'Base WU21 form metadata unavailable.' );
-}
-
-function wu18_base_entry_meta( $base_manifest, $entry_id ) {
-    foreach ( $base_manifest['entry_records'] as $entry_meta ) {
-        if ( (int) $entry_meta['entry_id'] === (int) $entry_id ) return $entry_meta;
-    }
-    throw new RuntimeException( 'Base WU21 entry metadata unavailable.' );
-}
-
-function wu18_host_file_contract( $form, $entry, $field_id ) {
-    $field = GFAPI::get_field( $form, $field_id );
-    wu18_assert( is_object( $field ) && 'fileupload' === $field->type, 'Expected host File Upload field unavailable.' );
-    $raw = isset( $entry[ (string) $field_id ] ) ? $entry[ (string) $field_id ] : null;
-    $files = $field->to_array( $raw );
-    wu18_assert( is_array( $files ) && 1 === count( array_filter( $files ) ) && ! empty( $files[0] ) && is_scalar( $files[0] ), 'Host File Upload value did not normalize to one stored URL.' );
-    $stored_url = (string) $files[0];
-    $name_metadata = $field->get_file_name_from_url( $stored_url );
-    wu18_assert( is_array( $name_metadata ) && isset( $name_metadata['sanitized'] ) && is_string( $name_metadata['sanitized'] ) && '' !== $name_metadata['sanitized'], 'Pinned Gravity Forms filename metadata was unusable.' );
-    $download_url = $field->get_download_url( $stored_url, false, (int) $entry['id'] );
-    wu18_assert( is_string( $download_url ) && '' !== $download_url, 'Host File Upload download URL unavailable.' );
-    return array( 'field' => $field, 'name' => $name_metadata['sanitized'], 'download_url' => $download_url );
-}
-
-function wu18_html_uses_host_url( $html, $url ) {
-    return false !== strpos( html_entity_decode( $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' ), $url );
+    $html = ob_get_clean();
+    return array( $html, $form, $entry, $step, RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' ) );
 }
 
 function wu18_trace_event( $trace, $stage, $result = null ) {
-    if ( ! is_array( $trace ) || empty( $trace['events'] ) ) return null;
+    if ( ! is_array( $trace ) || empty( $trace['events'] ) || ! is_array( $trace['events'] ) ) {
+        return null;
+    }
     foreach ( $trace['events'] as $event ) {
         if ( $stage !== $event['stage'] ) continue;
         if ( null !== $result && $result !== $event['result'] ) continue;
@@ -78,221 +52,234 @@ function wu18_trace_event( $trace, $stage, $result = null ) {
 }
 
 function wu18_trace_reason( $trace, $stage, $reason ) {
-    if ( ! is_array( $trace ) || empty( $trace['events'] ) ) return null;
+    if ( ! is_array( $trace ) || empty( $trace['events'] ) || ! is_array( $trace['events'] ) ) {
+        return null;
+    }
     foreach ( $trace['events'] as $event ) {
-        if ( $stage !== $event['stage'] ) continue;
-        if ( $reason !== ( isset( $event['reason_code'] ) ? $event['reason_code'] : null ) ) continue;
-        return $event;
+        if ( $stage === $event['stage'] && $reason === ( isset( $event['reason_code'] ) ? $event['reason_code'] : null ) ) {
+            return $event;
+        }
     }
     return null;
 }
 
-function wu18_active_binding_artifact( $binding_set_id, $version = '1.0.0' ) {
-    $reader = new BindingSetLifecycle(
-        new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
-        new EvidenceReferenceGate( array() )
-    );
-    $snapshot = $reader->snapshot();
-    if ( empty( $snapshot['installed'][ $binding_set_id ][ $version ]['artifact'] ) ) {
-        throw new RuntimeException( 'Expected WU18 binding artifact missing: ' . $binding_set_id );
+function wu18_set_current_approval_mode( $form_id, $entry_id, $editable_fields, $note_mode = 'optional', $revert = true ) {
+    $entry = GFAPI::get_entry( $entry_id );
+    $api = new Gravity_Flow_API( $form_id );
+    $step = $api->get_current_step( $entry );
+    if ( ! $step || 'approval' !== $step->get_type() ) {
+        throw new RuntimeException( 'WU18 expected current Approval step.' );
     }
-    return $snapshot['installed'][ $binding_set_id ][ $version ]['artifact'];
+    $meta = $step->get_feed_meta();
+    $meta['editable_fields'] = array_values( array_map( 'strval', $editable_fields ) );
+    $meta['instructionsEnable'] = '1';
+    $meta['instructionsValue'] = 'Synthetic WU18 current-task instructions.';
+    $meta['note_mode'] = $note_mode;
+    $meta['revertEnable'] = $revert ? '1' : '0';
+    gravity_flow()->update_feed_meta( $step->get_id(), $meta );
 }
 
-function wu18_binding_row( $artifact, $slot ) {
-    foreach ( $artifact['bindings'] as $binding ) {
-        if ( $slot === $binding['semantic_slot_key'] ) return $binding;
-    }
-    throw new RuntimeException( 'Binding row unavailable: ' . $slot );
-}
-
-function wu18_set_print_runtime_resolution( $resolution ) {
-    $runtime = new ReflectionClass( PrintDossierRuntime::class );
-    $loaded = $runtime->getProperty( 'model_loaded' );
-    $loaded->setAccessible( true );
-    $model_resolution = $runtime->getProperty( 'model_resolution' );
-    $model_resolution->setAccessible( true );
-    $loaded->setValue( null, true );
-    $model_resolution->setValue( null, $resolution );
-}
-
-wu18_assert( 'srwf.operations.entry-detail.v1' === $manifest['profile_id'], 'WU18 did not load the current Operations Entry Detail profile.' );
-wu18_assert( 'shared.entry_detail.v1' === $manifest['legacy_profile_excluded'], 'WU18 legacy-fixture exclusion control is missing.' );
-
-$alpha_binding = wu18_active_binding_artifact( 'wu18.operations.alpha.v1' );
-foreach ( array( 'student.full_name', 'print.utility', 'workflow.approve_action', 'workflow.reject_action' ) as $unbound_slot ) {
-    $row = wu18_binding_row( $alpha_binding, $unbound_slot );
-    wu18_assert( 'UNBOUND' === $row['state'] && null === $row['source_ref'], 'WU18 fabricated a direct source for ' . $unbound_slot );
-}
-$stale_permission_claim = false;
-foreach ( $alpha_binding['runtime_claims'] as $claim ) {
-    if ( 'workflow.approve_action' === $claim['semantic_slot_key'] && 'action_permission' === $claim['claim'] && 'PROVEN' === $claim['evidence_state'] ) {
-        $stale_permission_claim = true;
-        break;
+function wu18_assert_read_only_marker( $html, $label ) {
+    wu18_assert( false !== strpos( $html, 'data-gpp-entry-detail="ready"' ), $label . ': GPP dossier missing.' );
+    wu18_assert( false !== strpos( $html, 'data-gpp-review-mode="read-only"' ), $label . ': read-only review marker missing.' );
+    wu18_assert( false !== strpos( $html, 'data-gpp-native-table-suppression="read-only-review"' ), $label . ': native-table suppression marker missing.' );
+    wu18_assert( false !== strpos( $html, 'entry-detail-view' ), $label . ': native host field table missing from server HTML.' );
+    wu18_assert( false === strpos( $html, 'gpp-entry-dossier--composed' ), $label . ': obsolete JS-composed state leaked.' );
+    foreach ( array( 'data-gpp-native-status', 'data-gpp-native-editor', 'data-gpp-native-instructions', 'data-gpp-native-history', 'data-gpp-composition-state' ) as $obsolete ) {
+        wu18_assert( false === strpos( $html, $obsolete ), $label . ': obsolete composition destination leaked: ' . $obsolete );
     }
 }
-wu18_assert( $stale_permission_claim, 'Stale action-permission falsification claim is missing.' );
+
+// Normalize the synthetic positive fixture to the Owner-approved Review target.
+// This is test-only workflow state: an Approval step with no editable fields,
+// native Note/actions, and native Revert available. Production configuration is
+// intentionally not performed by GPP.
+wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
+wu18_set_current_approval_mode( $manifest['beta']['form_id'], $manifest['beta']['entry_id'], array() );
 
 wp_set_current_user( $operator->ID );
 PrintDossierPresentationAdapter::resetRuntimeCache();
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-$alpha_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
+list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step, $alpha_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
 
-wu18_assert( $alpha_step && 'approval' === $alpha_step->get_type(), 'Alpha current step is not native Approval.' );
+wu18_assert( is_array( $alpha_form ) && is_array( $alpha_entry ) && $alpha_step && 'approval' === $alpha_step->get_type(), 'Alpha native Approval context unavailable.' );
 wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $alpha_entry, $alpha_form, $alpha_step ), 'Operator lost native Entry Detail permission.' );
 wu18_assert( Gravity_Flow_Entry_Detail::can_update( $alpha_step ), 'Operator is not the native current Approval assignee/update subject.' );
+wu18_assert( array() === array_values( array_filter( array_map( 'strval', $alpha_step->get_editable_fields() ), 'strlen' ) ), 'Positive Review fixture unexpectedly requires a native editor.' );
+wu18_assert_read_only_marker( $alpha_html, 'Alpha Review' );
 wu18_assert( false !== strpos( $alpha_html, 'data-gpp-profile-id="srwf.operations.entry-detail.v1"' ), 'Current Operations Entry Detail profile was not rendered.' );
-wu18_assert( false === strpos( $alpha_html, 'data-gpp-profile-id="shared.entry_detail.v1"' ), 'Legacy WU09 Entry Detail profile leaked into current qualification.' );
-wu18_assert( false !== strpos( $alpha_html, 'data-gpp-print-utility="dossier"' ), 'Required existing Print utility capability was not exposed.' );
-
-$base_alpha_entry = wu18_base_entry_meta( $base_manifest, $alpha_entry['id'] );
-wu18_assert( false !== strpos( $alpha_html, esc_html( $base_alpha_entry['student_name'] ) ), 'Derived student.full_name did not compose authoritative first/last values.' );
-
-$host_api = new Gravity_Flow_API( (int) $alpha_form['id'] );
-$reader = new BoundHostValueReader();
-$bound_step = $reader->readRaw( array( 'type' => 'gravity_flow.state', 'state_key' => 'current_step' ), $alpha_form, $alpha_entry );
-$bound_status = $reader->readRaw( array( 'type' => 'gravity_flow.state', 'state_key' => 'status' ), $alpha_form, $alpha_entry );
-wu18_assert( $alpha_step->get_name() === $bound_step, 'GPP current-step source diverged from Gravity_Flow_API::get_current_step().' );
-wu18_assert( $host_api->get_status( $alpha_entry ) === $bound_status, 'GPP workflow-status source diverged from Gravity_Flow_API::get_status().' );
-
-$editable = array_map( 'strval', $alpha_step->get_editable_fields() );
-$review_field = (string) $manifest['alpha']['fields']['review.reason'];
-$mobile_field = (string) $manifest['alpha']['fields']['student.mobile'];
-wu18_assert( in_array( $review_field, $editable, true ), 'Pinned Approval did not expose review field as host-editable.' );
-wu18_assert( ! in_array( $mobile_field, $editable, true ), 'Semantic editability control became host-editable.' );
-wu18_assert( false !== strpos( $alpha_html, 'value="approved"' ) && false !== strpos( $alpha_html, 'تأیید پرونده' ), 'Native Approve action/label missing.' );
-wu18_assert( false !== strpos( $alpha_html, 'value="rejected"' ) && false !== strpos( $alpha_html, 'رد پرونده' ), 'Native Reject action/label missing.' );
-wu18_assert( false === strpos( $alpha_html, 'value="revert"' ), 'Fixture unexpectedly exposes Revert.' );
-
+wu18_assert( false !== strpos( $alpha_html, 'value="approved"' ), 'Native Approve control missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'value="rejected"' ), 'Native Reject control missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'value="revert"' ), 'Native Revert control missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'name="gravityflow_note"' ), 'Native Approval note control missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'name="_wpnonce"' ), 'Native workflow nonce missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'gravityflow-status-box' ), 'Native workflow/status box missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'gravityflow-timeline' ), 'Native Timeline missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'detail-view-print' ), 'Native Print utility missing.' );
+wu18_assert( false !== strpos( $alpha_html, 'data-gpp-print-utility="dossier"' ), 'Existing independent GPP Print utility missing.' );
 wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ), 'Successful structural-readiness trace missing.' );
-wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'PASS' ), 'Successful live Approval eligibility trace missing.' );
-wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ), 'Successful GPP presentation trace missing.' );
+wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'PASS' ), 'Native Approval eligibility trace missing.' );
+wu18_assert( null !== wu18_trace_event( $alpha_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ), 'Successful dossier output trace missing.' );
+wu18_assert( null !== wu18_trace_reason( $alpha_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'server_admitted_read_only_gpp_review' ), 'Server suppression admission trace missing.' );
 
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $beta_html, $beta_form, $beta_entry ) = wu18_render_entry( $manifest['beta']['form_id'], $manifest['beta']['entry_id'] );
-$alpha_document = wu18_host_file_contract( $alpha_form, $alpha_entry, $manifest['alpha']['fields']['documents.report_card'] );
-$beta_document = wu18_host_file_contract( $beta_form, $beta_entry, $manifest['beta']['fields']['documents.report_card'] );
-$alpha_base_form = wu18_base_form_meta( $base_manifest, $manifest['alpha']['form_id'] );
-$alpha_photo = wu18_host_file_contract( $alpha_form, $alpha_entry, $alpha_base_form['photo_field_id'] );
-wu18_assert( false !== strpos( $alpha_html, 'gpp-entry-dossier__document-thumbnail' ), 'Bound image document thumbnail missing.' );
-wu18_assert( wu18_html_uses_host_url( $alpha_html, $alpha_document['download_url'] ), 'Image document did not use host-authoritative download URL.' );
-wu18_assert( false !== strpos( $alpha_html, 'gpp-entry-dossier__student-photo' ), 'Bound student.photo thumbnail missing.' );
-wu18_assert( wu18_html_uses_host_url( $alpha_html, $alpha_photo['download_url'] ), 'student.photo did not use host-authoritative download URL.' );
-wu18_assert( false !== strpos( $beta_html, esc_html( $beta_document['name'] ) ) && false !== strpos( $beta_html, 'target="_blank"' ), 'Bound PDF open behavior missing.' );
-wu18_assert( wu18_html_uses_host_url( $beta_html, $beta_document['download_url'] ), 'PDF did not use host-authoritative download URL.' );
-
-$document_field_id = $manifest['alpha']['fields']['documents.report_card'];
-$original_document_value = $alpha_entry[ (string) $document_field_id ];
-$invalid_update = GFAPI::update_entry_field( $alpha_entry['id'], $document_field_id, 'not-a-valid-url' );
-if ( is_wp_error( $invalid_update ) ) throw new RuntimeException( $invalid_update->get_error_message() );
+// One UNMAPPED semantic plus visible empty and stale-file states must degrade
+// independently without returning the duplicate native visual presentation.
+$negative_entry_id = (int) $manifest['negative']['entry_id'];
+$home_field_id = (string) $manifest['alpha']['fields']['student.home_phone'];
+$document_field_id = (string) $manifest['alpha']['fields']['documents.report_card'];
+$negative_entry = GFAPI::get_entry( $negative_entry_id );
+$original_home = isset( $negative_entry[ $home_field_id ] ) ? $negative_entry[ $home_field_id ] : '';
+$original_document = isset( $negative_entry[ $document_field_id ] ) ? $negative_entry[ $document_field_id ] : '';
+wu18_assert( ! is_wp_error( GFAPI::update_entry_field( $negative_entry_id, $home_field_id, '' ) ), 'Unable to create mapped-empty control.' );
+wu18_assert( ! is_wp_error( GFAPI::update_entry_field( $negative_entry_id, $document_field_id, 'not-a-valid-url' ) ), 'Unable to create stale-file control.' );
 try {
-    EntryDetailPresentationAdapter::resetRuntimeCache();
-    list( $invalid_document_html, $invalid_form, $invalid_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-    $invalid_document_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-    $invalid_field = GFAPI::get_field( $invalid_form, $document_field_id );
-    wu18_assert( false === $invalid_field->get_file_name_from_url( $invalid_entry[ (string) $document_field_id ] ), 'Invalid filename control did not become unusable host metadata.' );
-    $documents_start = strpos( $invalid_document_html, '<section class="gpp-entry-dossier__section gpp-entry-dossier__documents"' );
-    $documents_end = false === $documents_start ? false : strpos( $invalid_document_html, '</section>', $documents_start );
-    wu18_assert( false !== $documents_start && false !== $documents_end, 'Invalid host filename metadata incorrectly removed the Documents region.' );
-    $invalid_documents_html = substr( $invalid_document_html, $documents_start, $documents_end + strlen( '</section>' ) - $documents_start );
-    wu18_assert( false !== strpos( $invalid_documents_html, 'data-gpp-slot="documents.report_card"' ) && false !== strpos( $invalid_documents_html, 'نگاشت معتبر نیست' ), 'Invalid document metadata did not degrade the report-card slot to its safe stale-source state.' );
-    wu18_assert( false === strpos( $invalid_documents_html, 'not-a-valid-url' ), 'Invalid raw file metadata leaked into the GPP Documents region.' );
-    wu18_assert( false === strpos( $invalid_documents_html, 'gpp-entry-dossier__file-link' ), 'Invalid file metadata produced an actionable GPP file link.' );
-    wu18_assert( false !== strpos( $invalid_document_html, 'data-gpp-entry-detail="ready"' ), 'Invalid document metadata incorrectly killed the structurally admitted dossier.' );
-    wu18_assert( null !== wu18_trace_reason( $invalid_document_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.documents.report_card.invalid_file_metadata' ), 'Invalid document metadata degradation was not diagnosed.' );
+    list( $negative_html, , , , $negative_trace ) = wu18_render_entry( $manifest['negative']['form_id'], $negative_entry_id );
+    wu18_assert_read_only_marker( $negative_html, 'Degraded Review' );
+    wu18_assert( 1 === preg_match( '/data-gpp-slot="student\.national_id"[^>]*>.*?<dd>\s*نگاشت نشده\s*<\/dd>/su', $negative_html ), 'UNMAPPED semantic did not degrade in-place.' );
+    wu18_assert( 1 === preg_match( '/data-gpp-slot="student\.home_phone"[^>]*>.*?<dd>\s*ثبت نشده\s*<\/dd>/su', $negative_html ), 'MAPPED_EMPTY semantic did not degrade in-place.' );
+    wu18_assert( false !== strpos( $negative_html, 'data-gpp-slot="documents.report_card"' ) && false !== strpos( $negative_html, 'نگاشت معتبر نیست' ), 'STALE document semantic did not degrade in-place.' );
+    wu18_assert( null !== wu18_trace_reason( $negative_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.student.national_id.unmapped' ), 'UNMAPPED diagnostic missing.' );
+    wu18_assert( null !== wu18_trace_reason( $negative_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.student.home_phone.mapped_empty' ), 'MAPPED_EMPTY diagnostic missing.' );
+    wu18_assert( null !== wu18_trace_reason( $negative_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.documents.report_card.invalid_file_metadata' ), 'STALE file diagnostic missing.' );
+    wu18_assert( null !== wu18_trace_reason( $negative_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'server_admitted_read_only_gpp_review' ), 'Semantic degradation incorrectly disabled suppression admission.' );
 } finally {
-    $restore = GFAPI::update_entry_field( $alpha_entry['id'], $document_field_id, $original_document_value );
-    if ( is_wp_error( $restore ) ) throw new RuntimeException( $restore->get_error_message() );
+    GFAPI::update_entry_field( $negative_entry_id, $home_field_id, $original_home );
+    GFAPI::update_entry_field( $negative_entry_id, $document_field_id, $original_document );
 }
 
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $negative_html ) = wu18_render_entry( $manifest['negative']['form_id'], $manifest['negative']['entry_id'] );
-$negative_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-wu18_assert( false !== strpos( $negative_html, 'data-gpp-entry-detail="ready"' ), 'Required NOT_PROVEN semantic incorrectly killed structurally admitted Entry Detail.' );
-wu18_assert( false !== strpos( $negative_html, 'data-gpp-slot="student.national_id"' ) && false !== strpos( $negative_html, 'نگاشت نشده' ), 'Required NOT_PROVEN semantic did not degrade to an explicit unmapped placeholder.' );
-wu18_assert( null !== wu18_trace_event( $negative_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ), 'Required semantic degradation was misclassified as structural failure.' );
-wu18_assert( null !== wu18_trace_reason( $negative_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.student.national_id.unmapped' ), 'Required semantic degradation did not expose its semantic key.' );
-wu18_assert( null !== wu18_trace_event( $negative_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' ), 'Live action eligibility must still be evaluated after structural admission.' );
-
-wu18_set_print_runtime_resolution( array( 'model' => null, 'reason' => 'synthetic_unavailable_control' ) );
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $print_unready_html ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-$print_unready_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-wu18_assert( false !== strpos( $print_unready_html, 'data-gpp-entry-detail="ready"' ), 'Unavailable Print utility incorrectly killed structurally admitted Entry Detail.' );
-wu18_assert( false === strpos( $print_unready_html, 'data-gpp-print-utility="dossier"' ), 'Unavailable Print utility was fabricated into the dossier.' );
-wu18_assert( null !== wu18_trace_event( $print_unready_trace, 'ENTRY_DETAIL_BINDING_READINESS', 'PASS' ), 'Print utility degradation was misclassified as structural failure.' );
-wu18_assert( null !== wu18_trace_reason( $print_unready_trace, 'ENTRY_DETAIL_OPTIONAL_REGIONS', 'region.print.utility.unavailable' ), 'Print utility degradation was not attributed to its optional region.' );
-PrintDossierPresentationAdapter::resetRuntimeCache();
-
-$original_creator = (int) $alpha_entry['created_by'];
-$creator_update = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', (int) $viewer->ID );
-if ( is_wp_error( $creator_update ) ) throw new RuntimeException( $creator_update->get_error_message() );
+// HOST_HIDDEN remains an information boundary. Use Gravity Flow's own display
+// predicate filter, then prove GPP omits the slot/value rather than treating it
+// like an ordinary degraded placeholder.
+$hidden_sentinel = 'WU18-HIDDEN-SENTINEL-DO-NOT-RENDER';
+$alpha_home_original = isset( $alpha_entry[ $home_field_id ] ) ? $alpha_entry[ $home_field_id ] : '';
+wu18_assert( ! is_wp_error( GFAPI::update_entry_field( $alpha_entry['id'], $home_field_id, $hidden_sentinel ) ), 'Unable to create HOST_HIDDEN control.' );
+$hide_home_phone = static function ( $display, $field ) use ( $home_field_id ) {
+    return is_object( $field ) && (string) $field->id === $home_field_id ? false : $display;
+};
+add_filter( 'gravityflow_workflow_detail_display_field', $hide_home_phone, 99, 2 );
 try {
-    wp_set_current_user( $viewer->ID );
-    EntryDetailPresentationAdapter::resetRuntimeCache();
-    list( $non_assignee_html, $non_assignee_form, $non_assignee_entry, $non_assignee_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-    $non_assignee_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
-    wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $non_assignee_entry, $non_assignee_form, $non_assignee_step ), 'Creator-view control lost native permission.' );
-    wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $non_assignee_step ), 'Creator-view control unexpectedly gained native Approval update eligibility.' );
-    wu18_assert( false !== strpos( $non_assignee_html, 'data-gpp-entry-detail="ready"' ), 'Authorized non-assignee did not receive the read-only enhanced dossier.' );
-    wu18_assert( false !== strpos( $non_assignee_html, 'data-gpp-actions-expected="0"' ), 'Read-only enhanced dossier incorrectly expected native Approval actions.' );
-    wu18_assert( false === strpos( $non_assignee_html, 'value="approved"' ) && false === strpos( $non_assignee_html, 'value="rejected"' ), 'Read-only viewer received native Approval mutation controls.' );
-    $non_assignee_gate = wu18_trace_event( $non_assignee_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'SKIP' );
-    wu18_assert( null !== $non_assignee_gate && 'current_assignee_not_eligible' === $non_assignee_gate['reason_code'], 'Non-assignee request was not distinguished from binding failure.' );
-    wu18_assert( null !== wu18_trace_event( $non_assignee_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'PASS' ), 'Authorized read-only enhanced presentation was not recorded.' );
+    list( $hidden_html, , , , $hidden_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+    wu18_assert_read_only_marker( $hidden_html, 'HOST_HIDDEN Review' );
+    wu18_assert( false === strpos( $hidden_html, $hidden_sentinel ), 'HOST_HIDDEN value leaked.' );
+    wu18_assert( false === strpos( $hidden_html, 'data-gpp-slot="student.home_phone"' ), 'HOST_HIDDEN slot rendered a GPP placeholder.' );
+    wu18_assert( null !== wu18_trace_reason( $hidden_trace, 'ENTRY_DETAIL_SEMANTIC_COMPLETENESS', 'semantic.student.home_phone.host_hidden' ), 'HOST_HIDDEN diagnostic missing.' );
 } finally {
-    wp_set_current_user( $operator->ID );
-    $restore_creator = GFAPI::update_entry_property( $alpha_entry['id'], 'created_by', $original_creator );
-    if ( is_wp_error( $restore_creator ) ) throw new RuntimeException( $restore_creator->get_error_message() );
+    remove_filter( 'gravityflow_workflow_detail_display_field', $hide_home_phone, 99 );
+    GFAPI::update_entry_field( $alpha_entry['id'], $home_field_id, $alpha_home_original );
 }
 
+// An Approval configured with editable fields must remain fully native. This is
+// the exact host seam where Gravity Flow replaces read-only rows with its native
+// entry editor.
+$review_field = (string) $manifest['alpha']['fields']['review.reason'];
+wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array( $review_field ) );
+list( $editor_html, , , $editor_step, $editor_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+wu18_assert( $editor_step && Gravity_Flow_Entry_Detail::can_update( $editor_step ), 'Editor fallback fixture lost native update eligibility.' );
+wu18_assert( false === strpos( $editor_html, 'data-gpp-entry-detail="ready"' ), 'Approval editor request incorrectly emitted GPP dossier.' );
+wu18_assert( false === strpos( $editor_html, 'data-gpp-native-table-suppression' ), 'Approval editor request incorrectly emitted suppression marker.' );
+wu18_assert( false !== strpos( $editor_html, 'entry-detail-view' ) && false !== strpos( $editor_html, 'gform_wrapper' ), 'Native Approval editor was not preserved.' );
+wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'native_editor_required' ), 'Native-editor fallback diagnostic missing.' );
+wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'native_editor_required' ), 'Native-editor output SKIP diagnostic missing.' );
+wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
+
+// A structurally invalid host payload must not produce a marker. Native host
+// rendering is unaffected because this direct adapter control never touches it.
+EntryDetailPresentationAdapter::resetRuntimeCache();
+$bad_entry = $alpha_entry;
+$bad_entry['form_id'] = (int) $alpha_entry['form_id'] + 999;
+ob_start();
+EntryDetailPresentationAdapter::renderDossier( $alpha_form, $bad_entry );
+$bad_html = ob_get_clean();
+$bad_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
+wu18_assert( '' === $bad_html, 'Structurally invalid host payload emitted GPP output.' );
+wu18_assert( null !== wu18_trace_reason( $bad_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'structural_readiness_not_satisfied' ), 'Structural fallback suppression diagnostic missing.' );
+
+// Profile inactive is a native-only request: prove the output/suppression gate
+// directly, while existing production-activation tests cover lifecycle storage.
+EntryDetailPresentationAdapter::resetRuntimeCache();
+$adapter_reflection = new ReflectionClass( EntryDetailPresentationAdapter::class );
+$model_loaded = $adapter_reflection->getProperty( 'model_loaded' );
+$model_loaded->setAccessible( true );
+$model_property = $adapter_reflection->getProperty( 'model' );
+$model_property->setAccessible( true );
+$model_loaded->setValue( null, true );
+$model_property->setValue( null, null );
+ob_start();
+EntryDetailPresentationAdapter::renderDossier( $alpha_form, $alpha_entry );
+$inactive_html = ob_get_clean();
+$inactive_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
+wu18_assert( '' === $inactive_html, 'Inactive profile emitted GPP output.' );
+wu18_assert( null !== wu18_trace_reason( $inactive_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'profile_inactive' ), 'Inactive-profile suppression diagnostic missing.' );
+EntryDetailPresentationAdapter::resetRuntimeCache();
+
+// An authorized non-assignee is read-only at the host seam. The dossier and
+// suppression remain eligible, while native Approval actions are not exposed.
 wp_set_current_user( $viewer->ID );
-EntryDetailPresentationAdapter::resetRuntimeCache();
-list( $denied_html, $denied_form, $denied_entry, $denied_step ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-wu18_assert( ! Gravity_Flow_Entry_Detail::is_permission_granted( $denied_entry, $denied_form, $denied_step ), 'Viewer unexpectedly has native permission after creator restoration.' );
-wu18_assert( false === strpos( $denied_html, 'data-gpp-entry-detail="ready"' ) && false === strpos( $denied_html, 'entry-detail-view' ), 'GPP bypassed native permission denial.' );
+list( $viewer_html, $viewer_form, $viewer_entry, $viewer_step, $viewer_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $viewer_entry, $viewer_form, $viewer_step ), 'Viewer lost native Entry Detail authorization.' );
+wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $viewer_step ), 'Viewer unexpectedly became current assignee.' );
+wu18_assert_read_only_marker( $viewer_html, 'Authorized read-only viewer' );
+wu18_assert( false === strpos( $viewer_html, 'value="approved"' ) && false === strpos( $viewer_html, 'value="rejected"' ), 'Non-assignee received native Approval actions.' );
+wu18_assert( null !== wu18_trace_reason( $viewer_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'current_assignee_not_eligible' ), 'Non-assignee Approval diagnostic missing.' );
+wu18_assert( null !== wu18_trace_reason( $viewer_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'server_admitted_read_only_gpp_review' ), 'Read-only viewer suppression admission missing.' );
+
+// A genuinely unauthorized request must never reach the GPP post-permission
+// seam. Gravity Flow's denial remains authoritative.
+wp_set_current_user( 0 );
+list( $denied_html ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+wu18_assert( false === strpos( $denied_html, 'data-gpp-entry-detail="ready"' ), 'Native authorization denial was bypassed by GPP.' );
+wu18_assert( false === strpos( $denied_html, 'data-gpp-native-table-suppression' ), 'Denied request emitted suppression marker.' );
+
 wp_set_current_user( $operator->ID );
+wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
+wu18_set_current_approval_mode( $manifest['beta']['form_id'], $manifest['beta']['entry_id'], array() );
+EntryDetailPresentationAdapter::resetRuntimeCache();
+
+$binding_hash_after = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
+wu18_assert( $binding_hash_after === $manifest['binding_state_sha256'], 'Runtime Review qualification unexpectedly mutated EnvironmentBindingSet state.' );
 
 $results = array(
-    'suite' => 'WU18 current Operations Package native PHP/runtime',
-    'gravity_flow' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
-    'gravity_forms' => GFForms::$version,
-    'package_id' => $manifest['package_id'],
-    'package_version' => $manifest['package_version'],
+    'schema_version' => '4.0.0',
+    'surface' => 'gravity_flow.entry_detail',
     'profile_id' => $manifest['profile_id'],
-    'legacy_profile_excluded' => true,
-    'derived_full_name_without_direct_source' => true,
-    'print_utility_without_direct_source' => true,
-    'print_capability_region_degraded' => true,
-    'approval_assignee_positive' => true,
-    'authorized_non_assignee_read_only_enhanced' => true,
-    'stale_action_permission_bypass_blocked' => true,
-    'request_change_controls' => 'browser_fresh_request',
-    'native_region_integrity' => 'browser_fresh_request',
-    'required_semantic_degraded_without_page_fallback' => true,
-    'unauthorized_native_denial' => true,
-    'native_approval_actions' => array( 'approved', 'rejected' ),
-    'host_editable_fields' => $editable,
-    'authoritative_state_sources' => array(
-        'workflow.current_step' => 'Gravity_Flow_API::get_current_step',
-        'workflow.status' => 'Gravity_Flow_API::get_status',
+    'host_versions' => array(
+        'gravity_forms' => class_exists( 'GFCommon' ) && method_exists( 'GFCommon', 'get_version' ) ? GFCommon::get_version() : null,
+        'gravity_flow' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
     ),
-    'documents' => array(
-        'alpha' => array( 'kind' => 'image_thumbnail', 'name' => $alpha_document['name'], 'host_download_url' => true ),
-        'beta' => array( 'kind' => 'pdf_open_link', 'name' => $beta_document['name'], 'host_download_url' => true ),
-        'student_photo' => array( 'kind' => 'image_thumbnail', 'name' => $alpha_photo['name'], 'host_download_url' => true ),
-        'invalid_filename_metadata' => 'slot_stale_placeholder_without_raw_file_leak',
+    'server_read_only_review' => array(
+        'dossier_emitted' => true,
+        'suppression_marker_emitted' => true,
+        'native_field_table_retained_in_html' => true,
+        'native_approve_reject_revert_note_nonce_present' => true,
+        'native_timeline_present' => true,
+        'print_independent' => true,
+        'structural_js_required' => false,
+    ),
+    'semantic_degradation' => array(
+        'unmapped' => 'student.national_id',
+        'mapped_empty' => 'student.home_phone',
+        'stale' => 'documents.report_card',
+        'dossier_retained' => true,
+        'suppression_retained' => true,
+        'host_hidden_omitted' => true,
+    ),
+    'fallbacks' => array(
+        'native_editor_required' => true,
+        'structural_readiness_not_satisfied' => true,
+        'profile_inactive' => true,
     ),
     'decision_controls' => array(
         'success' => $alpha_trace,
         'semantic_degradation' => $negative_trace,
-        'authorized_non_assignee' => $non_assignee_trace,
-        'print_unavailable' => $print_unready_trace,
+        'authorized_non_assignee' => $viewer_trace,
+        'native_editor_required' => $editor_trace,
+        'structural_fallback' => $bad_trace,
+        'profile_inactive' => $inactive_trace,
     ),
 );
+
 file_put_contents(
     trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json',
     wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
 );
-echo "WU18_RUNTIME_PASS\n";
+
+echo "WU18_RUNTIME_CORE_PASS\n";
