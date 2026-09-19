@@ -6,6 +6,8 @@ This record applies **only** to `gravity_flow.entry_detail` in the SRWF operatio
 
 The Owner explicitly superseded the Entry Detail portions of the earlier combined visual reference with the exact vNext HTML identified below. The older artifact remains repository history and remains available where unrelated surface qualification still depends on it.
 
+Structural composition and review/correction ownership are now governed by `docs/architecture/ENTRY_DETAIL_REVIEW_CORRECTION_TARGET_V1.md`. This visual record remains authoritative for admitted Entry Detail visual language and semantic grouping, but it no longer authorizes structural reparenting of the native Gravity Flow workflow box into the GPP dossier.
+
 ## Authority supersession
 
 | State | Artifact | Exact identity | Scope |
@@ -47,11 +49,13 @@ Missing, mapped-empty, stale, unsupported, unavailable and host-hidden states co
 
 ## Gravity Flow ownership
 
-The vNext composition remains presentation-only. Gravity Flow continues to own authorization, assignment, step state, editability, Approval/Reject availability, action mutation, history and navigation.
+The vNext presentation remains presentation-only. Gravity Flow continues to own authorization, assignment, step state, editability, Approval/Reject/Revert availability, action mutation, workflow notes/comments, operational status, history and navigation.
 
-For an admitted Approval/current-assignee state, GPP may transactionally reposition the **original** native status/action wrapper inside the current-task region only after cardinality and original-form ownership are proven. Native workflow controls are never cloned or recreated. A composition prerequisite or postcondition failure retains/restores native host UI and falls back safely.
+**CURRENT implementation:** repository code may still transactionally recompose original native Gravity Flow regions/nodes in the browser. That remains current implementation reality and historical qualification evidence until a later implementation work unit changes it.
 
-Authorized read-only and non-Approval states do not inherit a global status-box suppression rule.
+**OWNER-APPROVED TARGET:** the GPP dossier is a primarily read-only semantic projection, while the native Gravity Flow workflow/status/action box remains a separate host-rendered operational region. Native workflow controls are never cloned or recreated and are no longer a target for structural reparenting into the dossier merely for visual composition. Normal review and correction/editing are separate concerns; the preferred correction direction is native Gravity Flow User Input plus native Revert/transition semantics where later host verification proves the required workflow.
+
+The detailed target and supersession boundary are canonical in `docs/architecture/ENTRY_DETAIL_REVIEW_CORRECTION_TARGET_V1.md`.
 
 ## Responsive contract
 
@@ -60,3 +64,5 @@ The vNext authority preserves semantic parity between desktop and narrow/mobile 
 ## Historical relationship
 
 `SRWF_GRAVITY_FLOW_A4_VISUAL_BASELINE_CONTRACT_v1.0.0.md` and `SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md` remain historical authority/evidence records for their admitted runs. Where those documents describe the older combined HTML as the Entry Detail visual baseline, this Owner-approved migration is the later, surface-scoped supersession. Their Inbox/Print authority and semantic-binding history are not rewritten by this record.
+
+Likewise, historical PR/runtime evidence that qualified transactional client-side composition remains preserved as evidence of the implementation it actually tested. It is not retroactively rewritten as the new target architecture.
