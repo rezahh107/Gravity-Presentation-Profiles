@@ -99,6 +99,7 @@ $beta_fields = wu18_field_map( $beta_form, wu18_extend_form( $beta_form['form_id
 $alpha_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 0 );
 $negative_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 1 );
 $transition_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 2 );
+$viewer_entry = wu18_entry_for_form( $base, $alpha_form['form_id'], 3 );
 $beta_entry = wu18_entry_for_form( $base, $beta_form['form_id'], 0 );
 
 $uploads = wp_upload_dir();
@@ -139,27 +140,44 @@ function wu18_populate_entry( $entry_id, $fields, $prefix, $document_url ) {
 wu18_populate_entry( $alpha_entry['entry_id'], $alpha_fields, 'Alpha', $image_url );
 wu18_populate_entry( $negative_entry['entry_id'], $alpha_fields, 'Negative', $image_url );
 wu18_populate_entry( $transition_entry['entry_id'], $alpha_fields, 'Transition', $image_url );
+wu18_populate_entry( $viewer_entry['entry_id'], $alpha_fields, 'Viewer', $image_url );
 wu18_populate_entry( $beta_entry['entry_id'], $beta_fields, 'Beta', $pdf_url );
 
-foreach ( array( array( $alpha_form, $alpha_fields ), array( $beta_form, $beta_fields ) ) as $pair ) {
-    $form_meta = $pair[0];
-    $fields = $pair[1];
-    $entry_row = wu18_entry_for_form( $base, $form_meta['form_id'], 0 );
-    $api = new Gravity_Flow_API( (int) $form_meta['form_id'] );
-    $step = $api->get_current_step( GFAPI::get_entry( $entry_row['entry_id'] ) );
-    if ( ! $step || 'approval' !== $step->get_type() ) throw new RuntimeException( 'Pinned fixture did not expose Approval.' );
+$operator = get_user_by( 'login', 'bootstrap_admin' );
+$viewer = get_user_by( 'login', 'wu21_viewer' );
+if ( ! $operator || ! $viewer ) throw new RuntimeException( 'Pinned WU18 users unavailable.' );
+if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) {
+    require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+}
+
+function wu18_configure_approval_fixture( $form_id, $entry_id, $editable_fields, $note_mode, $revert_enabled ) {
+    $entry = GFAPI::get_entry( $entry_id );
+    $api = new Gravity_Flow_API( (int) $form_id );
+    $step = $api->get_current_step( $entry );
+    if ( ! $step || 'approval' !== $step->get_type() ) {
+        throw new RuntimeException( 'Pinned WU18 fixture did not expose Approval.' );
+    }
 
     $meta = $step->get_feed_meta();
-    $meta['editable_fields'] = array( (string) $fields['review.reason'] );
+    $meta['editable_fields'] = array_values( array_map( 'strval', $editable_fields ) );
     $meta['instructionsEnable'] = '1';
     $meta['instructionsValue'] = 'Synthetic WU18 current-task instructions.';
-    $meta['note_mode'] = 'hidden';
-    $meta['revertEnable'] = '0';
+    $meta['note_mode'] = $note_mode;
+    $meta['revertEnable'] = $revert_enabled ? '1' : '0';
     gravity_flow()->update_feed_meta( $step->get_id(), $meta );
 }
 
-$operator = get_user_by( 'login', 'bootstrap_admin' );
-if ( ! $operator ) throw new RuntimeException( 'Pinned WU18 operator unavailable.' );
+// Stable host states are constructed once, before runtime/browser assertions.
+// Alpha is the normal read-only Review Approval. Beta is a distinct native
+// Approval-editor fallback fixture. Tests do not switch either fixture later.
+wu18_configure_approval_fixture( $alpha_form['form_id'], $alpha_entry['entry_id'], array(), 'optional', true );
+wu18_configure_approval_fixture( $beta_form['form_id'], $beta_entry['entry_id'], array( (string) $beta_fields['review.reason'] ), 'optional', false );
+
+$created_by_update = GFAPI::update_entry_property( $viewer_entry['entry_id'], 'created_by', (int) $viewer->ID );
+if ( is_wp_error( $created_by_update ) ) {
+    throw new RuntimeException( $created_by_update->get_error_message() );
+}
+
 $alpha_api = new Gravity_Flow_API( (int) $alpha_form['form_id'] );
 $follow_up_step_id = $alpha_api->add_step(
     array(
@@ -178,8 +196,30 @@ if ( ! $follow_up_step_id || is_wp_error( $follow_up_step_id ) ) {
     throw new RuntimeException( 'Unable to create WU18 User Input follow-up step.' );
 }
 
+// Read back host-effective state from freshly resolved steps. Writing feed meta
+// is not accepted as proof: the effective native API must expose the target.
+wp_set_current_user( $operator->ID );
+$alpha_fresh = ( new Gravity_Flow_API( (int) $alpha_form['form_id'] ) )->get_current_step( GFAPI::get_entry( $alpha_entry['entry_id'] ) );
+if ( ! $alpha_fresh || 'approval' !== $alpha_fresh->get_type() || ! Gravity_Flow_Entry_Detail::can_update( $alpha_fresh ) ) {
+    throw new RuntimeException( 'WU18 read-only Review fixture did not resolve as actionable native Approval.' );
+}
+$alpha_effective_editable = array_values( array_filter( array_map( 'strval', $alpha_fresh->get_editable_fields() ), 'strlen' ) );
+if ( array() !== $alpha_effective_editable ) {
+    throw new RuntimeException( 'WU18 read-only Review fixture has effective native editable fields.' );
+}
+
+$beta_fresh = ( new Gravity_Flow_API( (int) $beta_form['form_id'] ) )->get_current_step( GFAPI::get_entry( $beta_entry['entry_id'] ) );
+if ( ! $beta_fresh || 'approval' !== $beta_fresh->get_type() || ! Gravity_Flow_Entry_Detail::can_update( $beta_fresh ) ) {
+    throw new RuntimeException( 'WU18 editor fixture did not resolve as actionable native Approval.' );
+}
+$beta_effective_editable = array_values( array_filter( array_map( 'strval', $beta_fresh->get_editable_fields() ), 'strlen' ) );
+if ( ! in_array( (string) $beta_fields['review.reason'], $beta_effective_editable, true ) ) {
+    throw new RuntimeException( 'WU18 editor fixture did not expose review.reason through effective host editability.' );
+}
+
 gravity_flow()->add_timeline_note( $alpha_entry['entry_id'], 'Synthetic dossier review opened.' );
-gravity_flow()->add_timeline_note( $beta_entry['entry_id'], 'Synthetic dossier review opened.' );
+gravity_flow()->add_timeline_note( $viewer_entry['entry_id'], 'Synthetic read-only viewer review opened.' );
+gravity_flow()->add_timeline_note( $beta_entry['entry_id'], 'Synthetic editor fallback opened.' );
 
 $operations = OperationsSetupService::forWordPress();
 $visual_package = $operations->packageArtifact();
@@ -198,7 +238,6 @@ foreach ( array( $alpha_form['form_id'], $beta_form['form_id'] ) as $form_id ) {
 
 function wu18_binding_set( $id, $installation_id, $form_id, $fields, $entry_ref, $package, $negative_required = false ) {
     $proven = array( 'wu18:current-operations-package', 'wu18:pinned-runtime' );
-    $negative = array( 'wu18:negative-control' );
     $bindings = array();
 
     foreach ( $package['semantic_slots'] as $declaration ) {
@@ -293,9 +332,10 @@ function wu18_binding_set( $id, $installation_id, $form_id, $fields, $entry_ref,
 
 $bindings = array(
     wu18_binding_set( 'wu18.operations.alpha.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $alpha_entry['entry_id'], $visual_package ),
-    wu18_binding_set( 'wu18.operations.beta.v1', $base['installation_id'], $beta_form['form_id'], $beta_fields, $beta_entry['entry_id'], $visual_package ),
+    wu18_binding_set( 'wu18.operations.beta.editor.v1', $base['installation_id'], $beta_form['form_id'], $beta_fields, $beta_entry['entry_id'], $visual_package ),
     wu18_binding_set( 'wu18.operations.alpha.negative.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $negative_entry['entry_id'], $visual_package, true ),
     wu18_binding_set( 'wu18.operations.alpha.transition.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $transition_entry['entry_id'], $visual_package ),
+    wu18_binding_set( 'wu18.operations.alpha.viewer.v1', $base['installation_id'], $alpha_form['form_id'], $alpha_fields, $viewer_entry['entry_id'], $visual_package ),
 );
 
 foreach ( $bindings as $binding ) EnvironmentBindingSet::validate( $binding );
@@ -327,7 +367,7 @@ PrintDossierPresentationAdapter::resetRuntimeCache();
 $binding_state_sha256 = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
 
 $manifest = array(
-    'schema_version' => '2.0.0',
+    'schema_version' => '3.0.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'package_id' => $visual_package['package_id'],
     'package_version' => $visual_package['package_version'],
@@ -339,6 +379,13 @@ $manifest = array(
         'entry_id' => (int) $alpha_entry['entry_id'],
         'fields' => $alpha_fields,
         'document_kind' => 'image',
+        'expected_effective_editable_fields' => array(),
+    ),
+    'editor' => array(
+        'form_id' => (int) $beta_form['form_id'],
+        'entry_id' => (int) $beta_entry['entry_id'],
+        'fields' => $beta_fields,
+        'editable_field_id' => (string) $beta_fields['review.reason'],
     ),
     'beta' => array(
         'form_id' => (int) $beta_form['form_id'],
@@ -350,16 +397,32 @@ $manifest = array(
         'form_id' => (int) $alpha_form['form_id'],
         'entry_id' => (int) $negative_entry['entry_id'],
     ),
+    'viewer' => array(
+        'form_id' => (int) $alpha_form['form_id'],
+        'entry_id' => (int) $viewer_entry['entry_id'],
+        'expected_user_login' => 'wu21_viewer',
+    ),
     'transition' => array(
         'form_id' => (int) $alpha_form['form_id'],
         'entry_id' => (int) $transition_entry['entry_id'],
         'follow_up_step_id' => (int) $follow_up_step_id,
     ),
-    'locked_history_helper' => 'اینجا می‌توانید ببینید پرونده در چه تاریخ‌هایی بررسی شده، چه نتیجه‌ای ثبت شده و اگر برای اصلاح برگشته، دلیل آن چه بوده است.',
+    'fixture_state_proof' => array(
+        'read_only_review' => array(
+            'step_type' => 'approval',
+            'operator_can_update' => true,
+            'effective_editable_fields' => $alpha_effective_editable,
+        ),
+        'approval_editor' => array(
+            'step_type' => 'approval',
+            'operator_can_update' => true,
+            'effective_editable_fields' => $beta_effective_editable,
+        ),
+    ),
 );
 update_option( 'gpp_wu18_fixture_manifest', $manifest, false );
 file_put_contents(
     trailingslashit( $artifact_dir ) . 'wu18-fixture-manifest.json',
     wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
 );
-echo "WU18 current Operations Package Entry Detail fixtures ready.\n";
+echo "WU18 stable read-only/editor/User-Input fixtures ready.\n";
