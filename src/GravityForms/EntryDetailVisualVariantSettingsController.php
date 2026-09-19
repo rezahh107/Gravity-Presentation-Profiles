@@ -86,18 +86,11 @@ final class EntryDetailVisualVariantSettingsController {
             return;
         }
 
-        $service = EntryDetailVisualVariantService::forWordPress();
         try {
-            $result = $service->applySettingsValue( trim( $value ) );
-            self::$request_result = $result;
-            if ( EntryDetailVisualVariantService::STATUS_COMPLETED === $result['status'] ) {
-                self::recordSuccess( $result );
-            }
+            self::$request_result = EntryDetailVisualVariantService::forWordPress()->applySettingsValue( trim( $value ) );
         } catch ( LifecycleException $exception ) {
-            self::recordFailure( $service, $exception );
             self::setFieldError( $field, $exception->getMessage() );
         } catch ( \Throwable $exception ) {
-            self::recordUnexpectedFailure( $service );
             self::setFieldError(
                 $field,
                 __( 'Entry Detail design switching failed before a safe visual activation could complete.', 'gravity-presentation-profiles' )
@@ -106,11 +99,6 @@ final class EntryDetailVisualVariantSettingsController {
     }
 
     public static function discardSelection( $field, $value ) {
-        unset( $field, $value );
-        return '';
-    }
-
-    public static function discardFeedback( $field, $value ) {
         unset( $field, $value );
         return '';
     }
@@ -169,43 +157,6 @@ final class EntryDetailVisualVariantSettingsController {
             : '';
 
         return 'gf_settings' === $page && 'gravity-presentation-profiles' === $subview;
-    }
-
-    private static function recordSuccess( $result ) {
-        try {
-            EntryDetailVisualVariantDiagnosticStore::forWordPress()->recordSuccess(
-                $result['variant'],
-                $result['activation']
-            );
-        } catch ( \Throwable $exception ) {
-            // Diagnostics are observational and never alter a completed switch.
-        }
-    }
-
-    private static function recordFailure( EntryDetailVisualVariantService $service, LifecycleException $exception ) {
-        try {
-            $facts = $service->activeFacts();
-            $activation = isset( $facts['activation'] ) ? $facts['activation'] : null;
-            $target = is_array( self::$request_result ) && isset( self::$request_result['variant'] )
-                ? self::$request_result['variant']
-                : ( isset( $facts['variant'] ) && $facts['variant'] ? $facts['variant'] : EntryDetailVisualVariant::CURRENT_SAFE );
-            EntryDetailVisualVariantDiagnosticStore::forWordPress()->recordFailure( $target, $exception->reasonCode(), $activation );
-        } catch ( \Throwable $diagnostic_exception ) {
-            // Diagnostics are observational and never alter the conflict result.
-        }
-    }
-
-    private static function recordUnexpectedFailure( EntryDetailVisualVariantService $service ) {
-        try {
-            $facts = $service->activeFacts();
-            EntryDetailVisualVariantDiagnosticStore::forWordPress()->recordFailure(
-                isset( $facts['variant'] ) && $facts['variant'] ? $facts['variant'] : EntryDetailVisualVariant::CURRENT_SAFE,
-                'entry_detail_visual_variant_switch_failed',
-                isset( $facts['activation'] ) ? $facts['activation'] : null
-            );
-        } catch ( \Throwable $diagnostic_exception ) {
-            // Diagnostics are observational and never alter the failed result.
-        }
     }
 
     private static function setFieldError( $field, $message ) {
