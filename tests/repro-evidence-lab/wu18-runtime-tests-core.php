@@ -8,7 +8,12 @@ use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter
 
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu18_fixture_manifest' );
-if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['alpha'] ) || empty( $manifest['beta'] ) || empty( $manifest['negative'] ) || empty( $manifest['transition'] ) ) {
+if ( ! $artifact_dir || ! is_array( $manifest )
+    || empty( $manifest['alpha'] )
+    || empty( $manifest['editor'] )
+    || empty( $manifest['negative'] )
+    || empty( $manifest['viewer'] )
+    || empty( $manifest['transition'] ) ) {
     throw new RuntimeException( 'WU18 fixture manifest unavailable.' );
 }
 
@@ -25,6 +30,25 @@ function wu18_assert( $condition, $message ) {
     if ( ! $condition ) {
         throw new RuntimeException( $message );
     }
+}
+
+function wu18_fresh_step( $form_id, $entry_id ) {
+    $entry = GFAPI::get_entry( $entry_id );
+    if ( is_wp_error( $entry ) ) {
+        throw new RuntimeException( $entry->get_error_message() );
+    }
+    return ( new Gravity_Flow_API( (int) $form_id ) )->get_current_step( $entry );
+}
+
+function wu18_effective_editable_fields( $step ) {
+    if ( ! is_object( $step ) || ! method_exists( $step, 'get_editable_fields' ) ) {
+        throw new RuntimeException( 'WU18 host step does not expose effective editable fields.' );
+    }
+    $fields = $step->get_editable_fields();
+    if ( ! is_array( $fields ) ) {
+        throw new RuntimeException( 'WU18 host editable-field state is not an array.' );
+    }
+    return array_values( array_filter( array_map( 'strval', $fields ), 'strlen' ) );
 }
 
 function wu18_render_entry( $form_id, $entry_id ) {
@@ -63,22 +87,6 @@ function wu18_trace_reason( $trace, $stage, $reason ) {
     return null;
 }
 
-function wu18_set_current_approval_mode( $form_id, $entry_id, $editable_fields, $note_mode = 'optional', $revert = true ) {
-    $entry = GFAPI::get_entry( $entry_id );
-    $api = new Gravity_Flow_API( $form_id );
-    $step = $api->get_current_step( $entry );
-    if ( ! $step || 'approval' !== $step->get_type() ) {
-        throw new RuntimeException( 'WU18 expected current Approval step.' );
-    }
-    $meta = $step->get_feed_meta();
-    $meta['editable_fields'] = array_values( array_map( 'strval', $editable_fields ) );
-    $meta['instructionsEnable'] = '1';
-    $meta['instructionsValue'] = 'Synthetic WU18 current-task instructions.';
-    $meta['note_mode'] = $note_mode;
-    $meta['revertEnable'] = $revert ? '1' : '0';
-    gravity_flow()->update_feed_meta( $step->get_id(), $meta );
-}
-
 function wu18_assert_read_only_marker( $html, $label ) {
     wu18_assert( false !== strpos( $html, 'data-gpp-entry-detail="ready"' ), $label . ': GPP dossier missing.' );
     wu18_assert( false !== strpos( $html, 'data-gpp-review-mode="read-only"' ), $label . ': read-only review marker missing.' );
@@ -90,21 +98,21 @@ function wu18_assert_read_only_marker( $html, $label ) {
     }
 }
 
-// Normalize the synthetic positive fixture to the Owner-approved Review target.
-// This is test-only workflow state: an Approval step with no editable fields,
-// native Note/actions, and native Revert available. Production configuration is
-// intentionally not performed by GPP.
-wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
-wu18_set_current_approval_mode( $manifest['beta']['form_id'], $manifest['beta']['entry_id'], array() );
-
 wp_set_current_user( $operator->ID );
 PrintDossierPresentationAdapter::resetRuntimeCache();
-list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step, $alpha_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
 
+// Read the positive Review state from a freshly resolved authentic Gravity Flow
+// step before rendering. Test-local expectations/feed meta are not proof.
+$alpha_fresh = wu18_fresh_step( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+wu18_assert( $alpha_fresh && 'approval' === $alpha_fresh->get_type(), 'Positive Review fixture is not native Approval.' );
+wu18_assert( Gravity_Flow_Entry_Detail::can_update( $alpha_fresh ), 'Positive Review operator lacks native Approval update/action eligibility.' );
+wu18_assert( array() === wu18_effective_editable_fields( $alpha_fresh ), 'Positive Review fixture unexpectedly requires a native editor.' );
+
+list( $alpha_html, $alpha_form, $alpha_entry, $alpha_step, $alpha_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
 wu18_assert( is_array( $alpha_form ) && is_array( $alpha_entry ) && $alpha_step && 'approval' === $alpha_step->get_type(), 'Alpha native Approval context unavailable.' );
 wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $alpha_entry, $alpha_form, $alpha_step ), 'Operator lost native Entry Detail permission.' );
 wu18_assert( Gravity_Flow_Entry_Detail::can_update( $alpha_step ), 'Operator is not the native current Approval assignee/update subject.' );
-wu18_assert( array() === array_values( array_filter( array_map( 'strval', $alpha_step->get_editable_fields() ), 'strlen' ) ), 'Positive Review fixture unexpectedly requires a native editor.' );
+wu18_assert( array() === wu18_effective_editable_fields( $alpha_step ), 'Rendered Review fixture gained effective editable fields.' );
 wu18_assert_read_only_marker( $alpha_html, 'Alpha Review' );
 wu18_assert( false !== strpos( $alpha_html, 'data-gpp-profile-id="srwf.operations.entry-detail.v1"' ), 'Current Operations Entry Detail profile was not rendered.' );
 wu18_assert( false !== strpos( $alpha_html, 'value="approved"' ), 'Native Approve control missing.' );
@@ -167,19 +175,22 @@ try {
     GFAPI::update_entry_field( $alpha_entry['id'], $home_field_id, $alpha_home_original );
 }
 
-// An Approval configured with editable fields must remain fully native. This is
-// the exact host seam where Gravity Flow replaces read-only rows with its native
-// entry editor.
-$review_field = (string) $manifest['alpha']['fields']['review.reason'];
-wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array( $review_field ) );
-list( $editor_html, , , $editor_step, $editor_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+// Dedicated stable Approval editor fixture. Resolve the host state fresh and
+// prove effective editability before asserting GPP's conservative fallback.
+$editor_fresh = wu18_fresh_step( $manifest['editor']['form_id'], $manifest['editor']['entry_id'] );
+wu18_assert( $editor_fresh && 'approval' === $editor_fresh->get_type(), 'Editor fixture is not native Approval.' );
+wu18_assert( Gravity_Flow_Entry_Detail::can_update( $editor_fresh ), 'Editor fixture operator lacks native update eligibility.' );
+$editor_effective_fields = wu18_effective_editable_fields( $editor_fresh );
+wu18_assert( in_array( (string) $manifest['editor']['editable_field_id'], $editor_effective_fields, true ), 'Editor fixture effective fields do not contain review.reason.' );
+
+list( $editor_html, , , $editor_step, $editor_trace ) = wu18_render_entry( $manifest['editor']['form_id'], $manifest['editor']['entry_id'] );
 wu18_assert( $editor_step && Gravity_Flow_Entry_Detail::can_update( $editor_step ), 'Editor fallback fixture lost native update eligibility.' );
+wu18_assert( in_array( (string) $manifest['editor']['editable_field_id'], wu18_effective_editable_fields( $editor_step ), true ), 'Rendered editor fixture lost effective native editability.' );
 wu18_assert( false === strpos( $editor_html, 'data-gpp-entry-detail="ready"' ), 'Approval editor request incorrectly emitted GPP dossier.' );
 wu18_assert( false === strpos( $editor_html, 'data-gpp-native-table-suppression' ), 'Approval editor request incorrectly emitted suppression marker.' );
 wu18_assert( false !== strpos( $editor_html, 'entry-detail-view' ) && false !== strpos( $editor_html, 'gform_wrapper' ), 'Native Approval editor was not preserved.' );
 wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'native_editor_required' ), 'Native-editor fallback diagnostic missing.' );
 wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'native_editor_required' ), 'Native-editor output SKIP diagnostic missing.' );
-wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
 
 // A structurally invalid host payload must not produce a marker. Native host
 // rendering is unaffected because this direct adapter control never touches it.
@@ -211,12 +222,15 @@ wu18_assert( '' === $inactive_html, 'Inactive profile emitted GPP output.' );
 wu18_assert( null !== wu18_trace_reason( $inactive_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'profile_inactive' ), 'Inactive-profile suppression diagnostic missing.' );
 EntryDetailPresentationAdapter::resetRuntimeCache();
 
-// An authorized non-assignee is read-only at the host seam. The dossier and
-// suppression remain eligible, while native Approval actions are not exposed.
+// A stable synthetic creator-view entry makes the subscriber an authentically
+// authorized non-assignee while the Approval assignee remains the operator.
 wp_set_current_user( $viewer->ID );
-list( $viewer_html, $viewer_form, $viewer_entry, $viewer_step, $viewer_trace ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $viewer_entry, $viewer_form, $viewer_step ), 'Viewer lost native Entry Detail authorization.' );
-wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $viewer_step ), 'Viewer unexpectedly became current assignee.' );
+$viewer_fresh = wu18_fresh_step( $manifest['viewer']['form_id'], $manifest['viewer']['entry_id'] );
+wu18_assert( $viewer_fresh && 'approval' === $viewer_fresh->get_type(), 'Read-only viewer fixture is not native Approval.' );
+wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $viewer_fresh ), 'Viewer unexpectedly became current Approval assignee.' );
+list( $viewer_html, $viewer_form, $viewer_entry_runtime, $viewer_step, $viewer_trace ) = wu18_render_entry( $manifest['viewer']['form_id'], $manifest['viewer']['entry_id'] );
+wu18_assert( Gravity_Flow_Entry_Detail::is_permission_granted( $viewer_entry_runtime, $viewer_form, $viewer_step ), 'Viewer lost native Entry Detail authorization.' );
+wu18_assert( ! Gravity_Flow_Entry_Detail::can_update( $viewer_step ), 'Viewer unexpectedly gained native update eligibility.' );
 wu18_assert_read_only_marker( $viewer_html, 'Authorized read-only viewer' );
 wu18_assert( false === strpos( $viewer_html, 'value="approved"' ) && false === strpos( $viewer_html, 'value="rejected"' ), 'Non-assignee received native Approval actions.' );
 wu18_assert( null !== wu18_trace_reason( $viewer_trace, 'ENTRY_DETAIL_APPROVAL_ELIGIBILITY', 'current_assignee_not_eligible' ), 'Non-assignee Approval diagnostic missing.' );
@@ -230,20 +244,35 @@ wu18_assert( false === strpos( $denied_html, 'data-gpp-entry-detail="ready"' ), 
 wu18_assert( false === strpos( $denied_html, 'data-gpp-native-table-suppression' ), 'Denied request emitted suppression marker.' );
 
 wp_set_current_user( $operator->ID );
-wu18_set_current_approval_mode( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'], array() );
-wu18_set_current_approval_mode( $manifest['beta']['form_id'], $manifest['beta']['entry_id'], array() );
 EntryDetailPresentationAdapter::resetRuntimeCache();
 
 $binding_hash_after = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
 wu18_assert( $binding_hash_after === $manifest['binding_state_sha256'], 'Runtime Review qualification unexpectedly mutated EnvironmentBindingSet state.' );
 
 $results = array(
-    'schema_version' => '4.0.0',
+    'schema_version' => '5.0.0',
     'surface' => 'gravity_flow.entry_detail',
     'profile_id' => $manifest['profile_id'],
     'host_versions' => array(
         'gravity_forms' => class_exists( 'GFCommon' ) && method_exists( 'GFCommon', 'get_version' ) ? GFCommon::get_version() : null,
         'gravity_flow' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
+    ),
+    'effective_fixture_state' => array(
+        'read_only_review' => array(
+            'step_type' => $alpha_fresh->get_type(),
+            'operator_can_update' => true,
+            'effective_editable_fields' => array(),
+        ),
+        'approval_editor' => array(
+            'step_type' => $editor_fresh->get_type(),
+            'operator_can_update' => true,
+            'effective_editable_fields' => $editor_effective_fields,
+        ),
+        'authorized_non_assignee' => array(
+            'step_type' => $viewer_fresh->get_type(),
+            'viewer_can_update' => false,
+            'native_permission' => true,
+        ),
     ),
     'server_read_only_review' => array(
         'dossier_emitted' => true,
