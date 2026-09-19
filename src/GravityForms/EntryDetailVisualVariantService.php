@@ -280,6 +280,9 @@ final class EntryDetailVisualVariantService {
         if ( 'active' !== $current_facts['state'] ) {
             throw new LifecycleException( 'entry_detail_variant_activation_unrecognized', 'The current Entry Detail visual activation is not a recognized Owner-selectable design and was left unchanged.' );
         }
+        if ( ! $this->sameIdentity( $current_facts['activation'], $expected ) ) {
+            throw new LifecycleException( 'visual_activation_conflict', 'The active Entry Detail design changed after this settings action was prepared. The newer activation was left unchanged.' );
+        }
 
         $target_identity = EntryDetailVisualVariant::CURRENT_SAFE === $target_variant
             ? $this->currentSafeIdentity()
@@ -327,7 +330,7 @@ final class EntryDetailVisualVariantService {
     }
 
     private function decodeAction( $value ) {
-        if ( 1 !== preg_match( '/^[A-Za-z0-9_-]+$/', $value ) ) {
+        if ( ! is_string( $value ) || '' === $value || 1 !== preg_match( '/^[A-Za-z0-9_-]+$/', $value ) ) {
             return null;
         }
         $encoded = strtr( $value, '-_', '+/' );
