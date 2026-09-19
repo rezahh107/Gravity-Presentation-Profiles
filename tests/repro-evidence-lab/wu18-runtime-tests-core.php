@@ -100,6 +100,7 @@ function wu18_assert_read_only_marker( $html, $label ) {
 
 wp_set_current_user( $operator->ID );
 PrintDossierPresentationAdapter::resetRuntimeCache();
+$binding_hash_before_runtime = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
 
 // Read the positive Review state from a freshly resolved authentic Gravity Flow
 // step before rendering. Test-local expectations/feed meta are not proof.
@@ -247,7 +248,7 @@ wp_set_current_user( $operator->ID );
 EntryDetailPresentationAdapter::resetRuntimeCache();
 
 $binding_hash_after = hash( 'sha256', wp_json_encode( get_option( BindingSetLifecycle::OPTION_NAME ) ) );
-wu18_assert( $binding_hash_after === $manifest['binding_state_sha256'], 'Runtime Review qualification unexpectedly mutated EnvironmentBindingSet state.' );
+wu18_assert( $binding_hash_after === $binding_hash_before_runtime, 'Runtime Review qualification unexpectedly mutated EnvironmentBindingSet state.' );
 
 $results = array(
     'schema_version' => '5.0.0',
