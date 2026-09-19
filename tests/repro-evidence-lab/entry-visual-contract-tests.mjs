@@ -11,215 +11,619 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const ownerHtml = process.env.GPP_ENTRY_OWNER_HTML;
 const expectedHtml = { size: 119765, sha256: '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69' };
+const comparatorVersion = 'entry-vnext-browser-comparator-v1';
+const evidenceSchemaVersion = '2.0.0';
 const canonical = ['header', 'current-task', 'education', 'candidate-details', 'contact', 'school', 'documents', 'registration-finance', 'history'];
+const expectedPlacements = {
+  'student.first_name': 'candidate-details',
+  'student.last_name': 'candidate-details',
+  'student.father_name': 'candidate-details',
+  'student.birth_date_jalali': 'candidate-details',
+  'student.gender': 'candidate-details',
+  'student.mobile': 'contact',
+  'student.home_phone': 'contact',
+  'student.father_mobile': 'contact',
+  'student.mother_mobile': 'contact',
+  'education.level': 'education',
+  'education.grade_group': 'education',
+  'school.name': 'school',
+  'entry.created_at': 'registration-finance',
+  'review.status': 'registration-finance',
+  'finance.status': 'registration-finance',
+  'finance.tuition_amount': 'registration-finance',
+  'finance.discount_amount': 'registration-finance',
+  'finance.net_payable_amount': 'registration-finance',
+};
+const personalHeaderExclusions = ['student.first_name', 'student.last_name', 'student.father_name', 'student.birth_date_jalali', 'student.gender'];
+const gridRegions = ['education', 'candidate-details', 'contact', 'school', 'registration-finance'];
 const results = [];
 
+const referenceProfile = {
+  root: '.dossier',
+  regionMatchers: [
+    { name: 'header', selector: '.dossier-header', mode: 'self' },
+    { name: 'current-task', selector: '.task', mode: 'self' },
+    { name: 'education', selector: '.data-grid--education', mode: 'descendant' },
+    { name: 'candidate-details', selector: '.data-grid--personal', mode: 'descendant' },
+    { name: 'contact', selector: '.data-grid--contact', mode: 'descendant' },
+    { name: 'school', selector: '.data-grid--school', mode: 'descendant' },
+    { name: 'documents', selector: '.documents', mode: 'descendant' },
+    { name: 'registration-finance', selector: '.data-grid--financial', mode: 'descendant' },
+    { name: 'history', selector: '.history', mode: 'self' },
+  ],
+  grids: {
+    education: '.data-grid--education',
+    'candidate-details': '.data-grid--personal',
+    contact: '.data-grid--contact',
+    school: '.data-grid--school',
+    'registration-finance': '.data-grid--financial',
+  },
+  h1: '.dossier-header h1',
+  taskHeading: '.task h2',
+  placementSelector: null,
+  genericFactsSelector: null,
+};
+
+const productionProfile = {
+  root: '.gpp-entry-dossier--composed',
+  regionMatchers: canonical.map(name => ({ name, selector: `[data-gpp-entry-region="${name}"]`, mode: 'self' })),
+  grids: {
+    education: '[data-gpp-entry-region="education"] .gpp-entry-dossier__facts',
+    'candidate-details': '[data-gpp-entry-region="candidate-details"] .gpp-entry-dossier__facts',
+    contact: '[data-gpp-entry-region="contact"] .gpp-entry-dossier__facts',
+    school: '[data-gpp-entry-region="school"] .gpp-entry-dossier__facts',
+    'registration-finance': '[data-gpp-entry-region="registration-finance"] .gpp-entry-dossier__facts',
+  },
+  h1: '[data-gpp-entry-region="header"] h1',
+  taskHeading: '[data-gpp-entry-region="current-task"] .gpp-entry-dossier__task-heading',
+  placementSelector: '[data-gpp-slot]',
+  genericFactsSelector: '[data-gpp-entry-region="facts"], [data-gpp-section="facts"]',
+};
+
 if (!artifactDir || !wpPath || !wpCli || !ownerHtml) throw new Error('Entry vNext visual qualification environment is incomplete.');
-function identity(file) { const data = fs.readFileSync(file); return { size: data.length, sha256: createHash('sha256').update(data).digest('hex') }; }
+
+function identity(file) {
+  const data = fs.readFileSync(file);
+  return { size: data.length, sha256: createHash('sha256').update(data).digest('hex') };
+}
+
+function command(args) {
+  const cp = spawnSync(args[0], args.slice(1), { encoding: 'utf8', env: process.env });
+  if (cp.status !== 0) throw new Error(`${args.join(' ')} failed:\n${cp.stderr}\n${cp.stdout}`);
+  return cp.stdout.trim();
+}
+
 const htmlIdentity = identity(ownerHtml);
-if (htmlIdentity.size !== expectedHtml.size || htmlIdentity.sha256 !== expectedHtml.sha256) throw new Error(`Entry vNext authority mismatch: ${JSON.stringify(htmlIdentity)}`);
+if (htmlIdentity.size !== expectedHtml.size || htmlIdentity.sha256 !== expectedHtml.sha256) {
+  throw new Error(`Entry vNext authority mismatch: ${JSON.stringify(htmlIdentity)}`);
+}
+const repositoryHead = command(['git', 'rev-parse', 'HEAD']);
+if (!/^[0-9a-f]{40}$/.test(repositoryHead)) throw new Error('Exact repository Head is unavailable.');
+
 function wpEval(code) {
   const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
   if (cp.status !== 0) throw new Error(`${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
+
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
 const runtimePassword = `gppv-${randomBytes(18).toString('hex')}-A1!`;
 wpEval(`wp_set_password(${JSON.stringify(runtimePassword)}, ${Number(manifest.bootstrap_id)}); echo 'credential-ready';`);
 const entryUrl = `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id=${alpha.form_id}&lid=${alpha.entry_id}`;
-function record(id, name, status, details = null) { results.push({ id, name, status, details }); }
-async function test(id, name, fn) { try { record(id, name, 'PASS', await fn()); } catch (error) { record(id, name, 'FAIL', { error: String(error?.stack || error).slice(0, 10000) }); } }
-async function login(page) {
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', 'bootstrap_admin'); await page.fill('#user_pass', runtimePassword);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
+
+function closeEnough(actual, expected, tolerance) {
+  return Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
 }
-function gridColumns(style) { const value = style.gridTemplateColumns.trim(); return value ? value.split(/\s+/).length : 0; }
-async function referenceSnapshot(page, surface) {
-  await page.evaluate(s => window.showSurface(s), surface);
-  return page.evaluate(() => {
-    const root = document.querySelector('.dossier');
+
+function sameArray(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+function executableResultBase(id, scenarioType, viewport, comparatorResult, failedRuleIds) {
+  return {
+    id,
+    status: 'PASS',
+    scenario_type: scenarioType,
+    viewport,
+    repository_head: repositoryHead,
+    owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+    comparator_version: comparatorVersion,
+    comparator_executed: true,
+    comparator_result: comparatorResult,
+    failed_rule_ids: failedRuleIds,
+  };
+}
+
+async function collectRenderedEntryDetailState(page, profile) {
+  return page.evaluate(({ profile, canonicalNames }) => {
+    const root = document.querySelector(profile.root);
     if (!root) return { missing: true };
-    const classify = child => {
-      if (child.classList.contains('dossier-header')) return 'header';
-      if (child.classList.contains('task')) return 'current-task';
-      if (child.classList.contains('history')) return 'history';
-      if (!child.classList.contains('dossier-section')) return null;
-      if (child.querySelector('.data-grid--education')) return 'education';
-      if (child.querySelector('.data-grid--personal')) return 'candidate-details';
-      if (child.querySelector('.data-grid--contact')) return 'contact';
-      if (child.querySelector('.data-grid--school')) return 'school';
-      if (child.querySelector('.documents')) return 'documents';
-      if (child.querySelector('.data-grid--financial')) return 'registration-finance';
-      return null;
+
+    const rect = element => {
+      if (!element) return null;
+      const value = element.getBoundingClientRect();
+      return {
+        top: value.top,
+        right: value.right,
+        bottom: value.bottom,
+        left: value.left,
+        width: value.width,
+        height: value.height,
+      };
     };
-    const order = [...root.children].map(classify).filter(Boolean);
-    const grids = {};
-    for (const [region, selector] of Object.entries({ education: '.data-grid--education', 'candidate-details': '.data-grid--personal', contact: '.data-grid--contact', school: '.data-grid--school', 'registration-finance': '.data-grid--financial' })) {
-      const el = root.querySelector(selector); if (el) grids[region] = getComputedStyle(el).gridTemplateColumns.trim().split(/\s+/).length;
+    const style = element => {
+      if (!element) return null;
+      const value = getComputedStyle(element);
+      return {
+        backgroundColor: value.backgroundColor,
+        borderTopColor: value.borderTopColor,
+        borderTopStyle: value.borderTopStyle,
+        borderTopWidth: parseFloat(value.borderTopWidth),
+        borderRadius: parseFloat(value.borderRadius),
+        paddingInlineStart: parseFloat(value.paddingInlineStart),
+        paddingInlineEnd: parseFloat(value.paddingInlineEnd),
+        fontSize: parseFloat(value.fontSize),
+        fontWeight: value.fontWeight,
+        lineHeight: parseFloat(value.lineHeight),
+        transform: value.transform,
+      };
+    };
+    const matchesRegion = (child, matcher) => matcher.mode === 'self'
+      ? child.matches(matcher.selector)
+      : Boolean(child.querySelector(matcher.selector));
+
+    const order = [];
+    const regionElements = {};
+    for (const child of root.children) {
+      const matcher = profile.regionMatchers.find(candidate => matchesRegion(child, candidate));
+      if (!matcher) continue;
+      order.push(matcher.name);
+      regionElements[matcher.name] = child;
     }
-    const task = root.querySelector('.task');
-    const cs = getComputedStyle(root); const taskCs = getComputedStyle(task);
-    return { missing: false, order, grids, rootBackground: cs.backgroundColor, rootBorderRadius: parseFloat(cs.borderRadius), taskBackground: taskCs.backgroundColor, taskBorderRadius: parseFloat(taskCs.borderRadius) };
-  });
-}
-async function productionSnapshot(page) {
-  return page.evaluate(() => {
-    const root = document.querySelector('.gpp-entry-dossier--composed');
-    if (!root) return { missing: true };
-    const regions = [...root.querySelectorAll(':scope > [data-gpp-entry-region]')];
+
+    const grids = {};
+    for (const [name, selector] of Object.entries(profile.grids)) {
+      const element = root.querySelector(selector);
+      if (!element) continue;
+      const columns = getComputedStyle(element).gridTemplateColumns.trim();
+      grids[name] = columns ? columns.split(/\s+/).length : 0;
+    }
+
     const placements = {};
-    root.querySelectorAll('[data-gpp-slot]').forEach(node => {
-      const region = node.closest('[data-gpp-entry-region]')?.dataset.gppEntryRegion || null;
-      (placements[node.dataset.gppSlot] ||= []).push(region);
-    });
-    const grids = {};
-    for (const region of regions) {
-      const grid = region.querySelector('.gpp-entry-dossier__facts');
-      if (grid) grids[region.dataset.gppEntryRegion] = getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length;
+    if (profile.placementSelector) {
+      root.querySelectorAll(profile.placementSelector).forEach(node => {
+        const slot = node.dataset.gppSlot;
+        if (!slot) return;
+        const region = node.closest('[data-gpp-entry-region]')?.dataset.gppEntryRegion || null;
+        (placements[slot] ||= []).push(region);
+      });
     }
-    const task = root.querySelector('[data-gpp-entry-region="current-task"]');
-    const header = root.querySelector('[data-gpp-entry-region="header"]');
-    const statusBoxes = [...document.querySelectorAll('.gravityflow-status-box')];
-    const cs = getComputedStyle(root); const taskCs = getComputedStyle(task);
+
+    const header = regionElements.header || null;
+    const task = regionElements['current-task'] || null;
+    const education = regionElements.education || null;
+    const h1 = root.querySelector(profile.h1);
+    const taskHeading = root.querySelector(profile.taskHeading);
+    const rootRect = rect(root);
+    const headerRect = rect(header);
+    const taskRect = rect(task);
+    const educationRect = rect(education);
+
     return {
       missing: false,
-      order: regions.map(r => r.dataset.gppEntryRegion),
-      placements,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      order,
       grids,
-      genericFacts: root.querySelectorAll('[data-gpp-entry-region="facts"], [data-gpp-section="facts"]').length,
+      placements,
+      genericFacts: profile.genericFactsSelector ? root.querySelectorAll(profile.genericFactsSelector).length : 0,
       rootOverflow: root.scrollWidth > root.clientWidth + 1,
       viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      rootBackground: cs.backgroundColor,
-      rootBorderRadius: parseFloat(cs.borderRadius),
-      taskBackground: taskCs.backgroundColor,
-      taskBorderRadius: parseFloat(taskCs.borderRadius),
-      headerBorderTopWidth: parseFloat(getComputedStyle(header).borderTopWidth),
-      statusBoxOutsideDossierVisible: statusBoxes.filter(n => !n.closest('.gpp-entry-dossier') && getComputedStyle(n).display !== 'none' && getComputedStyle(n).visibility !== 'hidden').length,
+      geometry: {
+        root: rootRect,
+        header: headerRect,
+        task: taskRect,
+        education: educationRect,
+        taskGapFromHeader: headerRect && taskRect ? taskRect.top - headerRect.bottom : null,
+        educationGapFromTask: taskRect && educationRect ? educationRect.top - taskRect.bottom : null,
+      },
+      tokens: {
+        root: style(root),
+        task: style(task),
+        h1: style(h1),
+        taskHeading: style(taskHeading),
+      },
+      knownRegions: canonicalNames.reduce((out, name) => {
+        out[name] = Boolean(regionElements[name]);
+        return out;
+      }, {}),
     };
-  });
+  }, { profile, canonicalNames: canonical });
 }
-function sameOrder(value) { return JSON.stringify(value) === JSON.stringify(canonical); }
-function requirePlacement(snapshot, slot, region) { return Array.isArray(snapshot.placements[slot]) && snapshot.placements[slot].includes(region); }
+
+function compareAgainstVNextContract(actual, reference, context) {
+  const failedRuleIds = [];
+  const ruleDetails = {};
+  const fail = (ruleId, details) => {
+    failedRuleIds.push(ruleId);
+    ruleDetails[ruleId] = details;
+  };
+
+  if (actual?.missing || reference?.missing) {
+    fail('DOSSIER_PRESENT', { actualMissing: Boolean(actual?.missing), referenceMissing: Boolean(reference?.missing) });
+    return { comparator_result: 'REJECTED', failed_rule_ids: failedRuleIds, rule_details: ruleDetails };
+  }
+
+  if (!sameArray(reference.order, canonical) || !sameArray(actual.order, canonical)) {
+    fail('ENTRY_REGION_ORDER', { reference: reference.order, actual: actual.order, expected: canonical });
+  }
+
+  const placementFailures = [];
+  for (const [slot, expectedRegion] of Object.entries(expectedPlacements)) {
+    const actualRegions = actual.placements[slot] || [];
+    if (!actualRegions.includes(expectedRegion)) placementFailures.push({ slot, expectedRegion, actualRegions });
+  }
+  for (const slot of personalHeaderExclusions) {
+    if ((actual.placements[slot] || []).includes('header')) placementFailures.push({ slot, forbiddenRegion: 'header' });
+  }
+  if (actual.genericFacts !== 0 || placementFailures.length) {
+    fail('SEMANTIC_REGION_PLACEMENT', { genericFacts: actual.genericFacts, placementFailures });
+  }
+
+  const gridFailures = gridRegions.filter(name => actual.grids[name] !== reference.grids[name]);
+  if (gridFailures.length) {
+    fail('GRID_STRUCTURE', {
+      failures: gridFailures.map(name => ({ name, actual: actual.grids[name], reference: reference.grids[name] })),
+    });
+  }
+
+  if (actual.rootOverflow || actual.viewportOverflow) {
+    fail('HORIZONTAL_OVERFLOW', { rootOverflow: actual.rootOverflow, viewportOverflow: actual.viewportOverflow });
+  }
+
+  const referenceWidth = reference.geometry.root?.width;
+  const actualWidth = actual.geometry.root?.width;
+  const widthTolerance = Math.max(10, (referenceWidth || 0) * 0.02);
+  const rootPaddingStartOk = closeEnough(actual.tokens.root?.paddingInlineStart, reference.tokens.root?.paddingInlineStart, 0.75);
+  const rootPaddingEndOk = closeEnough(actual.tokens.root?.paddingInlineEnd, reference.tokens.root?.paddingInlineEnd, 0.75);
+  if (!closeEnough(actualWidth, referenceWidth, widthTolerance) || !rootPaddingStartOk || !rootPaddingEndOk) {
+    fail('DOSSIER_INLINE_GEOMETRY', {
+      actualWidth,
+      referenceWidth,
+      widthTolerance,
+      actualPaddingInlineStart: actual.tokens.root?.paddingInlineStart,
+      referencePaddingInlineStart: reference.tokens.root?.paddingInlineStart,
+      actualPaddingInlineEnd: actual.tokens.root?.paddingInlineEnd,
+      referencePaddingInlineEnd: reference.tokens.root?.paddingInlineEnd,
+    });
+  }
+
+  if (!closeEnough(actual.geometry.taskGapFromHeader, reference.geometry.taskGapFromHeader, 2)
+      || !closeEnough(actual.geometry.educationGapFromTask, reference.geometry.educationGapFromTask, 2)) {
+    fail('CURRENT_TASK_RELATIVE_POSITION', {
+      actualTaskGapFromHeader: actual.geometry.taskGapFromHeader,
+      referenceTaskGapFromHeader: reference.geometry.taskGapFromHeader,
+      actualEducationGapFromTask: actual.geometry.educationGapFromTask,
+      referenceEducationGapFromTask: reference.geometry.educationGapFromTask,
+    });
+  }
+
+  const typographyRules = [
+    ['H1_TYPOGRAPHY', actual.tokens.h1, reference.tokens.h1],
+    ['TASK_HEADING_TYPOGRAPHY', actual.tokens.taskHeading, reference.tokens.taskHeading],
+  ];
+  for (const [ruleId, actualStyle, referenceStyle] of typographyRules) {
+    if (!actualStyle || !referenceStyle
+        || !closeEnough(actualStyle.fontSize, referenceStyle.fontSize, 0.5)
+        || String(actualStyle.fontWeight) !== String(referenceStyle.fontWeight)
+        || !closeEnough(actualStyle.lineHeight, referenceStyle.lineHeight, 0.75)) {
+      fail(ruleId, { actual: actualStyle, reference: referenceStyle });
+    }
+  }
+
+  if (!closeEnough(actual.tokens.root?.borderRadius, reference.tokens.root?.borderRadius, 0.5)) {
+    fail('DOSSIER_RADIUS', { actual: actual.tokens.root?.borderRadius, reference: reference.tokens.root?.borderRadius });
+  }
+  if (actual.tokens.root?.backgroundColor !== reference.tokens.root?.backgroundColor) {
+    fail('DOSSIER_BACKGROUND', { actual: actual.tokens.root?.backgroundColor, reference: reference.tokens.root?.backgroundColor });
+  }
+  if (!closeEnough(actual.tokens.root?.borderTopWidth, reference.tokens.root?.borderTopWidth, 0.25)
+      || actual.tokens.root?.borderTopStyle !== reference.tokens.root?.borderTopStyle
+      || actual.tokens.root?.borderTopColor !== reference.tokens.root?.borderTopColor) {
+    fail('DOSSIER_BORDER', { actual: actual.tokens.root, reference: reference.tokens.root });
+  }
+  if (!closeEnough(actual.tokens.task?.borderRadius, reference.tokens.task?.borderRadius, 0.5)) {
+    fail('CURRENT_TASK_RADIUS', { actual: actual.tokens.task?.borderRadius, reference: reference.tokens.task?.borderRadius });
+  }
+  if (actual.tokens.task?.backgroundColor !== reference.tokens.task?.backgroundColor) {
+    fail('CURRENT_TASK_BACKGROUND', { actual: actual.tokens.task?.backgroundColor, reference: reference.tokens.task?.backgroundColor });
+  }
+
+  return {
+    comparator_result: failedRuleIds.length ? 'REJECTED' : 'PASS',
+    failed_rule_ids: failedRuleIds,
+    rule_details: ruleDetails,
+    context,
+  };
+}
+
+function requireComparatorPass(comparison, label) {
+  if (comparison.comparator_result !== 'PASS') {
+    throw new Error(`${label} comparator rejected: ${JSON.stringify(comparison)}`);
+  }
+}
+
+async function login(context) {
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
+  await page.fill('#user_login', 'bootstrap_admin');
+  await page.fill('#user_pass', runtimePassword);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
+  await page.close();
+}
+
+async function freshProductionPage(context, viewport) {
+  const page = await context.newPage();
+  await page.setViewportSize(viewport);
+  await page.goto(entryUrl, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
+  return page;
+}
+
+async function collectReference(referencePage, surface, viewport) {
+  await referencePage.setViewportSize(viewport);
+  await referencePage.evaluate(name => window.showSurface(name), surface);
+  return collectRenderedEntryDetailState(referencePage, referenceProfile);
+}
+
+async function runPositive(context, reference, viewport, resultId, viewportId, screenshotName) {
+  const page = await freshProductionPage(context, viewport);
+  try {
+    const actual = await collectRenderedEntryDetailState(page, productionProfile);
+    const comparison = compareAgainstVNextContract(actual, reference, { scenario: 'positive', viewport: viewportId });
+    requireComparatorPass(comparison, resultId);
+    if (screenshotName) await page.screenshot({ path: path.join(artifactDir, screenshotName), fullPage: true });
+    return {
+      ...executableResultBase(resultId, 'positive', viewportId, comparison.comparator_result, comparison.failed_rule_ids),
+      mutation_id: null,
+      mutation_confirmed: null,
+      comparison_summary: {
+        actual_root_width: actual.geometry.root?.width,
+        reference_root_width: reference.geometry.root?.width,
+        actual_task_gap_from_header: actual.geometry.taskGapFromHeader,
+        reference_task_gap_from_header: reference.geometry.taskGapFromHeader,
+      },
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function runNegativeControl({
+  context,
+  reference,
+  viewport,
+  viewportId,
+  resultId,
+  mutationId,
+  expectedRuleId,
+  mutate,
+}) {
+  const page = await freshProductionPage(context, viewport);
+  try {
+    const baseline = await collectRenderedEntryDetailState(page, productionProfile);
+    const baselineComparison = compareAgainstVNextContract(baseline, reference, { scenario: 'falsification-baseline', viewport: viewportId, mutationId });
+    requireComparatorPass(baselineComparison, `${resultId} baseline`);
+
+    const mutationEvidence = await mutate(page, baseline);
+    if (!mutationEvidence?.confirmed) throw new Error(`${resultId} mutation did not materially apply: ${JSON.stringify(mutationEvidence)}`);
+
+    const mutated = await collectRenderedEntryDetailState(page, productionProfile);
+    const comparison = compareAgainstVNextContract(mutated, reference, { scenario: 'falsification', viewport: viewportId, mutationId });
+    if (comparison.comparator_result !== 'REJECTED') throw new Error(`${resultId} comparator failed to reject the mutated DOM.`);
+    if (!comparison.failed_rule_ids.includes(expectedRuleId)) {
+      throw new Error(`${resultId} rejected for unrelated rules: ${JSON.stringify(comparison.failed_rule_ids)}`);
+    }
+
+    return {
+      ...executableResultBase(resultId, 'falsification', viewportId, comparison.comparator_result, comparison.failed_rule_ids),
+      mutation_id: mutationId,
+      mutation_confirmed: true,
+      baseline_comparator_result: baselineComparison.comparator_result,
+      expected_failed_rule_id: expectedRuleId,
+      mutation_evidence: mutationEvidence,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function runCase(name, fn) {
+  try {
+    const result = await fn();
+    results.push(result);
+    console.log(`PASS ${result.id} ${name}`);
+  } catch (error) {
+    const failed = {
+      id: name,
+      status: 'FAIL',
+      scenario_type: 'qualification',
+      repository_head: repositoryHead,
+      owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+      comparator_version: comparatorVersion,
+      comparator_executed: false,
+      comparator_result: 'FAIL',
+      failed_rule_ids: [],
+      error: String(error?.stack || error).slice(0, 10000),
+    };
+    results.push(failed);
+    console.log(`FAIL ${name}`);
+  }
+}
 
 const browser = await chromium.launch({ headless: true });
 const referenceContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
 const referencePage = await referenceContext.newPage();
 await referencePage.goto(pathToFileURL(ownerHtml).href, { waitUntil: 'load' });
 await referencePage.waitForFunction(() => typeof window.showSurface === 'function');
-const referenceDesktop = await referenceSnapshot(referencePage, 'detail-desktop');
-await referencePage.setViewportSize({ width: 390, height: 844 });
-const referenceMobile = await referenceSnapshot(referencePage, 'detail-mobile');
+const referenceDesktop = await collectReference(referencePage, 'detail-desktop', { width: 1440, height: 1100 });
+const referenceMobile = await collectReference(referencePage, 'detail-mobile', { width: 390, height: 844 });
 
 const context = await browser.newContext();
-const page = await context.newPage();
-await login(page);
-await page.setViewportSize({ width: 1440, height: 1100 });
-await page.goto(entryUrl, { waitUntil: 'networkidle' });
-await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
-const productionDesktop = await productionSnapshot(page);
+await login(context);
 
-await test('ENTRY-VNEXT-001', 'exact Owner vNext C/D authority exposes canonical semantic hierarchy', async () => {
-  if (referenceDesktop.missing || referenceMobile.missing || !sameOrder(referenceDesktop.order) || !sameOrder(referenceMobile.order)) throw new Error(JSON.stringify({ referenceDesktop, referenceMobile }));
-  if (referenceDesktop.grids['candidate-details'] !== 3 || referenceDesktop.grids['registration-finance'] !== 3 || referenceDesktop.grids.education !== 2 || referenceDesktop.grids.contact !== 2 || referenceDesktop.grids.school !== 1) throw new Error(`Unexpected Owner desktop grid contract: ${JSON.stringify(referenceDesktop.grids)}`);
-  if (referenceMobile.grids['candidate-details'] !== 1 || referenceMobile.grids['registration-finance'] !== 1 || referenceMobile.grids.education !== 1 || referenceMobile.grids.contact !== 1 || referenceMobile.grids.school !== 1) throw new Error(`Unexpected Owner mobile grid contract: ${JSON.stringify(referenceMobile.grids)}`);
-  return { authority: htmlIdentity, desktop: referenceDesktop, mobile: referenceMobile };
-});
+await runCase('ENTRY-VNEXT-POSITIVE-DESKTOP-C', () => runPositive(
+  context,
+  referenceDesktop,
+  { width: 1440, height: 1100 },
+  'ENTRY-VNEXT-POSITIVE-DESKTOP-C',
+  'desktop-C',
+  'entry-vnext-desktop.png',
+));
 
-await test('ENTRY-VNEXT-002', 'production uses vNext regions and forbids legacy generic facts', async () => {
-  if (productionDesktop.missing || !sameOrder(productionDesktop.order) || productionDesktop.genericFacts !== 0) throw new Error(JSON.stringify(productionDesktop));
-  if (productionDesktop.headerBorderTopWidth !== 0) throw new Error('Legacy blue-top identity card border remains on compact header.');
-  if (productionDesktop.rootBackground !== referenceDesktop.rootBackground || productionDesktop.taskBackground !== referenceDesktop.taskBackground) throw new Error(`Major surface tokens diverge: ${JSON.stringify({ productionDesktop, referenceDesktop })}`);
-  return productionDesktop;
-});
+await runCase('ENTRY-VNEXT-POSITIVE-MOBILE-D', () => runPositive(
+  context,
+  referenceMobile,
+  { width: 390, height: 844 },
+  'ENTRY-VNEXT-POSITIVE-MOBILE-D',
+  'mobile-D',
+  'entry-vnext-mobile.png',
+));
 
-await test('ENTRY-VNEXT-003', 'semantic slots are assigned to their vNext domains', async () => {
-  const requirements = {
-    'student.first_name': 'candidate-details',
-    'student.last_name': 'candidate-details',
-    'student.father_name': 'candidate-details',
-    'student.birth_date_jalali': 'candidate-details',
-    'student.gender': 'candidate-details',
-    'student.mobile': 'contact',
-    'student.home_phone': 'contact',
-    'student.father_mobile': 'contact',
-    'student.mother_mobile': 'contact',
-    'education.level': 'education',
-    'education.grade_group': 'education',
-    'school.name': 'school',
-    'entry.created_at': 'registration-finance',
-    'review.status': 'registration-finance',
-    'finance.status': 'registration-finance',
-    'finance.tuition_amount': 'registration-finance',
-    'finance.discount_amount': 'registration-finance',
-    'finance.net_payable_amount': 'registration-finance',
-  };
-  const failures = Object.entries(requirements).filter(([slot, region]) => !requirePlacement(productionDesktop, slot, region));
-  if (failures.length) throw new Error(`Semantic placement failures: ${JSON.stringify(failures)}`);
-  for (const slot of ['student.first_name', 'student.last_name', 'student.father_name', 'student.birth_date_jalali', 'student.gender']) {
-    if ((productionDesktop.placements[slot] || []).includes('header')) throw new Error(`Full personal detail leaked into compact header: ${slot}`);
-  }
-  return { requirements };
-});
-
-await test('ENTRY-VNEXT-004', 'desktop/mobile retain semantic parity, responsive grid contract and no overflow', async () => {
-  await page.screenshot({ path: path.join(artifactDir, 'entry-vnext-desktop.png'), fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
-  const mobile = await productionSnapshot(page);
-  await page.screenshot({ path: path.join(artifactDir, 'entry-vnext-mobile.png'), fullPage: true });
-  if (!sameOrder(mobile.order) || JSON.stringify(Object.keys(productionDesktop.placements).sort()) !== JSON.stringify(Object.keys(mobile.placements).sort())) throw new Error(`Material semantic parity failed: ${JSON.stringify({ desktop: productionDesktop, mobile })}`);
-  if (productionDesktop.rootOverflow || productionDesktop.viewportOverflow || mobile.rootOverflow || mobile.viewportOverflow) throw new Error(`Horizontal overflow: ${JSON.stringify({ desktop: productionDesktop, mobile })}`);
-  if (productionDesktop.grids['candidate-details'] !== 3 || productionDesktop.grids['registration-finance'] !== 3 || productionDesktop.grids.education !== 2 || productionDesktop.grids.contact !== 2) throw new Error(`Production desktop grids diverge: ${JSON.stringify(productionDesktop.grids)}`);
-  if (mobile.grids['candidate-details'] !== 1 || mobile.grids['registration-finance'] !== 1 || mobile.grids.education !== 1 || mobile.grids.contact !== 1 || mobile.grids.school !== 1) throw new Error(`Production mobile grids diverge: ${JSON.stringify(mobile.grids)}`);
-  return { desktop: productionDesktop.grids, mobile: mobile.grids };
-});
-
-await test('ENTRY-VNEXT-005', 'Approval status wrapper is composed inside current-task without an orphan shell', async () => {
-  await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForSelector('.gpp-entry-dossier--composed', { timeout: 30000 });
-  const state = await page.evaluate(() => {
-    const form = document.querySelector('form[id^="gform_"]');
+await runCase('ENTRY-VNEXT-NEGATIVE-TASK-DISPLACEMENT', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-TASK-DISPLACEMENT',
+  mutationId: 'task_translate_y_120px',
+  expectedRuleId: 'CURRENT_TASK_RELATIVE_POSITION',
+  mutate: async page => page.evaluate(() => {
     const task = document.querySelector('[data-gpp-entry-region="current-task"]');
-    const status = document.querySelector('.gravityflow-status-box');
-    const actions = document.querySelector('.gravityflow-action-buttons');
+    if (!task) return { confirmed: false, reason: 'task_missing' };
+    const before = task.getBoundingClientRect();
+    task.style.setProperty('transform', 'translateY(120px)', 'important');
+    const after = task.getBoundingClientRect();
+    const deltaTop = after.top - before.top;
     return {
-      forms: document.querySelectorAll('form[id^="gform_"]').length,
-      statusBoxes: document.querySelectorAll('.gravityflow-status-box').length,
-      actionContainers: document.querySelectorAll('.gravityflow-action-buttons').length,
-      approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
-      rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
-      statusInsideTask: Boolean(status && task?.contains(status)),
-      actionsInsideStatus: Boolean(actions && status?.contains(actions)),
-      statusInForm: Boolean(status && status.closest('form') === form),
-      actionsInForm: Boolean(actions && actions.closest('form') === form),
-      orphanVisible: [...document.querySelectorAll('.gravityflow-status-box')].filter(n => !n.closest('.gpp-entry-dossier') && getComputedStyle(n).display !== 'none').length,
+      confirmed: Math.abs(deltaTop) >= 110,
+      before_top: before.top,
+      after_top: after.top,
+      delta_top: deltaTop,
+      computed_transform: getComputedStyle(task).transform,
     };
-  });
-  if (state.forms !== 1 || state.statusBoxes !== 1 || state.actionContainers !== 1 || state.approved !== 1 || state.rejected !== 1 || !state.statusInsideTask || !state.actionsInsideStatus || !state.statusInForm || !state.actionsInForm || state.orphanVisible !== 0) throw new Error(JSON.stringify(state));
-  return state;
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-NARROW-LAYOUT',
+  mutationId: 'dossier_width_72_percent',
+  expectedRuleId: 'DOSSIER_INLINE_GEOMETRY',
+  mutate: async page => page.evaluate(() => {
+    const root = document.querySelector('.gpp-entry-dossier--composed');
+    if (!root) return { confirmed: false, reason: 'dossier_missing' };
+    const before = root.getBoundingClientRect();
+    root.style.setProperty('width', '72%', 'important');
+    const after = root.getBoundingClientRect();
+    const ratio = before.width > 0 ? after.width / before.width : 1;
+    return {
+      confirmed: before.width - after.width >= 120 && ratio <= 0.82,
+      before_width: before.width,
+      after_width: after.width,
+      width_ratio: ratio,
+      computed_width: getComputedStyle(root).width,
+    };
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN', () => runNegativeControl({
+  context,
+  reference: referenceDesktop,
+  viewport: { width: 1440, height: 1100 },
+  viewportId: 'desktop-C',
+  resultId: 'ENTRY-VNEXT-NEGATIVE-OWNED-VISUAL-TOKEN',
+  mutationId: 'h1_font_size_plus_7px',
+  expectedRuleId: 'H1_TYPOGRAPHY',
+  mutate: async page => page.evaluate(() => {
+    const h1 = document.querySelector('[data-gpp-entry-region="header"] h1');
+    if (!h1) return { confirmed: false, reason: 'h1_missing' };
+    const before = parseFloat(getComputedStyle(h1).fontSize);
+    h1.style.setProperty('font-size', `${before + 7}px`, 'important');
+    const after = parseFloat(getComputedStyle(h1).fontSize);
+    return {
+      confirmed: Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) >= 6.5,
+      before_font_size: before,
+      after_font_size: after,
+      delta_font_size: after - before,
+    };
+  }),
+}));
+
+await runCase('ENTRY-VNEXT-FLOW-OWNERSHIP', async () => {
+  const page = await freshProductionPage(context, { width: 1440, height: 1100 });
+  try {
+    const state = await page.evaluate(() => {
+      const form = document.querySelector('form[id^="gform_"]');
+      const task = document.querySelector('[data-gpp-entry-region="current-task"]');
+      const status = document.querySelector('.gravityflow-status-box');
+      const actions = document.querySelector('.gravityflow-action-buttons');
+      return {
+        forms: document.querySelectorAll('form[id^="gform_"]').length,
+        statusBoxes: document.querySelectorAll('.gravityflow-status-box').length,
+        actionContainers: document.querySelectorAll('.gravityflow-action-buttons').length,
+        approved: document.querySelectorAll('.gravityflow-action-buttons [value="approved"]').length,
+        rejected: document.querySelectorAll('.gravityflow-action-buttons [value="rejected"]').length,
+        statusInsideTask: Boolean(status && task?.contains(status)),
+        actionsInsideStatus: Boolean(actions && status?.contains(actions)),
+        statusInForm: Boolean(status && status.closest('form') === form),
+        actionsInForm: Boolean(actions && actions.closest('form') === form),
+        orphanVisible: [...document.querySelectorAll('.gravityflow-status-box')].filter(node => !node.closest('.gpp-entry-dossier') && getComputedStyle(node).display !== 'none').length,
+      };
+    });
+    if (state.forms !== 1 || state.statusBoxes !== 1 || state.actionContainers !== 1 || state.approved !== 1 || state.rejected !== 1
+        || !state.statusInsideTask || !state.actionsInsideStatus || !state.statusInForm || !state.actionsInForm || state.orphanVisible !== 0) {
+      throw new Error(`Native Flow ownership changed: ${JSON.stringify(state)}`);
+    }
+    return {
+      id: 'ENTRY-VNEXT-FLOW-OWNERSHIP',
+      status: 'PASS',
+      scenario_type: 'runtime-invariant',
+      viewport: 'desktop-C',
+      repository_head: repositoryHead,
+      owner_authority: { file: path.basename(ownerHtml), ...htmlIdentity },
+      comparator_version: comparatorVersion,
+      comparator_executed: false,
+      comparator_result: 'NOT_APPLICABLE',
+      failed_rule_ids: [],
+      details: state,
+    };
+  } finally {
+    await page.close();
+  }
 });
 
-const deliberate = { ...productionDesktop, order: ['header', 'current-task', 'documents', 'history'], genericFacts: 1 };
-const deliberateRejected = !sameOrder(deliberate.order) || deliberate.genericFacts !== 0;
-const oldGateBypassRejected = expectedHtml.sha256 !== '666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81';
-record('ENTRY-VNEXT-REGRESSION', 'legacy generic hierarchy is deliberately rejected', deliberateRejected ? 'PASS' : 'FAIL');
-
+const positiveDesktop = results.find(result => result.id === 'ENTRY-VNEXT-POSITIVE-DESKTOP-C');
+const positiveMobile = results.find(result => result.id === 'ENTRY-VNEXT-POSITIVE-MOBILE-D');
 const output = {
-  suite: 'Entry Detail vNext structural visual contract',
+  schema_version: evidenceSchemaVersion,
+  suite: 'Entry Detail vNext shared browser/runtime visual contract',
+  comparator_version: comparatorVersion,
+  repository_head: repositoryHead,
   authority: { file: path.basename(ownerHtml), ...htmlIdentity },
   surfaces: {
-    entry_desktop_C: results.filter(r => r.id.startsWith('ENTRY-VNEXT-') && r.id !== 'ENTRY-VNEXT-REGRESSION').every(r => r.status === 'PASS') ? 'PASS' : 'FAIL',
-    entry_mobile_D: results.find(r => r.id === 'ENTRY-VNEXT-004')?.status || 'FAIL',
+    entry_desktop_C: positiveDesktop?.status === 'PASS' && positiveDesktop.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
+    entry_mobile_D: positiveMobile?.status === 'PASS' && positiveMobile.comparator_result === 'PASS' ? 'PASS' : 'FAIL',
   },
-  deliberate_regression: deliberateRejected ? 'REJECTED_AS_EXPECTED' : 'NOT_REJECTED',
-  old_gate_bypass_regression: oldGateBypassRejected ? 'REJECTED_AS_EXPECTED' : 'NOT_REJECTED',
   results,
 };
 fs.writeFileSync(path.join(artifactDir, 'entry-visual-contract-results.json'), JSON.stringify(output, null, 2) + '\n');
-for (const result of results) console.log(`${result.status} ${result.id} ${result.name}`);
-await referenceContext.close(); await context.close(); await browser.close();
-if (results.some(r => r.status !== 'PASS')) process.exit(1);
+
+await referenceContext.close();
+await context.close();
+await browser.close();
+
+if (results.some(result => result.status !== 'PASS')) process.exit(1);
