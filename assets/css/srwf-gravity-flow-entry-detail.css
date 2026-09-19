@@ -274,8 +274,8 @@
     font-weight: 700;
 }
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > .inside {
-    margin: 20px 0 0;
-    padding: 0;
+    margin: 0;
+    padding: 20px 0 0;
 }
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note {
     clear: both;
@@ -373,9 +373,6 @@
     }
     .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > h3 {
         font-size: 19px;
-    }
-    .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > .inside {
-        margin-top: 20px;
     }
     .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline .gravityflow-note {
         padding: 16px 0;
