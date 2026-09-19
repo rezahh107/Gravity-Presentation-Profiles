@@ -5,6 +5,7 @@ namespace GravityPresentationProfiles;
 use GravityPresentationProfiles\GravityForms\BindingRowAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailMappingAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
+use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController;
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
@@ -51,6 +52,7 @@ final class Bootstrap {
         BindingRowAdminController::register();
         EntryDetailMappingAdminController::register();
         EntryDetailSetupAdminController::register();
+        EntryDetailVisualVariantSettingsController::register();
 
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are
