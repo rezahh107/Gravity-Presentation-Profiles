@@ -273,7 +273,7 @@
     line-height: 1.7;
     font-weight: 700;
 }
-#poststuff .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > .inside {
+.gravityflow_workflow_detail #poststuff form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-native-table-suppression="read-only-review"]) .gravityflow-timeline > .inside {
     margin: 0;
     padding: 20px 0 0;
 }
