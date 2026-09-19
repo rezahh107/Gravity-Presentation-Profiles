@@ -738,6 +738,10 @@ final class EntryDetailPresentationAdapter {
             return array( 'eligible' => false, 'reason' => 'active_user_input_editing' );
         }
 
+        if ( 'approval' !== $step_type ) {
+            return array( 'eligible' => false, 'reason' => 'unsupported_or_ambiguous_request_state' );
+        }
+
         if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
             return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
         }
@@ -748,7 +752,8 @@ final class EntryDetailPresentationAdapter {
             return array( 'eligible' => false, 'reason' => 'editability_state_unproven' );
         }
 
-        // A viewer who cannot update is authentically read-only at this seam.
+        // Only an established Approval Review reaches this branch. A viewer who
+        // cannot update is authentically read-only at the native host seam.
         if ( ! $can_update ) {
             return array( 'eligible' => true, 'reason' => null );
         }
