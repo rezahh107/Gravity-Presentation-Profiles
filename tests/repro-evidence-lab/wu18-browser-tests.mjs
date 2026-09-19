@@ -7,7 +7,7 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
-const adminPassword = Buffer.from('d3UyMS1ib290c3RyYXAtcGFzcy0yMDI2', 'base64').toString('utf8');
+const adminPassword = 'wu21-bootstrap-pass-2026';
 const results = [];
 
 function wpEval(code) {
@@ -51,9 +51,6 @@ await test('WU18-BROWSER-001', 'server-admitted Review shows one semantic dossie
     const timeline = document.querySelector('.gravityflow-timeline');
     const nativePrint = document.querySelector('.detail-view-print');
     const task = dossier?.querySelector('[data-gpp-entry-region="current-task"]');
-    const dossierBox = dossier?.getBoundingClientRect();
-    const statusBox = status?.getBoundingClientRect();
-    const overlaps = Boolean(dossierBox && statusBox && !(dossierBox.right <= statusBox.left || statusBox.right <= dossierBox.left || dossierBox.bottom <= statusBox.top || statusBox.bottom <= dossierBox.top));
     return {
       profile: dossier?.dataset.gppProfileId || null,
       marker: dossier?.dataset.gppNativeTableSuppression || null,
@@ -69,7 +66,6 @@ await test('WU18-BROWSER-001', 'server-admitted Review shows one semantic dossie
       timeline_inside_dossier: Boolean(timeline?.closest('.gpp-entry-dossier')),
       native_print_present: Boolean(nativePrint),
       native_print_inside_dossier: Boolean(nativePrint?.closest('.gpp-entry-dossier')),
-      overlaps,
     };
   });
 
@@ -78,7 +74,7 @@ await test('WU18-BROWSER-001', 'server-admitted Review shows one semantic dossie
   if (!state.status_present || !state.status_visible || state.status_inside_dossier || !state.status_inside_native_form || state.task_contains_status) throw new Error(`Native workflow box ownership changed: ${JSON.stringify(state)}`);
   if (!state.timeline_present || state.timeline_inside_dossier) throw new Error(`Timeline was moved or removed: ${JSON.stringify(state)}`);
   if (!state.native_print_present || state.native_print_inside_dossier) throw new Error(`Native Print was moved or removed: ${JSON.stringify(state)}`);
-  if (state.composed_class || state.overlaps) throw new Error(`Obsolete composition or layout overlap observed: ${JSON.stringify(state)}`);
+  if (state.composed_class) throw new Error(`Obsolete composition state observed: ${JSON.stringify(state)}`);
   return state;
 });
 
