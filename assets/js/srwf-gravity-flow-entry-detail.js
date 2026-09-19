@@ -96,7 +96,10 @@
             approvalStatusBox = statusBoxes[0];
             const approved = actions.querySelectorAll('[value="approved"]');
             const rejected = actions.querySelectorAll('[value="rejected"]');
-            if (approved.length !== 1 || rejected.length !== 1) {
+            // Gravity Flow step configuration may authentically expose only one
+            // of Approve/Reject. GPP admits the native set as rendered, while
+            // rejecting duplicates or an unexpectedly empty action container.
+            if (approved.length > 1 || rejected.length > 1 || approved.length + rejected.length < 1) {
                 fail(dossier, form, 'approval-action-cardinality');
                 return;
             }
@@ -172,8 +175,9 @@
                     !actions ||
                     !status.contains(actions) ||
                     actions.closest('form') !== form ||
-                    approved.length !== 1 ||
-                    rejected.length !== 1
+                    approved.length > 1 ||
+                    rejected.length > 1 ||
+                    approved.length + rejected.length < 1
                 ) {
                     throw new Error('post-move-approval-ownership');
                 }
