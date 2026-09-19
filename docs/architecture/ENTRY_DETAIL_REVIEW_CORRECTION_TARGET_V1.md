@@ -2,12 +2,15 @@
 
 ```yaml
 document_id: GPP-ENTRY-DETAIL-REVIEW-CORRECTION-TARGET-V1
-status: OWNER_APPROVED_TARGET__METHOD_SELECTED__NOT_IMPLEMENTED__NOT_RUNTIME_VALIDATED
+status: OWNER_APPROVED_TARGET__METHOD_SELECTED__IMPLEMENTED__REPOSITORY_QUALIFIED__TARGET_RUNTIME_ACCEPTANCE_OPEN
 surface: gravity_flow.entry_detail
 scope: SRWF operations Entry Detail presentation architecture
 selected_duplicate_suppression_method: server-conditioned GPP-scoped CSS suppression of native read-only Entry Detail table
 selected_correction_method: native Gravity Flow Revert -> User Input -> Review
 correction_return_route_capability: Gravity Flow User Input explicit Next Step -> Review Approval is host-native and selected
+implementation_pr: 43
+implementation_head: 5b5fbe21757a622004c9cd282afc04c1de6d75be
+implementation_merge: c9617fe7a919266ad64479f3bf0d89742e6a891f
 supersedes_forward_target:
   - transactional client-side recomposition of native Gravity Flow read-only/editor/status/timeline regions into the GPP dossier for visual composition
   - changing Gravity Flow field-visibility semantics merely to remove duplicate native read-only rendering
@@ -19,21 +22,31 @@ preserves:
 
 ## 1. Purpose and authority
 
-This document records closed Owner decisions for the **forward target architecture** and the selected implementation method for the GPP Gravity Flow Entry Detail surface.
+This document records closed Owner decisions for the **forward target architecture** and selected implementation method for the GPP Gravity Flow Entry Detail surface.
 
 It is intentionally narrower than `MOTHER_ARCHITECTURE.md` and does not change the generic product boundary. It governs how the SRWF operations Entry Detail review/correction experience should evolve.
 
-This is a target architecture / method-selection record, not implementation evidence.
-
 ### CURRENT implementation
 
-The repository may still contain transactional client-side composition that moves original Gravity Flow regions/nodes into the GPP dossier and uses JavaScript to complete the composed presentation.
+PR #43 implemented the selected Review architecture on repository `main`.
 
-That current implementation remains historical/current code reality until a later implementation work unit changes it.
+Current production code now:
+
+- admits the GPP dossier only for structurally ready read-only Review requests after Gravity Flow has granted host Entry Detail permission;
+- emits a server-owned `data-gpp-native-table-suppression="read-only-review"` marker only with successful dossier output;
+- suppresses the duplicate native `.entry-detail-view` field table through scoped CSS rather than changing Gravity Flow visibility semantics;
+- keeps the native Gravity Flow workflow/status/action box structurally separate and host-owned;
+- falls back to native Gravity Flow rendering for active User Input editing and requests that require the native editable editor;
+- leaves Timeline and Print native;
+- no longer uses JavaScript for structural recomposition, rollback, native-node movement, or duplicate-table suppression;
+- retains Entry Detail JavaScript only for bounded image-preview progressive enhancement;
+- records privacy-safe `ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION` diagnostics separately from semantic degradation.
+
+Repository exact-Head qualification for PR #43 passed. Authentic Owner-site acceptance of the merged implementation remains open until the test build is installed and the target behavior is observed.
 
 ### TARGET architecture
 
-The target is:
+The target remains:
 
 ```text
 Gravity Flow Entry Detail
@@ -99,23 +112,23 @@ Gravity Flow continues to own and render its workflow/status/action region, incl
 
 GPP must not rebuild, clone, fake or parallelize these controls.
 
-The target architecture does **not** structurally move/reparent this operational box into the GPP dossier merely to obtain visual composition.
+The architecture does **not** structurally move/reparent this operational box into the GPP dossier merely to obtain visual composition.
 
 ### OD-ENTRY-04 — Workflow box may be visually integrated with scoped CSS
 
 GPP may visually adapt the native workflow box so it belongs to the same admitted Entry Detail visual system while remaining a separate native region.
 
-Exact future values must be derived from the admitted Entry Detail visual authority / existing GPP tokens, including applicable radius, border, background/surface, spacing, typography, shadow and control rhythm.
+Exact values must be derived from the admitted Entry Detail visual authority / existing GPP tokens, including applicable radius, border, background/surface, spacing, typography, shadow and control rhythm.
 
 No new visual tokens are admitted by this architecture record.
 
-The workflow region should be laid out so it does not overlap or collide with the dossier. The Owner's current visual direction is that the native workflow box remain separate and be shifted/aligned toward the left side where appropriate.
+The workflow region should be laid out so it does not overlap or collide with the dossier. The Owner's visual direction is that the native workflow box remain separate and be shifted/aligned toward the left side where appropriate.
 
-Future implementation should prefer robust scoped layout/CSS and avoid brittle absolute positioning or cosmetic transforms unless runtime evidence proves another method necessary.
+Implementation should prefer robust scoped layout/CSS and avoid brittle absolute positioning or cosmetic transforms unless runtime evidence proves another method necessary.
 
 ### OD-ENTRY-05 — No structural JavaScript composition by default
 
-The target Entry Detail architecture must not depend on JavaScript structural recomposition merely to:
+Entry Detail must not depend on JavaScript structural recomposition merely to:
 
 - move the native workflow box;
 - move native read-only fields into the dossier;
@@ -126,7 +139,7 @@ JavaScript remains zero-by-default under the Mother Architecture.
 
 JavaScript may remain for a separately proven residual progressive-enhancement need, for example bounded image preview, provided it does not take ownership of Gravity Flow workflow behavior.
 
-This decision does not itself delete or modify current JavaScript.
+PR #43 implements this boundary: structural composition was removed and the remaining Entry Detail JavaScript is progressive enhancement only.
 
 ### OD-ENTRY-06 — Editing is separated from review
 
@@ -158,15 +171,15 @@ Only explicitly permitted fields should be editable in that step.
 
 Gravity Flow / Gravity Forms continue to own editable-field behavior, validation, conditional logic, file handling, submission/save, permissions and workflow transition.
 
-The exact editable field set, correction assignee, required correction note, notifications and Save Progress behavior remain implementation/configuration decisions.
+The exact editable field set, correction assignee, required correction note, notifications and Save Progress behavior remain Owner/configuration decisions.
 
-No User Input configuration is admitted as implemented by this record.
+PR #43 deliberately does not configure the Owner's production workflow.
 
 ### OD-ENTRY-08 — Native Revert is the selected Request Edit transition
 
-The selected basis of the future Request Edit interaction is Gravity Flow's native **Revert** transition from the Review Approval Step to the dedicated User Input correction step.
+The selected basis of the Request Edit interaction is Gravity Flow's native **Revert** transition from the Review Approval Step to the dedicated User Input correction step.
 
-A later implementation may adapt the user-facing label, for example `درخواست اصلاح`, through a host-supported label mechanism without changing host ownership.
+A later workflow configuration may adapt the user-facing label, for example `درخواست اصلاح`, through a host-supported label mechanism without changing host ownership.
 
 No custom endpoint, custom workflow state or duplicate action system is authorized by this record.
 
@@ -207,18 +220,19 @@ These decisions preserve the Mother Architecture ownership boundary:
 
 ## 3. Owner-approved implementation method
 
-Decision status for this section:
+Decision / delivery status:
 
 ```text
 OWNER-APPROVED / METHOD_SELECTED
-NOT_IMPLEMENTED
-NOT_RUNTIME_VALIDATED
-NOT_PRODUCTION_ACCEPTED
+IMPLEMENTED_IN_MAIN
+REPOSITORY_QUALIFIED
+TARGET_RUNTIME_ACCEPTANCE_OPEN
+PRODUCTION_WORKFLOW_CONFIGURATION_OPEN
 ```
 
 ### 3.1 Duplicate native read-only field suppression
 
-The selected method is:
+The selected and implemented method is:
 
 **server-conditioned, GPP-scoped CSS suppression of the native Gravity Flow read-only Entry Detail table.**
 
@@ -232,7 +246,7 @@ Specifically, these are not the primary suppression mechanism:
 
 Reason: GPP relies on Gravity Flow's display/visibility decision to determine whether a field-backed semantic is allowed to appear in the GPP dossier. Changing that host predicate for cosmetic duplicate suppression can incorrectly turn an otherwise permitted GPP semantic into `HOST_HIDDEN`.
 
-The selected method therefore preserves the host visibility/privacy decision and suppresses only the duplicate visual presentation.
+The implementation therefore preserves the host visibility/privacy decision and suppresses only the duplicate visual presentation.
 
 ### 3.2 Server-side suppression admission contract
 
@@ -255,11 +269,11 @@ native Gravity Flow workflow box      visible and untouched
 Print / Timeline / Admin Actions       remain native unless separately governed
 ```
 
-The activation marker/condition must be derived server-side. Structural JavaScript composition must not be required to activate suppression.
+The activation marker/condition is server-owned. Structural JavaScript composition is not required to activate suppression.
 
 ### 3.3 Degraded semantic slots do not cancel suppression
 
-The previous graceful-degradation decision remains controlling.
+The graceful-degradation decision remains controlling.
 
 A dossier can be structurally valid and successfully emitted while individual semantic slots are legitimately:
 
@@ -271,9 +285,7 @@ A dossier can be structurally valid and successfully emitted while individual se
 
 Those slot-level presentation states do **not** by themselves require the duplicate native field table to reappear.
 
-Therefore the phrase "partially unavailable" must not be interpreted to mean that one unmapped/stale/empty presentation semantic disables suppression.
-
-Suppression must remain tied to **structural/read-only dossier admission and successful dossier emission**, not to perfect semantic completeness.
+Suppression remains tied to **structural/read-only dossier admission and successful dossier emission**, not to perfect semantic completeness.
 
 Host-hidden fields remain different: GPP must not expose them, and CSS suppression is never a substitute for the host privacy/visibility decision.
 
@@ -352,7 +364,7 @@ Rejected in [R]:
 
 The host-capability question for the User Input completion route back to Review is **closed**: Gravity Flow natively supports selecting the Review Approval Step [R] as the User Input Step [U]'s explicit **Next Step**.
 
-Therefore `User Input Complete -> Review Approval` is no longer an architectural or host-capability unknown. The implementation work unit must configure and verify the selected native route; it does not need to discover or invent a return mechanism.
+Therefore `User Input Complete -> Review Approval` is not an architectural or host-capability unknown.
 
 The remaining open items are Owner/configuration choices:
 
@@ -364,7 +376,7 @@ The remaining open items are Owner/configuration choices:
 - Approved destination;
 - Rejected destination.
 
-These are configuration decisions for the later implementation work unit, not architecture gaps.
+These are configuration decisions, not architecture gaps.
 
 ## 5. Locked Entry Detail mental model
 
@@ -402,15 +414,15 @@ Review
 
 This decision supersedes the **forward target direction** in which native Gravity Flow read-only/editor/status/timeline regions were structurally recomposed into the GPP dossier merely to realize the approved visual composition.
 
-It also closes the previously open implementation-method question for duplicate read-only field suppression: the selected target is server-conditioned GPP-scoped CSS suppression, not mutation of Gravity Flow field visibility semantics and not JavaScript structural removal.
+It closes the implementation-method question for duplicate read-only field suppression: the selected and implemented path is server-conditioned GPP-scoped CSS suppression, not mutation of Gravity Flow field visibility semantics and not JavaScript structural removal.
 
-It further closes the previously open host-capability question for the correction return route: User Input may explicitly select the Review Approval Step as its native Next Step.
+It also closes the host-capability question for the correction return route: User Input may explicitly select the Review Approval Step as its native Next Step.
 
 It does **not** rewrite historical evidence or claim that previous implementation/qualification never existed.
 
 Historical PRs, runtime qualification and evidence remain valid descriptions of the code/runtime they actually tested.
 
-Where another current forward-looking Entry Detail document conflicts on structural composition, duplicate-field suppression method, or whether the User Input return route is a host-capability unknown, this architecture record controls that narrow question.
+Where another forward-looking Entry Detail document conflicts on structural composition, duplicate-field suppression method, or whether the User Input return route is a host-capability unknown, this architecture record controls that narrow question.
 
 ## 7. Relationship to visual authority
 
@@ -420,33 +432,41 @@ This architecture changes **ownership, structural composition direction and dupl
 
 - GPP dossier keeps the admitted read-only hierarchy;
 - native workflow box remains native and separate;
-- GPP may visually coordinate that box with scoped CSS using admitted tokens;
+- GPP visually coordinates that box with scoped CSS using admitted tokens;
 - duplicate native read-only dossier values are suppressed only under the server-admitted GPP review state.
 
 The visual authority must not be interpreted as authorization to reparent native workflow controls into the dossier.
 
-## 8. Implementation boundary and remaining work unit
+## 8. Implementation evidence and remaining acceptance
 
-This document authorizes **no implementation by itself**.
+PR #43 (`Entry Detail: server-admitted read-only Review architecture`) implemented the plugin-side architecture.
 
-The next implementation work unit must implement and prove the selected method, including at minimum:
+Exact PR Head:
 
-- a server-side condition/marker that activates duplicate native table suppression only for successfully emitted, structurally valid, read-only GPP Entry Detail review;
-- scoped CSS that suppresses only the duplicate native `.entry-detail-view` read-only table and does not hide the native workflow/status/action box;
-- preservation of Gravity Flow field visibility/privacy semantics for GPP semantic admission;
-- removal/retirement of structural JavaScript composition as a requirement for duplicate-field elimination or workflow-box placement, while retaining only separately justified progressive enhancement if needed;
-- safe fallback where the native field listing remains visible whenever structural/read-only admission is not proven;
-- validation that slot-level `UNMAPPED` / stale / mapped-empty degradation does not reintroduce the duplicate native table;
-- native Revert from Review Approval to the dedicated User Input correction step;
-- User Input restricted to the Owner-approved editable field set;
-- explicit Review Approved / Rejected destinations that cannot accidentally enter correction;
-- configuration and verification of the already-selected native User Input explicit Next Step back to Review Approval;
-- scoped visual coordination of the native workflow box using admitted Entry Detail visual tokens;
-- regression proof for Print, Timeline, host actions, authorization and non-GPP/native fallback behavior.
+`5b5fbe21757a622004c9cd282afc04c1de6d75be`
 
-The return-route mechanism itself is not an implementation discovery item; only its concrete workflow configuration and runtime verification remain.
+Merged main commit:
 
-Until that work is completed, implementation/validation/migration/production acceptance remain **NOT_PROVEN**.
+`c9617fe7a919266ad64479f3bf0d89742e6a891f`
+
+Exact-Head qualification passed:
+
+- Repository CI — run `35441192979`;
+- SRWF Registration Authentic Runtime — run `35441192987`;
+- WU18 Entry Detail Runtime — run `35441192986`;
+- WU19 A4 Print Runtime — run `35441192971`;
+- WU21 Reproducible Evidence Lab — run `35441192977`.
+
+The merge commit also passed Repository CI on `main` — run `35442328696`.
+
+The qualification covers the new read-only target, semantic degradation, host-hidden omission, native-editor/User Input fallback, native Approve/Reject/Revert/Note/nonce ownership, native Timeline/Print ownership, and browser behavior with the Entry Detail progressive-enhancement JavaScript deliberately blocked.
+
+Still open and not claimed by repository qualification:
+
+- authentic Owner-site acceptance of the merged/test artifact;
+- concrete production workflow configuration for Revert -> User Input -> Review;
+- Owner choices for editable fields, assignee, note policy, notifications, Save Progress, Approved destination and Rejected destination;
+- final visual acceptance on the authentic target where required by the project destination.
 
 ## 9. Non-goals
 
