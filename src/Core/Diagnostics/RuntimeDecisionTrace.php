@@ -26,6 +26,7 @@ final class RuntimeDecisionTrace {
         'ENTRY_DETAIL_OPTIONAL_REGIONS' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail optional regions' ),
         'ENTRY_DETAIL_APPROVAL_ELIGIBILITY' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail live Approval-processing eligibility' ),
         'ENTRY_DETAIL_PRESENTATION_OUTPUT' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail presentation output' ),
+        'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION' => array( 'surface' => 'gravity_flow.entry_detail', 'label' => 'Entry Detail native duplicate-table suppression' ),
         // WU19 stage identities are intentionally retained so Print evidence and
         // consumers migrate into the shared trace model without a vocabulary break.
         'PRINT_DOSSIER_REQUEST' => array( 'surface' => 'print.dossier', 'label' => 'Dossier Print request' ),
