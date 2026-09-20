@@ -8,6 +8,7 @@ const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const adminPassword = 'wu21-bootstrap-pass-2026';
+const timelineRefinementPath = 'assets/css/srwf-gravity-flow-entry-detail-full-width-timeline.css';
 
 if (!artifactDir || !wpPath || !wpCli) throw new Error('WU18 Full Width browser environment is incomplete.');
 
@@ -85,9 +86,10 @@ async function selectVariantThroughSettings(page, labelFragment) {
 }
 
 async function inspectReview(page) {
-  return page.evaluate(() => {
+  return page.evaluate((timelinePath) => {
     const visible = node => Boolean(node && getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden');
     const rect = node => node ? (() => { const r=node.getBoundingClientRect(); return { x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom }; })() : null;
+    const text = node => node?.textContent?.replace(/\s+/g, ' ').trim() || '';
     const dossier = document.querySelector('.gpp-entry-dossier[data-gpp-entry-detail="ready"]');
     const postBody = document.querySelector('#post-body');
     const main = document.querySelector('#post-body-content');
@@ -98,6 +100,12 @@ async function inspectReview(page) {
     const notes = Array.from(document.querySelectorAll('.gravityflow-timeline .gravityflow-note'));
     const firstNote = notes[0] || null;
     const firstTitle = firstNote?.querySelector('.gravityflow-note-title') || null;
+    const firstWrap = firstNote?.querySelector('.gravityflow-note-body-wrap') || null;
+    const firstOuterBody = firstWrap?.querySelector(':scope > .gravityflow-note-body') || null;
+    const firstHeader = firstOuterBody?.querySelector(':scope > .gravityflow-note-header') || null;
+    const firstEventBody = firstOuterBody?.querySelector(':scope > .gravityflow-note-body') || null;
+    const firstAvatar = firstNote?.querySelector('.gravityflow-note-avatar') || null;
+    const headingLabel = timeline?.querySelector(':scope > h3 > label') || null;
     const nativePrint = document.querySelector('.detail-view-print');
     const gppPrint = document.querySelector('.gpp-entry-print-utility[data-gpp-print-utility="dossier"]');
     const table = document.querySelector('.entry-detail-view');
@@ -109,8 +117,35 @@ async function inspectReview(page) {
     const noteStyle = firstNote ? getComputedStyle(firstNote) : null;
     const inside = timeline?.querySelector(':scope > .inside') || null;
     const titlePseudo = firstTitle ? getComputedStyle(firstTitle, '::before') : null;
-    const fullStyle = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find(link => (link.id || '').includes('entry-detail-full-width'));
+    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+    const fullStyle = stylesheets.find(link => (link.id || '').includes('entry-detail-full-width'));
+    const timelineStyle = stylesheets.find(link => (link.getAttribute('href') || '').includes(timelinePath));
     const rootStyle = document.querySelector('.gravityflow_workflow_detail') ? getComputedStyle(document.querySelector('.gravityflow_workflow_detail')) : null;
+    const outerStyle = firstOuterBody ? getComputedStyle(firstOuterBody) : null;
+    const headerStyle = firstHeader ? getComputedStyle(firstHeader) : null;
+    const eventBodyStyle = firstEventBody ? getComputedStyle(firstEventBody) : null;
+    const avatarStyle = firstAvatar ? getComputedStyle(firstAvatar) : null;
+    const railStyle = firstOuterBody ? getComputedStyle(firstOuterBody, '::before') : null;
+    const centerMarkerStyle = firstOuterBody ? getComputedStyle(firstOuterBody, '::after') : null;
+    const headingStyle = headingLabel ? getComputedStyle(headingLabel) : null;
+    const headingPseudo = headingLabel ? getComputedStyle(headingLabel, '::before') : null;
+    const nativeEventSignature = notes.map(note => {
+      const wrap = note.querySelector('.gravityflow-note-body-wrap');
+      const outer = wrap?.querySelector(':scope > .gravityflow-note-body') || null;
+      const header = outer?.querySelector(':scope > .gravityflow-note-header') || null;
+      const body = outer?.querySelector(':scope > .gravityflow-note-body') || null;
+      return {
+        classes: [...note.classList],
+        actor: text(header?.querySelector('.gravityflow-note-title')),
+        meta: text(header?.querySelector('.gravityflow-note-meta')),
+        body: text(body),
+      };
+    });
+    const nestedNativeEventCount = notes.filter(note => {
+      const wrap = note.querySelector('.gravityflow-note-body-wrap');
+      const outer = wrap?.querySelector(':scope > .gravityflow-note-body') || null;
+      return Boolean(outer?.querySelector(':scope > .gravityflow-note-header') && outer?.querySelector(':scope > .gravityflow-note-body'));
+    }).length;
     const viewportWidth = document.documentElement.clientWidth;
     const overflowers = Array.from(document.querySelectorAll('body *'))
       .map(node => {
@@ -168,6 +203,68 @@ async function inspectReview(page) {
       timeline_spine_width: inside ? getComputedStyle(inside).borderInlineStartWidth : null,
       marker_content: titlePseudo?.content || null,
       marker_border: titlePseudo?.borderTopWidth || null,
+      timeline_refinement: {
+        exact_stylesheet_present: Boolean(timelineStyle),
+        exact_stylesheet_effective: Boolean(timelineStyle && !timelineStyle.disabled && timelineStyle.sheet),
+        exact_stylesheet_id: timelineStyle?.id || null,
+        exact_stylesheet_href: timelineStyle?.getAttribute('href') || null,
+        native_event_signature: nativeEventSignature,
+        nested_native_event_count: nestedNativeEventCount,
+        heading: {
+          native_label_present: Boolean(headingLabel),
+          native_label_text: text(headingLabel),
+          native_label_font_size: headingStyle?.fontSize || null,
+          pseudo_content: headingPseudo?.content || null,
+          pseudo_display: headingPseudo?.display || null,
+        },
+        avatar: {
+          native_node_present: Boolean(firstAvatar),
+          display: avatarStyle?.display || null,
+        },
+        outer_body: {
+          native_node_present: Boolean(firstOuterBody),
+          display: outerStyle?.display || null,
+          grid_template_columns: outerStyle?.gridTemplateColumns || null,
+          grid_template_rows: outerStyle?.gridTemplateRows || null,
+          rect: rect(firstOuterBody),
+        },
+        metadata: {
+          native_node_present: Boolean(firstHeader),
+          display: headerStyle?.display || null,
+          grid_column_start: headerStyle?.gridColumnStart || null,
+          grid_row_start: headerStyle?.gridRowStart || null,
+          rect: rect(firstHeader),
+        },
+        content: {
+          native_node_present: Boolean(firstEventBody),
+          display: eventBodyStyle?.display || null,
+          grid_column_start: eventBodyStyle?.gridColumnStart || null,
+          grid_row_start: eventBodyStyle?.gridRowStart || null,
+          rect: rect(firstEventBody),
+        },
+        rail: {
+          content: railStyle?.content || null,
+          grid_column_start: railStyle?.gridColumnStart || null,
+          grid_row_start: railStyle?.gridRowStart || null,
+          grid_row_end: railStyle?.gridRowEnd || null,
+          width: railStyle?.width || null,
+          background_image: railStyle?.backgroundImage || null,
+        },
+        marker: {
+          content: centerMarkerStyle?.content || null,
+          grid_column_start: centerMarkerStyle?.gridColumnStart || null,
+          grid_row_start: centerMarkerStyle?.gridRowStart || null,
+          grid_row_end: centerMarkerStyle?.gridRowEnd || null,
+          width: centerMarkerStyle?.width || null,
+          height: centerMarkerStyle?.height || null,
+          border_radius: centerMarkerStyle?.borderRadius || null,
+          background_image: centerMarkerStyle?.backgroundImage || null,
+        },
+        legacy_title_marker: {
+          content: titlePseudo?.content || null,
+          display: titlePseudo?.display || null,
+        },
+      },
       native_table_display: table ? getComputedStyle(table).display : null,
       native_print_display: nativePrint ? getComputedStyle(nativePrint).display : null,
       gpp_print_count: document.querySelectorAll('.gpp-entry-print-utility[data-gpp-print-utility="dossier"]').length,
@@ -194,7 +291,7 @@ async function inspectReview(page) {
         .slice(0, 80)
         .map(node => `${node.tagName.toLowerCase()}:${node.id || node.getAttribute('name') || node.getAttribute('value') || node.className || ''}`),
     };
-  });
+  }, timelineRefinementPath);
 }
 
 function assertNoHorizontalOverflow(state, label) {
@@ -210,6 +307,102 @@ function assertOnePrintAndNativeOwnership(state, label) {
   if (state.native_table_display !== 'none' || state.native_print_display !== 'none' || state.gpp_print_count !== 1 || !state.gpp_print_visible) {
     throw new Error(`${label} duplicate suppression/Print contract failed: ${JSON.stringify(state)}`);
   }
+}
+
+function sameNativeEvents(left, right) {
+  return JSON.stringify(left.timeline_refinement.native_event_signature) === JSON.stringify(right.timeline_refinement.native_event_signature);
+}
+
+function historicalGenericTimelineSatisfied(state) {
+  return Boolean(
+    state.full_width_stylesheet_loaded
+    && state.event_count >= 1
+    && state.event_radius !== '0px'
+    && state.timeline_spine_width === '2px'
+    && state.marker_content !== 'none'
+  );
+}
+
+function assertTimelineRefinementCommon(state, label) {
+  const t = state.timeline_refinement;
+  if (state.profile !== fullProfile) throw new Error(`${label}: Full Width profile is not active.`);
+  if (!t.exact_stylesheet_present || !t.exact_stylesheet_effective || !String(t.exact_stylesheet_href || '').includes(timelineRefinementPath)) {
+    throw new Error(`${label}: exact PR55 Timeline refinement stylesheet is not effective: ${JSON.stringify(t)}`);
+  }
+  if (state.event_count < 1 || t.nested_native_event_count !== state.event_count) {
+    throw new Error(`${label}: authentic nested Gravity Flow event ownership changed: ${JSON.stringify({ event_count: state.event_count, nested: t.nested_native_event_count })}`);
+  }
+  if (!t.heading.native_label_present || !String(t.heading.pseudo_content || '').includes('تاریخچه') || t.heading.pseudo_display === 'none') {
+    throw new Error(`${label}: visible History heading presentation is not applied: ${JSON.stringify(t.heading)}`);
+  }
+  if (!t.avatar.native_node_present || t.avatar.display !== 'none') {
+    throw new Error(`${label}: native avatar node must remain present but be visually suppressed: ${JSON.stringify(t.avatar)}`);
+  }
+  if (!t.outer_body.native_node_present || t.outer_body.display !== 'grid') {
+    throw new Error(`${label}: authentic outer native event body is not the PR55 grid owner: ${JSON.stringify(t.outer_body)}`);
+  }
+  if (!t.metadata.native_node_present || !t.content.native_node_present) {
+    throw new Error(`${label}: authentic header/body zones are missing.`);
+  }
+  if (t.legacy_title_marker.display !== 'none') {
+    throw new Error(`${label}: legacy title marker is still visually active: ${JSON.stringify(t.legacy_title_marker)}`);
+  }
+  if (!String(t.rail.content || '').includes('""') || !String(t.rail.background_image || '').includes('repeating-linear-gradient')) {
+    throw new Error(`${label}: PR55 neutral dashed rail is not computed: ${JSON.stringify(t.rail)}`);
+  }
+  if (!String(t.marker.content || '').includes('""') || !String(t.marker.background_image || '').includes('radial-gradient')) {
+    throw new Error(`${label}: PR55 neutral center marker is not computed: ${JSON.stringify(t.marker)}`);
+  }
+}
+
+function assertTimelineRefinementDesktopComputed(state, label) {
+  const t = state.timeline_refinement;
+  if (!t.outer_body.native_node_present || t.outer_body.display !== 'grid') throw new Error(`${label}: outer native event body is not a grid.`);
+  if (t.metadata.grid_column_start !== '3' || t.metadata.grid_row_start !== '1') throw new Error(`${label}: native metadata header is not in desktop metadata zone: ${JSON.stringify(t.metadata)}`);
+  if (t.content.grid_column_start !== '1' || t.content.grid_row_start !== '1') throw new Error(`${label}: native event body is not in desktop content zone: ${JSON.stringify(t.content)}`);
+  if (t.rail.grid_column_start !== '2' || t.rail.grid_row_start !== '1' || !String(t.rail.background_image || '').includes('repeating-linear-gradient')) {
+    throw new Error(`${label}: neutral rail is not in the desktop center zone: ${JSON.stringify(t.rail)}`);
+  }
+  if (t.marker.grid_column_start !== '2' || t.marker.grid_row_start !== '1' || !String(t.marker.background_image || '').includes('radial-gradient')) {
+    throw new Error(`${label}: neutral marker is not in the desktop center zone: ${JSON.stringify(t.marker)}`);
+  }
+  if (!t.metadata.rect || !t.content.rect || t.content.rect.x <= t.metadata.rect.x) {
+    throw new Error(`${label}: computed RTL content/metadata zone geometry is not the PR55 three-zone layout: ${JSON.stringify({ metadata: t.metadata.rect, content: t.content.rect })}`);
+  }
+}
+
+function assertTimelineRefinementDesktop(state, label) {
+  assertTimelineRefinementCommon(state, label);
+  assertTimelineRefinementDesktopComputed(state, label);
+}
+
+function assertTimelineRefinementNarrow(state, label) {
+  assertTimelineRefinementCommon(state, label);
+  const t = state.timeline_refinement;
+  if (t.metadata.grid_column_start !== '2' || t.metadata.grid_row_start !== '1') throw new Error(`${label}: narrow native metadata zone is not stacked first: ${JSON.stringify(t.metadata)}`);
+  if (t.content.grid_column_start !== '2' || t.content.grid_row_start !== '2') throw new Error(`${label}: narrow native event content is not stacked second: ${JSON.stringify(t.content)}`);
+  if (t.rail.grid_column_start !== '1' || t.rail.grid_row_start !== '1' || t.rail.grid_row_end !== '3') throw new Error(`${label}: narrow rail does not span stacked rows: ${JSON.stringify(t.rail)}`);
+  if (t.marker.grid_column_start !== '1' || t.marker.grid_row_start !== '1' || t.marker.grid_row_end !== '3') throw new Error(`${label}: narrow marker does not occupy the rail column: ${JSON.stringify(t.marker)}`);
+  if (!t.metadata.rect || !t.content.rect || t.metadata.rect.bottom > t.content.rect.y + 1) throw new Error(`${label}: narrow metadata/content geometry is not stacked: ${JSON.stringify({ metadata: t.metadata.rect, content: t.content.rect })}`);
+}
+
+function assertTimelineRefinementExcluded(state, label) {
+  const t = state.timeline_refinement;
+  if (t.exact_stylesheet_present || t.exact_stylesheet_effective) throw new Error(`${label}: PR55 Timeline stylesheet leaked outside Full Width.`);
+  if (t.outer_body.display === 'grid' && t.avatar.display === 'none' && String(t.heading.pseudo_content || '').includes('تاریخچه')) {
+    throw new Error(`${label}: PR55 computed Timeline presentation leaked outside Full Width.`);
+  }
+}
+
+async function setTimelineRefinementDisabled(page, disabled) {
+  const result = await page.evaluate(({ timelinePath, disabledState }) => {
+    const link = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find(item => (item.getAttribute('href') || '').includes(timelinePath));
+    if (!link) throw new Error(`Exact Timeline refinement stylesheet not found: ${timelinePath}`);
+    link.disabled = disabledState;
+    return { id: link.id || null, href: link.getAttribute('href') || null, disabled: link.disabled };
+  }, { timelinePath: timelineRefinementPath, disabledState: disabled });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  return result;
 }
 
 async function screenshot(page, file) {
@@ -251,12 +444,14 @@ const safeDesktop = await inspectReview(page);
 assertOnePrintAndNativeOwnership(safeDesktop, 'Current / Safe desktop');
 assertNoHorizontalOverflow(safeDesktop, 'Current / Safe desktop');
 if (safeDesktop.full_width_stylesheet_loaded) throw new Error('Full Width stylesheet leaked into Current / Safe.');
+assertTimelineRefinementExcluded(safeDesktop, 'Current / Safe desktop');
 await screenshot(page, raw('current-safe-desktop'));
 
 await gotoReview(page, { width: 390, height: 844 }, safeProfile);
 const safeNarrow = await inspectReview(page);
 assertOnePrintAndNativeOwnership(safeNarrow, 'Current / Safe narrow');
 assertNoHorizontalOverflow(safeNarrow, 'Current / Safe narrow');
+assertTimelineRefinementExcluded(safeNarrow, 'Current / Safe narrow');
 await screenshot(page, raw('current-safe-narrow'));
 
 // Use the authentic native Gravity Forms Add-On settings page to switch.
@@ -295,16 +490,42 @@ if (!fullWide.full_width_stylesheet_loaded || fullWide.post_body_display !== 'gr
 if (fullWide.main_parent !== 'post-body' || fullWide.workflow_parent !== 'post-body' || fullWide.timeline_parent !== 'post-body') throw new Error(`CSS-only sibling seam changed: ${JSON.stringify(fullWide)}`);
 if (!fullWide.main_rect || !fullWide.workflow_rect || fullWide.main_rect.width <= fullWide.workflow_rect.width * 2) throw new Error(`Wide dominant-main/bounded-workflow geometry not achieved: ${JSON.stringify(fullWide)}`);
 if (Math.abs(fullWide.main_rect.y - fullWide.workflow_rect.y) > 3 || fullWide.timeline_container_rect?.y <= fullWide.main_rect.y) throw new Error(`Wide grid row placement differs from approved two-region structure: ${JSON.stringify(fullWide)}`);
-if (fullWide.event_count < 1 || fullWide.event_radius === '0px' || fullWide.timeline_spine_width !== '2px' || fullWide.marker_content === 'none') throw new Error(`Native Timeline did not become neutral event cards/spine/markers: ${JSON.stringify(fullWide)}`);
+if (!historicalGenericTimelineSatisfied(fullWide)) throw new Error(`Historical generic Full Width Timeline baseline unexpectedly failed: ${JSON.stringify(fullWide)}`);
+assertTimelineRefinementDesktop(fullWide, 'Full Width wide');
+if (!sameNativeEvents(safeDesktop, fullWide)) throw new Error('Full Width presentation changed native Timeline event order/content.');
 if (fullWide.actions.length < 2 || fullWide.actions.some(action => action.height + 0.01 < 44)) throw new Error(`Full Width native actions are not usable: ${JSON.stringify(fullWide.actions)}`);
 if (!fullWide.workflow_content.heading || !fullWide.workflow_content.step_status || !fullWide.workflow_content.note_textarea || !fullWide.workflow_content.approve || !fullWide.workflow_content.reject) throw new Error(`Authentic workflow-panel content inventory incomplete: ${JSON.stringify(fullWide.workflow_content)}`);
 await screenshot(page, raw('full-width-wide'));
+
+// Original-defect falsification: disable only the exact PR55 stylesheet at the
+// authentic browser boundary. The older Full Width Timeline must still satisfy
+// the historical generic checks, while the new computed PR55 guard rejects it.
+const disabledTimelineAsset = await setTimelineRefinementDisabled(page, true);
+const oldFullWidthFallback = await inspectReview(page);
+assertOnePrintAndNativeOwnership(oldFullWidthFallback, 'Controlled old Full Width fallback');
+assertNoHorizontalOverflow(oldFullWidthFallback, 'Controlled old Full Width fallback');
+if (oldFullWidthFallback.timeline_refinement.exact_stylesheet_effective) throw new Error('Controlled falsification did not disable the exact PR55 Timeline stylesheet.');
+if (!historicalGenericTimelineSatisfied(oldFullWidthFallback)) throw new Error(`Old Full Width fallback no longer satisfies the historical generic Timeline guard: ${JSON.stringify(oldFullWidthFallback)}`);
+if (!sameNativeEvents(fullWide, oldFullWidthFallback)) throw new Error('Test-only stylesheet falsification changed native Timeline event order/content.');
+let fallbackRejection = null;
+try {
+  assertTimelineRefinementDesktopComputed(oldFullWidthFallback, 'Controlled old Full Width fallback');
+} catch (error) {
+  fallbackRejection = String(error?.message || error);
+}
+if (!fallbackRejection) throw new Error('PR55 computed Timeline guard accepted the previous Full Width Timeline presentation.');
+await setTimelineRefinementDisabled(page, false);
+const fullWideRestored = await inspectReview(page);
+assertTimelineRefinementDesktop(fullWideRestored, 'Full Width wide after falsification restore');
+if (!sameNativeEvents(fullWide, fullWideRestored)) throw new Error('Restoring the PR55 stylesheet changed native Timeline event order/content.');
 
 await gotoReview(page, { width: 1024, height: 900 }, fullProfile);
 const fullMedium = await inspectReview(page);
 assertOnePrintAndNativeOwnership(fullMedium, 'Full Width medium');
 assertNoHorizontalOverflow(fullMedium, 'Full Width medium');
 if (fullMedium.post_body_display !== 'grid' || !fullMedium.main_rect || !fullMedium.workflow_rect || fullMedium.main_rect.width <= fullMedium.workflow_rect.width) throw new Error(`Full Width medium grid did not remain bounded and readable: ${JSON.stringify(fullMedium)}`);
+assertTimelineRefinementDesktop(fullMedium, 'Full Width medium');
+if (!sameNativeEvents(fullWide, fullMedium)) throw new Error('Medium Full Width rendering changed native Timeline event order/content.');
 await screenshot(page, raw('full-width-medium'));
 
 await gotoReview(page, { width: 390, height: 844 }, fullProfile);
@@ -314,6 +535,8 @@ assertNoHorizontalOverflow(fullNarrow, 'Full Width narrow');
 if (!fullNarrow.main_rect || !fullNarrow.workflow_rect || !fullNarrow.timeline_container_rect || !(fullNarrow.main_rect.y < fullNarrow.workflow_rect.y && fullNarrow.workflow_rect.y < fullNarrow.timeline_container_rect.y)) {
   throw new Error(`Full Width narrow layout did not collapse in logical source order: ${JSON.stringify(fullNarrow)}`);
 }
+assertTimelineRefinementNarrow(fullNarrow, 'Full Width narrow');
+if (!sameNativeEvents(fullWide, fullNarrow)) throw new Error('Narrow Full Width rendering changed native Timeline event order/content.');
 if (fullNarrow.actions.some(action => action.height + 0.01 < 44)) throw new Error(`Full Width narrow actions violate interaction size: ${JSON.stringify(fullNarrow.actions)}`);
 await screenshot(page, raw('full-width-narrow'));
 
@@ -331,6 +554,8 @@ const fullBlocked = await inspectReview(blockedPage);
 assertOnePrintAndNativeOwnership(fullBlocked, 'Full Width JS-blocked');
 assertNoHorizontalOverflow(fullBlocked, 'Full Width JS-blocked');
 if (!scriptBlocked || fullBlocked.post_body_display !== 'grid' || !fullBlocked.full_width_stylesheet_loaded) throw new Error(`Full Width structural geometry depended on Entry Detail JS: ${JSON.stringify({ scriptBlocked, fullBlocked })}`);
+assertTimelineRefinementDesktop(fullBlocked, 'Full Width JS-blocked');
+if (!sameNativeEvents(fullWide, fullBlocked)) throw new Error('JS-blocked Full Width rendering changed native Timeline event order/content.');
 const previewBound = await blockedPage.locator('.gpp-entry-dossier').getAttribute('data-gpp-preview-bound');
 if (previewBound === '1') throw new Error('Blocked progressive-enhancement JS unexpectedly executed.');
 await screenshot(blockedPage, raw('full-width-js-blocked'));
@@ -368,6 +593,8 @@ await gotoReview(page, { width: 1440, height: 1000 }, safeProfile);
 const safeRestored = await inspectReview(page);
 assertOnePrintAndNativeOwnership(safeRestored, 'Restored Current / Safe');
 if (safeRestored.full_width_stylesheet_loaded) throw new Error('Full Width stylesheet remained active after Current / Safe rollback.');
+assertTimelineRefinementExcluded(safeRestored, 'Restored Current / Safe');
+if (!sameNativeEvents(safeDesktop, safeRestored) || !sameNativeEvents(fullWide, safeRestored)) throw new Error('Current / Safe rollback changed native Timeline event order/content.');
 if (safeRestored.event_radius !== '0px' || safeRestored.event_background !== 'rgba(0, 0, 0, 0)') throw new Error(`Current / Safe Timeline did not return to PR47 neutral chronology: ${JSON.stringify(safeRestored)}`);
 
 // Preserve all required exact-path WU18 screenshot evidence without workflow YAML changes.
@@ -419,6 +646,25 @@ browserResults.entry_detail_visual_variants = {
     semantic_tinting: 'NOT_ACHIEVABLE_WITHIN_CSS_ONLY_BOUNDARY',
     neutral_event_cards: true,
   },
+  timeline_runtime_guard: {
+    enforcement_boundary: 'authentic WU18 Playwright computed styles on lifecycle-activated Full Width Entry Detail',
+    exact_stylesheet: timelineRefinementPath,
+    exact_asset_runtime_proof: fullWide.timeline_refinement.exact_stylesheet_effective,
+    wide_computed_contract: 'PASS',
+    medium_computed_contract: 'PASS',
+    narrow_390_computed_contract: 'PASS',
+    js_blocked_computed_contract: 'PASS',
+    current_safe_exclusion: 'PASS',
+    native_event_order_content_preserved: sameNativeEvents(safeDesktop, fullWide) && sameNativeEvents(fullWide, fullMedium) && sameNativeEvents(fullWide, fullNarrow) && sameNativeEvents(fullWide, fullBlocked) && sameNativeEvents(fullWide, safeRestored),
+    original_defect_falsification: {
+      result: 'PASS',
+      exact_asset_disabled_test_only: disabledTimelineAsset,
+      historical_generic_guard_still_satisfied: historicalGenericTimelineSatisfied(oldFullWidthFallback),
+      pr55_computed_guard_rejected: Boolean(fallbackRejection),
+      rejection: fallbackRejection,
+      native_event_order_content_unchanged: sameNativeEvents(fullWide, oldFullWidthFallback),
+    },
+  },
   stale_action: stale,
   lifecycle_preservation: {
     inbox_unchanged: true,
@@ -451,5 +697,11 @@ console.log(JSON.stringify({
   stale_action_conflict_proven: true,
   css_only_grid_proven: true,
   js_blocked_proven: true,
+  timeline_computed_guard_proven: true,
+  timeline_original_defect_falsification_proven: true,
+  timeline_exact_asset_proven: true,
+  timeline_medium_narrow_proven: true,
+  timeline_current_safe_exclusion_proven: true,
+  timeline_native_content_order_proven: true,
   screenshots: ['wu18-entry-detail-native-chrome-desktop.png', 'wu18-entry-detail-native-chrome-mobile.png'],
 }));
