@@ -36,7 +36,7 @@ gpp_assert_true( false !== strpos( $semantic, '<bdi dir=\"auto\">' ), 'Mixed-lan
 gpp_assert_true( false === strpos( $semantic, 'update_option(' ) && false === strpos( $semantic, 'add_timeline_note(' ) && false === strpos( $semantic, 'add_note(' ), 'Presentation semantics must not persist or synthesize Timeline history.' );
 
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="approval"' ) && false !== strpos( $timeline, '#f0f8f2' ), 'Approval family must have restrained green presentation.' );
-gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="transition"' ) && false !== strpos( $timeline, '#f2f7fd' ), 'Transition family must have restrained blue presentation.' );
+gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="transition"' ) && false !== strpos( $timeline, '#f5f8ff' ), 'Transition family must have restrained blue presentation.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="note"' ) && false !== strpos( $timeline, '#fff8e8' ), 'Note family must reserve warm amber annotation presentation without warning semantics.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="system"' ) && false !== strpos( $timeline, '#f8fafc' ), 'System family must remain neutral.' );
 gpp_assert_true( false !== strpos( $timeline, '.gpp-timeline-event__title' ) && false !== strpos( $timeline, '.gpp-timeline-event__subtitle' ), 'Classified events must expose text hierarchy in addition to color.' );
