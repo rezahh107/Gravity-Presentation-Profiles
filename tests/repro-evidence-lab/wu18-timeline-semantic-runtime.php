@@ -34,6 +34,9 @@ foreach ( $notes as $note ) {
     if ( ! is_object( $note ) ) {
         continue;
     }
+    $step = method_exists( 'Gravity_Flow_Common', 'get_timeline_note_step' )
+        ? Gravity_Flow_Common::get_timeline_note_step( $note )
+        : false;
     $note_facts[] = array(
         'id' => isset( $note->id ) ? (int) $note->id : null,
         'note_type' => isset( $note->note_type ) ? (string) $note->note_type : null,
@@ -41,6 +44,15 @@ foreach ( $notes as $note ) {
         'user_id' => isset( $note->user_id ) ? (string) $note->user_id : null,
         'user_name' => isset( $note->user_name ) ? (string) $note->user_name : null,
         'value' => isset( $note->value ) ? (string) $note->value : null,
+        'properties' => array_values( array_keys( get_object_vars( $note ) ) ),
+        'resolved_step' => is_object( $step )
+            ? array(
+                'class' => get_class( $step ),
+                'id' => method_exists( $step, 'get_id' ) ? (int) $step->get_id() : null,
+                'type' => method_exists( $step, 'get_type' ) ? (string) $step->get_type() : null,
+                'name' => method_exists( $step, 'get_name' ) ? (string) $step->get_name() : null,
+            )
+            : null,
     );
 }
 
@@ -64,7 +76,7 @@ $method_source = static function ( $class, $method_name ) {
             continue;
         }
         $text = trim( $source[ $line - 1 ] );
-        foreach ( array( 'add_timeline_note', 'Approved', 'Sent to step', 'user_id', 'user_name', 'log_activity', 'log_event', 'log_value', 'step_id' ) as $needle ) {
+        foreach ( array( 'add_timeline_note', 'Approved', 'Sent to step', 'note_type', 'sub_type', 'user_id', 'user_name', 'log_activity', 'log_event', 'log_value', 'step_id' ) as $needle ) {
             if ( false !== strpos( $text, $needle ) ) {
                 $selected[] = array( 'line' => $line, 'text' => $text );
                 break;
@@ -88,6 +100,8 @@ $sources = array(
     $method_source( 'Gravity_Flow_API', 'log_activity' ),
     $method_source( 'Gravity_Flow_Step_Approval', 'add_status_update_note' ),
     $method_source( 'Gravity_Flow_Step_Approval', 'process_assignee_status' ),
+    $method_source( 'Gravity_Flow_Common', 'get_timeline_notes' ),
+    $method_source( 'Gravity_Flow_Common', 'get_timeline_note_step' ),
 );
 
 $workflow_submitted = null;
@@ -127,7 +141,7 @@ $misleading_result = $classify->invoke( null, $misleading, $steps );
 wu18_assert( is_array( $misleading_result ) && 'unknown' === $misleading_result['family'], 'Misleading keyword Timeline note was falsely classified.' );
 
 $probe = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'gravity_flow_version' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
     'notes' => $note_facts,
     'selected_host_method_source' => $sources,
@@ -138,9 +152,21 @@ $probe = array(
     ),
 );
 
+$probe_path = trailingslashit( $artifact_dir ) . 'wu18-timeline-semantic-probe.json';
 file_put_contents(
-    trailingslashit( $artifact_dir ) . 'wu18-timeline-semantic-probe.json',
+    $probe_path,
     wp_json_encode( $probe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
+);
+
+$results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
+$results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
+if ( ! is_array( $results ) ) {
+    $results = array();
+}
+$results['timeline_semantic_probe'] = $probe;
+file_put_contents(
+    $results_path,
+    wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
 );
 
 echo "WU18_TIMELINE_SEMANTIC_PROBE_PASS\n";
