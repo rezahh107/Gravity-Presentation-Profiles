@@ -69,7 +69,9 @@ $inbox_entry_id = (int) $inbox_manifest['entry_ids'][0];
 $inbox_entry = GFAPI::get_entry( $inbox_entry_id );
 wu18_assert( is_array( $inbox_entry ) && ! empty( $inbox_entry['date_created'] ), 'Authentic Inbox entry date_created is unavailable.' );
 $inbox_raw_before = (string) $inbox_entry['date_created'];
-$inbox_native_expected = GFCommon::format_date( $inbox_raw_before, false );
+$inbox_native_expected = $decode_text( GFCommon::format_date( $inbox_raw_before, false ) );
+$inbox_formatter_native = $decode_text( PersianDateFormatter::formatDateTime( $inbox_raw_before ) );
+wu18_assert( $inbox_native_expected === $inbox_formatter_native, 'Provider-disabled formatter did not preserve normalized Gravity Forms native date presentation.' );
 
 // Exact released provider, module default OFF: production Inbox presentation
 // must remain on the host/native date without weakening the ready card.
@@ -110,7 +112,7 @@ $_GET['lid'] = (int) $manifest['alpha']['entry_id'];
 
 try {
     list( $native_entry_html, , $native_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
-    $native_created_expected = GFCommon::format_date( (string) $native_entry['date_created'], false );
+    $native_created_expected = $decode_text( GFCommon::format_date( (string) $native_entry['date_created'], false ) );
     wu18_assert( $native_created_expected === $extract_entry_created( $native_entry_html ), 'Disabled exact provider module did not preserve native Entry Detail entry.created_at presentation.' );
 
     $native_notes = Gravity_Flow_Common::get_timeline_notes( $native_entry );
@@ -118,7 +120,7 @@ try {
     $native_timeline_expected = array();
     foreach ( $native_notes as $note ) {
         wu18_assert( is_object( $note ) && isset( $note->date_created ), 'Authentic Timeline note lacks raw date_created.' );
-        $native_timeline_expected[] = Gravity_Flow_Common::format_date( (string) $note->date_created, '', false, true );
+        $native_timeline_expected[] = $decode_text( Gravity_Flow_Common::format_date( (string) $note->date_created, '', false, true ) );
     }
     wu18_assert( $native_timeline_expected === $extract_timeline_meta( $native_entry_html ), 'Disabled exact provider module did not preserve native Timeline date presentation.' );
 
@@ -152,7 +154,7 @@ try {
         $out_of_range = '1799-12-31 00:00:00';
         $out_native = GFCommon::format_date( $out_of_range, false );
         wu18_assert( null === PGR_Jalali_Presentation::format_datetime( new DateTimeImmutable( $out_of_range, new DateTimeZone( 'UTC' ) ) ), 'Exact provider did not return null outside its validated range.' );
-        wu18_assert( $out_native === PersianDateFormatter::formatDateTime( $out_of_range ), 'Provider null did not preserve native Gravity Forms presentation.' );
+        wu18_assert( $decode_text( $out_native ) === $decode_text( PersianDateFormatter::formatDateTime( $out_of_range ) ), 'Provider null did not preserve native Gravity Forms presentation.' );
 
         // Production Inbox adapter: exact raw UTC source -> exact public facade
         // output; native row/query identity remains untouched.
@@ -167,7 +169,7 @@ try {
             InboxPresentationAdapter::CARD_COLUMN,
             $inbox_entry
         );
-        wu18_assert( $inbox_expected === $extract_inbox_created( $inbox_provider_card ), 'Production Inbox adapter did not apply exact PersianGravity output.' );
+        wu18_assert( $decode_text( $inbox_expected ) === $extract_inbox_created( $inbox_provider_card ), 'Production Inbox adapter did not apply exact PersianGravity output.' );
         wu18_assert( $inbox_raw === (string) GFAPI::get_entry( $inbox_entry_id )['date_created'], 'Provider-backed Inbox presentation mutated authoritative date_created.' );
 
         // Production Entry Detail + Timeline path in Full Width. The dossier slot
@@ -178,7 +180,7 @@ try {
         $entry_raw = (string) $provider_entry['date_created'];
         $entry_expected = $provider_for_utc( $entry_raw );
         wu18_assert( is_string( $entry_expected ) && '' !== $entry_expected, 'Exact provider returned no Entry Detail entry.created_at presentation.' );
-        wu18_assert( $entry_expected === $extract_entry_created( $provider_entry_html ), 'Production Entry Detail did not apply exact PersianGravity output to entry.created_at.' );
+        wu18_assert( $decode_text( $entry_expected ) === $extract_entry_created( $provider_entry_html ), 'Production Entry Detail did not apply exact PersianGravity output to entry.created_at.' );
         wu18_assert( $entry_raw === (string) GFAPI::get_entry( (int) $provider_entry['id'] )['date_created'], 'Provider-backed Entry Detail presentation mutated authoritative date_created.' );
 
         $provider_notes = Gravity_Flow_Common::get_timeline_notes( $provider_entry );
@@ -188,7 +190,7 @@ try {
             wu18_assert( is_object( $note ) && isset( $note->date_created ) && 1 === preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', (string) $note->date_created ), 'Timeline raw timestamp is not the qualified host UTC shape.' );
             $formatted = $provider_for_utc( (string) $note->date_created );
             wu18_assert( is_string( $formatted ) && '' !== $formatted, 'Exact provider returned no Timeline presentation for a qualified raw note timestamp.' );
-            $timeline_expected[] = $formatted;
+            $timeline_expected[] = $decode_text( $formatted );
         }
         $timeline_actual = $extract_timeline_meta( $provider_entry_html );
         wu18_assert( count( $timeline_expected ) === count( $timeline_actual ), 'Provider-backed Timeline changed the authentic event count.' );
