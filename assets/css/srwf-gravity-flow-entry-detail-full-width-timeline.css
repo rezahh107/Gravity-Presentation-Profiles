@@ -1,18 +1,17 @@
 /*
  * Full Width native Gravity Flow Timeline refinement.
  *
- * The native .gravityflow-note nodes, their source order and all event content
- * remain Gravity Flow owned. This stylesheet only changes the admitted
- * read-only Full Width presentation. Gravity Flow 3.1.0 exposes no proven
- * machine-readable event outcome/type on these wrappers, so event surfaces and
- * markers intentionally use one neutral presentation family rather than
- * classifying visible text.
+ * The native .gravityflow-note nodes, their source order and authentic event
+ * content remain Gravity Flow owned. This stylesheet changes only the admitted
+ * read-only Full Width presentation. A bounded request-time server annotation
+ * may expose a proven semantic family; unmatched events stay on the neutral
+ * base treatment and are never inferred from visible CSS text.
  *
  * Authentic Gravity Flow 3.1.0 nesting used below:
  * .gravityflow-note-body-wrap
  *   > .gravityflow-note-body
  *       > .gravityflow-note-header (actor + native date/time)
- *       > .gravityflow-note-body   (native event text)
+ *       > .gravityflow-note-body   (native event text / GPP semantic wrapper)
  */
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline {
@@ -94,8 +93,8 @@
 }
 
 /*
- * Authentic direct children of the native outer body become the visual zones:
- * inner event body (right), neutral rail/marker (center), native header (left).
+ * Authentic direct children of the native outer body remain the visual zones:
+ * inner event body (right), rail/semantic marker (center), native header (left).
  */
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-body-wrap > .gravityflow-note-body {
     display: grid;
@@ -136,7 +135,7 @@
     );
 }
 
-/* Neutral marker: event-type icons are intentionally not fabricated. */
+/* Unknown/unmapped events keep the neutral dot. Classified events override it below. */
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-body-wrap > .gravityflow-note-body::after {
     content: "";
     z-index: 1;
@@ -147,9 +146,12 @@
     box-sizing: border-box;
     inline-size: 34px;
     block-size: 34px;
-    border: 6px solid #f8fbff;
+    border: 6px solid #f8fafc;
     border-radius: 50%;
     background: radial-gradient(circle at center, #64748b 0 3px, #fff 4px 100%);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
     box-shadow: 0 0 0 1px #cbd5e1, 0 4px 12px rgba(15, 23, 42, .08);
 }
 
@@ -160,15 +162,121 @@
     margin: 0;
     padding: 20px 22px;
     overflow-wrap: anywhere;
-    border: 1px solid #dfe7f1;
+    border: 1px solid #e2e6ec;
     border-radius: 16px;
-    background: #f5f8ff;
+    background: #f8fafc;
     color: #344054;
     font-size: 15px;
     line-height: 1.9;
     font-weight: 500;
     box-shadow: 0 4px 16px rgba(15, 23, 42, .025);
     text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 6px;
+    min-width: 0;
+    direction: rtl;
+    isolation: isolate;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event__title {
+    display: block;
+    margin: 0;
+    color: #344054;
+    font-size: 15.5px;
+    font-weight: 800;
+    line-height: 1.7;
+    unicode-bidi: plaintext;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event__subtitle {
+    display: block;
+    margin: 0;
+    color: #5f6b7a;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.9;
+    unicode-bidi: plaintext;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event__subtitle bdi {
+    unicode-bidi: isolate;
+}
+
+/* Approval: exact host evidence -> Persian title -> decorative check -> soft green. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="approval"]) > .gravityflow-note-body {
+    border-color: #cce7d4;
+    background: #f0f8f2;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event[data-gpp-timeline-semantic="approval"] .gpp-timeline-event__title {
+    color: #247044;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="approval"])::after {
+    border-color: #eef8f1;
+    background-color: #3b8f5a;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m5 10.5 3 3 7-7' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow: 0 0 0 1px #b9ddc4, 0 4px 12px rgba(36, 112, 68, .12);
+}
+
+/* Transition: exact send-to-known-step signature -> movement title -> soft blue. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="transition"]) > .gravityflow-note-body {
+    border-color: #d4e3f7;
+    background: #f2f7fd;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event[data-gpp-timeline-semantic="transition"] .gpp-timeline-event__title {
+    color: #2c649f;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="transition"])::after {
+    border-color: #f0f6fe;
+    background-color: #4a7fb8;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 10h9m-3.5-3.5L14 10l-3.5 3.5' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow: 0 0 0 1px #c5d9f0, 0 4px 12px rgba(44, 100, 159, .12);
+}
+
+/* Note is a reserved proven family; it is emitted only when server evidence proves it. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="note"]) > .gravityflow-note-body {
+    border-color: #ead9aa;
+    background: #fff8e8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event[data-gpp-timeline-semantic="note"] .gpp-timeline-event__title {
+    color: #8a641c;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="note"])::after {
+    border-color: #fff9ea;
+    background-color: #b8892e;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 4.5h8v11H6zM8 8h4M8 11h4' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow: 0 0 0 1px #e4cf98, 0 4px 12px rgba(138, 100, 28, .12);
+}
+
+/* System/creation-family events remain visually neutral rather than alert-like. */
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="system"]) > .gravityflow-note-body {
+    border-color: #e2e6ec;
+    background: #f8fafc;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event[data-gpp-timeline-semantic="system"] .gpp-timeline-event__title {
+    color: #344054;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="system"])::after {
+    border-color: #f8fafc;
+    background-color: #667085;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M10 6v8M6 10h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    box-shadow: 0 0 0 1px #cbd5e1, 0 4px 12px rgba(15, 23, 42, .08);
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-timeline .gravityflow-note-header {
