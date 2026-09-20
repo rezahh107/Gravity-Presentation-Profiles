@@ -2,6 +2,10 @@
 
 $cases = array(
     'bootstrap-without-gravity-forms.php',
+    'persian-gravity-bridge-absent.php',
+    'persian-gravity-bridge-disabled.php',
+    'persian-gravity-bridge-incompatible.php',
+    'persian-gravity-bridge-provider.php',
     'core-resolution.php',
     'gravity-forms-addon.php',
     'form-presentation-ownership-settings.php',
