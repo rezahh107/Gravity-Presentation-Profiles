@@ -79,41 +79,4 @@
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root {
         width: 100% !important;
     }
-
-    /*
-     * AG Grid 25.2 keeps a fake horizontal-scroll viewport/container whose
-     * width follows the native column model. In Card Mode those extra columns
-     * are presentation-hidden, so constrain the fake scroll geometry to the one
-     * visible presentation axis instead of allowing hidden-column bookkeeping
-     * to enlarge the grid's scrollWidth. The native fallback remains untouched.
-     */
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-viewport,
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-container {
-        max-width: 100% !important;
-        min-width: 0 !important;
-    }
-
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-container {
-        width: 100% !important;
-    }
-
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-left-spacer,
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-right-spacer {
-        flex: 0 0 0 !important;
-        width: 0 !important;
-        min-width: 0 !important;
-        max-width: 0 !important;
-    }
-
-    /*
-     * In admitted frontend Card Mode every current-page row is deliberately
-     * converted to normal-flow cards and the grid grows to their full height.
-     * AG Grid's normal-layout vertical auto-scroller is therefore redundant and
-     * contributes a scrollbar gutter to wrapper scrollWidth. Hand scrolling to
-     * the document only for this frontend composition; wp-admin and every native
-     * fallback keep Gravity Flow's original viewport scrolling behavior.
-     */
-    .gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport {
-        overflow: visible !important;
-    }
 }
