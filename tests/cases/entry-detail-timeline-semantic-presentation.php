@@ -42,7 +42,10 @@ gpp_assert_true( false !== strpos( $semantic, "'family' => self::FAMILY_UNKNOWN"
 gpp_assert_true( false === strpos( $semantic, 'stripos( $value' ) && false === strpos( $semantic, 'similar_text(' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
 
 gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved-sibling"' ), 'Classified presentation must explicitly identify the preserved native source relationship.' );
-gpp_assert_true( false !== strpos( $semantic, '$match[1] . $match[2] . \'</div>\' . $presentation' ), 'Classified presentation must retain the authentic native event body and append a presentation sibling.' );
+gpp_assert_true( false !== strpos( $semantic, '$prefix . $match[2] . \'</div>\' . $presentation' ), 'Classified presentation must retain the authentic native event body and append a presentation sibling after bounded native-meta decoration.' );
+gpp_assert_true( false !== strpos( $semantic, "~(<div class=\"gravityflow-note-meta\">).*?(</div>)~s" ) && false !== strpos( $semantic, '$prefix = $match[1]' ), 'Jalali Timeline decoration must be confined to the native metadata prefix rather than rewriting the authentic event body.' );
+gpp_assert_true( false !== strpos( $semantic, 'timelineDatePresentation( $note )' ) && false !== strpos( $semantic, '$note->date_created' ) && false !== strpos( $semantic, "'3.1.0' !== GRAVITY_FLOW_VERSION" ), 'Timeline Jalali presentation must use only the exact-version-qualified raw note timestamp seam.' );
+gpp_assert_true( false === strpos( $semantic, 'strtotime(' ), 'Timeline date integration must not parse rendered/native display strings with strtotime().' );
 gpp_assert_true( false !== strpos( $semantic, '<bdi dir="auto">' ), 'Mixed-language destination and authentic note values must use bidi isolation.' );
 gpp_assert_true( false === strpos( $semantic, 'update_option(' ) && false === strpos( $semantic, 'add_timeline_note(' ) && false === strpos( $semantic, 'add_note(' ), 'Presentation semantics must not persist or synthesize Timeline history.' );
 
