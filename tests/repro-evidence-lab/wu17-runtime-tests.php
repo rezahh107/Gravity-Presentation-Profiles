@@ -229,27 +229,69 @@ wu17_test( 'WU17-RUNTIME-008', 'native authorization remains Gravity Flow-owned'
     return array( 'operator_tasks' => $operator_total, 'viewer_tasks' => $viewer_total );
 } );
 
-wu17_test( 'WU17-RUNTIME-009', 'presentation adapter does not own query polling navigation or grid reconciliation', function () use ( $repo_root ) {
+wu17_test( 'WU17-RUNTIME-009', 'presentation adapter owns only admitted Inbox presentation seams', function () use ( $repo_root ) {
     $source = file_get_contents( $repo_root . '/src/SRWF/GravityFlow/InboxPresentationAdapter.php' );
     wu17_assert( false !== strpos( $source, 'gravityflow_columns_inbox_table' ), 'Native column filter missing.' );
     wu17_assert( false !== strpos( $source, 'gravityflow_inbox_field_value' ), 'Native value filter missing.' );
-    foreach ( array( 'get_inbox_entries(', 'applyTransaction(', 'register_rest_route(', '/inbox/changes', 'setQuickFilter', 'setInterval(', 'setTimeout(' ) as $forbidden ) {
+    wu17_assert( false !== strpos( $source, 'gravityflow_shortcode_inbox' ), 'Supported frontend Inbox shortcode filter missing.' );
+    foreach ( array( 'get_inbox_entries(', 'applyTransaction(', 'register_rest_route(', '/inbox/changes', 'setQuickFilter', 'setInterval(', 'setTimeout(', 'MutationObserver' ) as $forbidden ) {
         wu17_assert( false === strpos( $source, $forbidden ), 'Presentation adapter introduced forbidden behavior ownership: ' . $forbidden );
     }
-    return 'Presentation remains two filters plus CSS; host owns data and behavior.';
+    return 'Presentation remains native host seams plus scoped server-rendered composition; host owns data and behavior.';
 } );
 
-wu17_test( 'WU17-RUNTIME-010', 'mixed-readiness gate and sizing contract stay native-first and bounded', function () use ( $repo_root ) {
+wu17_test( 'WU17-RUNTIME-010', 'mixed-readiness gate and responsive composition stay native-first and bounded', function () use ( $repo_root ) {
     $css = file_get_contents( $repo_root . '/assets/css/srwf-gravity-flow-inbox.css' );
     $native_css = file_get_contents( $repo_root . '/assets/css/srwf-gravity-flow-inbox-native.css' );
     wu17_assert( false !== strpos( $css, '@supports selector(:has(*))' ), 'Progressive selector gate missing.' );
     wu17_assert( false !== strpos( $css, ':not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready))' ), 'One-unready-row veto missing.' );
     wu17_assert( false !== strpos( $native_css, ':not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready))' ), 'Native-cell visibility veto missing.' );
-    wu17_assert( false !== strpos( $css, '@media (max-width: 782px)' ), 'WordPress-aligned 782px breakpoint changed.' );
-    wu17_assert( false === strpos( $css, '@container' ) && false === strpos( $css, 'container-type' ) && 0 === preg_match( '/^\s*max-width\s*:/m', $css ), 'Unproven production Container Query/max-width property was introduced.' );
+    wu17_assert( false !== strpos( $css, '@media (max-width: 782px)' ), 'WordPress-aligned 782px transition changed.' );
+    wu17_assert( false !== strpos( $css, 'max-inline-size: 70rem;' ), 'Owner-approved bounded Full Width content axis missing.' );
+    wu17_assert( false !== strpos( $css, 'grid-template-columns: repeat(2, minmax(0, 1fr));' ), 'Desktop two-card grid missing.' );
+    wu17_assert( false !== strpos( $css, 'grid-template-columns: minmax(0, 1fr);' ), 'Narrow one-card reflow missing.' );
+    wu17_assert( false === strpos( $css, '@container' ) && false === strpos( $css, 'container-type' ), 'Unneeded container-query subsystem was introduced.' );
     wu17_assert( false !== strpos( $css, 'width: 62px;' ) && false !== strpos( $css, 'height: 62px;' ), 'Avatar crop dimensions must remain pixel-based.' );
-    wu17_assert( false !== strpos( $css, 'font-size: 1rem;' ) && false !== strpos( $css, 'padding: 1rem;' ), 'Inbox typography/content spacing did not adopt rem sizing.' );
-    return 'Ready-only projection, one-unready native fallback, bounded rem sizing, no unproven container cap/query.';
+    wu17_assert( false !== strpos( $css, 'font-size: 1rem;' ) && false !== strpos( $css, 'padding: 1rem;' ), 'Inbox typography/content spacing did not retain scalable rem sizing.' );
+    return 'Ready-only projection, one-unready native fallback, bounded Full Width axis, responsive card grid.';
+} );
+
+wu17_test( 'WU17-RUNTIME-011', 'frontend Inbox composition wraps only authentic admitted shortcode output with semantic header copy', function () {
+    $native = '<div class="gravityflow_wrap"><div class="gflow-inbox gflow-grid gflow-common" data-grid-id="wu17"><div class="gflow-inbox__container"><div data-js="gflow-inbox"></div></div></div></div>';
+    $wrapped = apply_filters( 'gravityflow_shortcode_inbox', $native, array(), '' );
+    wu17_assert( false !== strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Authentic admitted Inbox did not receive page composition scope.' );
+    wu17_assert( 1 === substr_count( $wrapped, '<h1 class="gpp-inbox-surface__title"' ), 'Inbox composition must render exactly one semantic H1.' );
+    wu17_assert( false !== strpos( $wrapped, '>کارهای من</h1>' ), 'Inbox semantic title is missing.' );
+    wu17_assert( false !== strpos( $wrapped, 'پرونده‌هایی که اکنون نیاز به اقدام شما دارند' ), 'Truthful helper DOM text is missing.' );
+    wu17_assert( false !== strpos( $wrapped, $native ), 'Native Gravity Flow Inbox markup was replaced instead of wrapped.' );
+
+    $lookalike = '<main><h1>کارهای من</h1><div class="ag-root"></div></main>';
+    $lookalike_result = apply_filters( 'gravityflow_shortcode_inbox', $lookalike, array(), '' );
+    wu17_assert( $lookalike === $lookalike_result, 'Text/AG-grid lookalike falsely activated GPP Inbox composition.' );
+
+    $entry_detail = '<div class="gravityflow_wrap"><article class="gravityflow-entry-detail">Entry Detail</article></div>';
+    $entry_result = apply_filters( 'gravityflow_shortcode_inbox', $entry_detail, array(), '' );
+    wu17_assert( $entry_detail === $entry_result, 'Entry Detail markup was modified by Inbox composition.' );
+
+    return array( 'authentic_wrapped' => true, 'lookalike_unchanged' => true, 'entry_detail_unchanged' => true );
+} );
+
+wu17_test( 'WU17-RUNTIME-012', 'pinned Gravity Flow bundle exposes AG Grid 25.3-era native pagination APIs but no numbered-page panel', function () {
+    $files = glob( WP_PLUGIN_DIR . '/gravityflow/assets/js/dist/vendor-theme.*.js' );
+    wu17_assert( is_array( $files ) && ! empty( $files ), 'Gravity Flow vendor-theme AG Grid bundle unavailable.' );
+    $source = file_get_contents( $files[0] );
+    wu17_assert( is_string( $source ) && '' !== $source, 'Gravity Flow vendor-theme bundle unreadable.' );
+    foreach ( array( 'paginationGetCurrentPage', 'paginationGetTotalPages', 'paginationGoToPreviousPage', 'paginationGoToNextPage', 'isGroupOpenByDefault' ) as $capability ) {
+        wu17_assert( false !== strpos( $source, $capability ), 'Expected bundled AG Grid capability missing: ' . $capability );
+    }
+    wu17_assert( false !== strpos( $source, 'AG Grid v25.2.0' ), 'AG Grid v25 family signature missing.' );
+    wu17_assert( false === strpos( $source, 'pageNumbers' ), 'Unexpected modern numbered-page panel exists; implementation assumptions need review.' );
+    return array(
+        'detected_family' => 'AG Grid 25.3.0 capability set',
+        'row_model' => 'client-side default (Gravity Flow does not set rowModelType)',
+        'native_page_numbers' => false,
+        'public_pagination_api' => true,
+    );
 } );
 
 wu17_test( 'WU17-NEGATIVE-001', 'active Inbox profile with zero active bindings emits only an unready marker', function () use ( $manifest ) {
@@ -268,6 +310,25 @@ wu17_test( 'WU17-NEGATIVE-001', 'active Inbox profile with zero active bindings 
         return 'Negative fault injection preserves native Gravity Flow fallback.';
     } finally {
         update_option( BindingSetLifecycle::OPTION_NAME, $original, false );
+        InboxPresentationAdapter::resetRuntimeCache();
+    }
+} );
+
+wu17_test( 'WU17-NEGATIVE-002', 'inactive Inbox visual profile leaves authentic shortcode output native', function () {
+    $original = get_option( VisualPackageLifecycle::OPTION_NAME );
+    wu17_assert( is_array( $original ) && isset( $original['activations'] ), 'Visual lifecycle state unavailable for negative control.' );
+    $without_inbox = $original;
+    unset( $without_inbox['activations'][ InboxPresentationAdapter::SURFACE ] );
+    update_option( VisualPackageLifecycle::OPTION_NAME, $without_inbox, false );
+    InboxPresentationAdapter::resetRuntimeCache();
+
+    $native = '<div class="gravityflow_wrap"><div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div></div>';
+    try {
+        $result = apply_filters( 'gravityflow_shortcode_inbox', $native, array(), '' );
+        wu17_assert( $native === $result, 'Inactive Inbox profile still activated GPP page composition.' );
+        return 'Native shortcode output preserved without admitted Inbox profile.';
+    } finally {
+        update_option( VisualPackageLifecycle::OPTION_NAME, $original, false );
         InboxPresentationAdapter::resetRuntimeCache();
     }
 } );
