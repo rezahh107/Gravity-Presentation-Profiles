@@ -10,8 +10,9 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
  *
  * Gravity Flow remains the source of truth. This adapter reads the official
  * display-time timeline note objects, classifies only bounded proven host
- * signatures, and decorates the already-rendered native event body. It never
- * writes workflow state, reorders notes, or creates a second timeline.
+ * signatures, and adds a sibling presentation layer while leaving the native
+ * event body intact. It never writes workflow state, reorders notes, or creates
+ * a second timeline.
  */
 final class EntryDetailTimelineSemanticPresentation {
     const FAMILY_APPROVAL   = 'approval';
@@ -200,13 +201,14 @@ final class EntryDetailTimelineSemanticPresentation {
                 $family = esc_attr( $event['family'] );
                 $evidence = esc_attr( $event['evidence'] );
 
-                $presentation = '<div class="gpp-timeline-event" dir="rtl" data-gpp-timeline-semantic="' . $family . '" data-gpp-timeline-evidence="' . $evidence . '">';
+                $presentation = '<div class="gpp-timeline-event" dir="rtl" data-gpp-timeline-semantic="' . $family . '" data-gpp-timeline-evidence="' . $evidence . '" data-gpp-native-event-source="preserved-sibling">';
                 $presentation .= '<strong class="gpp-timeline-event__title">' . $title . '</strong>';
                 $presentation .= '<span class="gpp-timeline-event__subtitle">' . $subtitle . '</span>';
-                $presentation .= '<span class="gpp-timeline-event__native-source" data-gpp-native-event-source="preserved" hidden>' . $match[2] . '</span>';
                 $presentation .= '</div>';
 
-                return $match[1] . $presentation . $match[3];
+                // Preserve the authentic native inner event body byte-for-byte and
+                // insert the owner-facing semantic presentation as its sibling.
+                return $match[1] . $match[2] . '</div>' . $presentation . '</div></div>';
             },
             $html
         );
