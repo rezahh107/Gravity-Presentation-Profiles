@@ -1,0 +1,282 @@
+name: GPP Published Release Recovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-recovery.yml'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Already-published immutable release version to verify and recover (for example 0.2.0).'
+        type: string
+        required: true
+        default: '0.2.0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpp-production-release-v1
+  cancel-in-progress: false
+
+env:
+  GPP_RELEASE_DB_NAME: wordpress_recovery
+  GPP_RELEASE_DB_USER: root
+  GPP_RELEASE_DB_PASS: gpp-release-root
+  GPP_RELEASE_DB_HOST: 127.0.0.1:3306
+  GPP_RELEASE_BASE_URL: http://127.0.0.1:8090
+
+jobs:
+  recovery-contract:
+    name: Published-release recovery contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+
+      - name: Verify bounded recovery preconditions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          version="$(release_plugin_version .)"
+          release_is_production_version "$version"
+          test "$version" = '0.2.0'
+          bash -n scripts/release/smoke-zip.sh
+          git fetch --tags --force
+          tag="v$version"
+          tag_sha="$(git rev-list -n1 "$tag")"
+          test -n "$tag_sha"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+          test "$(printf '%s' "$release_json" | jq -r '.draft')" = 'false'
+          test "$(printf '%s' "$release_json" | jq -r '.tag_name')" = "$tag"
+          test "$(printf '%s' "$release_json" | jq -r '.assets[] | select(.name=="gravity-presentation-profiles-'"$version"'.zip") | .digest')" = 'sha256:33195bf563ed863ceeffe75b7fbd69dcd579d4bd76905e8dfc8939248e5bd9db'
+          git merge-base --is-ancestor "$tag_sha" HEAD
+          echo "GPP_RELEASE_RECOVERY_CONTRACT_PASS version=$version tag_sha=$tag_sha"
+
+  recover:
+    name: Verify immutable release and restore development main
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-release-root
+          MARIADB_DATABASE: wordpress_recovery
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-release-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - name: Enforce explicit main-branch recovery action
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          version="${{ inputs.release_version }}"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$version" != '0.0.0'
+          echo "GPP_RECOVERY_VERSION=$version" >> "$GITHUB_ENV"
+          echo "GPP_RECOVERY_APPROVED_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Checkout exact recovery source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.33'
+          coverage: none
+
+      - name: Install recovery tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip jq
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+
+      - name: Bind recovery to exact current main and published source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GPP_RECOVERY_APPROVED_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GPP_RECOVERY_APPROVED_SHA"
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = "$GPP_RECOVERY_VERSION"
+          test "$(release_addon_version .)" = "$GPP_RECOVERY_VERSION"
+
+      - name: Verify immutable-release protection and exact existing release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GPP_RELEASE_ADMIN_READ_TOKEN: ${{ secrets.GPP_RELEASE_ADMIN_READ_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GPP_RELEASE_ADMIN_READ_TOKEN" || { echo 'Missing Administration(read) token required to prove immutable releases are enabled.' >&2; exit 1; }
+          immutable="$(curl -sS --fail-with-body \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GPP_RELEASE_ADMIN_READ_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/immutable-releases")"
+          test "$(printf '%s' "$immutable" | jq -r '.enabled')" = 'true'
+
+          git fetch --tags --force
+          tag="v$GPP_RECOVERY_VERSION"
+          tag_sha="$(git rev-list -n1 "$tag")"
+          test -n "$tag_sha"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+          test "$(printf '%s' "$release_json" | jq -r '.draft')" = 'false'
+          test "$(printf '%s' "$release_json" | jq -r '.prerelease')" = 'false'
+          test "$(printf '%s' "$release_json" | jq -r '.tag_name')" = "$tag"
+          git merge-base --is-ancestor "$tag_sha" HEAD
+
+          # Recovery may add only this workflow after the immutable release candidate.
+          git diff --name-only "$tag_sha..HEAD" | sort > /tmp/gpp-recovery-diff.txt
+          printf '%s\n' '.github/workflows/release-recovery.yml' | sort > /tmp/gpp-recovery-allowed.txt
+          diff -u /tmp/gpp-recovery-allowed.txt /tmp/gpp-recovery-diff.txt
+
+          echo "GPP_RECOVERY_TAG=$tag" >> "$GITHUB_ENV"
+          echo "GPP_RECOVERY_TAG_SHA=$tag_sha" >> "$GITHUB_ENV"
+
+      - name: Re-download and verify exact consumer-facing release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/release/recovery-download
+          base="gravity-presentation-profiles-$GPP_RECOVERY_VERSION.zip"
+          gh release download "$GPP_RECOVERY_TAG" \
+            --pattern "$base" --pattern "$base.sha256" --pattern 'release-manifest.json' \
+            --dir build/release/recovery-download
+
+          zip="build/release/recovery-download/$base"
+          checksum_file="$zip.sha256"
+          manifest="build/release/recovery-download/release-manifest.json"
+          test -s "$zip"
+          test -s "$checksum_file"
+          test -s "$manifest"
+
+          expected_sha="$(awk 'NR==1 {print $1}' "$checksum_file")"
+          actual_sha="$(sha256sum "$zip" | awk '{print $1}')"
+          test "$expected_sha" = "$actual_sha"
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GPP_RECOVERY_TAG")"
+          asset_digest="$(printf '%s' "$release_json" | jq -r --arg base "$base" '.assets[] | select(.name==$base) | .digest')"
+          test "$asset_digest" = "sha256:$actual_sha"
+
+          php -r '
+            $m=json_decode(file_get_contents($argv[1]),true);
+            if(($m["mode"]??null)!=="publish") exit(1);
+            if(($m["release_version"]??null)!==$argv[2]) exit(1);
+            if(($m["candidate_commit"]??null)!==$argv[3]) exit(1);
+            if(($m["source_commit"]??null)!==$argv[3]) exit(1);
+            if(($m["zip_sha256"]??null)!==$argv[4]) exit(1);
+            if(($m["artifact_structure_validation"]??null)!=="PASS") exit(1);
+            if(($m["exact_zip_smoke_test"]??null)!=="PASS") exit(1);
+            if(($m["required_qualification"]??null)!=="PASS") exit(1);
+          ' "$manifest" "$GPP_RECOVERY_VERSION" "$GPP_RECOVERY_TAG_SHA" "$actual_sha"
+
+          bash scripts/release/validate-release.sh . "$zip" "$GPP_RECOVERY_VERSION" "$actual_sha"
+          echo "GPP_RECOVERY_ZIP=$zip" >> "$GITHUB_ENV"
+          echo "GPP_RECOVERY_ZIP_SHA=$actual_sha" >> "$GITHUB_ENV"
+
+      - name: Re-run clean last-mile smoke against the already-published ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/release/smoke-zip.sh . "$GPP_RECOVERY_ZIP" /tmp/gpp-release-recovery-wordpress
+
+      - name: Reverify release identity and restore normal development main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-list -n1 "$GPP_RECOVERY_TAG")"
+          test "$tag_sha" = "$GPP_RECOVERY_TAG_SHA"
+          release_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GPP_RECOVERY_TAG" --jq '.target_commitish')"
+          if [[ "$release_target" =~ ^[0-9a-f]{40}$ ]]; then release_sha="$release_target"; else release_sha="$tag_sha"; fi
+          php scripts/release/check-identity.php \
+            --approved="$tag_sha" --qualified="$tag_sha" \
+            --artifact="$tag_sha" --tag="$tag_sha" --release="$release_sha"
+
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$GPP_RECOVERY_APPROVED_SHA"
+          changelog_before="$(sha256sum CHANGELOG.md | awk '{print $1}')"
+          php scripts/release/prepare-development-continuation.php --root=. --released-version="$GPP_RECOVERY_VERSION"
+          test "$(sha256sum CHANGELOG.md | awk '{print $1}')" = "$changelog_before"
+          git diff --name-only | sort > /tmp/gpp-recovery-continuation-files.txt
+          printf '%s\n' gravity-presentation-profiles.php src/GravityForms/AddOn.php | sort > /tmp/gpp-recovery-continuation-expected.txt
+          diff -u /tmp/gpp-recovery-continuation-expected.txt /tmp/gpp-recovery-continuation-files.txt
+
+          git config user.name 'gpp-release-automation'
+          git config user.email 'gpp-release-automation@users.noreply.github.com'
+          git add gravity-presentation-profiles.php src/GravityForms/AddOn.php
+          git commit -m "chore: continue development after recovered $GPP_RECOVERY_TAG"
+          continuation="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$GPP_RECOVERY_APPROVED_SHA"
+
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$GPP_RECOVERY_APPROVED_SHA"
+          git push origin "HEAD:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$continuation"
+
+          source scripts/release/release-lib.sh
+          release_assert_version_mirrors .
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+          grep -Fq "## [$GPP_RECOVERY_VERSION]" CHANGELOG.md
+
+          mkdir -p build/release
+          php -r '
+            $e=array(
+              "schema_version"=>"1.0.0",
+              "recovery"=>"PUBLISHED_AND_VERIFIED",
+              "release_version"=>$argv[1],
+              "release_tag"=>$argv[2],
+              "release_candidate_commit"=>$argv[3],
+              "recovery_source_commit"=>$argv[4],
+              "development_continuation_commit"=>$argv[5],
+              "published_zip_sha256"=>$argv[6],
+              "last_mile_smoke"=>"PASS"
+            );
+            file_put_contents("build/release/published-release-recovery.json",json_encode($e,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES).PHP_EOL);
+          ' "$GPP_RECOVERY_VERSION" "$GPP_RECOVERY_TAG" "$GPP_RECOVERY_TAG_SHA" "$GPP_RECOVERY_APPROVED_SHA" "$continuation" "$GPP_RECOVERY_ZIP_SHA"
+
+          echo "GPP_RELEASE_RECOVERY_PUBLISHED_AND_VERIFIED version=$GPP_RECOVERY_VERSION candidate=$GPP_RECOVERY_TAG_SHA continuation=$continuation zip_sha=$GPP_RECOVERY_ZIP_SHA"
+
+      - name: Upload recovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gpp-published-release-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/release/published-release-recovery.json
+            build/release/behavioral-production-reachability.json
+          if-no-files-found: error
+          retention-days: 30
