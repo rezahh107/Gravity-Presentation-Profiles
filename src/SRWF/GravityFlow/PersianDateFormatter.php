@@ -27,8 +27,8 @@ final class PersianDateFormatter {
      * Only exact host UTC datetime strings are eligible for the provider. Numeric
      * candidates (currently the optional current-step Due path) remain native
      * because that host source contract is not yet independently qualified.
-     * No strtotime(), PHP default timezone, Iran offset, visible-text parsing or
-     * year heuristic is used.
+     * Parsing never depends on PHP's ambient/default timezone, Iran offsets,
+     * visible display text, or year heuristics.
      */
     public static function formatDateTime( $value ) {
         if ( is_int( $value ) || ( is_string( $value ) && ctype_digit( $value ) ) ) {
