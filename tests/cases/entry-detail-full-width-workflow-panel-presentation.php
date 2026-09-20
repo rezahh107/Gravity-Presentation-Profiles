@@ -17,6 +17,39 @@ if ( ! function_exists( 'esc_html__' ) ) {
     function esc_html__( $value, $domain = null ) { return esc_html( $value ); }
 }
 
+function gpp_php_source_has_identifier( $source, $identifier ) {
+    if ( ! is_string( $source ) || ! is_string( $identifier ) || '' === $identifier ) {
+        return false;
+    }
+
+    foreach ( token_get_all( $source ) as $token ) {
+        if ( ! is_array( $token ) ) {
+            continue;
+        }
+
+        if ( T_STRING === $token[0] && $identifier === $token[1] ) {
+            return true;
+        }
+
+        $qualified_name_tokens = array();
+        foreach ( array( 'T_NAME_QUALIFIED', 'T_NAME_FULLY_QUALIFIED', 'T_NAME_RELATIVE' ) as $constant_name ) {
+            if ( defined( $constant_name ) ) {
+                $qualified_name_tokens[] = constant( $constant_name );
+            }
+        }
+        if ( ! in_array( $token[0], $qualified_name_tokens, true ) ) {
+            continue;
+        }
+
+        $parts = explode( '\\', ltrim( $token[1], '\\' ) );
+        if ( $identifier === end( $parts ) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 final class GppWorkflowPanelTestAssignee {
     private $name;
     public function __construct( $name ) { $this->name = $name; }
@@ -84,14 +117,21 @@ gpp_assert_true( false === strpos( $missing_markup, 'data-gpp-workflow-fact="due
 $element_count = preg_match_all( '/<(?:h3|div|strong|p|section|h4|dl|dt|dd)\b/', $missing_markup, $matches );
 gpp_assert_same( 10, $element_count, 'Minimal Full Width markup without optional assignee/due facts must remain bounded.' );
 
+$legitimate_hook_source = "<?php add_action( 'wp_enqueue_scripts', 'gpp_enqueue' );";
+$forbidden_call_source = "<?php wp_enqueue_script( 'gpp-test', '/gpp-test.js' );";
+$non_executable_mentions = "<?php // wp_enqueue_script( 'comment-only', '/comment.js' );\n\$message = 'wp_enqueue_script';";
+gpp_assert_true( false === gpp_php_source_has_identifier( $legitimate_hook_source, 'wp_enqueue_script' ), 'Plural wp_enqueue_scripts hook must not be classified as the forbidden wp_enqueue_script identifier.' );
+gpp_assert_true( true === gpp_php_source_has_identifier( $forbidden_call_source, 'wp_enqueue_script' ), 'Actual wp_enqueue_script identifier must be rejected by the static JavaScript guard.' );
+gpp_assert_true( false === gpp_php_source_has_identifier( $non_executable_mentions, 'wp_enqueue_script' ), 'Comments and quoted strings mentioning wp_enqueue_script must not trigger the executable-identifier guard.' );
+
 $adapter_source = file_get_contents( dirname( __DIR__, 2 ) . '/src/SRWF/GravityFlow/EntryDetailFullWidthPresentationAdapter.php' );
 $panel_css = file_get_contents( dirname( __DIR__, 2 ) . '/assets/css/srwf-gravity-flow-entry-detail-full-width-workflow-panel.css' );
 gpp_assert_true( false !== strpos( $adapter_source, 'gravityflow_above_approval_buttons' ), 'Presentation markup must use the existing native Approval render seam.' );
 gpp_assert_true( false !== strpos( $adapter_source, 'gravityflow_approval_note_label_workflow_detail' ), 'Optional Note label must use the native Gravity Flow label filter.' );
 gpp_assert_true( false === strpos( $adapter_source, '<button' ), 'Adapter must not render workflow buttons.' );
 gpp_assert_true( false === strpos( $adapter_source, 'wp_remote_' ) && false === strpos( $adapter_source, 'curl_' ), 'Presentation adapter must not add network requests.' );
-gpp_assert_true( false === strpos( $adapter_source, 'update_option' ) && false === strpos( $adapter_source, 'add_option' ) && false === strpos( $adapter_source, 'GFAPI::update' ), 'Presentation adapter must not persist workflow state.' );
-gpp_assert_true( false === strpos( $adapter_source, 'wp_enqueue_script' ), 'Full Width presentation markup must not add JavaScript.' );
+gpp_assert_true( false === gpp_php_source_has_identifier( $adapter_source, 'update_option' ) && false === gpp_php_source_has_identifier( $adapter_source, 'add_option' ) && false === strpos( $adapter_source, 'GFAPI::update' ), 'Presentation adapter must not persist workflow state.' );
+gpp_assert_true( false === gpp_php_source_has_identifier( $adapter_source, 'wp_enqueue_script' ), 'Full Width presentation markup must not add JavaScript.' );
 gpp_assert_true( false === preg_match( '/preg_match|preg_replace|strip_tags|html_entity_decode/', $adapter_source ), 'Workflow facts must not be inferred by visible-text scraping/parsing.' );
 gpp_assert_true( false === preg_match( '/::before[^}]*content\s*:|::after[^}]*content\s*:/s', $panel_css ), 'Meaningful presentation copy must not come from CSS generated content.' );
 gpp_assert_true( false !== strpos( $panel_css, 'justify-content: center' ) && false !== strpos( $panel_css, 'align-items: center' ) && false !== strpos( $panel_css, 'text-align: center' ), 'Native action labels/icons must be horizontally and vertically centered.' );
