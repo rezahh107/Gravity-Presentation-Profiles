@@ -28,6 +28,14 @@ bash "$ROOT/tests/release/smoke-endpoint-contract-tests.sh"
 
 mkdir -p "$WORK/dev-source"
 git -C "$ROOT" archive HEAD | tar -x -C "$WORK/dev-source"
+php -r '
+    $path = $argv[1];
+    $text = file_get_contents($path);
+    $needle = "## [Unreleased]\n";
+    if (false === $text || 1 !== substr_count($text, $needle)) exit(1);
+    $fixture = $needle . "\n### Fixed\n\n- Synthetic release-contract fixture change.\n";
+    if (false === file_put_contents($path, str_replace($needle, $fixture, $text))) exit(1);
+' "$WORK/dev-source/CHANGELOG.md"
 cp -a "$WORK/dev-source" "$WORK/source"
 php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --version=9.8.7 --date=2030-01-02 >/dev/null
 
