@@ -51,10 +51,22 @@ final class BoundHostValueReader {
      * path resolves that compatibility boundary by passing the current entry to
      * every field. GPP follows the same host contract and requests text output;
      * it does not maintain a parallel field-type formatter table.
+     *
+     * The one typed host-meta exception is canonical `date_created`. Its source
+     * semantics are explicitly Gregorian/system UTC, so its presentation may be
+     * delegated to the optional PersianGravity facade. All Gravity Forms fields
+     * (including dedicated Jalali-domain fields) continue through their native
+     * field presentation path and are never calendar-converted here.
      */
     public function readDisplay( $source, $form, $entry ) {
         if ( ! is_array( $source ) || empty( $source['type'] ) || ! is_array( $entry ) ) {
             return null;
+        }
+
+        if ( 'gravity_forms.entry_meta' === $source['type']
+            && isset( $source['meta_key'] )
+            && 'date_created' === $source['meta_key'] ) {
+            return PersianDateFormatter::formatDateTime( $this->readRaw( $source, $form, $entry ) );
         }
 
         if ( 'gravity_forms.field' !== $source['type'] ) {
