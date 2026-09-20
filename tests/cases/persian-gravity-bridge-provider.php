@@ -58,7 +58,8 @@ PGR_Jalali_Presentation::$mode = 'value';
 $timestamp = 1774038600;
 $instant_display = PersianDateFormatter::formatDateTime( $timestamp );
 gpp_assert_true( 0 === strpos( $instant_display, 'provider:' ), 'Qualified Unix instant must use the provider facade.' );
-gpp_assert_same( $timestamp, end( PGR_Jalali_Presentation::$calls )['timestamp'], 'Unix instant must preserve the authoritative epoch value.' );
+$last_call = PGR_Jalali_Presentation::$calls[ count( PGR_Jalali_Presentation::$calls ) - 1 ];
+gpp_assert_same( $timestamp, $last_call['timestamp'], 'Unix instant must preserve the authoritative epoch value.' );
 
 $bridge = PersianGravityJalaliBridge::formatDateTime( new DateTimeImmutable( $raw, new DateTimeZone( 'UTC' ) ) );
 gpp_assert_same( PersianGravityJalaliBridge::STATUS_APPLIED, $bridge['status'], 'Successful provider application must be explicit.' );
