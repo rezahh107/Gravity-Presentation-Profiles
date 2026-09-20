@@ -1,16 +1,15 @@
 /* Native-first CSS projection over the authoritative Gravity Flow Inbox. */
 
 /*
- * WordPress block themes can offset constrained content with root padding. The
- * admitted frontend Full Width surface must escape from its actual normal-flow
- * position without relying on an over-constrained pair of negative margins (the
- * ignored physical margin differs in RTL). Use one physical relative offset so
- * the 100vw surface starts at the viewport edge. Classic/non-block hosts resolve
- * the root-padding custom property to 0px.
+ * The admitted frontend surface is normally centered inside a constrained host
+ * column. Move that 100vw box from the host column's center to the viewport's
+ * physical left edge with one relative offset. Using one offset avoids RTL
+ * over-constraint behavior from paired negative margins and leaves the bounded
+ * 70rem inner axis as the content-width owner.
  */
 .gpp-inbox-surface--full-width {
     position: relative;
-    left: calc(50% - 50vw - var(--wp--style--root--padding-left, 0px));
+    left: calc(50% - 50vw);
     margin-inline: 0 !important;
 }
 
@@ -82,12 +81,22 @@
     }
 
     /*
-     * AG Grid 25.x reserves a native scrollbar-corner spacer (17px in the
-     * pinned Chromium runtime) even though Card Mode presents one full-width
-     * column and has no horizontal content to scroll. Collapse only those fake
-     * horizontal-scroll spacers while Card Mode is fully ready. The native
-     * fallback keeps the host's untouched scrollbar geometry.
+     * AG Grid 25.2 keeps a fake horizontal-scroll viewport/container whose
+     * width follows the native column model. In Card Mode those extra columns
+     * are presentation-hidden, so constrain the fake scroll geometry to the one
+     * visible presentation axis instead of allowing hidden-column bookkeeping
+     * to enlarge the grid's scrollWidth. The native fallback remains untouched.
      */
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-container {
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-container {
+        width: 100% !important;
+    }
+
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-left-spacer,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-right-spacer {
         flex: 0 0 0 !important;
