@@ -53,6 +53,38 @@ function targetBox(locator) {
   });
 }
 
+async function returnFocusByKeyboard(page, locator) {
+  await locator.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  const active = await locator.evaluate(element => document.activeElement === element);
+  if (!active) throw new Error('Keyboard round-trip did not return focus to the expected native control.');
+}
+
+async function focusPresentationCellByKeyboard(page) {
+  const scope = '[data-gpp-inbox-surface="gravity_flow.inbox"]';
+  const search = page.locator(`${scope} [data-js="gflow-inbox-search"]`);
+  await search.focus();
+
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate(() => {
+      const active = document.activeElement;
+      const cell = active instanceof Element ? active.closest('.ag-cell[col-id="gpp_case_card"]') : null;
+      if (!cell) return null;
+      return {
+        colId: cell.getAttribute('col-id'),
+        rowIndex: cell.closest('.ag-row')?.getAttribute('row-index') ?? null,
+        activeTag: active.tagName,
+        activeClass: active.className,
+      };
+    });
+    if (focused?.colId === 'gpp_case_card') return focused;
+  }
+
+  throw new Error('Native AG Grid presentation cell was not reachable from the keyboard tab path.');
+}
+
 const manifest = loadManifest();
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1366, height: 1000 } });
@@ -114,10 +146,10 @@ try {
     const observations = {};
     for (const dataJs of ['inbox-clear-filters', 'inbox-fullscreeen', 'inbox-settings']) {
       const control = page.locator(`[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`);
-      await control.focus();
+      await returnFocusByKeyboard(page, control);
       const style = await focusStyle(control);
       const box = await targetBox(control);
-      if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2) throw new Error(`${dataJs} focus is not visible: ${JSON.stringify(style)}`);
+      if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2) throw new Error(`${dataJs} focus is not visible after keyboard navigation: ${JSON.stringify(style)}`);
       if (box.width < 40 || box.height < 40) throw new Error(`${dataJs} target below 40px baseline: ${JSON.stringify(box)}`);
       observations[dataJs] = { focus: style, target: box };
     }
@@ -147,18 +179,36 @@ try {
     return { next_focus: nextFocus, next_target: nextBox, sequence: ['1', '2', '1'] };
   });
 
-  await test('WU17-A11Y-005', 'native entry action is keyboard reachable and Enter preserves host navigation', async () => {
-    const link = page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"] .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link').first();
-    await link.focus();
-    const href = await link.getAttribute('href');
-    const cardFocus = await link.locator('.gpp-inbox-card').evaluate(element => ({ boxShadow: getComputedStyle(element).boxShadow, borderColor: getComputedStyle(element).borderColor }));
-    if (!href || !href.includes('page=gravityflow-inbox') || !href.includes('view=entry')) throw new Error(`Unexpected native entry href: ${href}`);
-    if (!cardFocus.boxShadow || cardFocus.boxShadow === 'none') throw new Error(`Focused entry card has no visible focus treatment: ${JSON.stringify(cardFocus)}`);
+  await test('WU17-A11Y-005', 'native AG Grid entry cell is keyboard reachable and Enter preserves host navigation', async () => {
+    const keyboardFocus = await focusPresentationCellByKeyboard(page);
+    const focusedCell = page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"] .ag-cell[col-id="gpp_case_card"].ag-cell-focus').first();
+    if (await focusedCell.count() !== 1) throw new Error('Keyboard focus did not produce the native AG Grid focused-cell state.');
+
+    const state = await focusedCell.evaluate(cell => {
+      const card = cell.querySelector('.gpp-inbox-card');
+      const link = cell.querySelector('.gflow-inbox__entry-cell-link');
+      if (!card || !link) return null;
+      const cardStyle = getComputedStyle(card);
+      return {
+        href: link.getAttribute('href'),
+        linkTabIndex: link.getAttribute('tabindex'),
+        cardFocus: {
+          boxShadow: cardStyle.boxShadow,
+          borderColor: cardStyle.borderColor,
+        },
+      };
+    });
+    if (!state) throw new Error('Focused native presentation cell is missing its card or host entry link.');
+    if (!state.href) throw new Error('Native entry href is missing.');
+    if (state.linkTabIndex !== '-1') throw new Error(`Pinned host entry overlay is expected outside the tab order, found tabindex=${state.linkTabIndex}.`);
+    if (!state.cardFocus.boxShadow || state.cardFocus.boxShadow === 'none') throw new Error(`Focused AG Grid entry cell has no visible card focus treatment: ${JSON.stringify(state.cardFocus)}`);
+
+    const expected = new URL(state.href, page.url()).href;
     await Promise.all([
-      page.waitForURL(/page=gravityflow-inbox.*view=entry/, { timeout: 30000 }),
+      page.waitForURL(url => url.href === expected, { timeout: 30000 }),
       page.keyboard.press('Enter'),
     ]);
-    return { href, focus: cardFocus, navigated_with_enter: true };
+    return { href: state.href, link_tabindex: state.linkTabIndex, focus: state.cardFocus, keyboard_focus: keyboardFocus, navigated_with_enter: true };
   });
 } finally {
   await browser.close();
