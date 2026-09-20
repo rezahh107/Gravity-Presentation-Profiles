@@ -21,4 +21,13 @@ if grep -En '\$wpdb|gpp_visual_package_lifecycle_v1|gpp_binding_set_lifecycle_v1
   echo 'Behavioral harness must not manufacture GPP state through raw storage access.' >&2
   exit 1
 fi
+RUNNER="$ROOT/tests/release/run-behavioral-production-reachability.sh"
+if ! grep -Fq 'EXPECTED_VERSION="${GPP_RELEASE_VERSION:-${GPP_RELEASE_DRY_VERSION:-}}"' "$RUNNER"; then
+  echo 'Behavioral release identity must prefer the resolved production version and fall back only to the explicit dry-run version.' >&2
+  exit 1
+fi
+if grep -Fq 'GPP_RELEASE_DRY_VERSION:-9999.0.0' "$RUNNER"; then
+  echo 'Behavioral release identity must not silently default production smoke to the synthetic dry-run version.' >&2
+  exit 1
+fi
 echo 'GPP_BEHAVIORAL_ANTI_BYPASS_GUARDRAIL_PASS'
