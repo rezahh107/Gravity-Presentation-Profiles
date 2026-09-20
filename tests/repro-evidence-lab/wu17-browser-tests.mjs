@@ -107,12 +107,32 @@ async function measureWidths(page, label) {
 }
 
 async function assertNoHorizontalOverflow(page, label) {
-  const overflow = await page.locator('[data-js="gflow-inbox"] .ag-root-wrapper').evaluate(element => ({
-    scrollWidth: element.scrollWidth,
-    clientWidth: element.clientWidth,
-  }));
-  if (overflow.scrollWidth > overflow.clientWidth + 2) {
-    throw new Error(`${label}: horizontal overflow ${JSON.stringify(overflow)}`);
+  const overflow = await page.evaluate(() => {
+    const root = document.querySelector('[data-js="gflow-inbox"] .ag-root-wrapper');
+    const center = document.querySelector('[data-js="gflow-inbox"] .ag-center-cols-viewport');
+    if (!root || !center) return null;
+    return {
+      document: {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        viewportWidth: innerWidth,
+      },
+      centerViewport: {
+        scrollWidth: center.scrollWidth,
+        clientWidth: center.clientWidth,
+      },
+      gridRootBookkeeping: {
+        scrollWidth: root.scrollWidth,
+        clientWidth: root.clientWidth,
+      },
+    };
+  });
+  if (!overflow) throw new Error(`${label}: Inbox overflow geometry unavailable.`);
+  if (overflow.document.scrollWidth > overflow.document.viewportWidth + 2) {
+    throw new Error(`${label}: document horizontal overflow ${JSON.stringify(overflow)}`);
+  }
+  if (overflow.centerViewport.scrollWidth > overflow.centerViewport.clientWidth + 2) {
+    throw new Error(`${label}: visible grid viewport horizontal overflow ${JSON.stringify(overflow)}`);
   }
   return overflow;
 }
@@ -439,8 +459,8 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
       if (width <= 782 && boxes[1].y <= boxes[0].y + 20) throw new Error(`${width}px should reflow to one column: ${JSON.stringify(boxes)}`);
       if (!state.header || state.header.scrollWidth > state.header.clientWidth + 2 || state.header.scrollHeight > state.header.clientHeight + 2) throw new Error(`${width}px header controls clip: ${JSON.stringify(state.header)}`);
       if (state.cardClipping.some(card => card.scrollWidth > card.clientWidth + 2 || card.scrollHeight > card.clientHeight + 2)) throw new Error(`${width}px card content clips: ${JSON.stringify(state.cardClipping)}`);
-      await assertNoHorizontalOverflow(page, `frontend ${width}px`);
-      observations.push({ width, document: state, cards: boxes });
+      const overflow = await assertNoHorizontalOverflow(page, `frontend ${width}px`);
+      observations.push({ width, document: state, overflow, cards: boxes });
       if ([1024, 390, 320].includes(width)) await page.screenshot({ path: path.join(artifactDir, `pr4-inbox-frontend-${width}.png`), fullPage: true });
     }
     return observations;
@@ -542,9 +562,10 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     sizing.push(measured);
     if (!measured.native_inbox || !measured.card_cell || measured.native_inbox.width <= 0 || measured.card_cell.width <= 0) throw new Error(`Wide-host measurements unavailable: ${JSON.stringify(measured)}`);
     if (measured.native_inbox.width < 1040 || measured.native_inbox.width > 1100) throw new Error(`Bounded Inbox width missed Owner calibration: ${JSON.stringify(measured.native_inbox)}`);
-    await assertNoHorizontalOverflow(page, 'wide frontend host');
+    const overflow = await assertNoHorizontalOverflow(page, 'wide frontend host');
     return {
       ...measured,
+      observable_overflow: overflow,
       viewport_to_inbox_ratio: measured.native_inbox.width / measured.viewport.width,
       inbox_to_card_ratio: measured.card_cell.width / measured.native_inbox.width,
       production_bounded_full_width_axis: true,
