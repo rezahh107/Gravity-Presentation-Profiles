@@ -34,6 +34,7 @@ final class RuntimeDecisionTrace {
         'PRINT_PROFILE_RESOLVED' => array( 'surface' => 'print.dossier', 'label' => 'Print presentation profile' ),
         'PRINT_BINDINGS_EVALUATED' => array( 'surface' => 'print.dossier', 'label' => 'Print semantic bindings' ),
         'PRINT_COMPOSITION_READY' => array( 'surface' => 'print.dossier', 'label' => 'Two-page dossier composition' ),
+        'JALALI_PRESENTATION' => array( 'surface' => 'integration.persian_gravity', 'label' => 'Optional PersianGravity Jalali presentation' ),
     );
 
     private const SURFACE_LABELS = array(
@@ -41,6 +42,7 @@ final class RuntimeDecisionTrace {
         'gravity_flow.inbox' => 'Gravity Flow Inbox',
         'gravity_flow.entry_detail' => 'Gravity Flow Entry Detail',
         'print.dossier' => 'Dossier Print',
+        'integration.persian_gravity' => 'PersianGravity optional presentation integration',
     );
 
     private const FALLBACK_LABELS = array(
@@ -50,6 +52,7 @@ final class RuntimeDecisionTrace {
         'host_authorization_preserved' => 'Gravity Flow authorization remains the authority for this request.',
         'dossier_not_rendered' => 'The GPP dossier was not produced rather than emitting unsafe or incomplete output.',
         'blank_unproven_value' => 'The unproven value was left blank rather than guessed or reused.',
+        'native_date_presentation' => 'The authoritative native date/time presentation remains unchanged.',
     );
 
     private $surface;
