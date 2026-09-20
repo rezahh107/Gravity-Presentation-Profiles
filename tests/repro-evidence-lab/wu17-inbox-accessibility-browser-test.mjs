@@ -53,17 +53,17 @@ function targetBox(locator) {
   });
 }
 
-async function focusForwardFromSearch(page, targetSelector, maxTabs = 12) {
+async function focusBackwardFromSearch(page, targetSelector, maxTabs = 12) {
   const search = page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox-search"]');
   await search.focus();
 
   for (let attempt = 0; attempt < maxTabs; attempt += 1) {
-    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
     const active = await page.evaluate(selector => document.activeElement?.matches?.(selector) === true, targetSelector);
     if (active) return attempt + 1;
   }
 
-  throw new Error(`Keyboard Tab did not reach ${targetSelector} from the native search control.`);
+  throw new Error(`Keyboard Shift+Tab did not reach ${targetSelector} from the native search control.`);
 }
 
 async function focusPresentationCellByKeyboard(page) {
@@ -172,12 +172,12 @@ try {
     for (const dataJs of ['inbox-clear-filters', 'inbox-fullscreeen', 'inbox-settings']) {
       const selector = `[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`;
       const control = page.locator(selector);
-      const tabMoves = await focusForwardFromSearch(page, selector);
+      const tabMoves = await focusBackwardFromSearch(page, selector);
       const style = await focusStyle(control);
       const box = await targetBox(control);
       if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2) throw new Error(`${dataJs} focus is not visible after keyboard navigation: ${JSON.stringify(style)}`);
       if (box.width < 40 || box.height < 40) throw new Error(`${dataJs} target below 40px baseline: ${JSON.stringify(box)}`);
-      observations[dataJs] = { focus: style, target: box, tab_moves_from_search: tabMoves };
+      observations[dataJs] = { focus: style, target: box, shift_tab_moves_from_search: tabMoves };
     }
     return observations;
   });
