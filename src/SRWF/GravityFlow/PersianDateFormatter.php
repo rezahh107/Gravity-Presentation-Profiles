@@ -2,24 +2,63 @@
 
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
+use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
+use GravityPresentationProfiles\Core\Presentation\PersianGravityJalaliBridge;
+
+/**
+ * Bounded host-date presentation helpers for the SRWF Gravity surfaces.
+ *
+ * Calendar conversion is intentionally absent. Gregorian/system instants are
+ * converted only by PersianGravity's optional public facade. The two admitted
+ * source shapes here are the current production call sites:
+ *
+ * - a strict Gravity Forms / Gravity Flow UTC `Y-m-d H:i:s` source;
+ * - a Unix timestamp already established by the host as an absolute instant.
+ *
+ * Any other value fails closed to native presentation. Persian digit mapping is
+ * not calendar conversion and remains local presentation behavior.
+ */
 final class PersianDateFormatter {
+    const DIAGNOSTIC_SURFACE = 'integration.persian_gravity';
+
+    /**
+     * Compatibility entry point for the current admitted GPP host-date callers.
+     *
+     * String values are accepted only when they are the exact host UTC shape;
+     * numeric values are accepted only as Unix instants. No strtotime(), PHP
+     * default timezone, Iran offset, visible-text parsing or year heuristic is
+     * used.
+     */
     public static function formatDateTime( $value ) {
-        $parts = self::dateParts( $value );
-        if ( null === $parts ) {
+        if ( is_int( $value ) || ( is_string( $value ) && ctype_digit( $value ) ) ) {
+            return self::formatUnixInstant( $value );
+        }
+
+        $native = self::nativeUtcDateTimeFallback( $value );
+        $source = self::strictUtcDateTime( $value );
+        if ( null === $source ) {
+            self::recordSourceFallback( 'source_semantics_not_qualified' );
+            return $native;
+        }
+
+        $result = PersianGravityJalaliBridge::formatDateTime( $source );
+        return null !== $result['value'] ? $result['value'] : $native;
+    }
+
+    /**
+     * Timeline companion: return only a provider presentation. `null` means the
+     * caller must preserve the already-rendered native Timeline date node.
+     */
+    public static function tryFormatUtcDateTime( $value ) {
+        $source = self::strictUtcDateTime( $value );
+        if ( null === $source ) {
+            self::recordSourceFallback( 'source_semantics_not_qualified' );
             return null;
         }
 
-        $jalali = self::gregorianToJalali( $parts['year'], $parts['month'], $parts['day'] );
-        $text = sprintf(
-            '%04d/%02d/%02d، %02d:%02d',
-            $jalali[0],
-            $jalali[1],
-            $jalali[2],
-            $parts['hour'],
-            $parts['minute']
-        );
-
-        return self::persianDigits( $text );
+        $result = PersianGravityJalaliBridge::formatDateTime( $source );
+        return null !== $result['value'] ? $result['value'] : null;
     }
 
     public static function persianDigits( $value ) {
@@ -32,73 +71,113 @@ final class PersianDateFormatter {
         );
     }
 
+    /**
+     * Unix instant only. This intentionally does not parse date strings.
+     */
     public static function timestamp( $value ) {
         if ( is_int( $value ) || ( is_string( $value ) && ctype_digit( $value ) ) ) {
             $timestamp = (int) $value;
             return $timestamp > 0 ? $timestamp : null;
         }
-
-        if ( ! is_string( $value ) || '' === trim( $value ) ) {
-            return null;
-        }
-
-        $timestamp = strtotime( $value );
-        return false === $timestamp ? null : $timestamp;
+        return null;
     }
 
-    private static function dateParts( $value ) {
+    private static function formatUnixInstant( $value ) {
         $timestamp = self::timestamp( $value );
         if ( null === $timestamp ) {
+            self::recordSourceFallback( 'source_semantics_not_qualified' );
             return null;
         }
 
-        return array(
-            'year' => (int) gmdate( 'Y', $timestamp ),
-            'month' => (int) gmdate( 'n', $timestamp ),
-            'day' => (int) gmdate( 'j', $timestamp ),
-            'hour' => (int) gmdate( 'G', $timestamp ),
-            'minute' => (int) gmdate( 'i', $timestamp ),
-        );
+        try {
+            $source = new \DateTimeImmutable( '@' . $timestamp );
+        } catch ( \Throwable $exception ) {
+            self::recordSourceFallback( 'source_semantics_not_qualified' );
+            return null;
+        }
+
+        $result = PersianGravityJalaliBridge::formatDateTime( $source );
+        if ( null !== $result['value'] ) {
+            return $result['value'];
+        }
+
+        return self::nativeUnixInstantFallback( $timestamp );
     }
 
-    private static function gregorianToJalali( $gy, $gm, $gd ) {
-        $g_days_in_month = array( 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 );
-
-        if ( $gy > 1600 ) {
-            $jy = 979;
-            $gy -= 1600;
-        } else {
-            $jy = 0;
-            $gy -= 621;
+    private static function strictUtcDateTime( $value ) {
+        if ( ! is_string( $value ) || 1 !== preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $value ) ) {
+            return null;
         }
 
-        $gy2 = $gm > 2 ? $gy + 1 : $gy;
-        $days = ( 365 * $gy )
-            + (int) floor( ( $gy2 + 3 ) / 4 )
-            - (int) floor( ( $gy2 + 99 ) / 100 )
-            + (int) floor( ( $gy2 + 399 ) / 400 )
-            - 80
-            + $gd
-            + $g_days_in_month[ $gm - 1 ];
-
-        $jy += 33 * (int) floor( $days / 12053 );
-        $days %= 12053;
-        $jy += 4 * (int) floor( $days / 1461 );
-        $days %= 1461;
-
-        if ( $days > 365 ) {
-            $jy += (int) floor( ( $days - 1 ) / 365 );
-            $days = ( $days - 1 ) % 365;
+        try {
+            $utc = new \DateTimeZone( 'UTC' );
+            $source = \DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, $utc );
+        } catch ( \Throwable $exception ) {
+            return null;
         }
 
-        if ( $days < 186 ) {
-            $jm = 1 + (int) floor( $days / 31 );
-            $jd = 1 + ( $days % 31 );
-        } else {
-            $jm = 7 + (int) floor( ( $days - 186 ) / 30 );
-            $jd = 1 + ( ( $days - 186 ) % 30 );
+        if ( false === $source ) {
+            return null;
         }
 
-        return array( $jy, $jm, $jd );
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ( is_array( $errors ) && ( ! empty( $errors['warning_count'] ) || ! empty( $errors['error_count'] ) ) ) {
+            return null;
+        }
+
+        return $source->format( 'Y-m-d H:i:s' ) === $value ? $source : null;
+    }
+
+    private static function nativeUtcDateTimeFallback( $value ) {
+        if ( ! is_scalar( $value ) ) {
+            return null;
+        }
+        $raw = trim( (string) $value );
+        if ( '' === $raw ) {
+            return null;
+        }
+
+        // Gravity Forms owns native date_created presentation. This preserves
+        // its site-timezone/date-format behavior when its formatter is present.
+        if ( class_exists( 'GFCommon' ) && method_exists( 'GFCommon', 'format_date' ) ) {
+            try {
+                $native = \GFCommon::format_date( $raw, false );
+                if ( is_scalar( $native ) && '' !== trim( (string) $native ) ) {
+                    return trim( (string) $native );
+                }
+            } catch ( \Throwable $exception ) {
+                // Fall through to the authoritative raw host value.
+            }
+        }
+
+        return $raw;
+    }
+
+    private static function nativeUnixInstantFallback( $timestamp ) {
+        if ( function_exists( 'wp_date' ) ) {
+            try {
+                $format = function_exists( 'get_option' )
+                    ? trim( (string) get_option( 'date_format', 'Y-m-d' ) . ' ' . (string) get_option( 'time_format', 'H:i' ) )
+                    : 'Y-m-d H:i';
+                $native = wp_date( '' === $format ? 'Y-m-d H:i' : $format, $timestamp );
+                if ( is_string( $native ) && '' !== trim( $native ) ) {
+                    return trim( $native );
+                }
+            } catch ( \Throwable $exception ) {
+                // Keep the fallback bounded and side-effect free.
+            }
+        }
+
+        return gmdate( 'Y-m-d H:i', $timestamp );
+    }
+
+    private static function recordSourceFallback( $reason ) {
+        RuntimeDiagnostics::recordOnce(
+            self::DIAGNOSTIC_SURFACE,
+            'JALALI_PRESENTATION',
+            RuntimeDecisionTrace::RESULT_SKIP,
+            $reason,
+            'native_date_presentation'
+        );
     }
 }
