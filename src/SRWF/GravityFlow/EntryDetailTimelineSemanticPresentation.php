@@ -91,9 +91,9 @@ final class EntryDetailTimelineSemanticPresentation {
             return;
         }
 
-        $admitted = false !== strpos( $html, 'data-gpp-profile-id="' . EntryDetailVisualVariant::PROFILE_FULL_WIDTH . '"' )
-            && false !== strpos( $html, 'data-gpp-entry-detail="ready"' )
-            && false !== strpos( $html, 'data-gpp-review-mode="read-only"' );
+        $admitted = false !== strpos( $html, 'data-gpp-profile-id="' . EntryDetailVisualVariant::PROFILE_FULL_WIDTH . '"' );
+        $admitted = $admitted && false !== strpos( $html, 'data-gpp-entry-detail="ready"' );
+        $admitted = $admitted && false !== strpos( $html, 'data-gpp-review-mode="read-only"' );
 
         if ( ! $admitted || array() === self::$events ) {
             echo $html;
