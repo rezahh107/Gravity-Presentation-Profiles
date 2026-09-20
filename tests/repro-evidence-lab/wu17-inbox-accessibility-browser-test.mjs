@@ -167,9 +167,29 @@ try {
     return { focus: style, target: box, filtered_rows: 1, restored_rows: 20 };
   });
 
-  await test('WU17-A11Y-003', 'native host icon controls have visible keyboard focus and modern target sizing', async () => {
+  await test('WU17-A11Y-003', 'active native host icon controls have visible keyboard focus and inactive Clear Filters stays host-hidden', async () => {
     const observations = {};
-    for (const dataJs of ['inbox-clear-filters', 'inbox-fullscreeen', 'inbox-settings']) {
+    const clearFilters = page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="inbox-clear-filters"]');
+    const clearState = await clearFilters.evaluate(element => {
+      const style = getComputedStyle(element);
+      const grid = element.closest('[data-js="gflow-inbox"]');
+      const rect = element.getBoundingClientRect();
+      return {
+        display: style.display,
+        width: rect.width,
+        height: rect.height,
+        filtersActive: grid?.classList.contains('gflow-inbox--filters-active') ?? false,
+      };
+    });
+    if (!clearState.filtersActive && clearState.display !== 'none') {
+      throw new Error(`Native Clear Filters should stay hidden until a column filter is active: ${JSON.stringify(clearState)}`);
+    }
+    observations['inbox-clear-filters'] = {
+      state: clearState.filtersActive ? 'native_filters_active' : 'native_inactive_hidden',
+      ...clearState,
+    };
+
+    for (const dataJs of ['inbox-fullscreeen', 'inbox-settings']) {
       const selector = `[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`;
       const control = page.locator(selector);
       const tabMoves = await focusBackwardFromSearch(page, selector);
