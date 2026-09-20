@@ -9,12 +9,11 @@ use GravityPresentationProfiles\Core\Presentation\PersianGravityJalaliBridge;
 /**
  * Bounded host-date presentation helpers for the SRWF Gravity surfaces.
  *
- * Calendar conversion is intentionally absent. Gregorian/system instants are
- * converted only by PersianGravity's optional public facade. The two admitted
- * source shapes here are the current production call sites:
- *
- * - a strict Gravity Forms / Gravity Flow UTC `Y-m-d H:i:s` source;
- * - a Unix timestamp already established by the host as an absolute instant.
+ * Calendar conversion is intentionally absent. Gregorian/system datetimes are
+ * converted only by PersianGravity's optional public facade after the caller's
+ * source contract has established the exact host UTC `Y-m-d H:i:s` semantics.
+ * Numeric candidates remain native until their producing host seam is separately
+ * qualified; a number is not promoted to an authoritative instant by shape alone.
  *
  * Any other value fails closed to native presentation. Persian digit mapping is
  * not calendar conversion and remains local presentation behavior.
@@ -25,14 +24,17 @@ final class PersianDateFormatter {
     /**
      * Compatibility entry point for the current admitted GPP host-date callers.
      *
-     * String values are accepted only when they are the exact host UTC shape;
-     * numeric values are accepted only as Unix instants. No strtotime(), PHP
-     * default timezone, Iran offset, visible-text parsing or year heuristic is
-     * used.
+     * Only exact host UTC datetime strings are eligible for the provider. Numeric
+     * candidates (currently the optional current-step Due path) remain native
+     * because that host source contract is not yet independently qualified.
+     * No strtotime(), PHP default timezone, Iran offset, visible-text parsing or
+     * year heuristic is used.
      */
     public static function formatDateTime( $value ) {
         if ( is_int( $value ) || ( is_string( $value ) && ctype_digit( $value ) ) ) {
-            return self::formatUnixInstant( $value );
+            $timestamp = self::timestamp( $value );
+            self::recordSourceFallback( 'source_semantics_not_qualified' );
+            return null === $timestamp ? null : self::nativeUnixInstantFallback( $timestamp );
         }
 
         $native = self::nativeUtcDateTimeFallback( $value );
@@ -72,7 +74,8 @@ final class PersianDateFormatter {
     }
 
     /**
-     * Unix instant only. This intentionally does not parse date strings.
+     * Numeric host value helper. This validates numeric shape only; it does not
+     * qualify the producing host seam for Gregorian→Jalali conversion.
      */
     public static function timestamp( $value ) {
         if ( is_int( $value ) || ( is_string( $value ) && ctype_digit( $value ) ) ) {
@@ -80,28 +83,6 @@ final class PersianDateFormatter {
             return $timestamp > 0 ? $timestamp : null;
         }
         return null;
-    }
-
-    private static function formatUnixInstant( $value ) {
-        $timestamp = self::timestamp( $value );
-        if ( null === $timestamp ) {
-            self::recordSourceFallback( 'source_semantics_not_qualified' );
-            return null;
-        }
-
-        try {
-            $source = new \DateTimeImmutable( '@' . $timestamp );
-        } catch ( \Throwable $exception ) {
-            self::recordSourceFallback( 'source_semantics_not_qualified' );
-            return null;
-        }
-
-        $result = PersianGravityJalaliBridge::formatDateTime( $source );
-        if ( null !== $result['value'] ) {
-            return $result['value'];
-        }
-
-        return self::nativeUnixInstantFallback( $timestamp );
     }
 
     private static function strictUtcDateTime( $value ) {
