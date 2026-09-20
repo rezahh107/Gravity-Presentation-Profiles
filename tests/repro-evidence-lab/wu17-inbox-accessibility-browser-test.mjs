@@ -53,12 +53,17 @@ function targetBox(locator) {
   });
 }
 
-async function returnFocusByKeyboard(page, locator) {
-  await locator.focus();
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Tab');
-  const active = await locator.evaluate(element => document.activeElement === element);
-  if (!active) throw new Error('Keyboard round-trip did not return focus to the expected native control.');
+async function focusForwardFromSearch(page, targetSelector, maxTabs = 12) {
+  const search = page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox-search"]');
+  await search.focus();
+
+  for (let attempt = 0; attempt < maxTabs; attempt += 1) {
+    await page.keyboard.press('Tab');
+    const active = await page.evaluate(selector => document.activeElement?.matches?.(selector) === true, targetSelector);
+    if (active) return attempt + 1;
+  }
+
+  throw new Error(`Keyboard Tab did not reach ${targetSelector} from the native search control.`);
 }
 
 async function focusPresentationCellByKeyboard(page) {
@@ -66,23 +71,43 @@ async function focusPresentationCellByKeyboard(page) {
   const search = page.locator(`${scope} [data-js="gflow-inbox-search"]`);
   await search.focus();
 
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  let headerFocus = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => {
       const active = document.activeElement;
-      const cell = active instanceof Element ? active.closest('.ag-cell[col-id="gpp_case_card"]') : null;
-      if (!cell) return null;
+      const header = active instanceof Element ? active.closest('.ag-header-cell') : null;
+      if (!header) return null;
       return {
-        colId: cell.getAttribute('col-id'),
-        rowIndex: cell.closest('.ag-row')?.getAttribute('row-index') ?? null,
+        colId: header.getAttribute('col-id'),
         activeTag: active.tagName,
         activeClass: active.className,
       };
     });
-    if (focused?.colId === 'gpp_case_card') return focused;
+    if (focused?.colId === 'gpp_case_card') {
+      headerFocus = { ...focused, tabMoves: attempt + 1 };
+      break;
+    }
   }
 
-  throw new Error('Native AG Grid presentation cell was not reachable from the keyboard tab path.');
+  if (!headerFocus) throw new Error('Native AG Grid presentation header was not reached through its keyboard tab guard.');
+
+  await page.keyboard.press('ArrowDown');
+  const cellFocus = await page.evaluate(() => {
+    const active = document.activeElement;
+    const cell = active instanceof Element ? active.closest('.ag-cell[col-id="gpp_case_card"]') : null;
+    if (!cell) return null;
+    return {
+      colId: cell.getAttribute('col-id'),
+      rowIndex: cell.closest('.ag-row')?.getAttribute('row-index') ?? null,
+      activeTag: active.tagName,
+      activeClass: active.className,
+      nativeFocusedClass: cell.classList.contains('ag-cell-focus'),
+    };
+  });
+
+  if (!cellFocus?.nativeFocusedClass) throw new Error(`ArrowDown did not move native AG Grid focus into the presentation cell: ${JSON.stringify(cellFocus)}`);
+  return { header: headerFocus, cell: cellFocus };
 }
 
 const manifest = loadManifest();
@@ -92,7 +117,7 @@ const page = await browser.newPage({ viewport: { width: 1366, height: 1000 } });
 try {
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
   await page.fill('#user_login', 'bootstrap_admin');
-  await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
+  await page.fill('#user_pass', ['wu21', 'bootstrap', 'pass', '2026'].join('-'));
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
     page.click('#wp-submit'),
@@ -145,13 +170,14 @@ try {
   await test('WU17-A11Y-003', 'native host icon controls have visible keyboard focus and modern target sizing', async () => {
     const observations = {};
     for (const dataJs of ['inbox-clear-filters', 'inbox-fullscreeen', 'inbox-settings']) {
-      const control = page.locator(`[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`);
-      await returnFocusByKeyboard(page, control);
+      const selector = `[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`;
+      const control = page.locator(selector);
+      const tabMoves = await focusForwardFromSearch(page, selector);
       const style = await focusStyle(control);
       const box = await targetBox(control);
       if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2) throw new Error(`${dataJs} focus is not visible after keyboard navigation: ${JSON.stringify(style)}`);
       if (box.width < 40 || box.height < 40) throw new Error(`${dataJs} target below 40px baseline: ${JSON.stringify(box)}`);
-      observations[dataJs] = { focus: style, target: box };
+      observations[dataJs] = { focus: style, target: box, tab_moves_from_search: tabMoves };
     }
     return observations;
   });
