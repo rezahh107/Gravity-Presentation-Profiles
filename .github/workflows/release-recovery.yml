@@ -60,7 +60,7 @@ jobs:
           release_is_production_version "$version"
           test "$version" = '0.2.0'
           bash -n scripts/release/smoke-zip.sh
-          bash tests/release/recovery-version-contract-tests.sh
+          bash tests/recovery/recovery-version-contract-tests.sh
           git fetch --tags --force
           tag="v$version"
           tag_sha="$(git rev-list -n1 "$tag")"
