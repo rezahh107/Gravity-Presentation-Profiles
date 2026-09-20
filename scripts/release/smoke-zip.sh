@@ -8,8 +8,12 @@ DB_NAME="${GPP_RELEASE_DB_NAME:-wordpress}"
 DB_USER="${GPP_RELEASE_DB_USER:-root}"
 DB_PASS="${GPP_RELEASE_DB_PASS:-gpp-release-root}"
 DB_HOST="${GPP_RELEASE_DB_HOST:-127.0.0.1:3306}"
-BASE_URL="${GPP_RELEASE_BASE_URL:-http://127.0.0.1:8090}"
+BASE_URL="${GPP_RELEASE_BASE_URL-http://127.0.0.1:8090}"
 LAB_CONFIG="$ROOT/tests/repro-evidence-lab/lab-config.json"
+
+source "$ROOT/scripts/release/release-lib.sh"
+SMOKE_ENDPOINT="$(release_parse_smoke_endpoint "$BASE_URL")"
+IFS=$'\t' read -r SERVER_HOST SERVER_PORT <<<"$SMOKE_ENDPOINT"
 
 [[ -f "$ZIP" ]] || { echo "Missing release ZIP: $ZIP" >&2; exit 1; }
 [[ -f "$LAB_CONFIG" ]] || { echo "Missing pinned runtime config: $LAB_CONFIG" >&2; exit 1; }
@@ -82,7 +86,8 @@ echo "GPP_RELEASE_RUNTIME_ASSERT_PASS\n";
 BEHAVIOR_DIR="$ROOT/build/release/behavioral-production-reachability"
 rm -rf "$BEHAVIOR_DIR"
 mkdir -p "$BEHAVIOR_DIR"
-php "$WPCLI" server --path="$WP_PATH" --host=127.0.0.1 --port=8090 >"$WORK/wp-server.log" 2>&1 &
+printf 'GPP_RELEASE_SMOKE_ENDPOINT base_url=%s bind_host=%s bind_port=%s\n' "$BASE_URL" "$SERVER_HOST" "$SERVER_PORT"
+php "$WPCLI" server --path="$WP_PATH" --host="$SERVER_HOST" --port="$SERVER_PORT" >"$WORK/wp-server.log" 2>&1 &
 SERVER_PID=$!
 for i in $(seq 1 30); do
     if curl -fsS "$BASE_URL/wp-login.php" >/dev/null; then
