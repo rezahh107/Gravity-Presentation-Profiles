@@ -230,8 +230,8 @@
 
 /* Transition: exact send-to-known-step signature -> movement title -> soft blue. */
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-note-body-wrap > .gravityflow-note-body:has(.gpp-timeline-event[data-gpp-timeline-semantic="transition"]) > .gravityflow-note-body {
-    border-color: #d4e3f7;
-    background: #f2f7fd;
+    border-color: #dfe7f1;
+    background: #f5f8ff;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"][data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gpp-timeline-event[data-gpp-timeline-semantic="transition"] .gpp-timeline-event__title {
