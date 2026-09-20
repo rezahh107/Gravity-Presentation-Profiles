@@ -195,10 +195,21 @@
     box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05);
 }
 
-.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:focus-visible .gpp-inbox-card,
-.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:hover .gpp-inbox-card {
+/*
+ * Gravity Flow 3.1.0 keeps its entry overlay link out of the tab order and lets
+ * AG Grid own keyboard focus/Enter navigation on the cell. Reflect that native
+ * focus state on the visual card rather than inventing a second interactive DOM.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"].ag-cell-focus .gpp-inbox-card {
     border-color: var(--gpp-inbox-focus);
     box-shadow: 0 0 0 2px var(--gpp-inbox-focus);
+}
+
+@supports selector(:has(*)) {
+    .gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"]:has(.gflow-inbox__entry-cell-link:hover) .gpp-inbox-card {
+        border-color: var(--gpp-inbox-focus);
+        box-shadow: 0 0 0 2px var(--gpp-inbox-focus);
+    }
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo {
