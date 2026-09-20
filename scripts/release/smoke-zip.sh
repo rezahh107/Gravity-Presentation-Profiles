@@ -10,9 +10,11 @@ DB_PASS="${GPP_RELEASE_DB_PASS:-gpp-release-root}"
 DB_HOST="${GPP_RELEASE_DB_HOST:-127.0.0.1:3306}"
 BASE_URL="${GPP_RELEASE_BASE_URL:-http://127.0.0.1:8090}"
 LAB_CONFIG="$ROOT/tests/repro-evidence-lab/lab-config.json"
+ENDPOINT_RESOLVER="$ROOT/scripts/release/resolve-smoke-server-endpoint.php"
 
 [[ -f "$ZIP" ]] || { echo "Missing release ZIP: $ZIP" >&2; exit 1; }
 [[ -f "$LAB_CONFIG" ]] || { echo "Missing pinned runtime config: $LAB_CONFIG" >&2; exit 1; }
+[[ -f "$ENDPOINT_RESOLVER" ]] || { echo "Missing smoke endpoint resolver: $ENDPOINT_RESOLVER" >&2; exit 1; }
 
 json_value() {
     local expression="$1"
@@ -30,6 +32,8 @@ FLOW_ID="$(json_value plugins.gravity_flow.drive_file_id)"
 FLOW_HASH="$(json_value plugins.gravity_flow.sha256)"
 FLOW_SIZE="$(json_value plugins.gravity_flow.size_bytes)"
 FLOW_VERSION="$(json_value plugins.gravity_flow.version)"
+IFS=$'\t' read -r SERVER_HOST SERVER_PORT < <(php "$ENDPOINT_RESOLVER" "$BASE_URL")
+[[ -n "$SERVER_HOST" && -n "$SERVER_PORT" ]] || { echo "Unable to resolve smoke server endpoint from BASE_URL=$BASE_URL" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
 SERVER_PID=""
@@ -82,7 +86,7 @@ echo "GPP_RELEASE_RUNTIME_ASSERT_PASS\n";
 BEHAVIOR_DIR="$ROOT/build/release/behavioral-production-reachability"
 rm -rf "$BEHAVIOR_DIR"
 mkdir -p "$BEHAVIOR_DIR"
-php "$WPCLI" server --path="$WP_PATH" --host=127.0.0.1 --port=8090 >"$WORK/wp-server.log" 2>&1 &
+php "$WPCLI" server --path="$WP_PATH" --host="$SERVER_HOST" --port="$SERVER_PORT" >"$WORK/wp-server.log" 2>&1 &
 SERVER_PID=$!
 for i in $(seq 1 30); do
     if curl -fsS "$BASE_URL/wp-login.php" >/dev/null; then
