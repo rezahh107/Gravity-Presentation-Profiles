@@ -4,12 +4,13 @@
  * WordPress block themes can put root padding on constrained containers instead
  * of body. The admitted frontend Full Width surface must cancel that host-owned
  * padding as well as the content-width constraint; otherwise a 100vw surface is
- * shifted by the root gutter and creates document overflow. Classic/non-block
- * hosts simply resolve the root-padding custom properties to the 0px fallback.
+ * shifted by the root gutter and creates document overflow. These physical
+ * declarations intentionally override the earlier logical centering shorthand;
+ * classic/non-block hosts resolve the root-padding custom properties to 0px.
  */
 .gpp-inbox-surface--full-width {
-    margin-left: calc(50% - 50vw - var(--wp--style--root--padding-left, 0px));
-    margin-right: calc(50% - 50vw - var(--wp--style--root--padding-right, 0px));
+    margin-left: calc(50% - 50vw - var(--wp--style--root--padding-left, 0px)) !important;
+    margin-right: calc(50% - 50vw - var(--wp--style--root--padding-right, 0px)) !important;
 }
 
 /*
@@ -59,25 +60,24 @@
     }
 
     /*
-     * AG Grid 25.2.0 keeps its fake horizontal scrollbar sized from the native
-     * column model even though Card Mode projects one CSS-wide presentation
-     * column. Reset only that presentation track/spacers to the visible card
-     * viewport. Native column/query/paging/search state is not changed and the
-     * fallback/unready state receives no override.
+     * Card Mode projects one bounded presentation column over AG Grid's native
+     * column model. Keep the authentic structural flex chain inside the visible
+     * grid width so its 17px scrollbar bookkeeping cannot enlarge the root
+     * scroll geometry. This changes presentation geometry only; it does not
+     * touch grid APIs, column/query state, pagination or the unready fallback.
      */
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll,
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-viewport,
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll-container {
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper-body,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport {
         box-sizing: border-box;
-        width: 100% !important;
         max-width: 100% !important;
         min-width: 0 !important;
     }
 
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-horizontal-left-spacer,
-    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-horizontal-right-spacer {
-        width: 0 !important;
-        max-width: 0 !important;
-        min-width: 0 !important;
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper-body,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root {
+        width: 100% !important;
     }
 }
