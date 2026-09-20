@@ -23,9 +23,9 @@ The Current / Safe identity remains the Entry Detail profile from the shipped Op
 
 Switching variants must not change Inbox activation, Print activation, EnvironmentBindingSet state, workflow configuration, semantic mappings, authorization, assignment or Gravity Flow actions.
 
-## CSS-only runtime boundary
+## Runtime composition boundary
 
-Full Width runtime composition is CSS-only. It uses the authentic Gravity Flow 3.1.0 Entry Detail structure where these native regions are direct siblings under `#post-body`:
+Full Width page composition remains CSS-only. It uses the authentic Gravity Flow 3.1.0 Entry Detail structure where these native regions are direct siblings under `#post-body`:
 
 - `#post-body-content` — main Entry Detail/GPP dossier region;
 - `#postbox-container-1` — native workflow/status/action region;
@@ -35,11 +35,23 @@ This permits a normal-flow CSS Grid desktop composition without DOM reparenting,
 
 On narrow viewports the same native source order collapses to one column.
 
+### Owner-approved workflow-panel presentation-markup exception
+
+The Owner has approved one narrow exception inside the Full Width admitted read-only Review workflow/action panel. GPP may render a small amount of server-side presentation markup through the native Gravity Flow Approval render seam for:
+
+- the Owner-facing panel heading and static guidance copy;
+- a current-stage presentation section that re-presents only authentic values already available on the current native Gravity Flow step/assignee context;
+- a static informational footer clarifying that workflow operations remain Gravity Flow-owned.
+
+The exception does **not** authorize workflow behavior. It must not add or clone workflow controls, persist workflow data, issue network requests, perform client-side state management, add JavaScript, alter mappings, alter workflow configuration, change authorization, or change action/transition ownership. Missing host facts are omitted rather than inferred from rendered strings or replaced with synthetic placeholders.
+
+The native Gravity Flow Note textarea and native Approval/Reject/Revert controls remain the original host controls. A Revert control is styled only if Gravity Flow itself emits one.
+
 ## Native ownership
 
 Gravity Flow remains authoritative for workflow status, assignment, Approval/Reject/Revert actions, notes, nonces, transitions, current-assignee behavior, Timeline data and Timeline order.
 
-GPP styles only existing native nodes and the existing server-rendered GPP dossier/Print utility. The duplicate native read-only field listing and redundant native Print control retain the existing PR44/PR47 suppression contract.
+GPP styles existing native nodes, the existing server-rendered GPP dossier/Print utility, and the bounded presentation markup described above. The duplicate native read-only field listing and redundant native Print control retain the existing PR44/PR47 suppression contract.
 
 ## Timeline limitation
 
@@ -51,9 +63,11 @@ A Timeline count badge must not be fabricated when the host DOM exposes no truth
 
 ## Workflow-panel content limitation
 
-Only authentic currently rendered native content may be styled. Current step/status, assignee, note textarea and available native actions are eligible when present. Instruction content remains in its authentic native location if the host renders it there.
+The bounded server-rendered presentation layer may use only authentic values already available from the current native Gravity Flow server context. Current step name, assignee display name, and a genuine due timestamp are eligible when their host APIs provide a value. Missing facts are omitted.
 
-A due date or other mockup-only workflow fact must not be manufactured when it is absent from the current DOM/API boundary.
+Static Owner-approved explanatory copy is presentation guidance, not workflow state. It must be real HTML text rather than CSS-generated content.
+
+No due date, remaining-days badge, assignee, status or other workflow fact may be manufactured from visible text or from a parallel data source.
 
 ## GeneratePress boundary
 
