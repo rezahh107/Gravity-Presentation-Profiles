@@ -31,7 +31,8 @@ gpp_assert_true( false !== strpos( $semantic, "'Sent to step'" ) && false !== st
 gpp_assert_true( false !== strpos( $semantic, "'family' => self::FAMILY_UNKNOWN" ) && false !== strpos( $semantic, 'unmatched_native_event' ), 'Unmatched events must explicitly fall back to unknown.' );
 gpp_assert_true( false === strpos( $semantic, 'preg_match( \'/.*Approved') && false === strpos( $semantic, 'stripos( $value' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
 
-gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved"' ) && false !== strpos( $semantic, '$match[2]' ), 'Classified presentation must retain the authentic native event source in the DOM.' );
+gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved-sibling"' ), 'Classified presentation must explicitly identify the preserved native source relationship.' );
+gpp_assert_true( false !== strpos( $semantic, '$match[1] . $match[2] . \'</div>\' . $presentation' ), 'Classified presentation must retain the authentic native event body and append a presentation sibling.' );
 gpp_assert_true( false !== strpos( $semantic, '<bdi dir="auto">' ), 'Mixed-language destination values must use bidi isolation.' );
 gpp_assert_true( false === strpos( $semantic, 'update_option(' ) && false === strpos( $semantic, 'add_timeline_note(' ) && false === strpos( $semantic, 'add_note(' ), 'Presentation semantics must not persist or synthesize Timeline history.' );
 
@@ -39,6 +40,7 @@ gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="appro
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="transition"' ) && false !== strpos( $timeline, '#f5f8ff' ), 'Transition family must have restrained blue presentation.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="note"' ) && false !== strpos( $timeline, '#fff8e8' ), 'Note family must reserve warm amber annotation presentation without warning semantics.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="system"' ) && false !== strpos( $timeline, '#f8fafc' ), 'System family must remain neutral.' );
+gpp_assert_true( false !== strpos( $timeline, ':has(> .gpp-timeline-event) > .gravityflow-note-body' ) && false !== strpos( $timeline, 'display: none' ), 'Only classified native event bodies may be visually superseded by their preserved semantic sibling.' );
 gpp_assert_true( false !== strpos( $timeline, '.gpp-timeline-event__title' ) && false !== strpos( $timeline, '.gpp-timeline-event__subtitle' ), 'Classified events must expose text hierarchy in addition to color.' );
 gpp_assert_true( false !== strpos( $timeline, 'background-image: url("data:image/svg+xml' ), 'Classified markers must use dependency-free decorative semantic icons.' );
 gpp_assert_true( false !== strpos( $timeline, 'unicode-bidi: plaintext' ) && false !== strpos( $timeline, 'unicode-bidi: isolate' ), 'Timeline text must explicitly protect RTL/mixed-language bidi flow.' );
