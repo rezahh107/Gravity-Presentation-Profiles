@@ -1,16 +1,17 @@
 /* Native-first CSS projection over the authoritative Gravity Flow Inbox. */
 
 /*
- * WordPress block themes can put root padding on constrained containers instead
- * of body. The admitted frontend Full Width surface must cancel that host-owned
- * padding as well as the content-width constraint; otherwise a 100vw surface is
- * shifted by the root gutter and creates document overflow. These physical
- * declarations intentionally override the earlier logical centering shorthand;
- * classic/non-block hosts resolve the root-padding custom properties to 0px.
+ * WordPress block themes can offset constrained content with root padding. The
+ * admitted frontend Full Width surface must escape from its actual normal-flow
+ * position without relying on an over-constrained pair of negative margins (the
+ * ignored physical margin differs in RTL). Use one physical relative offset so
+ * the 100vw surface starts at the viewport edge. Classic/non-block hosts resolve
+ * the root-padding custom property to 0px.
  */
 .gpp-inbox-surface--full-width {
-    margin-left: calc(50% - 50vw - var(--wp--style--root--padding-left, 0px)) !important;
-    margin-right: calc(50% - 50vw - var(--wp--style--root--padding-right, 0px)) !important;
+    position: relative;
+    left: calc(50% - 50vw - var(--wp--style--root--padding-left, 0px));
+    margin-inline: 0 !important;
 }
 
 /*
@@ -62,9 +63,8 @@
     /*
      * Card Mode projects one bounded presentation column over AG Grid's native
      * column model. Keep the authentic structural flex chain inside the visible
-     * grid width so its 17px scrollbar bookkeeping cannot enlarge the root
-     * scroll geometry. This changes presentation geometry only; it does not
-     * touch grid APIs, column/query state, pagination or the unready fallback.
+     * grid width. This changes presentation geometry only; it does not touch
+     * grid APIs, column/query state, pagination or the unready fallback.
      */
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper-body,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root,
@@ -79,5 +79,20 @@
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper-body,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root {
         width: 100% !important;
+    }
+
+    /*
+     * AG Grid 25.x reserves a native scrollbar-corner spacer (17px in the
+     * pinned Chromium runtime) even though Card Mode presents one full-width
+     * column and has no horizontal content to scroll. Collapse only those fake
+     * horizontal-scroll spacers while Card Mode is fully ready. The native
+     * fallback keeps the host's untouched scrollbar geometry.
+     */
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-left-spacer,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-horizontal-scroll .ag-horizontal-right-spacer {
+        flex: 0 0 0 !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
     }
 }
