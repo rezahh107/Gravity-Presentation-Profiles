@@ -20,6 +20,12 @@ gpp_assert_true( false !== strpos( $bootstrap, 'EntryDetailTimelineSemanticPrese
 gpp_assert_true( false !== strpos( $semantic, "gravityflow_timeline_notes" ), 'Semantic classification must consume Gravity Flow display-time timeline notes.' );
 gpp_assert_true( false !== strpos( $semantic, "gravityflow_entry_detail_content_before" ) && false !== strpos( $semantic, "gravityflow_entry_detail_content_after" ), 'Native Entry Detail output must be bracketed only for request-time presentation decoration.' );
 gpp_assert_true( false !== strpos( $semantic, 'data-gpp-profile-id="' ) && false !== strpos( $semantic, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $semantic, 'data-gpp-review-mode="read-only"' ), 'Semantic output must fail closed unless lifecycle-backed Full Width read-only Review is admitted.' );
+gpp_assert_true( false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_ID' ) && false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_VERSION' ) && false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PROFILE_ID' ), 'Semantic Timeline admission must reuse the exact Full Width lifecycle identities.' );
+gpp_assert_true( false !== strpos( $semantic, '$visual->resolve( EntryDetailVisualVariant::SURFACE )' ), 'Semantic Timeline admission must resolve the same lifecycle surface as the Full Width adapter.' );
+gpp_assert_true( false !== strpos( $semantic, "'entry' !== \$view || \$lid < 1" ) && false !== strpos( $semantic, "'gravityflow-inbox' === \$page" ), 'Semantic Timeline request admission must match the proven Full Width Entry Detail request seam.' );
+foreach ( array( '::PACKAGE_ID', '::PACKAGE_VERSION', '::PROFILE_FULL_WIDTH' ) as $invalid_alias ) {
+    gpp_assert_true( false === strpos( $semantic, $invalid_alias ), 'Semantic Timeline must not reference nonexistent visual-variant alias ' . $invalid_alias . '.' );
+}
 
 foreach ( array( 'FAMILY_APPROVAL', 'FAMILY_TRANSITION', 'FAMILY_NOTE', 'FAMILY_SYSTEM', 'FAMILY_UNKNOWN' ) as $family_constant ) {
     gpp_assert_true( false !== strpos( $semantic, $family_constant ), 'Small semantic vocabulary must include ' . $family_constant . '.' );
@@ -28,8 +34,9 @@ foreach ( array( 'FAMILY_APPROVAL', 'FAMILY_TRANSITION', 'FAMILY_NOTE', 'FAMILY_
 gpp_assert_true( false !== strpos( $semantic, "'Workflow Submitted'" ) && false !== strpos( $semantic, 'exact_gravityflow_workflow_submitted_signature' ), 'System classification must use an explicit native Workflow Submitted signature.' );
 gpp_assert_true( false !== strpos( $semantic, "'approval' === \$type" ) && false !== strpos( $semantic, "'Approved.'" ) && false !== strpos( $semantic, 'approval_step_plus_exact_approved_signature' ), 'Approval classification must require an authentic Approval step plus exact host status signature.' );
 gpp_assert_true( false !== strpos( $semantic, "'Sent to step'" ) && false !== strpos( $semantic, 'exact_send_to_known_step_signature' ), 'Transition classification must map only exact send-to-known-step signatures.' );
+gpp_assert_true( false !== strpos( $semantic, 'exactHostTexts' ), 'Explicit host signatures must tolerate only the canonical Gravity Flow text and its current translation.' );
 gpp_assert_true( false !== strpos( $semantic, "'family' => self::FAMILY_UNKNOWN" ) && false !== strpos( $semantic, 'unmatched_native_event' ), 'Unmatched events must explicitly fall back to unknown.' );
-gpp_assert_true( false === strpos( $semantic, 'preg_match( \'/.*Approved') && false === strpos( $semantic, 'stripos( $value' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
+gpp_assert_true( false === strpos( $semantic, 'stripos( $value' ) && false === strpos( $semantic, 'similar_text(' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
 
 gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved-sibling"' ), 'Classified presentation must explicitly identify the preserved native source relationship.' );
 gpp_assert_true( false !== strpos( $semantic, '$match[1] . $match[2] . \'</div>\' . $presentation' ), 'Classified presentation must retain the authentic native event body and append a presentation sibling.' );
