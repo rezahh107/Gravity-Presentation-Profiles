@@ -24,11 +24,28 @@ final class PGR_Jalali_Presentation {
     }
 }
 
+final class GF_Field_PGR_Jalali_Date_Test_Double {
+    public $type = 'pgr_jalali_date';
+
+    public function get_value_entry_detail( $raw, $entry, $format, $media ) {
+        unset( $entry, $format, $media );
+        return 'native-jalali-field:' . $raw;
+    }
+}
+
+final class GFAPI {
+    public static function get_field( $form, $field_id ) {
+        unset( $form, $field_id );
+        return new GF_Field_PGR_Jalali_Date_Test_Double();
+    }
+}
+
 require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/../../src/Autoloader.php';
 
 use GravityPresentationProfiles\Autoloader;
 use GravityPresentationProfiles\Core\Presentation\PersianGravityJalaliBridge;
+use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
 use GravityPresentationProfiles\SRWF\GravityFlow\PersianDateFormatter;
 
 Autoloader::register();
@@ -50,6 +67,16 @@ gpp_assert_same( '1799-12-31 00:00:00', PersianDateFormatter::formatDateTime( '1
 $before_jalali_calls = count( PGR_Jalali_Presentation::$calls );
 gpp_assert_same( '۱۴۰۵/۰۱/۰۱', PersianDateFormatter::formatDateTime( '۱۴۰۵/۰۱/۰۱' ), 'Already-presented Jalali text must remain native.' );
 gpp_assert_same( $before_jalali_calls, count( PGR_Jalali_Presentation::$calls ), 'Already-Jalali-looking text must never reach the Gregorian provider facade.' );
+
+$reader = new BoundHostValueReader();
+$field_calls_before = count( PGR_Jalali_Presentation::$calls );
+$field_display = $reader->readDisplay(
+    array( 'type' => 'gravity_forms.field', 'field_id' => 9 ),
+    array( 'id' => 77 ),
+    array( '9' => '1405-01-01' )
+);
+gpp_assert_same( 'native-jalali-field:1405-01-01', $field_display, 'Dedicated pgr_jalali_date field must retain its native field presentation.' );
+gpp_assert_same( $field_calls_before, count( PGR_Jalali_Presentation::$calls ), 'Dedicated pgr_jalali_date field must never enter Gregorian→Jalali provider conversion.' );
 
 PGR_Jalali_Presentation::$mode = 'throw';
 gpp_assert_same( $raw, PersianDateFormatter::formatDateTime( $raw ), 'Provider exception must preserve native output without escaping the optional boundary.' );
