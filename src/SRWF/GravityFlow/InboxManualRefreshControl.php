@@ -21,8 +21,8 @@ final class InboxManualRefreshControl {
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueAdmin' ), 20 );
 
         // Frontend reachability is attached to Gravity Flow's own Inbox shortcode
-        // render seam. The HTML is returned untouched; this is not a replacement
-        // Inbox and it does not enqueue on unrelated frontend pages.
+        // render seam. The authentic host HTML is optionally enclosed by the
+        // admitted GPP presentation shell; no Inbox state/rows are reconstructed.
         add_filter( 'gravityflow_shortcode_inbox', array( __CLASS__, 'filterFrontendInbox' ), 20, 3 );
         add_filter( 'render_block', array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
     }
@@ -37,13 +37,13 @@ final class InboxManualRefreshControl {
     public static function filterFrontendInbox( $html, $atts, $content ) {
         unset( $atts, $content );
         self::enqueueScript();
-        return $html;
+        return self::wrapPresentation( $html );
     }
 
     /**
      * Gravity Flow 3.1.0 also supports its native Inbox block. Keep the WordPress
-     * block filter generic but gate the enqueue on the exact admitted native
-     * Inbox DOM marker already used by the presentation layer.
+     * block filter generic but gate the enqueue/composition on the exact admitted
+     * native Inbox DOM markers already used by the presentation layer.
      */
     public static function filterFrontendBlock( $block_content, $block ) {
         unset( $block );
@@ -51,8 +51,20 @@ final class InboxManualRefreshControl {
             && false !== strpos( $block_content, 'gflow-inbox' )
             && false !== strpos( $block_content, 'data-js="gflow-inbox"' ) ) {
             self::enqueueScript();
+            return self::wrapPresentation( $block_content );
         }
         return $block_content;
+    }
+
+    private static function wrapPresentation( $html ) {
+        if ( ! is_string( $html )
+            || false === strpos( $html, 'gflow-inbox' )
+            || false === strpos( $html, 'data-js="gflow-inbox"' )
+            || ! class_exists( InboxSurfaceComposition::class ) ) {
+            return $html;
+        }
+
+        return InboxSurfaceComposition::wrap( $html );
     }
 
     private static function enqueueScript() {
