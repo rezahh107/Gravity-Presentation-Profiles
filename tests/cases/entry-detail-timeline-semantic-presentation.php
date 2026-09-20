@@ -19,7 +19,7 @@ gpp_assert_true( is_string( $timeline ) && '' !== $timeline, 'Timeline styleshee
 gpp_assert_true( false !== strpos( $bootstrap, 'EntryDetailTimelineSemanticPresentation::register();' ), 'Semantic Timeline layer must use the existing deferred Gravity Forms bootstrap.' );
 gpp_assert_true( false !== strpos( $semantic, "gravityflow_timeline_notes" ), 'Semantic classification must consume Gravity Flow display-time timeline notes.' );
 gpp_assert_true( false !== strpos( $semantic, "gravityflow_entry_detail_content_before" ) && false !== strpos( $semantic, "gravityflow_entry_detail_content_after" ), 'Native Entry Detail output must be bracketed only for request-time presentation decoration.' );
-gpp_assert_true( false !== strpos( $semantic, 'data-gpp-profile-id=\"' ) && false !== strpos( $semantic, 'data-gpp-entry-detail=\"ready\"' ) && false !== strpos( $semantic, 'data-gpp-review-mode=\"read-only\"' ), 'Semantic output must fail closed unless lifecycle-backed Full Width read-only Review is admitted.' );
+gpp_assert_true( false !== strpos( $semantic, 'data-gpp-profile-id="' ) && false !== strpos( $semantic, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $semantic, 'data-gpp-review-mode="read-only"' ), 'Semantic output must fail closed unless lifecycle-backed Full Width read-only Review is admitted.' );
 
 foreach ( array( 'FAMILY_APPROVAL', 'FAMILY_TRANSITION', 'FAMILY_NOTE', 'FAMILY_SYSTEM', 'FAMILY_UNKNOWN' ) as $family_constant ) {
     gpp_assert_true( false !== strpos( $semantic, $family_constant ), 'Small semantic vocabulary must include ' . $family_constant . '.' );
@@ -31,8 +31,8 @@ gpp_assert_true( false !== strpos( $semantic, "'Sent to step'" ) && false !== st
 gpp_assert_true( false !== strpos( $semantic, "'family' => self::FAMILY_UNKNOWN" ) && false !== strpos( $semantic, 'unmatched_native_event' ), 'Unmatched events must explicitly fall back to unknown.' );
 gpp_assert_true( false === strpos( $semantic, 'preg_match( \'/.*Approved') && false === strpos( $semantic, 'stripos( $value' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
 
-gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source=\"preserved\"' ) && false !== strpos( $semantic, '$match[2]' ), 'Classified presentation must retain the authentic native event source in the DOM.' );
-gpp_assert_true( false !== strpos( $semantic, '<bdi dir=\"auto\">' ), 'Mixed-language destination values must use bidi isolation.' );
+gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved"' ) && false !== strpos( $semantic, '$match[2]' ), 'Classified presentation must retain the authentic native event source in the DOM.' );
+gpp_assert_true( false !== strpos( $semantic, '<bdi dir="auto">' ), 'Mixed-language destination values must use bidi isolation.' );
 gpp_assert_true( false === strpos( $semantic, 'update_option(' ) && false === strpos( $semantic, 'add_timeline_note(' ) && false === strpos( $semantic, 'add_note(' ), 'Presentation semantics must not persist or synthesize Timeline history.' );
 
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="approval"' ) && false !== strpos( $timeline, '#f0f8f2' ), 'Approval family must have restrained green presentation.' );
