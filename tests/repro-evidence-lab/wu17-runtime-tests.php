@@ -276,21 +276,37 @@ wu17_test( 'WU17-RUNTIME-011', 'frontend Inbox composition wraps only authentic 
     return array( 'authentic_wrapped' => true, 'lookalike_unchanged' => true, 'entry_detail_unchanged' => true );
 } );
 
-wu17_test( 'WU17-RUNTIME-012', 'pinned Gravity Flow bundle exposes AG Grid 25.3-era native pagination APIs but no numbered-page panel', function () {
-    $files = glob( WP_PLUGIN_DIR . '/gravityflow/assets/js/dist/vendor-theme.*.js' );
-    wu17_assert( is_array( $files ) && ! empty( $files ), 'Gravity Flow vendor-theme AG Grid bundle unavailable.' );
-    $source = file_get_contents( $files[0] );
+wu17_test( 'WU17-RUNTIME-012', 'pinned Gravity Flow bundle exposes exact AG Grid 25.2.0 native pagination/filter APIs but no numbered-page panel', function () {
+    $vendor_files = glob( WP_PLUGIN_DIR . '/gravityflow/assets/js/dist/vendor-theme.*.js' );
+    $inbox_files = glob( WP_PLUGIN_DIR . '/gravityflow/assets/js/dist/common-inbox.*.js' );
+    wu17_assert( is_array( $vendor_files ) && ! empty( $vendor_files ), 'Gravity Flow vendor-theme AG Grid bundle unavailable.' );
+    wu17_assert( is_array( $inbox_files ) && ! empty( $inbox_files ), 'Gravity Flow common Inbox bundle unavailable.' );
+    $source = file_get_contents( $vendor_files[0] );
+    $inbox_source = file_get_contents( $inbox_files[0] );
     wu17_assert( is_string( $source ) && '' !== $source, 'Gravity Flow vendor-theme bundle unreadable.' );
-    foreach ( array( 'paginationGetCurrentPage', 'paginationGetTotalPages', 'paginationGoToPreviousPage', 'paginationGoToNextPage', 'isGroupOpenByDefault' ) as $capability ) {
-        wu17_assert( false !== strpos( $source, $capability ), 'Expected bundled AG Grid capability missing: ' . $capability );
+    wu17_assert( is_string( $inbox_source ) && '' !== $inbox_source, 'Gravity Flow common Inbox bundle unreadable.' );
+    foreach ( array( 'paginationGetCurrentPage', 'paginationGetTotalPages', 'paginationGoToPage', 'paginationGoToFirstPage', 'paginationGoToPreviousPage', 'paginationGoToNextPage', 'paginationGoToLastPage' ) as $capability ) {
+        wu17_assert( false !== strpos( $source, $capability ), 'Expected bundled AG Grid pagination API missing: ' . $capability );
     }
-    wu17_assert( false !== strpos( $source, 'AG Grid v25.2.0' ), 'AG Grid v25 family signature missing.' );
+    foreach ( array( 'ag-paging-row-summary-panel', 'lbCurrent', 'btFirst', 'btPrevious', 'btNext', 'btLast' ) as $capability ) {
+        wu17_assert( false !== strpos( $source, $capability ), 'Expected bundled AG Grid pagination panel capability missing: ' . $capability );
+    }
+    foreach ( array( 'setQuickFilter', 'setFilterModel', 'getFilterModel', 'applyTransaction' ) as $capability ) {
+        wu17_assert( false !== strpos( $inbox_source, $capability ), 'Expected Gravity Flow Inbox grid capability missing: ' . $capability );
+    }
+    wu17_assert( false !== strpos( $source, 'AG Grid v25.2.0' ), 'Exact bundled AG Grid v25.2.0 banner missing.' );
     wu17_assert( false === strpos( $source, 'pageNumbers' ), 'Unexpected modern numbered-page panel exists; implementation assumptions need review.' );
+    wu17_assert( false === strpos( $inbox_source, 'rowModelType' ), 'Gravity Flow now sets a non-default Inbox row model; implementation assumptions need review.' );
     return array(
-        'detected_family' => 'AG Grid 25.3.0 capability set',
-        'row_model' => 'client-side default (Gravity Flow does not set rowModelType)',
+        'detected_version' => '25.2.0',
+        'row_model' => 'client-side default (Gravity Flow common Inbox bundle does not set rowModelType)',
         'native_page_numbers' => false,
+        'native_row_summary' => true,
+        'native_first_previous_next_last' => true,
         'public_pagination_api' => true,
+        'quick_search' => true,
+        'filter_model' => true,
+        'sorting' => 'browser-proven by native AG Grid header state',
     );
 } );
 
