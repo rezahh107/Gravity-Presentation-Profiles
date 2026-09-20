@@ -47,6 +47,19 @@
 }
 
 /*
+ * Keep the one host-owned quick-search control at the locked A/B scale. The
+ * Full Width header may reflow its available width, but it must not compact the
+ * admitted control's established vertical rhythm or RTL search-icon padding.
+ */
+.gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
+    min-height: 3rem;
+    padding-block: 0.625rem;
+    padding-right: 2.8125rem;
+    padding-left: 0.9375rem;
+    line-height: 1.85;
+}
+
+/*
  * Baseline/fallback state: native Gravity Flow columns stay visible and the GPP
  * presentation column stays hidden. This is also the behavior for browsers
  * without selector(:has()) support and for every unready rendered row set.
@@ -122,5 +135,17 @@
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper-body,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root {
         width: 100% !important;
+    }
+}
+
+/*
+ * The locked two-column A/B desktop composition uses an 18px inter-card gap.
+ * Keep the mobile one-column spacing owned by the existing <=782px rule.
+ */
+@media (min-width: 783px) {
+    @supports selector(:has(*)) {
+        .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
+            gap: 1.125rem;
+        }
     }
 }
