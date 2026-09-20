@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/wu18-runtime-tests-core.php';
+require __DIR__ . '/wu18-prepare-inbox-provider-fixture.php';
 require __DIR__ . '/wu18-persiangravity-runtime.php';
 require __DIR__ . '/wu18-formatter-contract.php';
 require __DIR__ . '/wu18-timeline-semantic-runtime.php';
