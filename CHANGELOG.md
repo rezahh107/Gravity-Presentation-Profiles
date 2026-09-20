@@ -6,6 +6,10 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+### Fixed
+
+- Release ZIP smoke now derives the local wp-cli server bind host and port from the validated `GPP_RELEASE_BASE_URL`, preventing configured post-publication endpoints such as `http://127.0.0.1:8091` from drifting from the actual server endpoint.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added
