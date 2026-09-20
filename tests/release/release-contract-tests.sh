@@ -24,6 +24,8 @@ addon_version() {
     awk -F"'" '/protected[[:space:]]+\$_version[[:space:]]*=/{print $2; exit}' "$1/src/GravityForms/AddOn.php" | tr -d '\r'
 }
 
+bash "$ROOT/tests/release/smoke-endpoint-contract-tests.sh"
+
 mkdir -p "$WORK/dev-source"
 git -C "$ROOT" archive HEAD | tar -x -C "$WORK/dev-source"
 cp -a "$WORK/dev-source" "$WORK/source"
