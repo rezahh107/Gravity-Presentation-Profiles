@@ -37,11 +37,38 @@ async function test(id, name, fn) {
 function focusStyle(locator) {
   return locator.evaluate(element => {
     const style = getComputedStyle(element);
+    let nativeFocusRule = null;
+    for (const sheet of document.styleSheets) {
+      if (!sheet.href?.includes('srwf-gravity-flow-inbox-native.css')) continue;
+      try {
+        for (const rule of sheet.cssRules) {
+          if (rule.selectorText?.includes('.gflow-grid__button:focus')) {
+            nativeFocusRule = {
+              href: sheet.href,
+              selectorText: rule.selectorText,
+              cssText: rule.cssText,
+            };
+            break;
+          }
+        }
+      } catch (error) {
+        nativeFocusRule = { href: sheet.href, cssRulesError: String(error) };
+      }
+    }
     return {
       outlineStyle: style.outlineStyle,
       outlineWidth: style.outlineWidth,
       outlineColor: style.outlineColor,
       boxShadow: style.boxShadow,
+      activeElement: document.activeElement === element,
+      matchesFocus: element.matches(':focus'),
+      matchesFocusVisible: element.matches(':focus-visible'),
+      matchesGppToolbarFocusSelector: element.matches('.gflow-grid__button:focus') && element.closest('.gpp-inbox-surface') !== null,
+      tagName: element.tagName,
+      className: element.className,
+      dataJs: element.getAttribute('data-js'),
+      focusToken: style.getPropertyValue('--gpp-inbox-focus').trim(),
+      nativeFocusRule,
     };
   });
 }
