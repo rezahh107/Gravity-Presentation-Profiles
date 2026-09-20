@@ -132,8 +132,8 @@ gpp_assert_true( false === strpos( $adapter_source, '<button' ), 'Adapter must n
 gpp_assert_true( false === strpos( $adapter_source, 'wp_remote_' ) && false === strpos( $adapter_source, 'curl_' ), 'Presentation adapter must not add network requests.' );
 gpp_assert_true( false === gpp_php_source_has_identifier( $adapter_source, 'update_option' ) && false === gpp_php_source_has_identifier( $adapter_source, 'add_option' ) && false === strpos( $adapter_source, 'GFAPI::update' ), 'Presentation adapter must not persist workflow state.' );
 gpp_assert_true( false === gpp_php_source_has_identifier( $adapter_source, 'wp_enqueue_script' ), 'Full Width presentation markup must not add JavaScript.' );
-gpp_assert_true( false === preg_match( '/preg_match|preg_replace|strip_tags|html_entity_decode/', $adapter_source ), 'Workflow facts must not be inferred by visible-text scraping/parsing.' );
-gpp_assert_true( false === preg_match( '/::before[^}]*content\s*:|::after[^}]*content\s*:/s', $panel_css ), 'Meaningful presentation copy must not come from CSS generated content.' );
+gpp_assert_true( 0 === preg_match( '/preg_match|preg_replace|strip_tags|html_entity_decode/', $adapter_source ), 'Workflow facts must not be inferred by visible-text scraping/parsing.' );
+gpp_assert_true( 0 === preg_match( '/::before[^}]*content\s*:|::after[^}]*content\s*:/s', $panel_css ), 'Meaningful presentation copy must not come from CSS generated content.' );
 gpp_assert_true( false !== strpos( $panel_css, 'justify-content: center' ) && false !== strpos( $panel_css, 'align-items: center' ) && false !== strpos( $panel_css, 'text-align: center' ), 'Native action labels/icons must be horizontally and vertically centered.' );
 
 echo "ENTRY_DETAIL_FULL_WIDTH_WORKFLOW_PANEL_PRESENTATION_PASS\n";
