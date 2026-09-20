@@ -31,6 +31,22 @@
 }
 
 /*
+ * The Full Width canvas and the locked A/B card neutrals are separate visual
+ * roles. The shared canvas token must not flatten the card-region and photo
+ * fallback surfaces into the same neutral; retain the proven reference values
+ * while leaving the outer Full Width canvas independently themeable.
+ */
+.gflow-inbox.gflow-grid.gflow-common {
+    --gpp-inbox-card-region: #f6f8fb;
+    --gpp-inbox-photo-surface: #eef1f5;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-image,
+.gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo-fallback {
+    background: var(--gpp-inbox-photo-surface);
+}
+
+/*
  * Baseline/fallback state: native Gravity Flow columns stay visible and the GPP
  * presentation column stays hidden. This is also the behavior for browsers
  * without selector(:has()) support and for every unready rendered row set.
@@ -74,6 +90,17 @@
         width: 100% !important;
         min-width: 0 !important;
         max-width: none !important;
+    }
+
+    /*
+     * Preserve the locked operational card-region neutral independently from
+     * the wider Full Width canvas. This is presentation-only and does not alter
+     * AG Grid sizing, row state, pagination, filtering or navigation behavior.
+     */
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport,
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
+        background: var(--gpp-inbox-card-region);
     }
 
     /*
