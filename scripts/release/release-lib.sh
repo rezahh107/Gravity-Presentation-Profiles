@@ -14,6 +14,47 @@ release_require_command() {
     command -v "$1" >/dev/null 2>&1 || release_fail "Required command is unavailable: $1"
 }
 
+release_parse_smoke_endpoint() {
+    local base_url="${1-}"
+    [[ -n "$base_url" ]] || release_fail 'Smoke BASE_URL is required.'
+    release_require_command php
+
+    php -r '
+        $url = $argv[1];
+        $fail = static function (string $reason): void {
+            fwrite(STDERR, "GPP_RELEASE_FAIL: Invalid smoke BASE_URL: {$reason}" . PHP_EOL);
+            exit(1);
+        };
+
+        $parts = parse_url($url);
+        if (false === $parts) {
+            $fail("unable to parse URL");
+        }
+        if (isset($parts["user"]) || isset($parts["pass"])) {
+            $fail("userinfo is not allowed");
+        }
+
+        $scheme = strtolower((string) ($parts["scheme"] ?? ""));
+        $host = strtolower((string) ($parts["host"] ?? ""));
+        $port = $parts["port"] ?? null;
+
+        if ("http" !== $scheme) {
+            $fail("scheme must be http");
+        }
+        if ("" === $host) {
+            $fail("host is required");
+        }
+        if (!in_array($host, array("127.0.0.1", "localhost"), true)) {
+            $fail("host must be local loopback (127.0.0.1 or localhost)");
+        }
+        if (!is_int($port) || $port < 1 || $port > 65535) {
+            $fail("explicit numeric port 1..65535 is required");
+        }
+
+        printf("%s\t%d\n", $host, $port);
+    ' "$base_url"
+}
+
 release_is_production_version() {
     [[ "${1:-}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] && [[ "$1" != '0.0.0' ]]
 }
