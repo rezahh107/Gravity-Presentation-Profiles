@@ -33,19 +33,23 @@ foreach ( array( 'FAMILY_APPROVAL', 'FAMILY_TRANSITION', 'FAMILY_NOTE', 'FAMILY_
 
 gpp_assert_true( false !== strpos( $semantic, "'Workflow Submitted'" ) && false !== strpos( $semantic, 'exact_gravityflow_workflow_submitted_signature' ), 'System classification must use an explicit native Workflow Submitted signature.' );
 gpp_assert_true( false !== strpos( $semantic, "'approval' === \$type" ) && false !== strpos( $semantic, "'Approved.'" ) && false !== strpos( $semantic, 'approval_step_plus_exact_approved_signature' ), 'Approval classification must require an authentic Approval step plus exact host status signature.' );
+gpp_assert_true( false !== strpos( $semantic, '$approval_signature . "\\nNote: "' ) && false !== strpos( $semantic, 'approval_step_exact_approved_with_note_signature' ), 'Authentic Approval notes must be recognized only through the proven exact compound host grammar.' );
+gpp_assert_true( false !== strpos( $semantic, "'note_body' => \$note_body" ) && false !== strpos( $semantic, 'self::FAMILY_APPROVAL === $event[\'family\']' ), 'Authentic embedded Approval note content must remain secondary content of the Approval event rather than becoming a fabricated note event.' );
 gpp_assert_true( false !== strpos( $semantic, "'Sent to step'" ) && false !== strpos( $semantic, 'exact_send_to_known_step_signature' ), 'Transition classification must map only exact send-to-known-step signatures.' );
 gpp_assert_true( false !== strpos( $semantic, 'exactHostTexts' ), 'Explicit host signatures must tolerate only the canonical Gravity Flow text and its current translation.' );
+gpp_assert_true( false !== strpos( $semantic, 'normalizeEventValue' ) && false !== strpos( $semantic, 'str_replace( array( "\\r\\n", "\\r"' ), 'Compound host-event classification must preserve line boundaries instead of flattening the Approval + Note signature.' );
 gpp_assert_true( false !== strpos( $semantic, "'family' => self::FAMILY_UNKNOWN" ) && false !== strpos( $semantic, 'unmatched_native_event' ), 'Unmatched events must explicitly fall back to unknown.' );
 gpp_assert_true( false === strpos( $semantic, 'stripos( $value' ) && false === strpos( $semantic, 'similar_text(' ), 'Classifier must not use fuzzy visible-text keyword inference.' );
 
 gpp_assert_true( false !== strpos( $semantic, 'data-gpp-native-event-source="preserved-sibling"' ), 'Classified presentation must explicitly identify the preserved native source relationship.' );
 gpp_assert_true( false !== strpos( $semantic, '$match[1] . $match[2] . \'</div>\' . $presentation' ), 'Classified presentation must retain the authentic native event body and append a presentation sibling.' );
-gpp_assert_true( false !== strpos( $semantic, '<bdi dir="auto">' ), 'Mixed-language destination values must use bidi isolation.' );
+gpp_assert_true( false !== strpos( $semantic, '<bdi dir="auto">' ), 'Mixed-language destination and authentic note values must use bidi isolation.' );
 gpp_assert_true( false === strpos( $semantic, 'update_option(' ) && false === strpos( $semantic, 'add_timeline_note(' ) && false === strpos( $semantic, 'add_note(' ), 'Presentation semantics must not persist or synthesize Timeline history.' );
 
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="approval"' ) && false !== strpos( $timeline, '#f0f8f2' ), 'Approval family must have restrained green presentation.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="transition"' ) && false !== strpos( $timeline, '#f5f8ff' ), 'Transition family must have restrained blue presentation.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="note"' ) && false !== strpos( $timeline, '#fff8e8' ), 'Note family must reserve warm amber annotation presentation without warning semantics.' );
+gpp_assert_true( false !== strpos( $timeline, 'Note remains reserved until an authentic machine-readable note case is proven.' ), 'Unproven standalone note semantics must remain explicitly reserved rather than guessed.' );
 gpp_assert_true( false !== strpos( $timeline, 'data-gpp-timeline-semantic="system"' ) && false !== strpos( $timeline, '#f8fafc' ), 'System family must remain neutral.' );
 gpp_assert_true( false !== strpos( $timeline, ':has(> .gpp-timeline-event) > .gravityflow-note-body' ) && false !== strpos( $timeline, 'display: none' ), 'Only classified native event bodies may be visually superseded by their preserved semantic sibling.' );
 gpp_assert_true( false !== strpos( $timeline, '.gpp-timeline-event__title' ) && false !== strpos( $timeline, '.gpp-timeline-event__subtitle' ), 'Classified events must expose text hierarchy in addition to color.' );
