@@ -6,6 +6,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
 ### Added
 
 - Explicit owner-facing semantics for the existing per-form GPP presentation `enabled` switch, preserving profile configuration while OFF and adding a non-blocking exact-token warning when `srwf-registration-theme` indicates a potential Gravity Theme Builder overlap.
