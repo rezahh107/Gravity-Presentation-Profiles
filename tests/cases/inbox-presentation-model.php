@@ -178,7 +178,7 @@ $ambiguous_model = new InboxPresentationModel( $profile, array( $binding, $ambig
 $ambiguous_decision = $ambiguous_model->presentationReadiness( $entry );
 gpp_assert_true( ! $ambiguous_decision['ready'], 'Ambiguous active environment fails closed.' );
 
-gpp_assert_same( '۱۴۰۴/۰۱/۰۱، ۰۰:۰۰', PersianDateFormatter::formatDateTime( '2025-03-21 00:00:00' ), 'Jalali/Persian date presentation remains deterministic.' );
+gpp_assert_same( '2025-03-21 00:00:00', PersianDateFormatter::formatDateTime( '2025-03-21 00:00:00' ), 'Without the optional provider, system-date presentation remains native.' );
 gpp_assert_same( '۰۰۱۲۳۴۵۶۷۸۹', PersianDateFormatter::persianDigits( '00123456789' ), 'Persian digit conversion remains presentation-only.' );
 
 echo "INBOX_PRESENTATION_MODEL_PASS\n";
