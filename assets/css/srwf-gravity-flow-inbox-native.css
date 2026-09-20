@@ -104,4 +104,16 @@
         min-width: 0 !important;
         max-width: 0 !important;
     }
+
+    /*
+     * In admitted frontend Card Mode every current-page row is deliberately
+     * converted to normal-flow cards and the grid grows to their full height.
+     * AG Grid's normal-layout vertical auto-scroller is therefore redundant and
+     * contributes a scrollbar gutter to wrapper scrollWidth. Hand scrolling to
+     * the document only for this frontend composition; wp-admin and every native
+     * fallback keep Gravity Flow's original viewport scrolling behavior.
+     */
+    .gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport {
+        overflow: visible !important;
+    }
 }
