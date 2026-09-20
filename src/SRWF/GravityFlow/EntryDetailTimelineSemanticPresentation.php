@@ -92,7 +92,7 @@ final class EntryDetailTimelineSemanticPresentation {
             return;
         }
 
-        $admitted = false !== strpos( $html, 'data-gpp-profile-id="' . EntryDetailVisualVariant::PROFILE_FULL_WIDTH . '"' );
+        $admitted = false !== strpos( $html, 'data-gpp-profile-id="' . EntryDetailVisualVariant::FULL_WIDTH_PROFILE_ID . '"' );
         $admitted = $admitted && false !== strpos( $html, 'data-gpp-entry-detail="ready"' );
         $admitted = $admitted && false !== strpos( $html, 'data-gpp-review-mode="read-only"' );
 
@@ -127,15 +127,16 @@ final class EntryDetailTimelineSemanticPresentation {
             return $unknown;
         }
 
-        $workflow_submitted = self::normalizeText( self::translate( 'Workflow Submitted' ) );
-        if ( $value === $workflow_submitted ) {
-            return array(
-                'family' => self::FAMILY_SYSTEM,
-                'title' => 'جریان کار آغاز شد',
-                'subtitle' => 'پرونده وارد جریان کار شد.',
-                'destination' => null,
-                'evidence' => 'exact_gravityflow_workflow_submitted_signature',
-            );
+        foreach ( self::exactHostTexts( 'Workflow Submitted' ) as $workflow_submitted ) {
+            if ( $value === $workflow_submitted ) {
+                return array(
+                    'family' => self::FAMILY_SYSTEM,
+                    'title' => 'جریان کار آغاز شد',
+                    'subtitle' => 'پرونده وارد جریان کار شد.',
+                    'destination' => null,
+                    'evidence' => 'exact_gravityflow_workflow_submitted_signature',
+                );
+            }
         }
 
         foreach ( $steps as $step ) {
@@ -149,22 +150,26 @@ final class EntryDetailTimelineSemanticPresentation {
 
             $type = method_exists( $step, 'get_type' ) ? (string) $step->get_type() : '';
             if ( 'approval' === $type ) {
-                $approved = $name . ': ' . self::normalizeText( self::translate( 'Approved.' ) );
-                if ( $value === $approved ) {
-                    return array(
-                        'family' => self::FAMILY_APPROVAL,
-                        'title' => 'پرونده تأیید شد',
-                        'subtitle' => 'پرونده بررسی و تأیید شد.',
-                        'destination' => null,
-                        'evidence' => 'approval_step_plus_exact_approved_signature',
-                    );
+                foreach ( self::exactHostTexts( 'Approved.' ) as $approved_text ) {
+                    if ( $value === $name . ': ' . $approved_text ) {
+                        return array(
+                            'family' => self::FAMILY_APPROVAL,
+                            'title' => 'پرونده تأیید شد',
+                            'subtitle' => 'پرونده بررسی و تأیید شد.',
+                            'destination' => null,
+                            'evidence' => 'approval_step_plus_exact_approved_signature',
+                        );
+                    }
                 }
             }
 
-            $transition_signatures = array(
-                self::normalizeText( self::translate( 'Sent to step' ) . ': ' . $name ),
-                self::normalizeText( sprintf( self::translate( 'Sent to step: %s' ), $name ) ),
-            );
+            $transition_signatures = array();
+            foreach ( self::exactHostTexts( 'Sent to step' ) as $sent_to_step ) {
+                $transition_signatures[] = self::normalizeText( $sent_to_step . ': ' . $name );
+            }
+            foreach ( self::exactHostTexts( 'Sent to step: %s' ) as $sent_to_step_format ) {
+                $transition_signatures[] = self::normalizeText( sprintf( $sent_to_step_format, $name ) );
+            }
             if ( in_array( $value, array_unique( $transition_signatures ), true ) ) {
                 return array(
                     'family' => self::FAMILY_TRANSITION,
@@ -206,8 +211,8 @@ final class EntryDetailTimelineSemanticPresentation {
                 $presentation .= '<span class="gpp-timeline-event__subtitle">' . $subtitle . '</span>';
                 $presentation .= '</div>';
 
-                // Preserve the authentic native inner event body byte-for-byte and
-                // insert the owner-facing semantic presentation as its sibling.
+                // Keep the authentic native inner event body byte-for-byte and
+                // append the owner-facing semantic presentation as its sibling.
                 return $match[1] . $match[2] . '</div>' . $presentation . '</div></div>';
             },
             $html
@@ -239,6 +244,14 @@ final class EntryDetailTimelineSemanticPresentation {
         }
     }
 
+    private static function exactHostTexts( $source ) {
+        $texts = array( self::normalizeText( $source ) );
+        if ( function_exists( '__' ) ) {
+            $texts[] = self::normalizeText( __( $source, 'gravityflow' ) );
+        }
+        return array_values( array_unique( array_filter( $texts, 'strlen' ) ) );
+    }
+
     private static function normalizeText( $value ) {
         $value = html_entity_decode( wp_strip_all_tags( (string) $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
         $value = str_replace( "\xc2\xa0", ' ', $value );
@@ -246,31 +259,33 @@ final class EntryDetailTimelineSemanticPresentation {
         return trim( is_string( $value ) ? $value : '' );
     }
 
-    private static function translate( $value ) {
-        return function_exists( '__' ) ? __( $value, 'gravityflow' ) : $value;
-    }
-
     private static function isEntryDetailRequest() {
-        if ( ! isset( $_GET['view'] ) || 'entry' !== sanitize_key( wp_unslash( $_GET['view'] ) ) ) {
+        $view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+        $lid = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
+
+        if ( 'entry' !== $view || $lid < 1 ) {
             return false;
         }
 
-        $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-        return in_array( $page, array( 'gravityflow-inbox', 'gravityflow-status' ), true );
+        if ( function_exists( 'is_admin' ) && is_admin() ) {
+            $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+            return 'gravityflow-inbox' === $page;
+        }
+
+        return true;
     }
 
     private static function isFullWidthActive() {
-        $lifecycle = new VisualPackageLifecycle(
-            new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME )
-        );
-        $snapshot = $lifecycle->snapshot();
-        $activation = isset( $snapshot['activations'][ EntryDetailVisualVariant::SURFACE ] )
-            ? $snapshot['activations'][ EntryDetailVisualVariant::SURFACE ]
-            : null;
+        try {
+            $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
+            $activation = $visual->resolve( EntryDetailVisualVariant::SURFACE );
+        } catch ( \Throwable $exception ) {
+            return false;
+        }
 
         return is_array( $activation )
-            && EntryDetailVisualVariant::PACKAGE_ID === ( isset( $activation['package_id'] ) ? $activation['package_id'] : null )
-            && EntryDetailVisualVariant::PACKAGE_VERSION === ( isset( $activation['package_version'] ) ? $activation['package_version'] : null )
-            && EntryDetailVisualVariant::PROFILE_FULL_WIDTH === ( isset( $activation['profile_id'] ) ? $activation['profile_id'] : null );
+            && EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_ID === ( isset( $activation['package_id'] ) ? $activation['package_id'] : null )
+            && EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_VERSION === ( isset( $activation['package_version'] ) ? $activation['package_version'] : null )
+            && EntryDetailVisualVariant::FULL_WIDTH_PROFILE_ID === ( isset( $activation['profile_id'] ) ? $activation['profile_id'] : null );
     }
 }
