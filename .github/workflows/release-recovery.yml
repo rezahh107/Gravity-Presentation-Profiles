@@ -60,6 +60,7 @@ jobs:
           release_is_production_version "$version"
           test "$version" = '0.2.0'
           bash -n scripts/release/smoke-zip.sh
+          bash tests/release/recovery-version-contract-tests.sh
           git fetch --tags --force
           tag="v$version"
           tag_sha="$(git rev-list -n1 "$tag")"
@@ -69,7 +70,6 @@ jobs:
           test "$(printf '%s' "$release_json" | jq -r '.tag_name')" = "$tag"
           test "$(printf '%s' "$release_json" | jq -r '.assets[] | select(.name=="gravity-presentation-profiles-'"$version"'.zip") | .digest')" = 'sha256:33195bf563ed863ceeffe75b7fbd69dcd579d4bd76905e8dfc8939248e5bd9db'
           git merge-base --is-ancestor "$tag_sha" HEAD
-          grep -Fq 'GPP_RELEASE_VERSION="$GPP_RECOVERY_VERSION" GPP_RELEASE_SOURCE_SHA="$GPP_RECOVERY_TAG_SHA" bash scripts/release/smoke-zip.sh' .github/workflows/release-recovery.yml
           echo "GPP_RELEASE_RECOVERY_CONTRACT_PASS version=$version tag_sha=$tag_sha"
 
   recover:
@@ -212,7 +212,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          GPP_RELEASE_VERSION="$GPP_RECOVERY_VERSION" GPP_RELEASE_SOURCE_SHA="$GPP_RECOVERY_TAG_SHA" bash scripts/release/smoke-zip.sh . "$GPP_RECOVERY_ZIP" /tmp/gpp-release-recovery-wordpress
+          test -n "$GPP_RECOVERY_VERSION"
+          export GPP_RELEASE_VERSION="$GPP_RECOVERY_VERSION"
+          bash scripts/release/smoke-zip.sh . "$GPP_RECOVERY_ZIP" /tmp/gpp-release-recovery-wordpress
 
       - name: Reverify release identity and restore normal development main
         env:
