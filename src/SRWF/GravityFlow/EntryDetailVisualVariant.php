@@ -17,6 +17,8 @@ final class EntryDetailVisualVariant {
 
     const FULL_WIDTH_STYLE_HANDLE = 'gpp-srwf-gravity-flow-entry-detail-full-width';
     const FULL_WIDTH_STYLE_PATH = 'assets/css/srwf-gravity-flow-entry-detail-full-width.css';
+    const FULL_WIDTH_WORKFLOW_PANEL_STYLE_HANDLE = 'gpp-srwf-gravity-flow-entry-detail-full-width-workflow-panel';
+    const FULL_WIDTH_WORKFLOW_PANEL_STYLE_PATH = 'assets/css/srwf-gravity-flow-entry-detail-full-width-workflow-panel.css';
 
     public static function labels() {
         return array(

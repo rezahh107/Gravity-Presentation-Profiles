@@ -116,6 +116,29 @@ if ( ! is_array( $variant_evidence )
     throw new RuntimeException( 'Entry Detail visual variant browser evidence is incomplete.' );
 }
 
+// PRI-FND-001: static declarations are not sufficient regression evidence for
+// the host-cascade failure class. Require a second authentic Playwright control
+// to assert the target-calibrated computed Full Width workflow-panel values and
+// to prove that a synthetic 12px/44px host override is rejected by that guard.
+$panel_guard_script = __DIR__ . '/wu18-entry-detail-workflow-panel-runtime-guard.mjs';
+$panel_guard_output = array();
+$panel_guard_status = 0;
+exec( 'node ' . escapeshellarg( $panel_guard_script ) . ' 2>&1', $panel_guard_output, $panel_guard_status );
+if ( 0 !== $panel_guard_status || empty( $panel_guard_output ) ) {
+    throw new RuntimeException( 'Entry Detail workflow-panel computed-style guard failed: ' . implode( "\n", array_slice( $panel_guard_output, -12 ) ) );
+}
+$panel_guard_evidence = json_decode( end( $panel_guard_output ), true );
+if ( ! is_array( $panel_guard_evidence )
+    || 'PASS' !== ( isset( $panel_guard_evidence['status'] ) ? $panel_guard_evidence['status'] : null )
+    || empty( $panel_guard_evidence['computed_style_guard_proven'] )
+    || empty( $panel_guard_evidence['original_defect_falsification_proven'] )
+    || empty( $panel_guard_evidence['current_safe_44_proven'] )
+    || empty( $panel_guard_evidence['medium_narrow_proven'] )
+    || empty( $panel_guard_evidence['js_blocked_proven'] )
+    || empty( $panel_guard_evidence['lifecycle_preservation_proven'] ) ) {
+    throw new RuntimeException( 'Entry Detail workflow-panel computed-style evidence is incomplete.' );
+}
+
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
 if ( ! is_array( $results ) ) $results = array();
@@ -134,6 +157,7 @@ $results['post_browser_controls'] = array(
 );
 $results['real_mapping_browser_control'] = $mapping_evidence;
 $results['entry_detail_visual_variant_browser_control'] = $variant_evidence;
+$results['entry_detail_workflow_panel_runtime_guard'] = $panel_guard_evidence;
 file_put_contents(
     $results_path,
     wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
@@ -142,3 +166,4 @@ file_put_contents(
 echo "WU18_POST_BROWSER_USER_INPUT_FALLBACK_PASS\n";
 echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
+echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";

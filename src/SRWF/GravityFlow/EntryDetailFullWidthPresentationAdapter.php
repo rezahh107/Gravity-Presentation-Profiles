@@ -45,6 +45,18 @@ final class EntryDetailFullWidthPresentationAdapter {
             array( EntryDetailPresentationAdapter::STYLE_HANDLE ),
             self::assetVersion( $absolute )
         );
+
+        $panel_absolute = dirname( GPP_PLUGIN_FILE ) . '/' . EntryDetailVisualVariant::FULL_WIDTH_WORKFLOW_PANEL_STYLE_PATH;
+        if ( ! is_readable( $panel_absolute ) ) {
+            return;
+        }
+
+        wp_enqueue_style(
+            EntryDetailVisualVariant::FULL_WIDTH_WORKFLOW_PANEL_STYLE_HANDLE,
+            plugins_url( EntryDetailVisualVariant::FULL_WIDTH_WORKFLOW_PANEL_STYLE_PATH, GPP_PLUGIN_FILE ),
+            array( EntryDetailVisualVariant::FULL_WIDTH_STYLE_HANDLE ),
+            self::assetVersion( $panel_absolute )
+        );
     }
 
     /**
