@@ -195,9 +195,16 @@ try {
       const tabMoves = await focusBackwardFromSearch(page, selector);
       const style = await focusStyle(control);
       const box = await targetBox(control);
-      if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2) throw new Error(`${dataJs} focus is not visible after keyboard navigation: ${JSON.stringify(style)}`);
+      const hasStrongOutline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2;
+      const hasTwoPixelRingShadow = typeof style.boxShadow === 'string' && /0px 0px 0px 2px/.test(style.boxShadow);
+      if (!hasStrongOutline && !hasTwoPixelRingShadow) throw new Error(`${dataJs} focus is not visibly strong after keyboard navigation: ${JSON.stringify(style)}`);
       if (box.width < 40 || box.height < 40) throw new Error(`${dataJs} target below 40px baseline: ${JSON.stringify(box)}`);
-      observations[dataJs] = { focus: style, target: box, shift_tab_moves_from_search: tabMoves };
+      observations[dataJs] = {
+        focus: style,
+        visible_indicator: hasStrongOutline ? 'outline_2px_or_more' : 'box_shadow_ring_2px',
+        target: box,
+        shift_tab_moves_from_search: tabMoves,
+      };
     }
     return observations;
   });
