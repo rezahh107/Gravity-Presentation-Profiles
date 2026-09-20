@@ -48,7 +48,7 @@ jobs:
           php-version: '8.2.33'
           coverage: none
 
-      - name: Verify bounded recovery preconditions
+      - name: Verify bounded recovery preconditions and version contract
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -60,6 +60,119 @@ jobs:
           release_is_production_version "$version"
           test "$version" = '0.2.0'
           bash -n scripts/release/smoke-zip.sh
+
+          workflow='.github/workflows/release-recovery.yml'
+          release_workflow='.github/workflows/release.yml'
+          runner='tests/release/run-behavioral-production-reachability.sh'
+          guardrail='tests/release/behavioral-anti-bypass-guardrail.sh'
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+
+          recover_job="$work/recover-job.yml"
+          awk '$0 == "  recover:" { found=1 } found { print }' "$workflow" > "$recover_job"
+          test "$(grep -Fc 'scripts/release/smoke-zip.sh' "$recover_job")" = '1'
+          if grep -Fq 'tests/release/run-behavioral-production-reachability.sh' "$recover_job"; then
+            echo 'Recovery must not bypass smoke-zip.sh with a direct behavioral runner invocation.' >&2
+            exit 1
+          fi
+          if grep -Fq 'echo "GPP_RELEASE_VERSION=' "$recover_job"; then
+            echo 'Recovery must keep GPP_RELEASE_VERSION process-local to the smoke boundary.' >&2
+            exit 1
+          fi
+
+          step_script="$work/recovery-smoke-step.sh"
+          awk '
+            $0 == "      - name: Re-run clean last-mile smoke against the already-published ZIP" { in_step=1; next }
+            in_step && $0 == "        run: |" { in_run=1; next }
+            in_run && $0 ~ /^      - name:/ { exit }
+            in_run {
+              sub(/^          /, "")
+              print
+            }
+          ' "$workflow" > "$step_script"
+          sed -i '/^[[:space:]]*$/d' "$step_script"
+          cat > "$work/expected-smoke-step.sh" <<'SH'
+          set -euo pipefail
+          test -n "$GPP_RECOVERY_VERSION"
+          export GPP_RELEASE_VERSION="$GPP_RECOVERY_VERSION"
+          bash scripts/release/smoke-zip.sh . "$GPP_RECOVERY_ZIP" /tmp/gpp-release-recovery-wordpress
+          SH
+          diff -u "$work/expected-smoke-step.sh" "$step_script"
+
+          if grep -Fq 'GPP_RECOVERY_VERSION' "$runner"; then
+            echo 'Shared behavioral runner must not gain a Recovery-specific version fallback.' >&2
+            exit 1
+          fi
+          grep -Fqx 'EXPECTED_VERSION="${GPP_RELEASE_VERSION:-${GPP_RELEASE_DRY_VERSION:-}}"' "$runner"
+
+          fake_root="$work/fake-root"
+          mkdir -p "$fake_root/scripts/release"
+          cat > "$fake_root/scripts/release/smoke-zip.sh" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "${GPP_RELEASE_VERSION:-}" > "$GPP_RECOVERY_CAPTURE"
+          printf '%s\n' "$*" > "$GPP_RECOVERY_ARGS_CAPTURE"
+          SH
+          chmod +x "$fake_root/scripts/release/smoke-zip.sh"
+
+          run_propagation_control() {
+            local recovery_version="$1"
+            local capture="$work/canonical-$recovery_version.txt"
+            local args="$work/args-$recovery_version.txt"
+            (
+              cd "$fake_root"
+              GPP_RECOVERY_VERSION="$recovery_version" \
+              GPP_RECOVERY_ZIP="/tmp/gravity-presentation-profiles-$recovery_version.zip" \
+              GPP_RECOVERY_CAPTURE="$capture" \
+              GPP_RECOVERY_ARGS_CAPTURE="$args" \
+              bash "$step_script"
+            )
+            test "$(cat "$capture")" = "$recovery_version"
+            grep -Fqx ". /tmp/gravity-presentation-profiles-$recovery_version.zip /tmp/gpp-release-recovery-wordpress" "$args"
+            echo "GPP_RECOVERY_VERSION_PROPAGATION_PASS version=$recovery_version"
+          }
+
+          run_propagation_control '0.2.0'
+          run_propagation_control '0.2.1'
+
+          missing_capture="$work/missing-canonical.txt"
+          if (
+            cd "$fake_root"
+            GPP_RECOVERY_VERSION='' \
+            GPP_RECOVERY_ZIP='/tmp/gravity-presentation-profiles-missing.zip' \
+            GPP_RECOVERY_CAPTURE="$missing_capture" \
+            GPP_RECOVERY_ARGS_CAPTURE="$work/missing-args.txt" \
+            bash "$step_script"
+          ) >/dev/null 2>&1; then
+            echo 'Recovery smoke boundary accepted an empty GPP_RECOVERY_VERSION.' >&2
+            exit 1
+          fi
+          test ! -e "$missing_capture"
+          echo 'GPP_RECOVERY_VERSION_MISSING_PASS fail_closed=true'
+
+          neg_zip="$work/negative.zip"
+          neg_wpcli="$work/wp-cli.phar"
+          neg_wp_path="$work/wp"
+          touch "$neg_zip" "$neg_wpcli"
+          mkdir -p "$neg_wp_path"
+          if env -u GPP_RELEASE_VERSION -u GPP_RELEASE_DRY_VERSION \
+            bash "$runner" . "$neg_zip" "$neg_wpcli" "$neg_wp_path" 'http://127.0.0.1:8090' "$work/evidence" \
+            >"$work/missing-version.out" 2>"$work/missing-version.err"; then
+            echo 'Behavioral runner accepted missing release identity.' >&2
+            exit 1
+          fi
+          grep -Fq 'Expected release version is required for behavioral reachability identity.' "$work/missing-version.err"
+          echo 'GPP_BEHAVIORAL_MISSING_VERSION_PASS fail_closed=true'
+
+          bash "$guardrail" .
+          grep -Fq 'echo "GPP_RELEASE_VERSION=$version" >> "$GITHUB_ENV"' "$release_workflow"
+          grep -Fq 'GPP_RELEASE_DRY_VERSION=9999.0.0' "$release_workflow"
+          if grep -Fq 'GPP_RECOVERY_VERSION' "$release_workflow"; then
+            echo 'Normal release workflow must not consume Recovery-specific version identity.' >&2
+            exit 1
+          fi
+          echo 'GPP_RECOVERY_VERSION_CONTRACT_TESTS_PASS versions=0.2.0,0.2.1 normal_release=unchanged'
+
           git fetch --tags --force
           tag="v$version"
           tag_sha="$(git rev-list -n1 "$tag")"
@@ -211,6 +324,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$GPP_RECOVERY_VERSION"
+          export GPP_RELEASE_VERSION="$GPP_RECOVERY_VERSION"
           bash scripts/release/smoke-zip.sh . "$GPP_RECOVERY_ZIP" /tmp/gpp-release-recovery-wordpress
 
       - name: Reverify release identity and restore normal development main
