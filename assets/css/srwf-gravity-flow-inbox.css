@@ -380,7 +380,7 @@
 }
 
 /*
- * AG Grid 25.3.0 owns this pagination panel and every value shown here. That
+ * AG Grid 25.2.0 owns this pagination panel and every value shown here. That
  * bundled version has no native numbered-page panel, so GPP makes its real
  * Previous/Next/current-page/row-summary controls legible without a second pager.
  */
