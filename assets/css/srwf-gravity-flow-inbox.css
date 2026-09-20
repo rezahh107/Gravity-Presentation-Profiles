@@ -1,6 +1,95 @@
 /* SRWF shared Gravity Flow Inbox presentation. Native AG Grid remains the one Inbox. */
 
 /*
+ * Full Width means a full-width visual canvas, not viewport-width controls.
+ * The shortcode adapter provides the admitted semantic page scope; Gravity Flow
+ * remains the sole owner of the Inbox grid, search, filtering, sorting, refresh,
+ * pagination state and entry navigation.
+ */
+.gpp-inbox-surface,
+.gflow-inbox.gflow-grid.gflow-common {
+    --gpp-inbox-canvas: var(--wpds-color-background-surface-neutral-weak, #f7f8fc);
+    --gpp-inbox-surface: var(--wpds-color-background-surface-neutral, #fff);
+    --gpp-inbox-text: var(--wpds-color-foreground-content-neutral, #172033);
+    --gpp-inbox-text-muted: var(--wpds-color-foreground-content-neutral-weak, #475467);
+    --gpp-inbox-border: var(--wpds-color-stroke-surface-neutral-weak, #e4e7ec);
+    --gpp-inbox-control-border: var(--wpds-color-stroke-interactive-neutral, #8690a1);
+    --gpp-inbox-accent: var(--wpds-color-background-interactive-brand-strong, #1d4ed8);
+    --gpp-inbox-accent-active: var(--wpds-color-background-interactive-brand-strong-active, #1e40af);
+    --gpp-inbox-focus: var(--wpds-color-stroke-focus, #3858e9);
+}
+
+.gpp-inbox-surface {
+    box-sizing: border-box;
+    inline-size: 100%;
+    margin: 0;
+    padding-block: clamp(1.5rem, 3vw, 2.75rem) clamp(2rem, 4vw, 3.5rem);
+    background: var(--gpp-inbox-canvas);
+    box-shadow: 0 0 0 100vmax var(--gpp-inbox-canvas);
+    clip-path: inset(0 -100vmax);
+    color: var(--gpp-inbox-text);
+    direction: rtl;
+}
+
+/*
+ * The admitted frontend shortcode can sit inside a theme-constrained content
+ * column. Escape that parent at the GPP surface boundary; the inner 70rem axis
+ * below remains the sole bounded content width. Non-admitted/lookalike surfaces
+ * do not receive this modifier and therefore remain constrained by their host.
+ */
+.gpp-inbox-surface--full-width {
+    inline-size: 100vw;
+    max-inline-size: 100vw;
+    margin-inline: calc(50% - 50vw);
+}
+
+.gpp-inbox-surface__inner {
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 70rem;
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 2vw, 1.625rem);
+}
+
+.gpp-inbox-surface__header {
+    margin: 0 0 clamp(1rem, 1.8vw, 1.375rem);
+    text-align: start;
+}
+
+.gpp-inbox-surface__title {
+    margin: 0;
+    color: var(--gpp-inbox-text);
+    font-family: inherit;
+    font-size: clamp(1.75rem, 2vw, 2.125rem);
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.gpp-inbox-surface__helper {
+    max-inline-size: 52rem;
+    margin: 0.375rem 0 0;
+    color: var(--gpp-inbox-text-muted);
+    font-family: inherit;
+    font-size: clamp(0.875rem, 1vw, 0.9375rem);
+    font-weight: 400;
+    line-height: 1.9;
+}
+
+.gpp-inbox-surface__host,
+.gpp-inbox-surface .gravityflow_wrap,
+.gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common {
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: none;
+    margin-inline: 0;
+}
+
+.gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common {
+    min-height: 0;
+    background: transparent;
+}
+
+/*
  * Structural card projection is progressive. The default state is untouched
  * native Gravity Flow; only browsers with :has() selector support can enter
  * card mode, and then only when every currently rendered row is ready.
@@ -19,19 +108,19 @@
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport {
-        background: #f6f8fb;
+        background: var(--gpp-inbox-canvas);
     }
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
         box-sizing: border-box;
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1.125rem;
+        gap: 1.25rem;
         height: auto !important;
         min-height: 0 !important;
         width: 100% !important;
         padding: 0.25rem;
-        background: #f6f8fb;
+        background: var(--gpp-inbox-canvas);
     }
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row {
@@ -93,10 +182,10 @@
     min-height: 236px;
     height: 100%;
     padding: 1.375rem 1.5rem 1.125rem;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--gpp-inbox-border);
     border-radius: 14px;
-    background: #fff;
-    color: #172033;
+    background: var(--gpp-inbox-surface);
+    color: var(--gpp-inbox-text);
     direction: rtl;
     text-align: right;
     font-family: 'Vazir', Tahoma, Arial, sans-serif;
@@ -106,10 +195,21 @@
     box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05);
 }
 
-.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:focus .gpp-inbox-card,
-.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"] .gflow-inbox__entry-cell-link:hover .gpp-inbox-card {
-    border-color: #1d4ed8;
-    box-shadow: 0 0 0 1px #1d4ed8;
+/*
+ * Gravity Flow 3.1.0 keeps its entry overlay link out of the tab order and lets
+ * AG Grid own keyboard focus/Enter navigation on the cell. Reflect that native
+ * focus state on the visual card rather than inventing a second interactive DOM.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"].ag-cell-focus .gpp-inbox-card {
+    border-color: var(--gpp-inbox-focus);
+    box-shadow: 0 0 0 2px var(--gpp-inbox-focus);
+}
+
+@supports selector(:has(*)) {
+    .gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="gpp_case_card"]:has(.gflow-inbox__entry-cell-link:hover) .gpp-inbox-card {
+        border-color: var(--gpp-inbox-focus);
+        box-shadow: 0 0 0 2px var(--gpp-inbox-focus);
+    }
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__photo {
@@ -124,11 +224,11 @@
     place-items: center;
     width: 62px;
     height: 62px;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--gpp-inbox-border);
     border-radius: 12px;
     object-fit: cover;
-    background: #eef1f5;
-    color: #475467;
+    background: var(--gpp-inbox-canvas);
+    color: var(--gpp-inbox-text-muted);
     font-size: 1.375rem;
     font-weight: 700;
 }
@@ -142,7 +242,7 @@
     display: block;
     margin-bottom: 0.1875rem;
     overflow-wrap: anywhere;
-    color: #172033;
+    color: var(--gpp-inbox-text);
     font-size: 1.25rem;
     font-weight: 700;
     line-height: 1.7;
@@ -152,7 +252,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    color: #475467;
+    color: var(--gpp-inbox-text-muted);
     font-size: 0.875rem;
     font-weight: 400;
     line-height: 1.85;
@@ -180,7 +280,7 @@
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dt {
     margin: 0;
-    color: #475467;
+    color: var(--gpp-inbox-text-muted);
     font-size: 0.875rem;
     font-weight: 400;
     line-height: 1.85;
@@ -189,14 +289,14 @@
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__detail dd {
     margin: 0;
     overflow-wrap: anywhere;
-    color: #172033;
+    color: var(--gpp-inbox-text);
     font-size: 0.9375rem;
     font-weight: 500;
     line-height: 1.85;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__due--overdue dd {
-    color: #b42318;
+    color: var(--wpds-color-foreground-content-error, #b42318);
     font-weight: 700;
 }
 
@@ -210,7 +310,7 @@
     min-height: 44px;
     padding: 0.4375rem 1rem;
     border-radius: 8px;
-    background: #1d4ed8;
+    background: var(--gpp-inbox-accent);
     color: #fff;
     font-size: 0.9375rem;
     font-weight: 500;
@@ -218,28 +318,235 @@
 }
 
 /*
- * The native Gravity Flow quick-search control keeps its host width, identity
- * and query behavior. The admitted SRWF A/B typography, palette and local
- * control geometry are projected onto that same host-owned input.
+ * Native Gravity Flow controls keep their host actions and state. GPP only
+ * reflows their existing header geometry and strengthens target/focus styling.
  */
-.gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
-    box-sizing: border-box;
+.gpp-inbox-surface .gflow-grid__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 64px;
     height: auto;
-    min-height: 3rem;
-    padding-block: 0.625rem;
-    padding-right: 2.8125rem;
-    padding-left: 0.9375rem;
-    background: #fff;
-    border-color: #8690a1;
+    padding: 0.5625rem 0.625rem;
+    border: 1px solid var(--gpp-inbox-border);
+    border-bottom: 0;
+    background: var(--gpp-inbox-surface);
+}
+
+.gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"] {
+    grid-column: 1;
+    box-sizing: border-box;
+    inline-size: 100%;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: auto;
+    margin: 0;
+    padding-block: 0.5rem;
+    padding-inline: 2.8125rem 0.875rem;
+    border: 1px solid var(--gpp-inbox-control-border);
     border-radius: 8px;
-    color: #172033;
+    background: var(--gpp-inbox-surface);
+    color: var(--gpp-inbox-text);
     font-family: 'Vazir', Tahoma, Arial, sans-serif;
     font-size: 1rem;
     font-weight: 400;
-    line-height: 1.85;
+    line-height: 1.6;
+    text-align: start;
+}
+
+.gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"]:focus-visible {
+    border-color: var(--gpp-inbox-focus);
+    outline: 2px solid var(--gpp-inbox-focus);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.gpp-inbox-surface .gflow-grid__header .gflow-grid__search-icon {
+    inset-inline-start: 1.4rem;
+    inset-inline-end: auto;
+}
+
+.gpp-inbox-surface .gflow-grid__button:not(.hover):not(.active):not(.has-background) {
+    position: static;
+    top: auto;
+    right: auto;
+    left: auto;
+    box-sizing: border-box;
+    inline-size: 44px;
+    width: 44px;
+    block-size: 44px;
+    height: 44px;
+    border: 1px solid var(--gpp-inbox-border);
+    border-radius: 8px;
+    background: var(--gpp-inbox-surface);
+    color: var(--gpp-inbox-text-muted);
+}
+
+.gpp-inbox-surface .gflow-grid__button--clear-filters:not(.hover):not(.active):not(.has-background) {
+    grid-column: 2;
+}
+
+.gpp-inbox-surface .gflow-grid__button--fullscreen:not(.hover):not(.active):not(.has-background) {
+    grid-column: 3;
+}
+
+.gpp-inbox-surface .gflow-grid__button--settings:not(.hover):not(.active):not(.has-background) {
+    grid-column: 4;
+}
+
+.gpp-inbox-surface .gflow-grid__button:focus-visible,
+.gpp-inbox-surface .ag-paging-button:focus-visible {
+    outline: 2px solid var(--gpp-inbox-focus) !important;
+    outline-offset: 2px;
+}
+
+/*
+ * AG Grid 25.2.0 owns this pagination panel and every value shown here. That
+ * bundled version has no native numbered-page panel, so GPP makes its real
+ * Previous/Next/current-page/row-summary controls legible without a second pager.
+ */
+.gpp-inbox-surface .ag-paging-panel {
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem 1rem;
+    min-height: 0;
+    height: auto;
+    padding: 1rem 0.25rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--gpp-inbox-text-muted);
+    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.7;
+}
+
+.gpp-inbox-surface .ag-paging-row-summary-panel {
+    order: 1;
+    flex: 1 0 100%;
+    inline-size: 100%;
+    margin: 0;
+    text-align: start;
+}
+
+.gpp-inbox-surface .ag-paging-page-summary-panel {
+    order: 2;
+    display: flex;
+    flex: 1 0 100%;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: 0;
+}
+
+.gpp-inbox-surface .ag-paging-button {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 40px;
+    min-block-size: 40px;
+    margin: 0;
+    padding: 0.375rem 0.625rem;
+    border: 1px solid var(--gpp-inbox-control-border);
+    border-radius: 8px;
+    background: var(--gpp-inbox-surface);
+    color: var(--gpp-inbox-text);
+    cursor: pointer;
+}
+
+.gpp-inbox-surface .ag-paging-button[ref="btPrevious"],
+.gpp-inbox-surface .ag-paging-button[ref="btNext"] {
+    min-inline-size: 72px;
+    gap: 0.375rem;
+}
+
+.gpp-inbox-surface .ag-paging-button[ref="btPrevious"]::after {
+    content: "قبلی";
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.gpp-inbox-surface .ag-paging-button[ref="btNext"]::before {
+    content: "بعدی";
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.gpp-inbox-surface .ag-paging-button:hover:not(.ag-disabled) {
+    border-color: var(--gpp-inbox-focus);
+    color: var(--gpp-inbox-accent-active);
+}
+
+.gpp-inbox-surface .ag-paging-button.ag-disabled {
+    border-color: var(--gpp-inbox-border);
+    background: var(--gpp-inbox-canvas);
+    color: var(--gpp-inbox-text-muted);
+    cursor: default;
+    opacity: 0.58;
+}
+
+.gpp-inbox-surface .ag-paging-description {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0 0.25rem;
+}
+
+.gpp-inbox-surface .ag-paging-number[ref="lbCurrent"] {
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 40px;
+    min-block-size: 40px;
+    padding-inline: 0.625rem;
+    border-radius: 8px;
+    background: var(--gpp-inbox-accent);
+    color: #fff;
+    font-weight: 700;
+}
+
+/* Keep the same host-owned quick-search presentation in wp-admin evidence. */
+.gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"] {
+    box-sizing: border-box;
+    height: auto;
+    min-height: 44px;
+    background: var(--gpp-inbox-surface);
+    border-color: var(--gpp-inbox-control-border);
+    border-radius: 8px;
+    color: var(--gpp-inbox-text);
+    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.6;
 }
 
 @media (max-width: 782px) {
+    .gpp-inbox-surface {
+        padding-block: 1.25rem 2rem;
+    }
+
+    .gpp-inbox-surface__inner {
+        padding-inline: 1rem;
+    }
+
+    .gpp-inbox-surface .gflow-grid__header {
+        grid-template-columns: minmax(0, 1fr) repeat(3, 40px);
+        gap: 0.25rem;
+        padding: 0.5rem;
+    }
+
+    .gpp-inbox-surface .gflow-grid__button:not(.hover):not(.active):not(.has-background) {
+        inline-size: 40px;
+        width: 40px;
+        block-size: 40px;
+        height: 40px;
+    }
+
     @supports selector(:has(*)) {
         .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
             grid-template-columns: minmax(0, 1fr);
@@ -256,5 +563,35 @@
 
     .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__details {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gpp-inbox-surface .ag-paging-panel {
+        gap: 0.625rem;
+        padding-top: 0.875rem;
+    }
+}
+
+@media (max-width: 420px) {
+    .gpp-inbox-surface__title {
+        font-size: 1.625rem;
+    }
+
+    .gpp-inbox-surface .gflow-grid__header {
+        grid-template-columns: minmax(0, 1fr) repeat(3, 40px);
+    }
+
+    .gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"] {
+        font-size: 0.9375rem;
+        padding-inline-start: 2.5rem;
+        padding-inline-end: 0.5rem;
+    }
+
+    .gpp-inbox-surface .ag-paging-row-summary-panel {
+        text-align: center;
+    }
+
+    .gpp-inbox-surface .ag-paging-button[ref="btPrevious"],
+    .gpp-inbox-surface .ag-paging-button[ref="btNext"] {
+        min-inline-size: 68px;
     }
 }

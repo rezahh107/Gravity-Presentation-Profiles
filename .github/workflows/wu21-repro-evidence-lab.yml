@@ -293,6 +293,9 @@ jobs:
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
+            /tmp/wu21-artifacts/wu17-*.json
+            /tmp/wu21-artifacts/pr4-*.json
+            /tmp/wu21-artifacts/pr4-*.png
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error
           retention-days: 30

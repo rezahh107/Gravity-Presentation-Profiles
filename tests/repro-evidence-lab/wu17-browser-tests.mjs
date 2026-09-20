@@ -8,6 +8,7 @@ const cardSelector = `${centerRowsSelector} .gpp-inbox-card`;
 const readySelector = `${centerRowsSelector} .gpp-inbox-card__readiness--ready`;
 const unreadySelector = `${centerRowsSelector} .gpp-inbox-card__readiness--unready`;
 const manualRefreshSelector = '[data-gpp-inbox-manual-refresh]';
+const surfaceSelector = '[data-gpp-inbox-surface="gravity_flow.inbox"]';
 
 function bounded(value, max = 5000) {
   const text = String(value ?? '');
@@ -106,12 +107,32 @@ async function measureWidths(page, label) {
 }
 
 async function assertNoHorizontalOverflow(page, label) {
-  const overflow = await page.locator('[data-js="gflow-inbox"] .ag-root-wrapper').evaluate(element => ({
-    scrollWidth: element.scrollWidth,
-    clientWidth: element.clientWidth,
-  }));
-  if (overflow.scrollWidth > overflow.clientWidth + 2) {
-    throw new Error(`${label}: horizontal overflow ${JSON.stringify(overflow)}`);
+  const overflow = await page.evaluate(() => {
+    const root = document.querySelector('[data-js="gflow-inbox"] .ag-root-wrapper');
+    const center = document.querySelector('[data-js="gflow-inbox"] .ag-center-cols-viewport');
+    if (!root || !center) return null;
+    return {
+      document: {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        viewportWidth: innerWidth,
+      },
+      centerViewport: {
+        scrollWidth: center.scrollWidth,
+        clientWidth: center.clientWidth,
+      },
+      gridRootBookkeeping: {
+        scrollWidth: root.scrollWidth,
+        clientWidth: root.clientWidth,
+      },
+    };
+  });
+  if (!overflow) throw new Error(`${label}: Inbox overflow geometry unavailable.`);
+  if (overflow.document.scrollWidth > overflow.document.viewportWidth + 2) {
+    throw new Error(`${label}: document horizontal overflow ${JSON.stringify(overflow)}`);
+  }
+  if (overflow.centerViewport.scrollWidth > overflow.centerViewport.clientWidth + 2) {
+    throw new Error(`${label}: visible grid viewport horizontal overflow ${JSON.stringify(overflow)}`);
   }
   return overflow;
 }
@@ -327,6 +348,147 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     return { url: before, controls: 1 };
   });
 
+  await test('PR4-BROWSER-010', 'Full Width frontend composition has one semantic header and one bounded content axis', async () => {
+    if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
+    await page.setViewportSize({ width: 1874, height: 1200 });
+    await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+    await waitForInbox(page, 20);
+    if (await page.locator(surfaceSelector).count() !== 1) throw new Error('Admitted frontend Inbox surface scope is missing or duplicated.');
+    const title = page.locator(`${surfaceSelector} .gpp-inbox-surface__title`);
+    const helper = page.locator(`${surfaceSelector} .gpp-inbox-surface__helper`);
+    if (await title.count() !== 1 || (await title.evaluate(el => el.tagName)) !== 'H1' || (await title.innerText()).trim() !== 'کارهای من') throw new Error('Semantic Inbox H1 is missing or incorrect.');
+    if (!(await helper.innerText()).includes('پرونده‌هایی که اکنون نیاز به اقدام شما دارند')) throw new Error('Inbox helper DOM copy is missing.');
+    const geometry = await page.evaluate(selector => {
+      const box = s => {
+        const el = document.querySelector(s);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, right: r.right, width: r.width, y: r.y, height: r.height, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+      };
+      return {
+        viewport: innerWidth,
+        document_scroll_width: document.documentElement.scrollWidth,
+        surface: box(selector),
+        inner: box(`${selector} .gpp-inbox-surface__inner`),
+        header: box(`${selector} .gflow-grid__header`),
+        native_inbox: box(`${selector} [data-js="gflow-inbox"]`),
+        grid: box(`${selector} .ag-root-wrapper`),
+        paging: box(`${selector} .ag-paging-panel`),
+      };
+    }, surfaceSelector);
+    if (!geometry.surface || geometry.surface.width < geometry.viewport - 2 || geometry.surface.width > geometry.viewport + 2) throw new Error(`Full Width surface did not escape constrained theme parent: ${JSON.stringify(geometry)}`);
+    if (!geometry.inner || geometry.inner.width > 1121 || geometry.inner.width < 1060) throw new Error(`Bounded desktop content width is outside Owner calibration: ${JSON.stringify(geometry)}`);
+    if (!geometry.native_inbox || geometry.native_inbox.width < 1040 || geometry.native_inbox.width > 1100) throw new Error(`Native Inbox did not reach the expected bounded host axis: ${JSON.stringify(geometry)}`);
+    for (const key of ['header', 'native_inbox', 'grid', 'paging']) {
+      if (!geometry[key]) throw new Error(`Missing ${key} geometry.`);
+      if (Math.abs(geometry[key].x - geometry.header.x) > 3 || Math.abs(geometry[key].right - geometry.header.right) > 3) throw new Error(`Desktop axes diverge: ${JSON.stringify(geometry)}`);
+    }
+    if (geometry.document_scroll_width > geometry.viewport + 2) throw new Error(`Document-level overflow at wide desktop: ${JSON.stringify(geometry)}`);
+    await page.screenshot({ path: path.join(artifactDir, 'pr4-inbox-wide-1874.png'), fullPage: true });
+    return geometry;
+  });
+
+  await test('PR4-BROWSER-011', 'native AG Grid pagination stays singular, readable, synchronized with search, and correctly disabled', async () => {
+    if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
+    await page.setViewportSize({ width: 1366, height: 1000 });
+    await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+    await waitForInbox(page, 20);
+    if (await page.locator(`${surfaceSelector} .ag-paging-panel`).count() !== 1) throw new Error('Native pagination panel missing or duplicated.');
+    const prev = page.locator(`${surfaceSelector} [ref="btPrevious"]`);
+    const next = page.locator(`${surfaceSelector} [ref="btNext"]`);
+    const current = page.locator(`${surfaceSelector} [ref="lbCurrent"]`);
+    const total = page.locator(`${surfaceSelector} [ref="lbTotal"]`);
+    const rowSummary = page.locator(`${surfaceSelector} .ag-paging-row-summary-panel`);
+    const disabled = locator => locator.evaluate(el => el.classList.contains('ag-disabled') || el.getAttribute('aria-disabled') === 'true');
+    if (!(await disabled(prev)) || await disabled(next)) throw new Error('First-page Previous/Next disabled state is incorrect.');
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2') throw new Error('Native page summary does not report page 1 of 2.');
+    const controlGeometry = await prev.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, label: el.getAttribute('aria-label'), after: getComputedStyle(el, '::after').content }; });
+    const nextGeometry = await next.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, label: el.getAttribute('aria-label'), before: getComputedStyle(el, '::before').content }; });
+    if (controlGeometry.width < 40 || controlGeometry.height < 40 || nextGeometry.width < 40 || nextGeometry.height < 40) throw new Error(`Pagination target too small: ${JSON.stringify({ controlGeometry, nextGeometry })}`);
+    if (!String(controlGeometry.after).includes('قبلی') || !String(nextGeometry.before).includes('بعدی')) throw new Error('Visible Persian Previous/Next labels are missing.');
+    if (!(await rowSummary.innerText()).trim()) throw new Error('Authentic host row summary is empty.');
+
+    await next.click();
+    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 5, centerRowsSelector, { timeout: 15000 });
+    if ((await current.innerText()).trim() !== '2' || await disabled(prev) || !(await disabled(next))) throw new Error('Last-page native paging state is not synchronized.');
+    await page.screenshot({ path: path.join(artifactDir, 'pr4-inbox-pagination-page2.png'), fullPage: true });
+
+    await prev.click();
+    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2') throw new Error('Returning through native Previous did not restore page 1 of 2.');
+
+    const search = page.locator(`${surfaceSelector} [data-js="gflow-inbox-search"]`);
+    await search.click();
+    await search.pressSequentially('00:24:00');
+    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 15000 });
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) throw new Error('One-page search result did not synchronize native pagination state.');
+    const onePageSummary = (await rowSummary.innerText()).trim();
+    if (!onePageSummary) throw new Error('Native row summary became empty after keyboard search.');
+
+    await search.press('Control+A');
+    await search.press('Backspace');
+    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2' || !(await disabled(prev)) || await disabled(next)) throw new Error('Clearing keyboard search did not restore native page 1 of 2.');
+    return { first_page: '1/2', last_page: '2/2', returned_page: '1/2', one_page_after_search: '1/1', restored_after_clear: '1/2', one_page_row_summary: onePageSummary, previous: controlGeometry, next: nextGeometry, search_driver: 'keyboard_events' };
+  });
+
+  await test('PR4-BROWSER-012', 'frontend Full Width composition reflows across required widths without document overflow', async () => {
+    if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
+    const observations = [];
+    for (const width of [1600, 1366, 1024, 768, 390, 360, 320]) {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+      await waitForInbox(page, 20);
+      const boxes = await cardBoxes(page, 2);
+      const state = await page.evaluate(({ selector, cardsSelector }) => {
+        const surface = document.querySelector(selector);
+        const header = surface?.querySelector('.gflow-grid__header');
+        const cards = [...document.querySelectorAll(cardsSelector)].slice(0, 2);
+        const cardClipping = cards.map(card => ({ scrollWidth: card.scrollWidth, clientWidth: card.clientWidth, scrollHeight: card.scrollHeight, clientHeight: card.clientHeight }));
+        return {
+          viewport: innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          surface: document.querySelectorAll(selector).length,
+          header: header ? { scrollWidth: header.scrollWidth, clientWidth: header.clientWidth, scrollHeight: header.scrollHeight, clientHeight: header.clientHeight } : null,
+          cardClipping,
+        };
+      }, { selector: surfaceSelector, cardsSelector: cardSelector });
+      if (state.scrollWidth > state.viewport + 2) throw new Error(`${width}px document overflow: ${JSON.stringify(state)}`);
+      if (boxes.length < 2) throw new Error(`${width}px missing card geometry.`);
+      if (width > 782 && Math.abs(boxes[0].y - boxes[1].y) > 3) throw new Error(`${width}px should retain two columns: ${JSON.stringify(boxes)}`);
+      if (width <= 782 && boxes[1].y <= boxes[0].y + 20) throw new Error(`${width}px should reflow to one column: ${JSON.stringify(boxes)}`);
+      if (!state.header || state.header.scrollWidth > state.header.clientWidth + 2 || state.header.scrollHeight > state.header.clientHeight + 2) throw new Error(`${width}px header controls clip: ${JSON.stringify(state.header)}`);
+      if (state.cardClipping.some(card => card.scrollWidth > card.clientWidth + 2 || card.scrollHeight > card.clientHeight + 2)) throw new Error(`${width}px card content clips: ${JSON.stringify(state.cardClipping)}`);
+      const overflow = await assertNoHorizontalOverflow(page, `frontend ${width}px`);
+      observations.push({ width, document: state, overflow, cards: boxes });
+      if ([1024, 390, 320].includes(width)) await page.screenshot({ path: path.join(artifactDir, `pr4-inbox-frontend-${width}.png`), fullPage: true });
+    }
+    return observations;
+  });
+
+  await test('PR4-BROWSER-013', 'Full Width escape applies only to the admitted modifier and does not widen a lookalike surface', async () => {
+    if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
+    await page.setViewportSize({ width: 1874, height: 1000 });
+    await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+    await waitForInbox(page, 20);
+    const bypass = await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:absolute;inset-inline-start:20px;top:20px;width:320px;';
+      const lookalike = document.createElement('section');
+      lookalike.className = 'gpp-inbox-surface';
+      lookalike.setAttribute('data-gpp-inbox-surface', 'lookalike');
+      host.appendChild(lookalike);
+      document.body.appendChild(host);
+      const hostWidth = host.getBoundingClientRect().width;
+      const surfaceWidth = lookalike.getBoundingClientRect().width;
+      const computedInlineSize = getComputedStyle(lookalike).inlineSize;
+      host.remove();
+      return { hostWidth, surfaceWidth, computedInlineSize };
+    });
+    if (Math.abs(bypass.surfaceWidth - bypass.hostWidth) > 2 || bypass.surfaceWidth > 322) throw new Error(`Non-admitted lookalike escaped its host: ${JSON.stringify(bypass)}`);
+    return bypass;
+  });
+
   await test('PR4-SIZING-001', 'measure admitted admin Inbox widths with expanded and collapsed WordPress menu', async () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(inboxUrl, { waitUntil: 'networkidle' });
@@ -391,21 +553,22 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     return geometry;
   });
 
-  await test('PR4-SIZING-005', 'very wide frontend host records real container/card widths without an invented production cap', async () => {
+  await test('PR4-SIZING-005', 'Owner-reference wide frontend host uses the bounded Full Width content axis', async () => {
     if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
-    await page.setViewportSize({ width: 2200, height: 1200 });
+    await page.setViewportSize({ width: 1874, height: 1200 });
     await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
     await waitForInbox(page);
-    const measured = await measureWidths(page, 'frontend-2200-wide-host');
+    const measured = await measureWidths(page, 'frontend-1874-bounded-host');
     sizing.push(measured);
     if (!measured.native_inbox || !measured.card_cell || measured.native_inbox.width <= 0 || measured.card_cell.width <= 0) throw new Error(`Wide-host measurements unavailable: ${JSON.stringify(measured)}`);
-    await assertNoHorizontalOverflow(page, 'wide frontend host');
-    await page.screenshot({ path: path.join(artifactDir, 'pr4-inbox-wide-2200.png'), fullPage: true });
+    if (measured.native_inbox.width < 1040 || measured.native_inbox.width > 1100) throw new Error(`Bounded Inbox width missed Owner calibration: ${JSON.stringify(measured.native_inbox)}`);
+    const overflow = await assertNoHorizontalOverflow(page, 'wide frontend host');
     return {
       ...measured,
+      observable_overflow: overflow,
       viewport_to_inbox_ratio: measured.native_inbox.width / measured.viewport.width,
       inbox_to_card_ratio: measured.card_cell.width / measured.native_inbox.width,
-      production_max_width_added: false,
+      production_bounded_full_width_axis: true,
       production_container_query_added: false,
     };
   });
@@ -434,8 +597,8 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
       reference: path.basename(referencePath),
       desktop_reference_captured: true,
       mobile_reference_captured: true,
-      actual_desktop: 'pr4-inbox-desktop-actual.png',
-      actual_mobile: 'pr4-inbox-mobile-actual.png',
+      actual_desktop: 'pr4-inbox-wide-1874.png',
+      actual_mobile: 'pr4-inbox-frontend-390.png',
       note: 'Screenshots are comparable evidence artifacts; visual acceptance still requires review of GPP-owned scope.',
     };
   });

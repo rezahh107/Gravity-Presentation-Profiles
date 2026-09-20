@@ -35,6 +35,7 @@ final class InboxPresentationAdapter {
         // by the runtime lab. Layout remains CSS-only; no grid/query API is owned.
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
+        add_filter( 'gravityflow_shortcode_inbox', array( __CLASS__, 'filterShortcodeInbox' ), 20, 3 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
     }
@@ -94,6 +95,38 @@ final class InboxPresentationAdapter {
         return self::renderCard( $model, $entry );
     }
 
+    /**
+     * Adds the Full Width page composition only around the authentic frontend
+     * Gravity Flow Inbox shortcode output. Entry Detail and lookalike markup are
+     * deliberately left untouched.
+     */
+    public static function filterShortcodeInbox( $html, $atts, $content ) {
+        unset( $atts, $content );
+
+        if ( null === self::model() || ! is_string( $html ) ) {
+            return $html;
+        }
+        if ( false === strpos( $html, 'gflow-inbox gflow-grid gflow-common' ) || false === strpos( $html, 'data-js="gflow-inbox"' ) ) {
+            return $html;
+        }
+        if ( false !== strpos( $html, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
+            return $html;
+        }
+
+        $title = esc_html__( 'کارهای من', 'gravity-presentation-profiles' );
+        $helper = esc_html__( 'پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.', 'gravity-presentation-profiles' );
+
+        return '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" dir="rtl" aria-labelledby="gpp-inbox-title">'
+            . '<div class="gpp-inbox-surface__inner">'
+            . '<header class="gpp-inbox-surface__header">'
+            . '<h1 class="gpp-inbox-surface__title" id="gpp-inbox-title">' . $title . '</h1>'
+            . '<p class="gpp-inbox-surface__helper">' . $helper . '</p>'
+            . '</header>'
+            . '<div class="gpp-inbox-surface__host">' . $html . '</div>'
+            . '</div>'
+            . '</section>';
+    }
+
     public static function enqueueStyles() {
         if ( null === self::model() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
             return;
@@ -102,11 +135,19 @@ final class InboxPresentationAdapter {
         $presentation_path = 'assets/css/srwf-gravity-flow-inbox.css';
         $native_path = 'assets/css/srwf-gravity-flow-inbox-native.css';
         $plugin_root = dirname( GPP_PLUGIN_FILE );
+        $presentation_dependencies = array();
+
+        // WordPress 7.1 registers the public Design System token stylesheet as
+        // wp-theme. Older supported runtimes simply use GPP's bounded fallbacks.
+        if ( function_exists( 'wp_style_is' ) && wp_style_is( 'wp-theme', 'registered' ) ) {
+            wp_enqueue_style( 'wp-theme' );
+            $presentation_dependencies[] = 'wp-theme';
+        }
 
         wp_enqueue_style(
             self::STYLE_HANDLE,
             plugins_url( $presentation_path, GPP_PLUGIN_FILE ),
-            array(),
+            $presentation_dependencies,
             self::assetVersion( $plugin_root . '/' . $presentation_path )
         );
         wp_enqueue_style(
