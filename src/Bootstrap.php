@@ -9,6 +9,7 @@ use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsCon
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
@@ -61,6 +62,7 @@ final class Bootstrap {
         InboxPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
         EntryDetailFullWidthPresentationAdapter::register();
+        EntryDetailTimelineSemanticPresentation::register();
         PrintDossierPresentationAdapter::register();
 
         return true;

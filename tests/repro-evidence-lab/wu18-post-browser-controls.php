@@ -139,6 +139,29 @@ if ( ! is_array( $panel_guard_evidence )
     throw new RuntimeException( 'Entry Detail workflow-panel computed-style evidence is incomplete.' );
 }
 
+// Extend the same WU18 browser state with semantic Timeline qualification only
+// after the existing transition/editor and Full Width geometry guards have run.
+$timeline_semantic_script = __DIR__ . '/wu18-entry-detail-timeline-semantic-browser-control.mjs';
+$timeline_semantic_output = array();
+$timeline_semantic_status = 0;
+exec( 'node ' . escapeshellarg( $timeline_semantic_script ) . ' 2>&1', $timeline_semantic_output, $timeline_semantic_status );
+if ( 0 !== $timeline_semantic_status || empty( $timeline_semantic_output ) ) {
+    throw new RuntimeException( 'Entry Detail Timeline semantic browser control failed: ' . implode( "\n", array_slice( $timeline_semantic_output, -16 ) ) );
+}
+$timeline_semantic_evidence = json_decode( end( $timeline_semantic_output ), true );
+if ( ! is_array( $timeline_semantic_evidence )
+    || 'PASS' !== ( isset( $timeline_semantic_evidence['status'] ) ? $timeline_semantic_evidence['status'] : null )
+    || empty( $timeline_semantic_evidence['approval_proven'] )
+    || empty( $timeline_semantic_evidence['transition_proven'] )
+    || empty( $timeline_semantic_evidence['system_proven'] )
+    || empty( $timeline_semantic_evidence['unknown_keyword_falsification_proven'] )
+    || empty( $timeline_semantic_evidence['native_order_content_preserved'] )
+    || empty( $timeline_semantic_evidence['desktop_medium_mobile_proven'] )
+    || empty( $timeline_semantic_evidence['js_blocked_proven'] )
+    || empty( $timeline_semantic_evidence['current_safe_isolation_proven'] ) ) {
+    throw new RuntimeException( 'Entry Detail Timeline semantic browser evidence is incomplete.' );
+}
+
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
 if ( ! is_array( $results ) ) $results = array();
@@ -158,6 +181,7 @@ $results['post_browser_controls'] = array(
 $results['real_mapping_browser_control'] = $mapping_evidence;
 $results['entry_detail_visual_variant_browser_control'] = $variant_evidence;
 $results['entry_detail_workflow_panel_runtime_guard'] = $panel_guard_evidence;
+$results['entry_detail_timeline_semantic_browser_control'] = $timeline_semantic_evidence;
 file_put_contents(
     $results_path,
     wp_json_encode( $results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
@@ -167,3 +191,4 @@ echo "WU18_POST_BROWSER_USER_INPUT_FALLBACK_PASS\n";
 echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
+echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
