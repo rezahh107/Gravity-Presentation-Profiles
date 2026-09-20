@@ -37,7 +37,7 @@ foreach ( array( 'position: absolute', 'position:absolute', 'position: fixed', '
 }
 gpp_assert_true( 0 === preg_match( '/margin(?:-[a-z]+)?\s*:\s*-[0-9]/i', $full ), 'Full Width must not use negative-margin layout hacks.' );
 gpp_assert_true( 0 === preg_match( '/margin(?:-[a-z]+)?\s*:\s*-[0-9]/i', $panel ), 'Workflow-panel refinement must not use negative-margin layout hacks.' );
-gpp_assert_true( 0 === preg_match( '/content\s*:/i', $panel ), 'Workflow-panel refinement must not fabricate visible content with CSS.' );
+gpp_assert_true( 0 === preg_match( '/::(?:before|after)\s*\{[^}]*\bcontent\s*:/si', $panel ), 'Workflow-panel refinement must not fabricate visible content with CSS pseudo-elements.' );
 
 // The Full Width event-card treatment is isolated from PR47 Current / Safe.
 gpp_assert_true( 1 === preg_match( '/\.gravityflow-timeline \.gravityflow-note\s*\{[^}]*border:\s*1px solid #e5e7eb;[^}]*border-radius:\s*16px;[^}]*background:\s*#f8fafc;/s', $full ), 'Full Width must style the existing native event wrapper as a neutral card.' );
@@ -48,12 +48,13 @@ gpp_assert_true( false !== $timeline_start, 'Full Width Timeline enforcement bou
 $timeline_css = substr( $full, $timeline_start );
 gpp_assert_true( 0 === preg_match( '/approved|rejected|revert|approve|reject|تأیید|رد شد|ارسال شد/i', $timeline_css ), 'Timeline styling must not classify event outcome from visible text or action names.' );
 
-// Workflow/action panel: only authentic native controls are selected and target-calibrated.
+// Workflow/action panel: native controls remain host-owned; GPP may add only the admitted presentation markup.
 gpp_assert_true( false !== strpos( $panel, '#gravityflow-status-box-container' ), 'Workflow-panel refinement must target the authentic native status box.' );
 gpp_assert_true( false !== strpos( $panel, 'textarea[name="gravityflow_note"]' ), 'Native Gravity Flow note textarea must remain the note control.' );
 gpp_assert_true( false !== strpos( $panel, 'button[value="approved"]' ), 'Native Approve control may receive profile-scoped visual treatment.' );
 gpp_assert_true( false !== strpos( $panel, 'button[value="rejected"]' ), 'Native Reject control may receive profile-scoped visual treatment.' );
-gpp_assert_true( false !== strpos( $panel, 'button[value="revert"]' ), 'Native Revert control may receive profile-scoped visual treatment.' );
+gpp_assert_true( false !== strpos( $panel, 'button[value="revert"]' ), 'A future native Revert control may receive profile-scoped styling without being manufactured by GPP.' );
+gpp_assert_true( false !== strpos( $panel, '.gpp-entry-workflow-panel__title' ) && false !== strpos( $panel, '.gpp-entry-workflow-panel__guidance' ) && false !== strpos( $panel, '.gpp-entry-workflow-panel__stage' ) && false !== strpos( $panel, '.gpp-entry-workflow-panel__footer' ), 'Owner-approved server-rendered presentation regions must have scoped styles.' );
 
 gpp_assert_true( false !== strpos( $panel, 'border: 1px solid #e4e8f0' ), 'Workflow card/divider border must use the calibrated cool-neutral family.' );
 gpp_assert_true( false !== strpos( $panel, 'border-radius: 18px' ), 'Workflow outer card radius must match the calibrated target family.' );
@@ -69,11 +70,11 @@ gpp_assert_true( false !== strpos( $panel, 'border-radius: 9px' ), 'Workflow act
 gpp_assert_true( false !== strpos( $panel, 'font-size: 15px' ), 'Workflow actions/current-stage typography must retain the calibrated scale.' );
 gpp_assert_true( false !== strpos( $panel, 'border-color: #379b52' ) && false !== strpos( $panel, 'background: #379b52' ), 'Approve action must use the measured target green.' );
 gpp_assert_true( false !== strpos( $panel, 'border-color: #e55967' ) && false !== strpos( $panel, 'background: #e55967' ), 'Reject action must use the measured target coral-red.' );
-gpp_assert_true( false !== strpos( $panel, 'background: #fcf2d8' ), 'Revert action must use the measured target pale amber surface.' );
-gpp_assert_true( false !== strpos( $panel, 'background: #f2f5fb' ), 'Authentic current-stage context must use a calm cool-neutral surface rather than fabricated notice content.' );
+gpp_assert_true( false !== strpos( $panel, 'background: #fcf2d8' ), 'Approved warm presentation family must remain available for notice/native Revert treatment.' );
 
 gpp_assert_true( false !== strpos( $panel, 'display: flex' ) && false !== strpos( $panel, 'flex-direction: column' ), 'Workflow hierarchy refinement must stay in normal-flow CSS.' );
 gpp_assert_true( false !== strpos( $panel, 'order: 10' ) && false !== strpos( $panel, 'order: 12' ) && false !== strpos( $panel, 'order: 20' ), 'Authentic note/actions/context may be visually grouped without DOM relocation.' );
+gpp_assert_true( false !== strpos( $panel, 'display: flex' ) && false !== strpos( $panel, 'align-items: center' ) && false !== strpos( $panel, 'justify-content: center' ) && false !== strpos( $panel, 'text-align: center' ), 'Native action icon/label groups must be robustly centered.' );
 gpp_assert_true( false !== strpos( $panel, 'outline: 3px solid #2563eb' ), 'Full Width focus-visible treatment must remain explicit.' );
 gpp_assert_true( false !== strpos( $panel, 'opacity: .48' ) && false !== strpos( $panel, 'aria-disabled="true"' ), 'Full Width disabled action semantics must remain visibly preserved.' );
 
