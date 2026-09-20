@@ -83,10 +83,9 @@ gpp_assert_same( $raw, PersianDateFormatter::formatDateTime( $raw ), 'Provider e
 
 PGR_Jalali_Presentation::$mode = 'value';
 $timestamp = 1774038600;
-$instant_display = PersianDateFormatter::formatDateTime( $timestamp );
-gpp_assert_true( 0 === strpos( $instant_display, 'provider:' ), 'Qualified Unix instant must use the provider facade.' );
-$last_call = PGR_Jalali_Presentation::$calls[ count( PGR_Jalali_Presentation::$calls ) - 1 ];
-gpp_assert_same( $timestamp, $last_call['timestamp'], 'Unix instant must preserve the authoritative epoch value.' );
+$numeric_calls_before = count( PGR_Jalali_Presentation::$calls );
+gpp_assert_same( '2026-03-20 20:30', PersianDateFormatter::formatDateTime( $timestamp ), 'Unqualified numeric candidate must remain native.' );
+gpp_assert_same( $numeric_calls_before, count( PGR_Jalali_Presentation::$calls ), 'Unqualified numeric candidate must not invoke the Gregorian provider facade.' );
 
 $bridge = PersianGravityJalaliBridge::formatDateTime( new DateTimeImmutable( $raw, new DateTimeZone( 'UTC' ) ) );
 gpp_assert_same( PersianGravityJalaliBridge::STATUS_APPLIED, $bridge['status'], 'Successful provider application must be explicit.' );
