@@ -6,9 +6,14 @@ WPCLI="${3:-}"
 WP_PATH="${4:-}"
 BASE_URL="${5:-}"
 EVIDENCE_DIR="${6:-}"
+EXPECTED_VERSION="${GPP_RELEASE_VERSION:-${GPP_RELEASE_DRY_VERSION:-}}"
 
 [[ -f "$ZIP" && -f "$WPCLI" && -d "$WP_PATH" && -n "$BASE_URL" && -n "$EVIDENCE_DIR" ]] || {
   echo 'Incomplete behavioral reachability runtime arguments.' >&2
+  exit 1
+}
+[[ -n "$EXPECTED_VERSION" ]] || {
+  echo 'Expected release version is required for behavioral reachability identity.' >&2
   exit 1
 }
 mkdir -p "$EVIDENCE_DIR"
@@ -51,7 +56,7 @@ unzip -q "$ZIP" -d "$IDENTITY_DIR"
 diff -qr "$IDENTITY_DIR/gravity-presentation-profiles" "$INSTALLED_DIR" >/dev/null
 ZIP_SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
 ZIP_FILES="$(unzip -Z1 "$ZIP" | grep -v '/$' | wc -l | tr -d ' ')"
-php -r '$d=array("source_sha"=>$argv[1],"overlay_version"=>$argv[2],"zip"=>basename($argv[3]),"zip_sha256"=>$argv[4],"zip_file_count"=>(int)$argv[5],"installed_plugin_path"=>realpath($argv[6]),"installed_plugin_dir_is_link"=>is_link($argv[6]),"installed_tree_matches_zip"=>true); file_put_contents($argv[7], json_encode($d, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES).PHP_EOL);' "${GPP_RELEASE_SOURCE_SHA:-UNKNOWN}" "${GPP_RELEASE_DRY_VERSION:-9999.0.0}" "$ZIP" "$ZIP_SHA" "$ZIP_FILES" "$INSTALLED_DIR" "$EVIDENCE_DIR/artifact-identity.json"
+php -r '$d=array("source_sha"=>$argv[1],"overlay_version"=>$argv[2],"zip"=>basename($argv[3]),"zip_sha256"=>$argv[4],"zip_file_count"=>(int)$argv[5],"installed_plugin_path"=>realpath($argv[6]),"installed_plugin_dir_is_link"=>is_link($argv[6]),"installed_tree_matches_zip"=>true); file_put_contents($argv[7], json_encode($d, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES).PHP_EOL);' "${GPP_RELEASE_SOURCE_SHA:-UNKNOWN}" "$EXPECTED_VERSION" "$ZIP" "$ZIP_SHA" "$ZIP_FILES" "$INSTALLED_DIR" "$EVIDENCE_DIR/artifact-identity.json"
 rm -rf "$IDENTITY_DIR"
 
 GPP_BEHAVIOR_STATE_COMMAND=preflight php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-host-fixture.php"
