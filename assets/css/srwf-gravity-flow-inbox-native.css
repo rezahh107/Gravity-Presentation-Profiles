@@ -14,16 +14,20 @@
 }
 
 /*
- * Gravity Flow owns the toolbar buttons and their actions. Keep GPP's visible
- * focus treatment whenever one of those authentic controls has focus. The
- * host/runtime can zero its outline after focus moves, so pair the outline with
- * a scoped 2px focus ring that is independent of the host outline shorthand.
+ * Gravity Flow owns these toolbar buttons and applies `transition: all .15s`.
+ * Do not transition focus-indicator properties: CSS transitions outrank normal
+ * cascade resolution while active and can otherwise suppress the ring at the
+ * instant keyboard focus moves. Preserve the host's visual transitions only for
+ * color/background/border changes and keep GPP's focus treatment immediate.
  */
+.gpp-inbox-surface .gflow-grid__button {
+    transition-property: color, border-color, background-color !important;
+}
+
 .gpp-inbox-surface .gflow-grid__button:focus,
 .gpp-inbox-surface .gflow-grid__button:focus-visible {
     outline: 2px solid var(--gpp-inbox-focus) !important;
     outline-offset: 2px;
-    box-shadow: 0 0 0 2px var(--gpp-inbox-focus) !important;
 }
 
 /*
