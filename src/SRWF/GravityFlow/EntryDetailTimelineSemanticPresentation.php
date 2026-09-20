@@ -112,6 +112,7 @@ final class EntryDetailTimelineSemanticPresentation {
             'title' => null,
             'subtitle' => null,
             'destination' => null,
+            'note_body' => null,
             'evidence' => 'unmatched_native_event',
         );
 
@@ -122,7 +123,7 @@ final class EntryDetailTimelineSemanticPresentation {
             return $unknown;
         }
 
-        $value = self::normalizeText( (string) $note->value );
+        $value = self::normalizeEventValue( (string) $note->value );
         if ( '' === $value ) {
             return $unknown;
         }
@@ -134,6 +135,7 @@ final class EntryDetailTimelineSemanticPresentation {
                     'title' => 'جریان کار آغاز شد',
                     'subtitle' => 'پرونده وارد جریان کار شد.',
                     'destination' => null,
+                    'note_body' => null,
                     'evidence' => 'exact_gravityflow_workflow_submitted_signature',
                 );
             }
@@ -151,24 +153,47 @@ final class EntryDetailTimelineSemanticPresentation {
             $type = method_exists( $step, 'get_type' ) ? (string) $step->get_type() : '';
             if ( 'approval' === $type ) {
                 foreach ( self::exactHostTexts( 'Approved.' ) as $approved_text ) {
-                    if ( $value === $name . ': ' . $approved_text ) {
+                    $approval_signature = $name . ': ' . $approved_text;
+                    if ( $value === $approval_signature ) {
                         return array(
                             'family' => self::FAMILY_APPROVAL,
                             'title' => 'پرونده تأیید شد',
                             'subtitle' => 'پرونده بررسی و تأیید شد.',
                             'destination' => null,
+                            'note_body' => null,
                             'evidence' => 'approval_step_plus_exact_approved_signature',
                         );
+                    }
+
+                    // Gravity Flow 3.1.0 runtime evidence proves that a native
+                    // Approval note is embedded in the same host event instead
+                    // of emitted as a separately typed Timeline event:
+                    //   {known approval step}: Approved.\nNote: {authentic body}
+                    // Match that grammar exactly. The trailing note body remains
+                    // user-authored content and is never used to infer semantics.
+                    $note_prefix = $approval_signature . "\nNote: ";
+                    if ( 0 === strpos( $value, $note_prefix ) ) {
+                        $note_body = trim( substr( $value, strlen( $note_prefix ) ) );
+                        if ( '' !== $note_body ) {
+                            return array(
+                                'family' => self::FAMILY_APPROVAL,
+                                'title' => 'پرونده تأیید شد',
+                                'subtitle' => $note_body,
+                                'destination' => null,
+                                'note_body' => $note_body,
+                                'evidence' => 'approval_step_exact_approved_with_note_signature',
+                            );
+                        }
                     }
                 }
             }
 
             $transition_signatures = array();
             foreach ( self::exactHostTexts( 'Sent to step' ) as $sent_to_step ) {
-                $transition_signatures[] = self::normalizeText( $sent_to_step . ': ' . $name );
+                $transition_signatures[] = self::normalizeEventValue( $sent_to_step . ': ' . $name );
             }
             foreach ( self::exactHostTexts( 'Sent to step: %s' ) as $sent_to_step_format ) {
-                $transition_signatures[] = self::normalizeText( sprintf( $sent_to_step_format, $name ) );
+                $transition_signatures[] = self::normalizeEventValue( sprintf( $sent_to_step_format, $name ) );
             }
             if ( in_array( $value, array_unique( $transition_signatures ), true ) ) {
                 return array(
@@ -176,6 +201,7 @@ final class EntryDetailTimelineSemanticPresentation {
                     'title' => 'به مرحله بعد ارسال شد',
                     'subtitle' => 'پرونده به مرحله «' . $name . '» ارسال شد.',
                     'destination' => $name,
+                    'note_body' => null,
                     'evidence' => 'exact_send_to_known_step_signature',
                 );
             }
@@ -226,6 +252,10 @@ final class EntryDetailTimelineSemanticPresentation {
             return 'پرونده به مرحله «<bdi dir="auto">' . esc_html( $event['destination'] ) . '</bdi>» ارسال شد.';
         }
 
+        if ( self::FAMILY_APPROVAL === $event['family'] && ! empty( $event['note_body'] ) ) {
+            return '<bdi dir="auto">' . esc_html( $event['note_body'] ) . '</bdi>';
+        }
+
         return esc_html( $event['subtitle'] );
     }
 
@@ -252,9 +282,25 @@ final class EntryDetailTimelineSemanticPresentation {
         return array_values( array_unique( array_filter( $texts, 'strlen' ) ) );
     }
 
-    private static function normalizeText( $value ) {
+    /**
+     * Preserve the proven host line boundary used by the Approval + Note event.
+     * Horizontal whitespace may be normalized, but semantic classification must
+     * never collapse a compound host event into a guessed one-line signature.
+     */
+    private static function normalizeEventValue( $value ) {
         $value = html_entity_decode( wp_strip_all_tags( (string) $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-        $value = str_replace( "\xc2\xa0", ' ', $value );
+        $value = str_replace( array( "\r\n", "\r", "\xc2\xa0" ), array( "\n", "\n", ' ' ), $value );
+        $lines = explode( "\n", $value );
+        foreach ( $lines as &$line ) {
+            $line = preg_replace( '/[\t ]+/u', ' ', $line );
+            $line = trim( is_string( $line ) ? $line : '' );
+        }
+        unset( $line );
+        return trim( implode( "\n", $lines ) );
+    }
+
+    private static function normalizeText( $value ) {
+        $value = self::normalizeEventValue( $value );
         $value = preg_replace( '/\s+/u', ' ', $value );
         return trim( is_string( $value ) ? $value : '' );
     }
