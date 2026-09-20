@@ -343,7 +343,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         const el = document.querySelector(s);
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { x: r.x, right: r.right, width: r.width, y: r.y, height: r.height };
+        return { x: r.x, right: r.right, width: r.width, y: r.y, height: r.height, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
       };
       return {
         viewport: innerWidth,
@@ -351,12 +351,15 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         surface: box(selector),
         inner: box(`${selector} .gpp-inbox-surface__inner`),
         header: box(`${selector} .gflow-grid__header`),
+        native_inbox: box(`${selector} [data-js="gflow-inbox"]`),
         grid: box(`${selector} .ag-root-wrapper`),
         paging: box(`${selector} .ag-paging-panel`),
       };
     }, surfaceSelector);
+    if (!geometry.surface || geometry.surface.width < geometry.viewport - 2 || geometry.surface.width > geometry.viewport + 2) throw new Error(`Full Width surface did not escape constrained theme parent: ${JSON.stringify(geometry)}`);
     if (!geometry.inner || geometry.inner.width > 1121 || geometry.inner.width < 1060) throw new Error(`Bounded desktop content width is outside Owner calibration: ${JSON.stringify(geometry)}`);
-    for (const key of ['header', 'grid', 'paging']) {
+    if (!geometry.native_inbox || geometry.native_inbox.width < 1040 || geometry.native_inbox.width > 1100) throw new Error(`Native Inbox did not reach the expected bounded host axis: ${JSON.stringify(geometry)}`);
+    for (const key of ['header', 'native_inbox', 'grid', 'paging']) {
       if (!geometry[key]) throw new Error(`Missing ${key} geometry.`);
       if (Math.abs(geometry[key].x - geometry.header.x) > 3 || Math.abs(geometry[key].right - geometry.header.right) > 3) throw new Error(`Desktop axes diverge: ${JSON.stringify(geometry)}`);
     }
@@ -392,14 +395,21 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
 
     await prev.click();
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2') throw new Error('Returning through native Previous did not restore page 1 of 2.');
+
     const search = page.locator(`${surfaceSelector} [data-js="gflow-inbox-search"]`);
-    await search.fill('00:24:00');
+    await search.click();
+    await search.pressSequentially('00:24:00');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 15000 });
     if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) throw new Error('One-page search result did not synchronize native pagination state.');
     const onePageSummary = (await rowSummary.innerText()).trim();
-    await search.fill('');
+    if (!onePageSummary) throw new Error('Native row summary became empty after keyboard search.');
+
+    await search.press('Control+A');
+    await search.press('Backspace');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
-    return { first_page: '1/2', last_page: '2/2', one_page_after_search: '1/1', one_page_row_summary: onePageSummary, previous: controlGeometry, next: nextGeometry };
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2' || !(await disabled(prev)) || await disabled(next)) throw new Error('Clearing keyboard search did not restore native page 1 of 2.');
+    return { first_page: '1/2', last_page: '2/2', returned_page: '1/2', one_page_after_search: '1/1', restored_after_clear: '1/2', one_page_row_summary: onePageSummary, previous: controlGeometry, next: nextGeometry, search_driver: 'keyboard_events' };
   });
 
   await test('PR4-BROWSER-012', 'frontend Full Width composition reflows across required widths without document overflow', async () => {
@@ -410,16 +420,53 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
       await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
       await waitForInbox(page, 20);
       const boxes = await cardBoxes(page, 2);
-      const state = await page.evaluate(selector => ({ viewport: innerWidth, scrollWidth: document.documentElement.scrollWidth, surface: document.querySelectorAll(selector).length }), surfaceSelector);
+      const state = await page.evaluate(({ selector, cardsSelector }) => {
+        const surface = document.querySelector(selector);
+        const header = surface?.querySelector('.gflow-grid__header');
+        const cards = [...document.querySelectorAll(cardsSelector)].slice(0, 2);
+        const cardClipping = cards.map(card => ({ scrollWidth: card.scrollWidth, clientWidth: card.clientWidth, scrollHeight: card.scrollHeight, clientHeight: card.clientHeight }));
+        return {
+          viewport: innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          surface: document.querySelectorAll(selector).length,
+          header: header ? { scrollWidth: header.scrollWidth, clientWidth: header.clientWidth, scrollHeight: header.scrollHeight, clientHeight: header.clientHeight } : null,
+          cardClipping,
+        };
+      }, { selector: surfaceSelector, cardsSelector: cardSelector });
       if (state.scrollWidth > state.viewport + 2) throw new Error(`${width}px document overflow: ${JSON.stringify(state)}`);
       if (boxes.length < 2) throw new Error(`${width}px missing card geometry.`);
       if (width > 782 && Math.abs(boxes[0].y - boxes[1].y) > 3) throw new Error(`${width}px should retain two columns: ${JSON.stringify(boxes)}`);
       if (width <= 782 && boxes[1].y <= boxes[0].y + 20) throw new Error(`${width}px should reflow to one column: ${JSON.stringify(boxes)}`);
+      if (!state.header || state.header.scrollWidth > state.header.clientWidth + 2 || state.header.scrollHeight > state.header.clientHeight + 2) throw new Error(`${width}px header controls clip: ${JSON.stringify(state.header)}`);
+      if (state.cardClipping.some(card => card.scrollWidth > card.clientWidth + 2 || card.scrollHeight > card.clientHeight + 2)) throw new Error(`${width}px card content clips: ${JSON.stringify(state.cardClipping)}`);
       await assertNoHorizontalOverflow(page, `frontend ${width}px`);
       observations.push({ width, document: state, cards: boxes });
       if ([1024, 390, 320].includes(width)) await page.screenshot({ path: path.join(artifactDir, `pr4-inbox-frontend-${width}.png`), fullPage: true });
     }
     return observations;
+  });
+
+  await test('PR4-BROWSER-013', 'Full Width escape applies only to the admitted modifier and does not widen a lookalike surface', async () => {
+    if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
+    await page.setViewportSize({ width: 1874, height: 1000 });
+    await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+    await waitForInbox(page, 20);
+    const bypass = await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:absolute;inset-inline-start:20px;top:20px;width:320px;';
+      const lookalike = document.createElement('section');
+      lookalike.className = 'gpp-inbox-surface';
+      lookalike.setAttribute('data-gpp-inbox-surface', 'lookalike');
+      host.appendChild(lookalike);
+      document.body.appendChild(host);
+      const hostWidth = host.getBoundingClientRect().width;
+      const surfaceWidth = lookalike.getBoundingClientRect().width;
+      const computedInlineSize = getComputedStyle(lookalike).inlineSize;
+      host.remove();
+      return { hostWidth, surfaceWidth, computedInlineSize };
+    });
+    if (Math.abs(bypass.surfaceWidth - bypass.hostWidth) > 2 || bypass.surfaceWidth > 322) throw new Error(`Non-admitted lookalike escaped its host: ${JSON.stringify(bypass)}`);
+    return bypass;
   });
 
   await test('PR4-SIZING-001', 'measure admitted admin Inbox widths with expanded and collapsed WordPress menu', async () => {
