@@ -62,6 +62,18 @@ wu19_normalize_current_components( $wu18['beta'], 'Beta First', 'Beta Last' );
 $wu03_script = __DIR__ . '/wu03-print-stylesheet-seam.mjs';
 $wu03_output = array();
 $wu03_status = 0;
+
+// actions/checkout writes an authenticated GitHub extraheader into the local
+// repository config. A nested public clone must not inherit that header: doing
+// so makes Git prompt for credentials in the non-interactive runner. Clearing
+// only this runner-local checkout header leaves repository content untouched.
+$git_config_output = array();
+$git_config_status = 0;
+exec( 'git config --local --unset-all ' . escapeshellarg( 'http.https://github.com/.extraheader' ) . ' 2>/dev/null', $git_config_output, $git_config_status );
+if ( 0 !== $git_config_status && 5 !== $git_config_status ) {
+    throw new RuntimeException( 'WU03 could not clear the runner-local GitHub checkout extraheader.' );
+}
+
 exec( 'node ' . escapeshellarg( $wu03_script ) . ' 2>&1', $wu03_output, $wu03_status );
 if ( 0 !== $wu03_status || empty( $wu03_output ) ) {
     throw new RuntimeException( 'WU03 Print stylesheet seam qualification failed to produce evidence: ' . implode( "\n", array_slice( $wu03_output, -12 ) ) );
