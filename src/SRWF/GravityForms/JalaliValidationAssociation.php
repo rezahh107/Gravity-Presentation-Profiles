@@ -100,7 +100,17 @@ final class JalaliValidationAssociation {
             return preg_replace( '/\saria-errormessage=("|\')(.*?)\1/i', $replacement, $input_tag, 1 );
         }
 
-        return preg_replace( '/\s*\/>$/', ' aria-errormessage="' . esc_attr( $error_id ) . '" />', $input_tag, 1, $count )
-            ?: preg_replace( '/>$/', ' aria-errormessage="' . esc_attr( $error_id ) . '">', $input_tag, 1 );
+        $updated = preg_replace(
+            '/\s*\/>$/',
+            ' aria-errormessage="' . esc_attr( $error_id ) . '" />',
+            $input_tag,
+            1,
+            $count
+        );
+        if ( 1 === $count ) {
+            return $updated;
+        }
+
+        return preg_replace( '/>$/', ' aria-errormessage="' . esc_attr( $error_id ) . '">', $input_tag, 1 );
     }
 }
