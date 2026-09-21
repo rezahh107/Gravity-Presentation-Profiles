@@ -23,3 +23,10 @@ await import('./diagnostics-admin-row-browser-tests.mjs');
 await import('./diagnostics-bundle-validate.mjs');
 await import('./inbox-settings-admin-browser-tests.mjs');
 await import('./inbox-human-display-browser-tests.mjs');
+
+// GPP-RP-WU-00/01 extends the admitted WU21 browser/runtime flow only after
+// all existing regression suites have completed. Its prototype CSS is injected
+// in-browser and never mutates production assets.
+await import('./inbox-width-rtl-comparative-bootstrap.mjs');
+await import('./inbox-width-rtl-comparative-browser-tests.mjs');
+await import('./inbox-width-rtl-comparative-finalize.mjs');

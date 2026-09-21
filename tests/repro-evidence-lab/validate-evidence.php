@@ -43,6 +43,32 @@ foreach ( $e['mechanics'] as $name => $m ) req( 'PROVEN_IN_REPRODUCIBLE_SIMULATI
 for ( $i=1; $i<=10; $i++ ) { $id=sprintf('AC-WU21-%03d',$i); req( 'PASS' === $e['acceptance_criteria'][$id]['status'], 'Acceptance criterion not PASS: ' . $id ); }
 req( 'UNBOUND' === $e['target_production_facts']['form_ids'], 'Production form IDs must remain UNBOUND' );
 req( 'NOT_PROVEN' === $e['target_production_facts']['plugin_license_configuration'], 'Production plugin/license config must remain NOT_PROVEN' );
+
+$c = isset( $e['comparative_repair_qualification'] ) && is_array( $e['comparative_repair_qualification'] ) ? $e['comparative_repair_qualification'] : array();
+req( 'gpp.comparative_repair_qualification.v1' === ( $c['schema'] ?? null ), 'Comparative schema mismatch' );
+req( getenv( 'GPP_WU21_REPOSITORY_SHA' ) === ( $c['repository_sha'] ?? null ), 'Comparative repository SHA mismatch' );
+req( '8265507e7330a1e444ee10eec0592e816e03fad3' === ( $c['authorized_baseline_sha'] ?? null ), 'Comparative authorized baseline mismatch' );
+req( 'twentytwentyfive' === ( $c['theme']['observed']['template'] ?? null ), 'Comparative template identity mismatch' );
+req( 'twentytwentyfive' === ( $c['theme']['observed']['stylesheet'] ?? null ), 'Comparative stylesheet identity mismatch' );
+req( 'NOT_PROVEN' === ( $c['production_equivalence'] ?? null ), 'Comparative production equivalence must remain NOT_PROVEN' );
+req( in_array( $c['outcome'] ?? null, array( 'METHOD_CLOSED_IN_REPRODUCIBLE_SIMULATION', 'OWNER_GATE_REQUIRED', 'NOT_PROVEN' ), true ), 'Comparative outcome is invalid' );
+req( array( 'FULL_WIDTH_HOST', 'CONSTRAINED_HOST' ) === ( $c['contexts'] ?? null ), 'Comparative host contexts mismatch' );
+req( array( 'rtl', 'ltr' ) === ( $c['directions'] ?? null ), 'Comparative direction matrix mismatch' );
+req( isset( $c['control_reproduction']['status'] ) && in_array( $c['control_reproduction']['status'], array( 'REPRODUCED', 'NOT_REPRODUCED', 'NOT_PROVEN' ), true ), 'Comparative control reproduction state invalid' );
+req( isset( $c['candidates'] ) && 2 === count( $c['candidates'] ), 'Exactly CONTROL and CANDIDATE_HOST_OWNED must be frozen' );
+req( 'CONTROL' === ( $c['candidates'][0]['id'] ?? null ), 'CONTROL must execute first' );
+req( 'CANDIDATE_HOST_OWNED' === ( $c['candidates'][1]['id'] ?? null ), 'Host-owned candidate missing' );
+$allowed_gate_states = array( 'PASS', 'FAIL', 'NOT_PROVEN' );
+foreach ( array( 'CONTROL', 'CANDIDATE_HOST_OWNED' ) as $candidate ) {
+    req( isset( $c['per_candidate_gate_results'][ $candidate ] ), 'Missing comparative gate results for ' . $candidate );
+    for ( $i = 1; $i <= 10; $i++ ) {
+        $gate = 'G' . $i;
+        req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
+        req( in_array( $c['per_candidate_gate_results'][ $candidate ][ $gate ]['status'] ?? null, $allowed_gate_states, true ), 'Invalid gate state for ' . $candidate . ' ' . $gate );
+    }
+}
+req( isset( $c['measurements'] ) && count( $c['measurements'] ) >= 18, 'Comparative measurement matrix is incomplete' );
+
 $copy = $e; $actual = $copy['content_digest']['value']; unset( $copy['content_digest'] ); $expected = hash( 'sha256', cj( $copy ) );
 req( hash_equals( $expected, $actual ), 'Content digest mismatch' );
 req( 'wu21-repro-evidence-' . $actual . '.json' === $filename, 'Content-addressed filename mismatch' );
