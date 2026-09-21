@@ -231,6 +231,12 @@ fs.mkdirSync(artifactDir, { recursive: true });
 const artifactPath = path.join(artifactDir, 'p05-inbox-palette-contract.json');
 fs.writeFileSync(artifactPath, `${JSON.stringify(results, null, 2)}\n`);
 
+const browserResultsPath = path.join(artifactDir, 'browser-results.json');
+if (!fs.existsSync(browserResultsPath)) throw new Error('P05 canonical browser-results evidence is unavailable.');
+const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
+browserResults.p05_inbox_palette_contract = results;
+fs.writeFileSync(browserResultsPath, `${JSON.stringify(browserResults, null, 2)}\n`);
+
 if (results.status !== 'PASS') {
   console.error(results.error || 'P05 Inbox palette contract regression failed.');
   process.exit(1);
