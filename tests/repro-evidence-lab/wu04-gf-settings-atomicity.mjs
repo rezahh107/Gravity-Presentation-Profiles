@@ -34,21 +34,21 @@ echo (int)$id;
 
 function snapshot(formId) {
   return JSON.parse(wpEval(`
-+$operations = \\GravityPresentationProfiles\\GravityForms\\OperationsSetupService::forWordPress();
-+$context = $operations->bindingContext(${Number(formId)});
-+$bindings = new \\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle(
-+  new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME),
-+  new \\GravityPresentationProfiles\\Core\\Lifecycle\\EvidenceReferenceGate(array())
-+);
-+$binding_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME);
-+$visual_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME);
-+echo wp_json_encode(array(
-+  'form_id' => ${Number(formId)},
-+  'binding_activation' => $bindings->resolve($context),
-+  'binding_state_sha256' => hash('sha256', wp_json_encode($binding_option)),
-+  'visual_state_sha256' => hash('sha256', wp_json_encode($visual_option)),
-+), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
-+`).replace(/^\+/gm, ''));
+$operations = \\GravityPresentationProfiles\\GravityForms\\OperationsSetupService::forWordPress();
+$context = $operations->bindingContext(${Number(formId)});
+$bindings = new \\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle(
+  new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME),
+  new \\GravityPresentationProfiles\\Core\\Lifecycle\\EvidenceReferenceGate(array())
+);
+$binding_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME);
+$visual_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME);
+echo wp_json_encode(array(
+  'form_id' => ${Number(formId)},
+  'binding_activation' => $bindings->resolve($context),
+  'binding_state_sha256' => hash('sha256', wp_json_encode($binding_option)),
+  'visual_state_sha256' => hash('sha256', wp_json_encode($visual_option)),
+), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+`));
 }
 
 const rejectedFormId = createForm('WU04 Rejected Transaction');
