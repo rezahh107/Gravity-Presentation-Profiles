@@ -16,6 +16,7 @@ await import('./legacy-browser-tests.mjs');
 await import('./declarative-browser-tests.mjs');
 await import('./sparse-declarative-browser-tests.mjs');
 await import('./presentation-ownership-browser-tests.mjs');
+await import('./jalali-validation-reading-order.mjs');
 
 execFileSync(
   'php',
