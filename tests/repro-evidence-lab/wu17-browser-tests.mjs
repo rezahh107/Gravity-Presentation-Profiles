@@ -365,11 +365,21 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         return { x: r.x, right: r.right, width: r.width, y: r.y, height: r.height, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
       };
       const surface = document.querySelector(selector);
+      const host = surface?.parentElement;
+      const hostRect = host?.getBoundingClientRect();
+      const hostStyle = host ? getComputedStyle(host) : null;
+      const px = value => Number.parseFloat(value) || 0;
+      const hostContent = hostRect && hostStyle ? {
+        x: hostRect.x + px(hostStyle.borderLeftWidth) + px(hostStyle.paddingLeft),
+        right: hostRect.right - px(hostStyle.borderRightWidth) - px(hostStyle.paddingRight),
+        width: hostRect.width - px(hostStyle.borderLeftWidth) - px(hostStyle.borderRightWidth) - px(hostStyle.paddingLeft) - px(hostStyle.paddingRight),
+      } : null;
       const box = s => describe(document.querySelector(s));
       return {
         viewport: innerWidth,
         document_scroll_width: document.documentElement.scrollWidth,
-        host: describe(surface?.parentElement),
+        host: describe(host),
+        host_content: hostContent,
         surface: describe(surface),
         inner: box(`${selector} .gpp-inbox-surface__inner`),
         header: box(`${selector} .gflow-grid__header`),
@@ -378,7 +388,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         paging: box(`${selector} .ag-paging-panel`),
       };
     }, surfaceSelector);
-    if (!geometry.host || !geometry.surface || Math.abs(geometry.surface.x - geometry.host.x) > 2 || Math.abs(geometry.surface.right - geometry.host.right) > 2 || Math.abs(geometry.surface.width - geometry.host.width) > 2) throw new Error(`Full Width surface did not consume its actual host width: ${JSON.stringify(geometry)}`);
+    if (!geometry.host_content || !geometry.surface || Math.abs(geometry.surface.x - geometry.host_content.x) > 2 || Math.abs(geometry.surface.right - geometry.host_content.right) > 2 || Math.abs(geometry.surface.width - geometry.host_content.width) > 2) throw new Error(`Full Width surface did not consume its actual host content width: ${JSON.stringify(geometry)}`);
     if (geometry.surface.width > geometry.viewport + 2) throw new Error(`Host-owned Full Width surface exceeded the viewport: ${JSON.stringify(geometry)}`);
     if (!geometry.inner || geometry.inner.width > 1121 || geometry.inner.width < 1060) throw new Error(`Bounded desktop content width is outside Owner calibration: ${JSON.stringify(geometry)}`);
     if (!geometry.native_inbox || geometry.native_inbox.width < 1040 || geometry.native_inbox.width > 1100) throw new Error(`Native Inbox did not reach the expected bounded host axis: ${JSON.stringify(geometry)}`);
