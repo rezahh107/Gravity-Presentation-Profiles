@@ -348,7 +348,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     return { url: before, controls: 1 };
   });
 
-  await test('PR4-BROWSER-010', 'Full Width frontend composition has one semantic header and one bounded content axis', async () => {
+  await test('PR4-BROWSER-010', 'Full Width frontend composition consumes its actual host and keeps one bounded content axis', async () => {
     if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
     await page.setViewportSize({ width: 1874, height: 1200 });
     await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
@@ -359,16 +359,28 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     if (await title.count() !== 1 || (await title.evaluate(el => el.tagName)) !== 'H1' || (await title.innerText()).trim() !== 'کارهای من') throw new Error('Semantic Inbox H1 is missing or incorrect.');
     if (!(await helper.innerText()).includes('پرونده‌هایی که اکنون نیاز به اقدام شما دارند')) throw new Error('Inbox helper DOM copy is missing.');
     const geometry = await page.evaluate(selector => {
-      const box = s => {
-        const el = document.querySelector(s);
+      const describe = el => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
         return { x: r.x, right: r.right, width: r.width, y: r.y, height: r.height, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
       };
+      const surface = document.querySelector(selector);
+      const host = surface?.parentElement;
+      const hostRect = host?.getBoundingClientRect();
+      const hostStyle = host ? getComputedStyle(host) : null;
+      const px = value => Number.parseFloat(value) || 0;
+      const hostContent = hostRect && hostStyle ? {
+        x: hostRect.x + px(hostStyle.borderLeftWidth) + px(hostStyle.paddingLeft),
+        right: hostRect.right - px(hostStyle.borderRightWidth) - px(hostStyle.paddingRight),
+        width: hostRect.width - px(hostStyle.borderLeftWidth) - px(hostStyle.borderRightWidth) - px(hostStyle.paddingLeft) - px(hostStyle.paddingRight),
+      } : null;
+      const box = s => describe(document.querySelector(s));
       return {
         viewport: innerWidth,
         document_scroll_width: document.documentElement.scrollWidth,
-        surface: box(selector),
+        host: describe(host),
+        host_content: hostContent,
+        surface: describe(surface),
         inner: box(`${selector} .gpp-inbox-surface__inner`),
         header: box(`${selector} .gflow-grid__header`),
         native_inbox: box(`${selector} [data-js="gflow-inbox"]`),
@@ -376,7 +388,8 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         paging: box(`${selector} .ag-paging-panel`),
       };
     }, surfaceSelector);
-    if (!geometry.surface || geometry.surface.width < geometry.viewport - 2 || geometry.surface.width > geometry.viewport + 2) throw new Error(`Full Width surface did not escape constrained theme parent: ${JSON.stringify(geometry)}`);
+    if (!geometry.host_content || !geometry.surface || Math.abs(geometry.surface.x - geometry.host_content.x) > 2 || Math.abs(geometry.surface.right - geometry.host_content.right) > 2 || Math.abs(geometry.surface.width - geometry.host_content.width) > 2) throw new Error(`Full Width surface did not consume its actual host content width: ${JSON.stringify(geometry)}`);
+    if (geometry.surface.width > geometry.viewport + 2) throw new Error(`Host-owned Full Width surface exceeded the viewport: ${JSON.stringify(geometry)}`);
     if (!geometry.inner || geometry.inner.width > 1121 || geometry.inner.width < 1060) throw new Error(`Bounded desktop content width is outside Owner calibration: ${JSON.stringify(geometry)}`);
     if (!geometry.native_inbox || geometry.native_inbox.width < 1040 || geometry.native_inbox.width > 1100) throw new Error(`Native Inbox did not reach the expected bounded host axis: ${JSON.stringify(geometry)}`);
     for (const key of ['header', 'native_inbox', 'grid', 'paging']) {
@@ -466,7 +479,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     return observations;
   });
 
-  await test('PR4-BROWSER-013', 'Full Width escape applies only to the admitted modifier and does not widen a lookalike surface', async () => {
+  await test('PR4-BROWSER-013', 'Host-owned Full Width behavior is admission-scoped and a lookalike remains host-relative', async () => {
     if (!manifest?.frontend_inbox_url) throw new Error('Frontend Inbox URL missing.');
     await page.setViewportSize({ width: 1874, height: 1000 });
     await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });

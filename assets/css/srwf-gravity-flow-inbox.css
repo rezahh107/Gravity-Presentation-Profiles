@@ -32,15 +32,15 @@
 }
 
 /*
- * The admitted frontend shortcode can sit inside a theme-constrained content
- * column. Escape that parent at the GPP surface boundary; the inner 70rem axis
- * below remains the sole bounded content width. Non-admitted/lookalike surfaces
- * do not receive this modifier and therefore remain constrained by their host.
+ * The admitted Full Width Inbox follows the width supplied by its actual
+ * theme/page host. GPP owns only presentation inside that host width; the inner
+ * 70rem axis below remains the sole bounded content-width owner. A constrained
+ * host therefore remains truthfully constrained instead of being escaped.
  */
 .gpp-inbox-surface--full-width {
-    inline-size: 100vw;
-    max-inline-size: 100vw;
-    margin-inline: calc(50% - 50vw);
+    inline-size: 100%;
+    max-inline-size: none;
+    margin-inline: 0;
 }
 
 .gpp-inbox-surface__inner {
