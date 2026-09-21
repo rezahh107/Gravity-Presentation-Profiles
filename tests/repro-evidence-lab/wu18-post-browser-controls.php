@@ -5,6 +5,25 @@ use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 
+function gpp_wu02_assert_qualified_summary( $summary ) {
+    if ( ! is_array( $summary )
+        || 'EVIDENCE_COMPLETE' !== ( $summary['status'] ?? null )
+        || 'PASS' !== ( $summary['hard_gate_result'] ?? null )
+        || 'QUALIFIED_FOR_PINNED_RUNTIME' !== ( $summary['disposition'] ?? null ) ) {
+        throw new RuntimeException( 'WU02 Entry Detail visibility evidence did not qualify the pinned runtime.' );
+    }
+}
+
+function gpp_wu02_summary_rejected( $summary ) {
+    try {
+        gpp_wu02_assert_qualified_summary( $summary );
+    } catch ( RuntimeException $exception ) {
+        return true;
+    }
+
+    return false;
+}
+
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu18_fixture_manifest' );
 if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['transition'] ) || empty( $manifest['binding_state_sha256'] ) ) {
@@ -193,8 +212,46 @@ echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
 echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
 
-// GPP-RP-WU-02: run after the existing WU18 controls. The qualification may
-// mutate only ephemeral synthetic field values/conditional logic at this point.
+// GPP-RP-WU-02: the PHP wrapper consumes one authoritative Node result. These
+// deterministic controls exercise the exact fail-closed acceptance predicate
+// before the real pinned-runtime evaluator is invoked.
+$wu02_positive_control = false;
+try {
+    gpp_wu02_assert_qualified_summary( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'hard_gate_result' => 'PASS',
+        'disposition' => 'QUALIFIED_FOR_PINNED_RUNTIME',
+    ) );
+    $wu02_positive_control = true;
+} catch ( RuntimeException $exception ) {
+    $wu02_positive_control = false;
+}
+$wu02_fail_control = gpp_wu02_summary_rejected( array(
+    'status' => 'EVIDENCE_COMPLETE',
+    'hard_gate_result' => 'FAIL',
+    'disposition' => 'CONFIRMED_DEFECT',
+) );
+$wu02_not_proven_control = gpp_wu02_summary_rejected( array(
+    'status' => 'EVIDENCE_COMPLETE',
+    'hard_gate_result' => 'NOT_PROVEN',
+    'disposition' => 'NOT_PROVEN',
+) );
+$wu02_malformed_control = gpp_wu02_summary_rejected( '{not-json' );
+$wu02_missing_control = gpp_wu02_summary_rejected( array( 'status' => 'EVIDENCE_COMPLETE' ) );
+if ( ! $wu02_positive_control
+    || ! $wu02_fail_control
+    || ! $wu02_not_proven_control
+    || ! $wu02_malformed_control
+    || ! $wu02_missing_control ) {
+    throw new RuntimeException( 'WU02 fail-closed qualification summary controls failed.' );
+}
+echo "WU02_QUALIFICATION_POSITIVE_CONTROL_PASS\n";
+echo "WU02_QUALIFICATION_FAIL_FALSIFICATION_PASS\n";
+echo "WU02_QUALIFICATION_NOT_PROVEN_FALSIFICATION_PASS\n";
+echo "WU02_QUALIFICATION_MALFORMED_MISSING_FALSIFICATION_PASS\n";
+
+// Run after the existing WU18 controls. The qualification may mutate only
+// ephemeral synthetic field values/conditional logic at this point.
 $wu02_script = __DIR__ . '/wu02-entry-visibility-differential.mjs';
 $wu02_output = array();
 $wu02_status = 0;
@@ -203,7 +260,5 @@ if ( 0 !== $wu02_status || empty( $wu02_output ) ) {
     throw new RuntimeException( 'WU02 Entry Detail visibility differential failed to produce evidence: ' . implode( "\n", array_slice( $wu02_output, -20 ) ) );
 }
 $wu02_summary = json_decode( end( $wu02_output ), true );
-if ( ! is_array( $wu02_summary ) || 'EVIDENCE_COMPLETE' !== ( $wu02_summary['status'] ?? null ) ) {
-    throw new RuntimeException( 'WU02 Entry Detail visibility evidence summary is incomplete.' );
-}
-echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_EVIDENCE_COMPLETE\n";
+gpp_wu02_assert_qualified_summary( $wu02_summary );
+echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_QUALIFIED_FOR_PINNED_RUNTIME\n";
