@@ -10,11 +10,18 @@ use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPoli
  * Keeps lifecycle-changing GPP plugin-settings commands inside Gravity Forms'
  * native Settings transaction.
  *
- * GFAddOn prepares the renderer and Gravity Forms validates every field before
- * it invokes field save callbacks. Existing GPP callbacks historically mixed
- * validation and mutation. This controller preserves those proven callbacks as
- * the commit implementation, replaces validation with read-only checks, and
- * invokes the mutation only from the host save phase after global validation.
+ * In Gravity Forms 3.1.1.1 the prepared Settings renderer validates every
+ * field first, then runs field save callbacks only when the complete settings
+ * submission is valid. Existing GPP callbacks historically mixed validation
+ * and mutation. This controller preserves those callbacks as the commit
+ * implementation, replaces validation with read-only checks, and invokes the
+ * mutation only from the host-owned post-validation field save phase.
+ *
+ * Prepared renderer fields are Settings Field objects, not the original config
+ * arrays. The controller therefore mutates those public callback properties in
+ * place. This is important: replacing only array-shaped metadata would leave
+ * the authentic renderer untouched and the historical validation-time mutation
+ * path active.
  *
  * No nonce, capability, dispatch, settings persistence, or error UI is
  * reimplemented here; those remain owned by the Gravity Forms Settings API.
@@ -25,12 +32,12 @@ final class PluginSettingsAtomicityController {
     private static $committed = array();
 
     private const FIELD_VALIDATORS = array(
-        'visual_profile_package_json'       => 'validateVisualPackage',
-        'operations_setup_action'           => 'validateFormAction',
-        'inbox_setup_action'                => 'validateFormAction',
-        'entry_detail_setup_action'         => 'validateFormAction',
-        'binding_management_action'         => 'validateBindingAction',
-        'entry_detail_visual_variant_action'=> 'validateVisualVariantAction',
+        'visual_profile_package_json'        => 'validateVisualPackage',
+        'operations_setup_action'            => 'validateFormAction',
+        'inbox_setup_action'                 => 'validateFormAction',
+        'entry_detail_setup_action'          => 'validateFormAction',
+        'binding_management_action'          => 'validateBindingAction',
+        'entry_detail_visual_variant_action' => 'validateVisualVariantAction',
     );
 
     public static function register() {
@@ -38,10 +45,10 @@ final class PluginSettingsAtomicityController {
             return;
         }
 
-        // The Add-On Framework has constructed its Settings renderer by this
-        // point. EntryDetailVisualVariantSettingsController inserts its field at
-        // 999; run one step later so that command is covered by the same atomic
-        // boundary. admin_head is a bounded retry for host init-order variance.
+        // GFAddOn creates the prepared plugin-settings renderer during its admin
+        // initialization. EntryDetailVisualVariantSettingsController inserts its
+        // optional command at priority 999, so run immediately afterwards and
+        // retain one idempotent admin_head retry for host init-order variance.
         add_action( 'admin_init', array( __CLASS__, 'rewireRenderer' ), 1000 );
         add_action( 'admin_head', array( __CLASS__, 'rewireRenderer' ), 2 );
     }
@@ -55,7 +62,6 @@ final class PluginSettingsAtomicityController {
         if ( ! is_object( $addon )
             || ! method_exists( $addon, 'get_settings_renderer' )
             || ! method_exists( $addon, 'get_field' )
-            || ! method_exists( $addon, 'replace_field' )
             || ! is_object( $addon->get_settings_renderer() ) ) {
             return;
         }
@@ -66,29 +72,27 @@ final class PluginSettingsAtomicityController {
             }
 
             $field = $addon->get_field( $name, array() );
-            if ( ! is_array( $field ) ) {
-                // The optional Entry Detail visual command may not exist on the
-                // first retry. Core command fields fail closed by remaining on
-                // their historical callback until authentic runtime proves the
-                // renderer seam; WU-04 hard-gates the production result.
+            if ( ! is_object( $field ) ) {
+                // Optional fields can legitimately be absent on the first retry.
+                // Core command fields are protected by exact-runtime WU-04; do
+                // not synthesize a second renderer or parallel POST path here.
                 continue;
             }
 
-            $original = isset( $field['validation_callback'] ) ? $field['validation_callback'] : null;
+            $original = isset( $field->validation_callback ) ? $field->validation_callback : null;
             if ( ! is_callable( $original ) ) {
                 continue;
             }
 
             self::$commit_callbacks[ $name ] = $original;
-            $field['validation_callback'] = array( __CLASS__, $validator );
-            $field['save_callback'] = array( __CLASS__, 'commitValidatedAction' );
-            $addon->replace_field( $name, $field, array() );
+            $field->validation_callback = array( __CLASS__, $validator );
+            $field->save_callback = array( __CLASS__, 'commitValidatedAction' );
 
             $readback = $addon->get_field( $name, array() );
-            if ( is_array( $readback )
-                && isset( $readback['validation_callback'], $readback['save_callback'] )
-                && array( __CLASS__, $validator ) === $readback['validation_callback']
-                && array( __CLASS__, 'commitValidatedAction' ) === $readback['save_callback'] ) {
+            if ( is_object( $readback )
+                && isset( $readback->validation_callback, $readback->save_callback )
+                && array( __CLASS__, $validator ) === $readback->validation_callback
+                && array( __CLASS__, 'commitValidatedAction' ) === $readback->save_callback ) {
                 self::$rewired[ $name ] = true;
             }
         }
@@ -205,10 +209,11 @@ final class PluginSettingsAtomicityController {
         }
         self::$committed[ $identity ] = true;
 
-        // This is intentionally the historical callback. It retains each
-        // command's existing lifecycle/CAS implementation, diagnostics and
-        // request feedback; only its timing changes from validation to the host
-        // save phase after Gravity Forms has accepted every sibling field.
+        // Gravity Forms 3.1.1.1 reaches field save callbacks only after the
+        // renderer's complete validation pass succeeds. Reusing the historical
+        // callback here preserves each command's lifecycle/CAS implementation,
+        // diagnostics and transient request feedback while removing its ability
+        // to mutate during a rejected sibling validation transaction.
         call_user_func( self::$commit_callbacks[ $name ], $field, $value );
         return '';
     }
