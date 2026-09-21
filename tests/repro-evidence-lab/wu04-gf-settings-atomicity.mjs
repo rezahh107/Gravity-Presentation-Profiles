@@ -7,6 +7,7 @@ const CONCLUSIVE_OUTCOMES = new Set([
   'CONFIRMED_PARTIAL_MUTATION_DEFECT/FAIL',
   'ATOMICITY_PROVEN/PASS',
 ]);
+const HOST_VALIDATION_SELECTOR = '#gform-settings .gform-settings-validation__error';
 
 function snapshotShapeValid(snapshot) {
   return Boolean(
@@ -58,6 +59,29 @@ function authenticSettingsPost(request) {
   );
 }
 
+function hostValidationOutcome(request) {
+  const response = request?.response;
+  const texts = response?.host_validation_error_texts;
+  const count = response?.host_validation_error_count;
+  const evidenceComplete = Boolean(
+    response
+      && response.host_validation_surface_present === true
+      && response.host_validation_surface_selector === HOST_VALIDATION_SELECTOR
+      && Number.isInteger(count)
+      && count >= 0
+      && Array.isArray(texts)
+      && texts.length === count
+      && texts.every(text => typeof text === 'string')
+  );
+
+  return {
+    evidence_complete: evidenceComplete,
+    accepted: evidenceComplete ? count === 0 : null,
+    rejected: evidenceComplete ? count > 0 : null,
+    error_count: evidenceComplete ? count : null,
+  };
+}
+
 function classifyAtomicity({
   rejectedRequest,
   rejectedBefore,
@@ -68,9 +92,12 @@ function classifyAtomicity({
 }) {
   const rejectedDelta = canonicalLifecycleDelta(rejectedBefore, rejectedAfter);
   const validDelta = canonicalLifecycleDelta(validBefore, validAfter);
+  const rejectedHostValidation = hostValidationOutcome(rejectedRequest);
+  const validHostValidation = hostValidationOutcome(validRequest);
   const rejectedByHost = Boolean(
-    rejectedRequest?.response?.field_error_present
-      && !rejectedRequest?.response?.settings_saved_message_present
+    rejectedHostValidation.evidence_complete
+      && rejectedHostValidation.rejected
+      && rejectedRequest?.response?.field_error_present
   );
   const validBindingActivated = Boolean(
     validDelta.evidence_complete
@@ -79,13 +106,15 @@ function classifyAtomicity({
   );
   const validPositiveControl = Boolean(
     authenticSettingsPost(validRequest)
+      && validHostValidation.evidence_complete
+      && validHostValidation.accepted
+      && validDelta.evidence_complete
       && validBindingActivated
       && validDelta.any_lifecycle_mutation
   );
   const prerequisitesComplete = Boolean(
     authenticSettingsPost(rejectedRequest)
       && rejectedDelta.evidence_complete
-      && validDelta.evidence_complete
       && rejectedByHost
       && validPositiveControl
   );
@@ -107,6 +136,8 @@ function classifyAtomicity({
     hard_gate_result: hardGate,
     prerequisites_complete: prerequisitesComplete,
     rejected_by_host: rejectedByHost,
+    rejected_host_validation: rejectedHostValidation,
+    valid_host_validation: validHostValidation,
     rejected_delta: rejectedDelta,
     valid_delta: validDelta,
     valid_binding_activated: validBindingActivated,
@@ -131,7 +162,7 @@ function syntheticSnapshot(formId, activation, bindingHash, visualHash) {
   };
 }
 
-function syntheticRequest({ rejected }) {
+function syntheticRequest({ expectedSiblingRejected = false, hostValidationErrors = [] } = {}) {
   return {
     request_shape: {
       host_form_id: 'gform-settings',
@@ -142,15 +173,23 @@ function syntheticRequest({ rejected }) {
       has_sibling: true,
     },
     response: {
-      field_error_present: rejected,
-      settings_saved_message_present: !rejected,
+      field_error_present: expectedSiblingRejected,
+      field_error_texts: expectedSiblingRejected ? ['Synthetic expected Entry Detail validation error'] : [],
+      host_validation_surface_present: true,
+      host_validation_surface_selector: HOST_VALIDATION_SELECTOR,
+      host_validation_error_count: hostValidationErrors.length,
+      host_validation_error_texts: [...hostValidationErrors],
+      settings_saved_message_present: false,
     },
   };
 }
 
 function runClassifierFalsification() {
-  const rejectedRequest = syntheticRequest({ rejected: true });
-  const validRequest = syntheticRequest({ rejected: false });
+  const rejectedRequest = syntheticRequest({
+    expectedSiblingRejected: true,
+    hostValidationErrors: ['Synthetic expected Entry Detail validation error'],
+  });
+  const validRequest = syntheticRequest();
   const rejectedBefore = syntheticSnapshot(101, null, 'binding-a', 'visual-a');
   const validBefore = syntheticSnapshot(202, null, 'binding-after-rejected', 'visual-a');
   const validAfter = syntheticSnapshot(202, { key: 'valid' }, 'binding-after-valid', 'visual-a');
@@ -165,6 +204,7 @@ function runClassifierFalsification() {
   });
   assert.equal(defect.disposition, 'CONFIRMED_PARTIAL_MUTATION_DEFECT');
   assert.equal(defect.hard_gate_result, 'FAIL');
+  assert.equal(defect.valid_host_validation.accepted, true);
   assert.equal(qualificationExitCode(defect), 0);
 
   const atomic = classifyAtomicity({
@@ -179,6 +219,19 @@ function runClassifierFalsification() {
   assert.equal(atomic.hard_gate_result, 'PASS');
   assert.equal(qualificationExitCode(atomic), 0);
 
+  const rejectedButMutatingPositiveControl = classifyAtomicity({
+    rejectedRequest,
+    rejectedBefore,
+    rejectedAfter: syntheticSnapshot(101, { key: 'rejected' }, 'binding-after-rejected', 'visual-a'),
+    validRequest: syntheticRequest({ hostValidationErrors: ['Synthetic unrelated host validation failure'] }),
+    validBefore,
+    validAfter,
+  });
+  assert.equal(rejectedButMutatingPositiveControl.disposition, 'NOT_PROVEN');
+  assert.equal(rejectedButMutatingPositiveControl.hard_gate_result, 'NOT_PROVEN');
+  assert.equal(qualificationStatus(rejectedButMutatingPositiveControl), 'EVIDENCE_INCONCLUSIVE');
+  assert.notEqual(qualificationExitCode(rejectedButMutatingPositiveControl), 0);
+
   const inconclusive = classifyAtomicity({
     rejectedRequest,
     rejectedBefore,
@@ -190,6 +243,20 @@ function runClassifierFalsification() {
   assert.equal(inconclusive.disposition, 'NOT_PROVEN');
   assert.equal(inconclusive.hard_gate_result, 'NOT_PROVEN');
   assert.notEqual(qualificationExitCode(inconclusive), 0);
+
+  const incompleteHostValidation = classifyAtomicity({
+    rejectedRequest,
+    rejectedBefore,
+    rejectedAfter: syntheticSnapshot(101, null, 'binding-a', 'visual-a'),
+    validRequest: {
+      ...validRequest,
+      response: { ...validRequest.response, host_validation_error_count: undefined },
+    },
+    validBefore,
+    validAfter,
+  });
+  assert.equal(incompleteHostValidation.disposition, 'NOT_PROVEN');
+  assert.notEqual(qualificationExitCode(incompleteHostValidation), 0);
 
   const canonicalMutationWithoutRejectedActivation = classifyAtomicity({
     rejectedRequest,
@@ -210,6 +277,8 @@ function runClassifierFalsification() {
   return {
     confirmed_defect_fail_exits_successfully: true,
     atomicity_proven_pass_exits_successfully: true,
+    rejected_but_mutating_positive_control_fails_closed: true,
+    incomplete_host_validation_fails_closed: true,
     not_proven_fails_closed: true,
     canonical_mutation_without_rejected_form_activation_is_defect: true,
     inconsistent_terminal_pairs_fail_closed: true,
@@ -341,18 +410,30 @@ async function submitScenario(page, formId, invalidSibling) {
   ]);
   await page.waitForLoadState('networkidle');
 
-  const response = await page.evaluate(({ expectedSiblingError }) => {
-    const container = document.querySelector('#gform_setting_entry_detail_setup_action');
-    const errorNodes = container ? Array.from(container.querySelectorAll('.gform-settings-validation__error, [class*="validation"][class*="error"], [role="alert"]')) : [];
+  const response = await page.evaluate(({ expectedSiblingError, hostValidationSelector }) => {
+    const hostForm = document.querySelector('#gform-settings');
+    const hostValidationNodes = hostForm instanceof HTMLFormElement
+      ? Array.from(hostForm.querySelectorAll('.gform-settings-validation__error'))
+      : [];
+    const siblingContainer = document.querySelector('#gform_setting_entry_detail_setup_action');
+    const siblingErrorNodes = siblingContainer
+      ? Array.from(siblingContainer.querySelectorAll('.gform-settings-validation__error'))
+      : [];
     const bodyText = document.body?.innerText || '';
-    const errorTexts = errorNodes.map(node => (node.textContent || '').replace(/\s+/g, ' ').trim());
+    const hostValidationErrorTexts = hostValidationNodes.map(node => (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500));
+    const siblingErrorTexts = siblingErrorNodes.map(node => (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500));
     return {
       final_url: location.href,
-      field_error_present: errorTexts.some(text => text.includes(expectedSiblingError)),
-      field_error_texts: errorTexts.map(text => text.slice(0, 500)),
+      field_error_present: siblingErrorTexts.some(text => text.includes(expectedSiblingError)),
+      field_error_texts: siblingErrorTexts,
+      host_validation_surface_present: hostForm instanceof HTMLFormElement,
+      host_validation_surface_selector: hostValidationSelector,
+      host_validation_error_count: hostValidationNodes.length,
+      host_validation_error_texts: hostValidationErrorTexts,
+      host_validation_accepted: hostForm instanceof HTMLFormElement && hostValidationNodes.length === 0,
       settings_saved_message_present: /Settings saved|تنظیمات.*ذخیره/i.test(bodyText),
     };
-  }, { expectedSiblingError });
+  }, { expectedSiblingError, hostValidationSelector: HOST_VALIDATION_SELECTOR });
 
   return {
     request_shape: {
@@ -437,6 +518,13 @@ const evidence = {
     observed_sequence: transactionSequence,
     proven: true,
   },
+  host_validation_contract: {
+    owner: 'Gravity Forms Add-On settings form',
+    form: '#gform-settings',
+    error_selector: HOST_VALIDATION_SELECTOR,
+    acceptance_predicate: 'complete host validation surface present and zero Gravity Forms settings validation error nodes',
+    settings_saved_notice_required: false,
+  },
   production_call_path: {
     host_form: 'GFAddOn#gform-settings',
     lifecycle_field: 'operations_setup_action',
@@ -467,12 +555,14 @@ const evidence = {
     canonical_before: validBefore,
     canonical_after: validAfter,
     canonical_delta: outcome.valid_delta,
+    host_validation_accepted: outcome.valid_host_validation.accepted === true,
     mutation_persisted: outcome.valid_binding_activated,
     state_changed: Boolean(outcome.valid_delta.any_lifecycle_mutation),
   },
   hard_gates: {
     authentic_gform_settings_post: authenticSettingsPost(rejectedRequest) && authenticSettingsPost(validRequest),
     invalid_sibling_rejected: outcome.rejected_by_host,
+    positive_control_host_validation_accepted: outcome.valid_host_validation.accepted === true,
     positive_control_mutates_canonical_state: outcome.valid_positive_control,
     rejected_transaction_does_not_persist_lifecycle_mutation: outcome.rejected_delta.any_lifecycle_mutation === false,
     transaction_local_snapshot_order: true,
