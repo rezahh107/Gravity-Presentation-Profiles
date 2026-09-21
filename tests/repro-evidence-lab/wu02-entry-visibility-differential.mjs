@@ -285,18 +285,57 @@ try {
   await browser.close();
 }
 
-for (const state of states) {
-  if (state.qualification === 'NOT_PROVEN') continue;
+const gppDossierExpectationByState = Object.freeze({
+  current_assignee_active_step_get: 'PRESENT',
+  ordinary_post: 'PRESENT',
+  authorized_non_assignee_get: 'PRESENT',
+  complete_approved_post_response: 'NOT_REQUIRED',
+  no_current_step_complete_get: 'NOT_REQUIRED',
+});
+
+function buildHardGates(state) {
   const hidden = state.hidden_control;
-  state.hard_gates = {
+  const dossierExpectation = gppDossierExpectationByState[state.state];
+  state.gpp_dossier_expectation = dossierExpectation || 'UNDECLARED';
+  return {
     native_oracle_present: state.native_entry_detail_present === true,
+    gpp_dossier_expectation_declared: Boolean(dossierExpectation),
+    gpp_dossier_present_when_required: dossierExpectation !== 'PRESENT' || state.gpp_dossier_present === true,
     subset: state.subset_assertion === true,
     hidden_not_native_visible: hidden?.native_visible === false,
     hidden_not_gpp_visible: hidden?.gpp_visible === false,
     hidden_sentinel_not_serialized: hidden?.serialized_leak === false,
     hidden_gpp_placeholder_absent: hidden?.gpp_placeholder_present === false,
   };
+}
+
+for (const state of states) {
+  if (state.qualification === 'NOT_PROVEN') continue;
+  state.hard_gates = buildHardGates(state);
   state.hard_gate_result = Object.values(state.hard_gates).every(Boolean) ? 'PASS' : 'FAIL';
+}
+
+const nonVacuityControlState = {
+  state: 'current_assignee_active_step_get',
+  native_entry_detail_present: true,
+  gpp_dossier_present: false,
+  native_visible_field_ids: ['synthetic-visible-field'],
+  gpp_rendered_field_backed_source_ids: [],
+  subset_assertion: true,
+  hidden_control: {
+    native_visible: false,
+    gpp_visible: false,
+    serialized_leak: false,
+    gpp_placeholder_present: false,
+  },
+};
+const nonVacuityControlGates = buildHardGates(nonVacuityControlState);
+const nonVacuityControlHardGateResult = Object.values(nonVacuityControlGates).every(Boolean) ? 'PASS' : 'FAIL';
+if (nonVacuityControlState.subset_assertion !== true
+    || nonVacuityControlState.gpp_rendered_field_backed_source_ids.length !== 0
+    || nonVacuityControlState.gpp_dossier_expectation !== 'PRESENT'
+    || nonVacuityControlHardGateResult !== 'FAIL') {
+  throw new Error('WU02 GPP dossier non-vacuity falsification control failed.');
 }
 
 const requiredStateNames = [
@@ -340,6 +379,15 @@ const evidence = {
     hidden_semantic_slot: 'student.home_phone',
     screenshots_required: false,
   },
+  non_vacuity_control: {
+    state: nonVacuityControlState.state,
+    expected_gpp_dossier: nonVacuityControlState.gpp_dossier_expectation,
+    observed_gpp_dossier_present: nonVacuityControlState.gpp_dossier_present,
+    gpp_rendered_field_backed_source_ids: nonVacuityControlState.gpp_rendered_field_backed_source_ids,
+    subset_assertion: nonVacuityControlState.subset_assertion,
+    hard_gate_result: nonVacuityControlHardGateResult,
+    result: 'PASS',
+  },
   mirrored_branch_scope: {
     pinned_gravity_flow: '3.1.0',
     current_assignee: stateByName.current_assignee_active_step_get?.qualification === 'NOT_PROVEN' ? 'NOT_PROVEN' : 'covered',
@@ -365,4 +413,10 @@ const retainedOut = path.join(artifactDir, 'wu18-gf-settings-save-wu02-entry-vis
 const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
 fs.writeFileSync(dedicatedOut, serialized);
 fs.writeFileSync(retainedOut, serialized);
-console.log(JSON.stringify({ status: 'EVIDENCE_COMPLETE', disposition, hard_gate_result: evidence.hard_gate_result, artifact: retainedOut }));
+console.log(JSON.stringify({
+  status: 'EVIDENCE_COMPLETE',
+  disposition,
+  hard_gate_result: evidence.hard_gate_result,
+  non_vacuity_control: evidence.non_vacuity_control.result,
+  artifact: retainedOut,
+}));
