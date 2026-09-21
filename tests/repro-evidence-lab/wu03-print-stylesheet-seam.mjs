@@ -98,6 +98,7 @@ async function capture(page, mode) {
 
   const state = await page.evaluate(() => {
     const sheets = Array.from(document.querySelectorAll('.gpp-print-sheet'));
+    const sheet = sheets[0] || null;
     const nodes = Array.from(document.querySelectorAll('link[rel="stylesheet"], style[id]')).map((node, index) => ({
       index,
       tag: node.tagName.toLowerCase(),
@@ -125,7 +126,7 @@ async function capture(page, mode) {
       manual_link_count: document.querySelectorAll('#gpp-print-dossier-css').length,
       candidate_link_count: document.querySelectorAll('#gpp-wu03-native-print-dossier-css').length,
       font_contract_inline_count: document.querySelectorAll('#vazir-font-frontend-inline-css').length,
-      font_family: dossier ? getComputedStyle(dossier).fontFamily : null,
+      font_family: sheet ? getComputedStyle(sheet).fontFamily : null,
       font_faces: fontFaces,
       sheet_count: sheets.length,
       page_order: sheets.map(node => node.dataset.gppPrintPage || null),
@@ -179,6 +180,7 @@ function gate(state, mode) {
     deterministic_asset_identity: state.asset_version === '1.0.1' && cssSha256.length === 64,
     font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
     font_contract_loaded: state.all_font_contract_faces_loaded,
+    dossier_font_family_contract: /Vazir/i.test(state.font_family || ''),
     stylesheet_order_after_font_contract: state.dossier_after_font_contract,
     rtl: state.dir === 'rtl',
     front_back_order: state.sheet_count === 2 && JSON.stringify(state.page_order) === JSON.stringify(['front', 'back']),
@@ -208,7 +210,7 @@ else if (!controlPass && candidatePass) disposition = 'OFFICIAL_NATIVE_SEAM_UNIQ
 else if (controlPass && !candidatePass) disposition = 'KEEP_CURRENT_DELIVERY_QUALIFIED';
 
 const evidence = {
-  schema_version: '2.1.0',
+  schema_version: '2.2.0',
   work_unit: 'GPP-RP-WU-03-PRINT-STYLESHEET-SEAM',
   problems: ['P-18'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
