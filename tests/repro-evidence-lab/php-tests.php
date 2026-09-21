@@ -160,17 +160,20 @@ wu21_test( 'WU21-PHP-008', 'runtime availability proof is bound to exact active 
     return $out;
 } );
 
-wu21_test( 'WU21-PHP-009', 'current-step and created-at extraction use authentic Gravity Flow/GF host state', function () use ( $manifest ) {
+wu21_test( 'WU21-PHP-009', 'current-step and created-at extraction use authentic Gravity Flow/GF host state with native fallback when PersianGravity is absent', function () use ( $manifest ) {
     $record = $manifest['entry_records'][0];
     $entry = GFAPI::get_entry( $record['entry_id'] );
     wu21_assert( ! is_wp_error( $entry ) && $entry['date_created'] === $record['date_created'], 'Authoritative date_created mismatch.' );
     $api = new Gravity_Flow_API( (int) $record['form_id'] );
     $step = $api->get_current_step( $entry );
     wu21_assert( $step && $step->get_name() === $record['step_name'], 'Authoritative current step mismatch.' );
+    wu21_assert( ! class_exists( 'PGR_Jalali_Presentation', false ), 'WU21 native-fallback control unexpectedly has the optional PersianGravity facade loaded.' );
+    $native_created_at = GFCommon::format_date( $record['date_created'], false );
+    wu21_assert( is_scalar( $native_created_at ) && '' !== trim( (string) $native_created_at ), 'Gravity Forms native created-at presentation is unavailable.' );
     $html = apply_filters( 'gravityflow_inbox_field_value', '', (int) $record['form_id'], InboxPresentationAdapter::CARD_COLUMN, $entry );
     wu21_assert( false !== strpos( $html, esc_html( $record['step_name'] ) ), 'Production card did not display current host step.' );
-    wu21_assert( false !== strpos( $html, '۱۴۰۴/۱۰/۱۱، ۰۰:۰۰' ), 'Production card did not present authentic created-at value.' );
-    return array( 'step' => $step->get_name(), 'created_at' => $entry['date_created'] );
+    wu21_assert( false !== strpos( $html, esc_html( trim( (string) $native_created_at ) ) ), 'Production card did not preserve Gravity Forms native created-at presentation while PersianGravity is absent.' );
+    return array( 'step' => $step->get_name(), 'created_at' => $entry['date_created'], 'native_created_at' => trim( (string) $native_created_at ) );
 } );
 
 wu21_test( 'WU21-PHP-010', 'native Inbox form filtering remains host-owned', function () use ( $manifest ) {
