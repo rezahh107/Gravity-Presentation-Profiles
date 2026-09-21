@@ -103,8 +103,28 @@ assertVisualFidelity(actualMobile, referenceB, 'mobile-B');
 
 assertPxClose(actualDesktop.grid.style.gap, referenceA.grid.style.gap, 0.01, 'desktop-A: two-column card gap must match A/B');
 assertPxClose(actualMobile.grid.style.gap, referenceB.grid.style.gap, 0.01, 'mobile-B: one-column card gap must match A/B');
-assert.equal(actualDesktop.grid.style.backgroundColor, 'rgb(246, 248, 251)', 'desktop-A: operational card region must use the admitted light-gray hierarchy.');
-assert.equal(actualMobile.grid.style.backgroundColor, 'rgb(246, 248, 251)', 'mobile-B: operational card region must use the admitted light-gray hierarchy.');
+
+// The operational canvas is a host/theme-semantic soft-neutral value, not a
+// GPP-owned fixed RGB. PR33 therefore guards the visual hierarchy and cross-
+// viewport consistency without reintroducing a second fixed color authority.
+// P05's dedicated browser regression independently mutates the admitted canvas
+// alias and hostile WPDS tokens to prove that this canvas remains variable while
+// GPP-owned card/control/accent/focus values stay deterministic.
+assert.equal(
+  actualDesktop.grid.style.backgroundColor,
+  actualMobile.grid.style.backgroundColor,
+  'Inbox operational canvas must remain consistent across desktop and mobile.'
+);
+assert.notEqual(
+  actualDesktop.grid.style.backgroundColor,
+  actualDesktop.card1.style.backgroundColor,
+  'desktop-A: operational canvas must remain visually distinct from the GPP-owned card surface.'
+);
+assert.notEqual(
+  actualMobile.grid.style.backgroundColor,
+  actualMobile.card1.style.backgroundColor,
+  'mobile-B: operational canvas must remain visually distinct from the GPP-owned card surface.'
+);
 
 // Fixed media crops and radii remain pixel-based by contract, but their values
 // now follow the explicit A/B visual authority instead of the earlier compact
@@ -178,39 +198,38 @@ const compactReference = value => value ? {
   viewport: value.viewport,
   stage: value.stage,
   inbox_view: value.inboxView,
-  search: value.search,
+  page_heading: value.pageHeading,
+  search_row: value.searchRow,
   grid: value.grid,
   card1: value.card1,
   card2: value.card2,
+  selection: value.selection,
+  card_delta: value.cardDelta,
   photo: value.photo,
-  identity: value.identity,
   name: value.name,
   identifier: value.identifier,
-  meta: value.meta,
-  detail_row: value.detailRow,
+  details: value.details,
+  detail: value.detail,
   detail_label: value.detailLabel,
   detail_value: value.detailValue,
   action: value.action,
+  search: value.search,
 } : null;
 
-const summary = {
-  repository_sha: baseline.repository_sha,
+const report = {
+  schema_version: '1.0.0',
+  status: 'PASS',
+  method: 'runtime-loaded canonical HTML with Owner A/B; exact same Chromium engine as WU21; computed-style and bounding-rect comparison; screenshots are secondary visual evidence',
+  reference_source: baseline.reference,
+  actual_desktop: compactActual(actualDesktop),
+  actual_mobile: compactActual(actualMobile),
+  actual_mobile_text_200: compactActual(actualText200),
+  reference_A: compactReference(referenceA),
+  reference_B: compactReference(referenceB),
+  assertions: browser.pr33_visual_baseline.visual_fidelity_assertions,
   screenshots,
-  visual_fidelity_assertions: browser.pr33_visual_baseline.visual_fidelity_assertions,
-  actual: {
-    admin_1440: compactActual(obs['baseline-admin-1440']),
-    admin_414: compactActual(obs['baseline-admin-414']),
-    admin_375: compactActual(obs['baseline-admin-375']),
-    admin_320: compactActual(obs['baseline-admin-320']),
-    admin_414_text_200: compactActual(obs['baseline-admin-414-text-200']),
-    frontend_2200: compactActual(obs['baseline-frontend-2200']),
-  },
-  reference: {
-    A_1440: compactReference(obs['reference-A-1440']),
-    B_414: compactReference(obs['reference-B-414']),
-  },
 };
 
-process.stdout.write(`PR33_VISUAL_FIDELITY_ASSERTIONS_PASS=${baseline.repository_sha}\n`);
-process.stdout.write(`PR33_BASELINE_RETAINED=${browserPath}\n`);
-process.stdout.write(`PR33_BASELINE_SUMMARY=${JSON.stringify(summary)}\n`);
+const reportPath = path.join(artifactDir, 'pr33-baseline-report.json');
+fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+console.log(`PR33_BASELINE_REPORT_PASS=${reportPath}`);
