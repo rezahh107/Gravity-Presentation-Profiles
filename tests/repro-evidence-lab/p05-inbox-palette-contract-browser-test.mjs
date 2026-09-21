@@ -40,12 +40,46 @@ const expected = {
   controlBorder: 'rgb(134, 144, 161)',
   accent: 'rgb(29, 78, 216)',
   focus: 'rgb(56, 88, 233)',
+  error: 'rgb(180, 35, 24)',
 };
 const mutatedCanvas = 'rgb(1, 2, 3)';
+const hostileError = 'rgb(33, 34, 35)';
 
 async function waitForCardMode(page) {
   await page.waitForSelector('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelectorAll('[data-gpp-inbox-surface="gravity_flow.inbox"] .gpp-inbox-card').length > 1, null, { timeout: 30000 });
+}
+
+async function ensureOverdueObservable(page) {
+  return page.evaluate(() => {
+    const surface = document.querySelector('[data-gpp-inbox-surface="gravity_flow.inbox"]');
+    const details = surface?.querySelector('.gpp-inbox-card .gpp-inbox-card__details');
+    if (!surface || !details) throw new Error('P05 canonical Inbox details fixture is unavailable.');
+
+    let overdue = details.querySelector('.gpp-inbox-card__due--overdue');
+    let source = 'runtime_fixture';
+    if (!overdue) {
+      overdue = document.createElement('div');
+      overdue.className = 'gpp-inbox-card__detail gpp-inbox-card__due gpp-inbox-card__due--overdue';
+      overdue.dataset.gppP05TestOverdue = 'true';
+
+      const term = document.createElement('dt');
+      term.textContent = 'سررسید';
+      const value = document.createElement('dd');
+      value.textContent = '۱۴۰۴/۰۱/۰۱';
+      overdue.append(term, value);
+      details.appendChild(overdue);
+      source = 'p05_test_controlled';
+    }
+
+    const value = overdue.querySelector('dd');
+    if (!value) throw new Error('P05 overdue fixture has no value node.');
+    return {
+      source,
+      selector: '.gpp-inbox-card__due--overdue dd',
+      test_controlled: overdue.dataset.gppP05TestOverdue === 'true',
+    };
+  });
 }
 
 async function observe(page) {
@@ -56,9 +90,10 @@ async function observe(page) {
     const name = card?.querySelector('.gpp-inbox-card__name');
     const meta = card?.querySelector('.gpp-inbox-card__meta');
     const open = card?.querySelector('.gpp-inbox-card__open');
+    const overdue = card?.querySelector('.gpp-inbox-card__due--overdue dd');
     const search = surface?.querySelector('[data-js="gflow-inbox-search"]');
     const cell = card?.closest('.ag-cell[col-id="gpp_case_card"]');
-    if (!surface || !grid || !card || !name || !meta || !open || !search || !cell) {
+    if (!surface || !grid || !card || !name || !meta || !open || !overdue || !search || !cell) {
       throw new Error('P05 canonical Inbox card-mode surface is incomplete.');
     }
 
@@ -68,6 +103,7 @@ async function observe(page) {
     const nameStyle = getComputedStyle(name);
     const metaStyle = getComputedStyle(meta);
     const openStyle = getComputedStyle(open);
+    const overdueStyle = getComputedStyle(overdue);
     const searchStyle = getComputedStyle(search);
     return {
       direction: surfaceStyle.direction,
@@ -90,6 +126,7 @@ async function observe(page) {
         name_color: nameStyle.color,
         meta_color: metaStyle.color,
         open_background: openStyle.backgroundColor,
+        overdue_color: overdueStyle.color,
         search_background: searchStyle.backgroundColor,
         search_border: searchStyle.borderColor,
         search_color: searchStyle.color,
@@ -133,6 +170,7 @@ function assertOwnedPalette(observation, label) {
   assert.equal(observation.computed.search_background, expected.surface, `${label}: search surface changed.`);
   assert.equal(observation.computed.search_border, expected.controlBorder, `${label}: control border changed.`);
   assert.equal(observation.computed.search_color, expected.text, `${label}: search text changed.`);
+  assert.equal(observation.computed.overdue_color, expected.error, `${label}: overdue/error color changed.`);
 }
 
 async function mutateExternalThemeTokens(page) {
@@ -155,10 +193,39 @@ async function mutateExternalThemeTokens(page) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function proveOverdueAssertionCausality(page, label) {
+  const regressionStyle = await page.addStyleTag({ content: `
+    .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__due--overdue dd {
+      color: var(--wpds-color-foreground-content-error, #b42318);
+    }
+  ` });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+  const falsified = await observe(page);
+  assert.equal(falsified.computed.overdue_color, hostileError, `${label}: falsification did not restore external error-token authority.`);
+  assert.throws(
+    () => assertOwnedPalette(falsified, `${label} falsification`),
+    error => error?.code === 'ERR_ASSERTION' && /overdue\/error color changed/.test(error.message),
+    `${label}: overdue assertion did not reject external error-token takeover.`
+  );
+
+  await regressionStyle.evaluate(node => node.remove());
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const restored = await observe(page);
+  assertOwnedPalette(restored, `${label} restored`);
+
+  return {
+    simulated_external_token_color: falsified.computed.overdue_color,
+    assertion_rejected_takeover: true,
+    restored_overdue_color: restored.computed.overdue_color,
+  };
+}
+
 async function verifyViewport(page, width, height) {
   await page.setViewportSize({ width, height });
   await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
   await waitForCardMode(page);
+  const overdueFixture = await ensureOverdueObservable(page);
   const before = await observe(page);
   assert.equal(before.direction, 'rtl', `P05 ${width}px: Inbox is not RTL before mutation.`);
   assert.equal(before.canvas, expected.canvas, `P05 ${width}px: baseline canvas is unexpected.`);
@@ -176,7 +243,8 @@ async function verifyViewport(page, width, height) {
   assert.deepEqual(normalizeGeometry(after), normalizeGeometry(before), `P05 ${width}px: palette mutation changed Inbox geometry.`);
   assert.equal(after.outside_scope_token, '', `P05 ${width}px: owned palette leaked outside Inbox scope after mutation.`);
 
-  return { width, height, before, after };
+  const falsification = await proveOverdueAssertionCausality(page, `P05 ${width}px`);
+  return { width, height, overdue_fixture: overdueFixture, before, after, falsification };
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -200,6 +268,8 @@ const results = {
     authenticated_native_inbox: true,
     host_canvas_remains_semantic: false,
     gpp_owned_palette_resists_external_wpds_mutation: false,
+    overdue_observable_and_color_proven: false,
+    overdue_external_token_takeover_is_detected_by_assertion: false,
     no_scope_leak: false,
     rtl_and_geometry_preserved: false,
     card_mode_preserved: false,
@@ -213,10 +283,17 @@ try {
 
   for (const viewport of results.viewports) {
     assert.equal(viewport.after.scope_tokens.focus, '#3858e9');
+    assert.equal(viewport.before.computed.overdue_color, expected.error);
+    assert.equal(viewport.after.computed.overdue_color, expected.error);
+    assert.equal(viewport.falsification.simulated_external_token_color, hostileError);
+    assert.equal(viewport.falsification.assertion_rejected_takeover, true);
+    assert.equal(viewport.falsification.restored_overdue_color, expected.error);
   }
 
   results.assertions.host_canvas_remains_semantic = true;
   results.assertions.gpp_owned_palette_resists_external_wpds_mutation = true;
+  results.assertions.overdue_observable_and_color_proven = true;
+  results.assertions.overdue_external_token_takeover_is_detected_by_assertion = true;
   results.assertions.no_scope_leak = true;
   results.assertions.rtl_and_geometry_preserved = true;
   results.assertions.card_mode_preserved = results.viewports.every(item => item.before.card_mode && item.after.card_mode);
