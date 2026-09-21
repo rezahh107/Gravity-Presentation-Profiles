@@ -56,4 +56,20 @@ function wu19_normalize_current_components( $item, $first, $last ) {
 wu19_normalize_current_components( $wu18['alpha'], 'Alpha First', 'Alpha Last' );
 wu19_normalize_current_components( $wu18['beta'], 'Beta First', 'Beta Last' );
 
+// GPP-RP-WU-03 reuses this already-admitted WU19 browser/PDF boundary. The
+// candidate is implemented only by a temporary MU-plugin created and removed by
+// the qualification script; production Print delivery remains untouched.
+$wu03_script = __DIR__ . '/wu03-print-stylesheet-seam.mjs';
+$wu03_output = array();
+$wu03_status = 0;
+exec( 'node ' . escapeshellarg( $wu03_script ) . ' 2>&1', $wu03_output, $wu03_status );
+if ( 0 !== $wu03_status || empty( $wu03_output ) ) {
+    throw new RuntimeException( 'WU03 Print stylesheet seam qualification failed to produce evidence: ' . implode( "\n", array_slice( $wu03_output, -12 ) ) );
+}
+$wu03_summary = json_decode( end( $wu03_output ), true );
+if ( ! is_array( $wu03_summary ) || 'EVIDENCE_COMPLETE' !== ( $wu03_summary['status'] ?? null ) ) {
+    throw new RuntimeException( 'WU03 Print stylesheet seam evidence summary is incomplete.' );
+}
+
 echo "WU19 visual control data normalized without direct full-name authority.\n";
+echo "WU03_PRINT_STYLESHEET_SEAM_EVIDENCE_COMPLETE\n";
