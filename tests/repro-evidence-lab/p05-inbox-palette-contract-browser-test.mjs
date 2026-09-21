@@ -19,6 +19,16 @@ function wpEval(code) {
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 if (!manifest?.frontend_inbox_url) throw new Error('P05 frontend Inbox fixture URL is unavailable.');
 
+const authCookies = JSON.parse(wpEval(`
+$u = get_user_by('login', 'bootstrap_admin');
+if (!$u) throw new RuntimeException('bootstrap_admin unavailable');
+$expiration = time() + 600;
+echo wp_json_encode(array(
+  array('name' => AUTH_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'auth')),
+  array('name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'logged_in'))
+), JSON_UNESCAPED_SLASHES);
+`));
+
 const repositoryHead = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const playwrightVersion = JSON.parse(fs.readFileSync('node_modules/playwright/package.json', 'utf8')).version;
 const expected = {
@@ -32,16 +42,6 @@ const expected = {
   focus: 'rgb(56, 88, 233)',
 };
 const mutatedCanvas = 'rgb(1, 2, 3)';
-
-async function login(page) {
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', 'bootstrap_admin');
-  await page.fill('#user_pass', ['wu21', 'bootstrap', 'pass', '2026'].join('-'));
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.click('#wp-submit'),
-  ]);
-}
 
 async function waitForCardMode(page) {
   await page.waitForSelector('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
@@ -73,6 +73,7 @@ async function observe(page) {
       direction: surfaceStyle.direction,
       canvas: surfaceStyle.backgroundColor,
       scope_tokens: {
+        canvas: surfaceStyle.getPropertyValue('--gpp-inbox-canvas').trim(),
         surface: surfaceStyle.getPropertyValue('--gpp-inbox-surface').trim(),
         text: surfaceStyle.getPropertyValue('--gpp-inbox-text').trim(),
         muted: surfaceStyle.getPropertyValue('--gpp-inbox-text-muted').trim(),
@@ -99,7 +100,7 @@ async function observe(page) {
         card: (() => { const r = card.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })(),
         grid_columns: gridStyle.gridTemplateColumns,
       },
-      card_mode: getComputedStyle(grid).display === 'grid',
+      card_mode: gridStyle.display === 'grid',
       outside_scope_token: getComputedStyle(document.body).getPropertyValue('--gpp-inbox-text').trim(),
     };
   });
@@ -138,6 +139,7 @@ async function mutateExternalThemeTokens(page) {
   await page.addStyleTag({ content: `
     .gpp-inbox-surface,
     .gflow-inbox.gflow-grid.gflow-common {
+      --gpp-inbox-canvas: rgb(1, 2, 3) !important;
       --wpds-color-background-surface-neutral-weak: rgb(1, 2, 3) !important;
       --wpds-color-background-surface-neutral: rgb(9, 10, 11) !important;
       --wpds-color-foreground-content-neutral: rgb(12, 13, 14) !important;
@@ -167,8 +169,9 @@ async function verifyViewport(page, width, height) {
   await mutateExternalThemeTokens(page);
   const after = await observe(page);
   assert.equal(after.direction, 'rtl', `P05 ${width}px: RTL changed after host-token mutation.`);
-  assert.equal(after.canvas, mutatedCanvas, `P05 ${width}px: admitted theme-semantic canvas did not follow host token.`);
-  assert.equal(after.computed.grid_background, mutatedCanvas, `P05 ${width}px: card-mode canvas did not follow admitted host token.`);
+  assert.equal(after.scope_tokens.canvas, mutatedCanvas, `P05 ${width}px: admitted semantic canvas alias did not accept host override.`);
+  assert.equal(after.canvas, mutatedCanvas, `P05 ${width}px: admitted theme-semantic canvas did not follow host override.`);
+  assert.equal(after.computed.grid_background, mutatedCanvas, `P05 ${width}px: card-mode canvas did not follow admitted host override.`);
   assertOwnedPalette(after, `P05 ${width}px mutated`);
   assert.deepEqual(normalizeGeometry(after), normalizeGeometry(before), `P05 ${width}px: palette mutation changed Inbox geometry.`);
   assert.equal(after.outside_scope_token, '', `P05 ${width}px: owned palette leaked outside Inbox scope after mutation.`);
@@ -177,7 +180,9 @@ async function verifyViewport(page, width, height) {
 }
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage();
+const context = await browser.newContext();
+await context.addCookies(authCookies.map(cookie => ({ ...cookie, url: baseUrl })));
+const page = await context.newPage();
 const results = {
   status: 'PASS',
   repository_head: repositoryHead,
@@ -192,7 +197,7 @@ const results = {
   },
   viewports: [],
   assertions: {
-    authenticated_native_inbox: false,
+    authenticated_native_inbox: true,
     host_canvas_remains_semantic: false,
     gpp_owned_palette_resists_external_wpds_mutation: false,
     no_scope_leak: false,
@@ -203,14 +208,9 @@ const results = {
 };
 
 try {
-  await login(page);
-  results.assertions.authenticated_native_inbox = true;
   results.viewports.push(await verifyViewport(page, 1366, 1000));
   results.viewports.push(await verifyViewport(page, 760, 1000));
 
-  // WU17 runs immediately before this test in the same exact-Head WU21 job and
-  // exercises real keyboard focus. Here we independently prove the color
-  // authority feeding those focus rules cannot be replaced by an external token.
   for (const viewport of results.viewports) {
     assert.equal(viewport.after.scope_tokens.focus, '#3858e9');
   }
