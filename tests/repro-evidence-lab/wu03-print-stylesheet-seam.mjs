@@ -15,10 +15,10 @@ const playwrightVersion = JSON.parse(fs.readFileSync('node_modules/playwright/pa
 const cssPath = path.resolve('assets/css/srwf-gravity-flow-print-dossier.css');
 const adapterPath = path.resolve('src/SRWF/GravityFlow/PrintDossierPresentationAdapter.php');
 const cssSha256 = crypto.createHash('sha256').update(fs.readFileSync(cssPath)).digest('hex');
+const expectedAssetVersion = cssSha256.slice(0, 16);
 const adapterSource = fs.readFileSync(adapterPath, 'utf8');
 const requiredFontWeights = ['300', '400', '500', '700', '900'];
 const expectedFixtureMarker = 'vazir-loader-interface-local-font-fixture-v1';
-const expectedStyleVersion = '1.0.2';
 
 function run(command, args, options = {}) {
   const cp = spawnSync(command, args, { encoding: 'utf8', env: process.env, ...options });
@@ -45,7 +45,6 @@ echo wp_json_encode(array(
   'loader_available' => is_object($loader),
   'selected_weights' => is_object($loader) && method_exists($loader, 'get_selected_weights') ? $loader->get_selected_weights() : array(),
   'fixture_marker' => defined('GPP_WU03_FONT_PROVIDER_CONTRACT') ? GPP_WU03_FONT_PROVIDER_CONTRACT : null,
-  'style_version' => $adapter::STYLE_VERSION,
   'dossier_style_handle' => $adapter::DOSSIER_STYLE_HANDLE,
   'vazir_style_handle' => $adapter::VAZIR_STYLE_HANDLE,
 ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
@@ -54,17 +53,22 @@ echo wp_json_encode(array(
 const sourceContract = {
   vazir_native_filter_declared: adapterSource.includes("add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeVazirPrintStyle' ), 20, 2 )"),
   dossier_native_filter_declared: adapterSource.includes("add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeDossierPrintStyle' ), 30, 2 )"),
+  content_addressed_dossier_version_declared:
+    adapterSource.includes('$version = self::assetVersion( $path );') &&
+    adapterSource.includes('if ( false === $version )') &&
+    adapterSource.includes("wp_register_style(\n            self::DOSSIER_STYLE_HANDLE") &&
+    adapterSource.includes("            $version,\n            'all'"),
+  manual_style_version_authority_absent: !adapterSource.includes('STYLE_VERSION'),
   legacy_manual_link_absent: !adapterSource.includes("echo '<link") && !adapterSource.includes('gpp-print-dossier-css"'),
 };
 
 if (!runtimeContract.loader_available) throw new Error('WU03 font contract fixture did not expose VazirFont_Loader.');
 if (runtimeContract.fixture_marker !== expectedFixtureMarker) throw new Error('WU03 font contract fixture identity mismatch.');
 if (JSON.stringify(runtimeContract.selected_weights) !== JSON.stringify(requiredFontWeights)) throw new Error('WU03 font contract fixture weights mismatch.');
-if (runtimeContract.style_version !== expectedStyleVersion) throw new Error(`Unexpected dossier STYLE_VERSION: ${runtimeContract.style_version}`);
 if (runtimeContract.dossier_style_handle !== 'gpp-print-dossier' || runtimeContract.vazir_style_handle !== 'vazir-font-frontend') {
   throw new Error(`Unexpected canonical style handles: ${JSON.stringify(runtimeContract)}`);
 }
-if (!Object.values(sourceContract).every(Boolean)) throw new Error(`Production adapter source no longer declares one native-only Print stylesheet path: ${JSON.stringify(sourceContract)}`);
+if (!Object.values(sourceContract).every(Boolean)) throw new Error(`Production adapter source no longer declares one native content-addressed Print stylesheet path: ${JSON.stringify(sourceContract)}`);
 
 const cookies = JSON.parse(wpEval(`
 $u = get_user_by('login', 'bootstrap_admin');
@@ -168,7 +172,7 @@ const hardGates = {
   native_filter_source_contract: Object.values(sourceContract).every(Boolean),
   single_dossier_stylesheet_delivery: state.dossier_link_count === 1 && Boolean(state.dossier_style),
   stylesheet_is_canonical_asset: state.asset_path_matches === true,
-  deterministic_asset_identity: state.asset_version === expectedStyleVersion && cssSha256.length === 64,
+  deterministic_asset_identity: state.asset_version === expectedAssetVersion,
   font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
   font_contract_loaded: state.all_font_contract_faces_loaded,
   dossier_font_family_contract: /Vazir/i.test(state.font_family || ''),
@@ -202,7 +206,7 @@ const evidence = {
     node: process.version,
     playwright: playwrightVersion,
     dossier_css_sha256: cssSha256,
-    style_version: runtimeContract.style_version,
+    dossier_css_version: expectedAssetVersion,
     font_provider_fixture: runtimeContract.fixture_marker,
   },
   canonical_constants: runtimeContract,
