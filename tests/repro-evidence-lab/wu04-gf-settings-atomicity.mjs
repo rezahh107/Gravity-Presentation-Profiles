@@ -442,7 +442,8 @@ const evidence = {
     lifecycle_field: 'operations_setup_action',
     validation_callback: 'GravityPresentationProfiles\\GravityForms\\AddOn::validate_operations_setup_action',
     service_call: 'OperationsSetupService::forWordPress()->initialize',
-    canonical_state: [
+    canonical_state: 'BindingSetLifecycle::OPTION_NAME',
+    admitted_canonical_state_surfaces: [
       'form-specific BindingSetLifecycle resolution',
       'BindingSetLifecycle::OPTION_NAME',
       'VisualPackageLifecycle::OPTION_NAME',
