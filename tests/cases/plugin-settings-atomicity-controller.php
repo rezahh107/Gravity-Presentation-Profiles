@@ -4,10 +4,14 @@ require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/../../src/Autoloader.php';
 
 use GravityPresentationProfiles\Autoloader;
+use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 use GravityPresentationProfiles\GravityForms\AddOn;
 use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
 
 $GLOBALS['gpp_atomicity_actions'] = array();
+$GLOBALS['gpp_atomicity_options'] = array(
+    'gpp_atomicity_test' => array( 'revision' => 0, 'value' => 0 ),
+);
 
 function add_action( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
     $GLOBALS['gpp_atomicity_actions'][] = array( $hook, $callback, $priority, $accepted_args );
@@ -17,12 +21,33 @@ function sanitize_key( $value ) { return strtolower( preg_replace( '/[^a-z0-9_\-
 function wp_unslash( $value ) { return $value; }
 function esc_html__( $value ) { return $value; }
 function __( $value ) { return $value; }
+function get_option( $name, $default = null ) {
+    return array_key_exists( $name, $GLOBALS['gpp_atomicity_options'] ) ? $GLOBALS['gpp_atomicity_options'][ $name ] : $default;
+}
+function update_option( $name, $value, $autoload = null ) {
+    unset( $autoload );
+    $GLOBALS['gpp_atomicity_options'][ $name ] = $value;
+    return true;
+}
+
+final class AtomicityWpdb {
+    public $prefix = 'wp_';
+    public $blogid = 1;
+    public function prepare( $query, $value ) { return $query . '|' . $value; }
+    public function get_var( $query ) {
+        if ( 'SELECT DATABASE()' === $query ) return 'gpp_atomicity';
+        if ( 0 === strpos( $query, 'SELECT GET_LOCK' ) ) return 1;
+        if ( 0 === strpos( $query, 'SELECT RELEASE_LOCK' ) ) return 1;
+        return null;
+    }
+}
+$GLOBALS['wpdb'] = new AtomicityWpdb();
 
 final class AtomicityField {
     public $name;
     public $validation_callback;
     public $save_callback;
-    public $error = null;
+    private $error = '';
 
     public function __construct( $name, $validation_callback = null, $save_callback = null ) {
         $this->name = $name;
@@ -30,13 +55,33 @@ final class AtomicityField {
         $this->save_callback = $save_callback;
     }
 
-    public function set_error( $message ) { $this->error = $message; }
+    public function set_error( $message ) { $this->error = (string) $message; }
+    public function get_error() { return $this->error; }
 }
 
 final class AtomicityCommitRecorder {
     public static $calls = array();
+
     public static function mutate( $field, $value ) {
-        self::$calls[] = array( 'name' => $field->name, 'value' => $value );
+        self::$calls[] = array(
+            'name' => $field->name,
+            'value' => $value,
+            'preview' => WordPressOptionStateStore::isPreviewActive(),
+        );
+
+        if ( 'invalid-sibling' === $value ) {
+            $field->set_error( 'Sibling business validation rejected the transaction.' );
+            return;
+        }
+
+        $store = new WordPressOptionStateStore( 'gpp_atomicity_test' );
+        $state = $store->load();
+        $expected_revision = $state['revision'];
+        $state['revision']++;
+        $state['value']++;
+        if ( ! $store->commit( $expected_revision, $state ) ) {
+            throw new RuntimeException( 'Atomicity test StateStore commit failed.' );
+        }
     }
 }
 
@@ -73,36 +118,47 @@ $operation = $addon->atomicityField( 'operations_setup_action' );
 $sibling = $addon->atomicityField( 'entry_detail_setup_action' );
 gpp_assert_true( is_object( $operation ), 'Prepared Gravity Forms settings fields are objects.' );
 gpp_assert_same(
-    array( PluginSettingsAtomicityController::class, 'validateFormAction' ),
+    array( PluginSettingsAtomicityController::class, 'validateWithoutCommit' ),
     $operation->validation_callback,
-    'Lifecycle command validation must be replaced on the prepared field object by the read-only atomicity validator.'
+    'Lifecycle command validation must execute through the isolated lifecycle preview.'
 );
 gpp_assert_same(
     array( PluginSettingsAtomicityController::class, 'commitValidatedAction' ),
     $operation->save_callback,
-    'Lifecycle mutation must be moved to the prepared field object save callback.'
+    'Lifecycle mutation must remain deferred to the prepared field save callback.'
 );
 gpp_assert_same(
-    array( PluginSettingsAtomicityController::class, 'validateFormAction' ),
+    array( PluginSettingsAtomicityController::class, 'validateWithoutCommit' ),
     $sibling->validation_callback,
-    'Sibling command field must be rewired through the same prepared-object seam.'
+    'Sibling command field must use the same isolated preview boundary.'
 );
 
-gpp_assert_same( array(), AtomicityCommitRecorder::$calls, 'Renderer rewiring must not execute lifecycle mutation.' );
+gpp_assert_same( array(), AtomicityCommitRecorder::$calls, 'Renderer rewiring must not execute lifecycle logic.' );
 
-PluginSettingsAtomicityController::validateFormAction( $operation, 'form:42' );
-PluginSettingsAtomicityController::validateFormAction( $sibling, 'invalid-sibling' );
-gpp_assert_same( null, $operation->error, 'Valid lifecycle command must pass read-only validation.' );
-gpp_assert_true( is_string( $sibling->error ) && false !== strpos( $sibling->error, 'Entry Detail' ), 'Invalid sibling must remain a Gravity Forms field error.' );
-gpp_assert_same( array(), AtomicityCommitRecorder::$calls, 'Validation phase must remain mutation-free even when a valid lifecycle command is present.' );
+PluginSettingsAtomicityController::validateWithoutCommit( $operation, 'form:42' );
+PluginSettingsAtomicityController::validateWithoutCommit( $sibling, 'invalid-sibling' );
+gpp_assert_same( '', $operation->get_error(), 'Valid lifecycle command must pass exact callback validation.' );
+gpp_assert_true( false !== strpos( $sibling->get_error(), 'Sibling business validation' ), 'Business validation error must remain on the authentic field object.' );
+gpp_assert_same(
+    array( 'revision' => 0, 'value' => 0 ),
+    $GLOBALS['gpp_atomicity_options']['gpp_atomicity_test'],
+    'Validation preview must discard lifecycle commits even when the exact callback performs writes.'
+);
+gpp_assert_same( false, WordPressOptionStateStore::isPreviewActive(), 'Preview scope must always close after validation.' );
+gpp_assert_same( 2, count( AtomicityCommitRecorder::$calls ), 'Both exact callbacks must execute during validation.' );
+gpp_assert_same( true, AtomicityCommitRecorder::$calls[0]['preview'], 'Valid command validation must execute inside preview.' );
+gpp_assert_same( true, AtomicityCommitRecorder::$calls[1]['preview'], 'Rejected sibling validation must execute inside preview.' );
 
-// Exact Gravity Forms 3.1.1.1 Settings::process_postback() invokes field
-// save callbacks only after validate() returns true for the whole renderer. A
-// rejected sibling therefore never reaches this boundary. Model only the
-// accepted branch here; WU-04 authentic browser evidence proves the host order.
+// Exact Gravity Forms 3.1.1.1 Settings::process_postback() reaches save callbacks
+// only when every field validates. Model only the accepted transaction here.
 PluginSettingsAtomicityController::commitValidatedAction( $operation, 'form:42' );
 PluginSettingsAtomicityController::commitValidatedAction( $operation, 'form:42' );
-gpp_assert_same( 1, count( AtomicityCommitRecorder::$calls ), 'One accepted command must commit exactly once per request.' );
-gpp_assert_same( 'form:42', AtomicityCommitRecorder::$calls[0]['value'], 'Commit must preserve the exact validated command value.' );
+gpp_assert_same(
+    array( 'revision' => 1, 'value' => 1 ),
+    $GLOBALS['gpp_atomicity_options']['gpp_atomicity_test'],
+    'One globally accepted settings transaction must persist the intended lifecycle mutation exactly once.'
+);
+gpp_assert_same( 3, count( AtomicityCommitRecorder::$calls ), 'Duplicate save-callback invocation must not duplicate mutation.' );
+gpp_assert_same( false, AtomicityCommitRecorder::$calls[2]['preview'], 'Accepted commit must execute against real StateStore state.' );
 
 echo "PLUGIN_SETTINGS_ATOMICITY_CONTROLLER_PASS\n";
