@@ -136,7 +136,8 @@ function assertOwnedPalette(observation, label) {
 
 async function mutateExternalThemeTokens(page) {
   await page.addStyleTag({ content: `
-    :root {
+    .gpp-inbox-surface,
+    .gflow-inbox.gflow-grid.gflow-common {
       --wpds-color-background-surface-neutral-weak: rgb(1, 2, 3) !important;
       --wpds-color-background-surface-neutral: rgb(9, 10, 11) !important;
       --wpds-color-foreground-content-neutral: rgb(12, 13, 14) !important;
