@@ -1,7 +1,7 @@
-/* WU19 canonical dossier print. Loaded only from the post-permission Print footer. */
-#view-container > form,
-#view-container > .gravityflow-timeline,
-#view-container > .print-hr {
+/* WU19 canonical dossier print. Native host content is suppressed only when GPP dossier output exists. */
+#view-container:has(> .gpp-print-dossier) > form,
+#view-container:has(> .gpp-print-dossier) > .gravityflow-timeline,
+#view-container:has(> .gpp-print-dossier) > .print-hr {
   display: none !important;
 }
 
@@ -115,7 +115,7 @@
 .gpp-print-dossier .paper-approval .paper-choices { gap: 5px; font-size: 11px; margin: 8px 0; }
 .gpp-print-dossier .paper-write { border: 1px solid var(--paper-line-soft); padding: 8px 9px; font-size: 11px; background: #fff; min-height: 80px; }
 .gpp-print-dossier .paper-write--management { min-height: 85px !important; }
-.gpp-print-dossier .paper-management { border: 1.5px solid var(--paper-line-strong); padding: 12px 14px; margin-top: 12px; break-inside: avoid; }
+.gpp-print-dossier .paper-management { border: 1.5px solid var(--paper-line-strong); padding: 10px 11px; margin-top: 12px; break-inside: avoid; }
 .gpp-print-dossier .paper-management p { font-size: 12px; display: inline-block; margin-left: 15px; }
 .gpp-print-dossier .paper-management > .paper-choices { display: inline-flex; }
 .gpp-print-dossier .paper-section { margin-top: 13px; break-inside: avoid; }
