@@ -36,7 +36,7 @@ final class PersianGravityJalaliBridge {
         if ( ! is_string( $version ) || '' === trim( $version ) ) {
             return self::fallback( self::STATUS_PROVIDER_VERSION_UNPROVEN );
         }
-        if ( version_compare( $version, self::QUALIFIED_PROVIDER_VERSION, '<' ) ) {
+        if ( ! version_compare( $version, self::QUALIFIED_PROVIDER_VERSION, '==' ) ) {
             return self::fallback( self::STATUS_PROVIDER_INCOMPATIBLE );
         }
 
