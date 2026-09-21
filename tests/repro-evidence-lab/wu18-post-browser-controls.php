@@ -5,6 +5,25 @@ use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 
+function gpp_wu02_assert_qualified_summary( $summary ) {
+    if ( ! is_array( $summary )
+        || 'EVIDENCE_COMPLETE' !== ( $summary['status'] ?? null )
+        || 'PASS' !== ( $summary['hard_gate_result'] ?? null )
+        || 'QUALIFIED_FOR_PINNED_RUNTIME' !== ( $summary['disposition'] ?? null ) ) {
+        throw new RuntimeException( 'WU02 Entry Detail visibility evidence did not qualify the pinned runtime.' );
+    }
+}
+
+function gpp_wu02_summary_rejected( $summary ) {
+    try {
+        gpp_wu02_assert_qualified_summary( $summary );
+    } catch ( RuntimeException $exception ) {
+        return true;
+    }
+
+    return false;
+}
+
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu18_fixture_manifest' );
 if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['transition'] ) || empty( $manifest['binding_state_sha256'] ) ) {
@@ -193,16 +212,83 @@ echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
 echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
 
-// GPP-RP-WU-04: WU04 owns qualification semantics. WU18 only enforces the
-// process/transport contract: zero exit plus one well-formed conclusive envelope.
+// GPP-RP-WU-02: the PHP wrapper consumes one authoritative Node result. These
+// deterministic controls exercise the exact fail-closed acceptance predicate
+// before the real pinned-runtime evaluator is invoked.
+$wu02_positive_control = false;
+try {
+    gpp_wu02_assert_qualified_summary( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'hard_gate_result' => 'PASS',
+        'disposition' => 'QUALIFIED_FOR_PINNED_RUNTIME',
+    ) );
+    $wu02_positive_control = true;
+} catch ( RuntimeException $exception ) {
+    $wu02_positive_control = false;
+}
+$wu02_fail_control = gpp_wu02_summary_rejected( array(
+    'status' => 'EVIDENCE_COMPLETE',
+    'hard_gate_result' => 'FAIL',
+    'disposition' => 'CONFIRMED_DEFECT',
+) );
+$wu02_not_proven_control = gpp_wu02_summary_rejected( array(
+    'status' => 'EVIDENCE_COMPLETE',
+    'hard_gate_result' => 'NOT_PROVEN',
+    'disposition' => 'NOT_PROVEN',
+) );
+$wu02_malformed_control = gpp_wu02_summary_rejected( '{not-json' );
+$wu02_missing_control = gpp_wu02_summary_rejected( array( 'status' => 'EVIDENCE_COMPLETE' ) );
+if ( ! $wu02_positive_control
+    || ! $wu02_fail_control
+    || ! $wu02_not_proven_control
+    || ! $wu02_malformed_control
+    || ! $wu02_missing_control ) {
+    throw new RuntimeException( 'WU02 fail-closed qualification summary controls failed.' );
+}
+echo "WU02_QUALIFICATION_POSITIVE_CONTROL_PASS\n";
+echo "WU02_QUALIFICATION_FAIL_FALSIFICATION_PASS\n";
+echo "WU02_QUALIFICATION_NOT_PROVEN_FALSIFICATION_PASS\n";
+echo "WU02_QUALIFICATION_MALFORMED_MISSING_FALSIFICATION_PASS\n";
+
+// Run after the existing WU18 controls. The qualification may mutate only
+// ephemeral synthetic field values/conditional logic at this point.
+$wu02_script = __DIR__ . '/wu02-entry-visibility-differential.mjs';
+$wu02_output = array();
+$wu02_status = 0;
+exec( 'node ' . escapeshellarg( $wu02_script ) . ' 2>&1', $wu02_output, $wu02_status );
+if ( 0 !== $wu02_status || empty( $wu02_output ) ) {
+    throw new RuntimeException( 'WU02 Entry Detail visibility differential failed to produce evidence: ' . implode( "\n", array_slice( $wu02_output, -20 ) ) );
+}
+$wu02_summary = json_decode( end( $wu02_output ), true );
+gpp_wu02_assert_qualified_summary( $wu02_summary );
+echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_QUALIFIED_FOR_PINNED_RUNTIME\n";
+
+// GPP-RP-WU-04: WU04 owns qualification semantics. WU18 validates only the
+// process/transport envelope and the referenced evidence artifact.
 $consume_wu04_transport = static function ( array $output, $status ) {
     if ( 0 !== (int) $status || empty( $output ) ) {
         throw new RuntimeException( 'WU04 GF settings atomicity qualification did not complete conclusively.' );
     }
 
     $summary = json_decode( end( $output ), true );
-    if ( ! is_array( $summary ) || 'EVIDENCE_COMPLETE' !== ( $summary['status'] ?? null ) ) {
-        throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is malformed or inconclusive.' );
+    if ( ! is_array( $summary ) ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is not a JSON object.' );
+    }
+
+    foreach ( array( 'status', 'disposition', 'hard_gate_result', 'artifact' ) as $field ) {
+        if ( ! isset( $summary[ $field ] )
+            || ! is_string( $summary[ $field ] )
+            || '' === trim( $summary[ $field ] ) ) {
+            throw new RuntimeException( 'WU04 GF settings atomicity conclusive envelope is structurally incomplete.' );
+        }
+    }
+
+    if ( 'EVIDENCE_COMPLETE' !== $summary['status'] ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is inconclusive.' );
+    }
+
+    if ( ! is_file( $summary['artifact'] ) || ! is_readable( $summary['artifact'] ) ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity referenced evidence artifact is unavailable.' );
     }
 
     return $summary;
@@ -220,18 +306,44 @@ $assert_wu04_transport_rejected = static function ( array $output, $status ) use
 $assert_wu04_transport_rejected( array(), 0 );
 $assert_wu04_transport_rejected( array( 'not-json' ), 0 );
 $assert_wu04_transport_rejected(
-    array( wp_json_encode( array( 'status' => 'EVIDENCE_INCONCLUSIVE', 'disposition' => 'NOT_PROVEN', 'hard_gate_result' => 'NOT_PROVEN' ) ) ),
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'SYNTHETIC_CONCLUSIVE',
+        'hard_gate_result' => 'SYNTHETIC',
+        'artifact' => $results_path,
+    ) ) ),
+    2
+);
+$assert_wu04_transport_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_INCONCLUSIVE',
+        'disposition' => 'NOT_PROVEN',
+        'hard_gate_result' => 'NOT_PROVEN',
+        'artifact' => $results_path,
+    ) ) ),
     0
 );
 $assert_wu04_transport_rejected(
-    array( wp_json_encode( array( 'status' => 'EVIDENCE_INCONCLUSIVE', 'disposition' => 'NOT_PROVEN', 'hard_gate_result' => 'NOT_PROVEN' ) ) ),
-    2
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'SYNTHETIC_CONCLUSIVE',
+        'hard_gate_result' => 'SYNTHETIC',
+    ) ) ),
+    0
+);
+$assert_wu04_transport_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => array( 'not-a-scalar' ),
+        'hard_gate_result' => 'SYNTHETIC',
+        'artifact' => $results_path,
+    ) ) ),
+    0
 );
 echo "WU04_GF_SETTINGS_ATOMICITY_TRANSPORT_FALSIFICATION_PASS\n";
 
-// Run after all existing WU18 controls so the synthetic settings forms cannot
-// affect their state. A conclusive product defect remains a successful
-// qualification because WU04 itself returns zero for that terminal state.
+// Run after the existing WU18 controls and WU02 qualification. WU04 may mutate
+// only its own ephemeral synthetic settings fixtures at this point.
 $wu04_script = __DIR__ . '/wu04-gf-settings-atomicity.mjs';
 $wu04_output = array();
 $wu04_status = 0;
