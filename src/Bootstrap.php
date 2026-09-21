@@ -14,6 +14,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityForms\GtbCoexistenceGuard;
+use GravityPresentationProfiles\SRWF\GravityForms\JalaliValidationAssociation;
 
 final class Bootstrap {
     private static $initialized = false;
@@ -50,6 +51,7 @@ final class Bootstrap {
         \GFAddOn::register( $addon_class );
         FormPresentationOwnershipSettings::register();
         GtbCoexistenceGuard::register();
+        JalaliValidationAssociation::register();
         BindingRowAdminController::register();
         EntryDetailMappingAdminController::register();
         EntryDetailSetupAdminController::register();

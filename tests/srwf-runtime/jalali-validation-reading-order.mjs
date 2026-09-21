@@ -25,6 +25,7 @@ function deriveAssociationState(observation) {
   const descriptionId = observation.description_id || null;
   const describedByReferences = observation.aria_describedby_references || [];
   const errorMessageReferences = observation.aria_errormessage_references || [];
+  const allReferences = [...describedByReferences, ...errorMessageReferences];
 
   const resolvesToError = reference => Boolean(
     errorId &&
@@ -40,14 +41,17 @@ function deriveAssociationState(observation) {
     reference?.resolves_to_description === true
   );
 
-  const viaDescribedBy = describedByReferences.some(resolvesToError);
-  const viaErrorMessage = errorMessageReferences.some(resolvesToError);
+  const describedByErrorReferences = describedByReferences.filter(resolvesToError);
+  const errorMessageErrorReferences = errorMessageReferences.filter(resolvesToError);
+  const errorReferences = [...describedByErrorReferences, ...errorMessageErrorReferences];
 
   return {
-    error_associated: viaDescribedBy || viaErrorMessage,
+    error_associated: errorReferences.length > 0,
+    error_reference_count: errorReferences.length,
+    all_reference_ids_resolve_uniquely: allReferences.every(reference => reference?.match_count === 1),
     error_association_mechanisms: {
-      aria_describedby: viaDescribedBy,
-      aria_errormessage: viaErrorMessage,
+      aria_describedby: describedByErrorReferences.length > 0,
+      aria_errormessage: errorMessageErrorReferences.length > 0,
     },
     description_associated: describedByReferences.some(resolvesToDescription),
   };
@@ -55,9 +59,10 @@ function deriveAssociationState(observation) {
 
 function hostSemanticsPreservedFor(selected, nativeControl) {
   return selected.label_relationship === nativeControl.label_relationship &&
-    selected.error_associated === nativeControl.error_associated &&
     selected.aria_invalid === nativeControl.aria_invalid &&
-    selected.field_error_count === nativeControl.field_error_count;
+    selected.field_error_count === nativeControl.field_error_count &&
+    selected.aria_describedby_raw === nativeControl.aria_describedby_raw &&
+    selected.description_associated === nativeControl.description_associated;
 }
 
 function runAssociationModelControls() {
@@ -86,6 +91,7 @@ function runAssociationModelControls() {
     aria_describedby_references: [resolvedError],
   });
   assert.equal(describedByOnly.error_associated, true);
+  assert.equal(describedByOnly.error_reference_count, 1);
   assert.equal(describedByOnly.error_association_mechanisms.aria_describedby, true);
   assert.equal(describedByOnly.error_association_mechanisms.aria_errormessage, false);
 
@@ -94,8 +100,16 @@ function runAssociationModelControls() {
     aria_errormessage_references: [resolvedError],
   });
   assert.equal(errorMessageOnly.error_associated, true);
+  assert.equal(errorMessageOnly.error_reference_count, 1);
   assert.equal(errorMessageOnly.error_association_mechanisms.aria_describedby, false);
   assert.equal(errorMessageOnly.error_association_mechanisms.aria_errormessage, true);
+
+  const duplicateAssociation = deriveAssociationState({
+    ...baseObservation,
+    aria_describedby_references: [resolvedError],
+    aria_errormessage_references: [resolvedError],
+  });
+  assert.equal(duplicateAssociation.error_reference_count, 2);
 
   const noAssociation = deriveAssociationState(baseObservation);
   assert.equal(noAssociation.error_associated, false);
@@ -110,6 +124,7 @@ function runAssociationModelControls() {
     }],
   });
   assert.equal(danglingReference.error_associated, false);
+  assert.equal(danglingReference.all_reference_ids_resolve_uniquely, false);
 
   const differentNodeReference = deriveAssociationState({
     ...baseObservation,
@@ -133,49 +148,36 @@ function runAssociationModelControls() {
     label_relationship: true,
     aria_invalid: 'true',
     field_error_count: 1,
-    ...errorMessageOnly,
+    aria_describedby_raw: 'description_1',
+    ...deriveAssociationState({
+      ...baseObservation,
+      aria_describedby_references: [resolvedDescription],
+      aria_errormessage_references: [resolvedError],
+    }),
   };
   const nativeControl = {
     label_relationship: true,
     aria_invalid: 'true',
     field_error_count: 1,
-    ...describedByOnly,
+    aria_describedby_raw: 'description_1',
+    ...descriptionOnly,
   };
   assert.equal(hostSemanticsPreservedFor(selected, nativeControl), true);
-  assert.equal(hostSemanticsPreservedFor({ ...selected, ...danglingReference }, nativeControl), false);
 
   return {
     aria_describedby_positive: 'PASS',
     aria_errormessage_positive: 'PASS',
+    exactly_one_error_reference_control: 'PASS',
+    duplicate_association_detected: 'PASS',
     missing_association_negative: 'PASS',
     dangling_reference_negative: 'PASS',
     different_node_negative: 'PASS',
     description_independent: 'PASS',
-    selected_native_corrected_model: 'PASS',
+    admitted_repair_preserves_host_semantics_model: 'PASS',
   };
 }
 
-async function submitInvalidJalali(page, formId, expectedGpp) {
-  await page.goto(`${baseUrl}/?page_id=${manifest.page_id}`, { waitUntil: 'networkidle' });
-  const wrapper = page.locator(`#gform_wrapper_${formId}`);
-  await wrapper.waitFor({ state: 'visible' });
-
-  const text = wrapper.locator('input[type="text"]:not(.pgr_jalali_date)').first();
-  const select = wrapper.locator('select').first();
-  if (await text.count()) await text.fill('Synthetic Student');
-  if (await select.count()) await select.selectOption({ index: 1 });
-
-  const jalali = wrapper.locator('input.pgr_jalali_date').first();
-  if (await jalali.count() !== 1) throw new Error(`Jalali control unavailable for form ${formId}.`);
-  await jalali.fill('');
-
-  const submit = wrapper.locator('input[type="submit"], button[type="submit"]').last();
-  if (await submit.count() !== 1) throw new Error(`Submit control unavailable for form ${formId}.`);
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    submit.click(),
-  ]);
-
+async function observeInvalidJalali(page, formId, expectedGpp) {
   const result = await page.evaluate(({ formId, expectedGpp }) => {
     const wrapper = document.querySelector(`#gform_wrapper_${formId}`);
     const field = wrapper?.querySelector('.gfield--type-pgr_jalali_date.gfield_error');
@@ -303,53 +305,106 @@ async function submitInvalidJalali(page, formId, expectedGpp) {
   return result;
 }
 
+async function submitInvalidJalali(page, formId, expectedGpp) {
+  await page.goto(`${baseUrl}/?page_id=${manifest.page_id}`, { waitUntil: 'networkidle' });
+  const wrapper = page.locator(`#gform_wrapper_${formId}`);
+  await wrapper.waitFor({ state: 'visible' });
+
+  const text = wrapper.locator('input[type="text"]:not(.pgr_jalali_date)').first();
+  const select = wrapper.locator('select').first();
+  if (await text.count()) await text.fill('Synthetic Student');
+  if (await select.count()) await select.selectOption({ index: 1 });
+
+  const jalali = wrapper.locator('input.pgr_jalali_date').first();
+  if (await jalali.count() !== 1) throw new Error(`Jalali control unavailable for form ${formId}.`);
+  await jalali.fill('');
+
+  const submit = wrapper.locator('input[type="submit"], button[type="submit"]').last();
+  if (await submit.count() !== 1) throw new Error(`Submit control unavailable for form ${formId}.`);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    submit.click(),
+  ]);
+
+  return observeInvalidJalali(page, formId, expectedGpp);
+}
+
+async function revalidateInvalidJalali(page, formId, expectedGpp) {
+  const wrapper = page.locator(`#gform_wrapper_${formId}`);
+  await wrapper.waitFor({ state: 'visible' });
+  const jalali = wrapper.locator('input.pgr_jalali_date').first();
+  if (await jalali.count() !== 1) throw new Error(`Jalali control unavailable for revalidation on form ${formId}.`);
+  await jalali.fill('');
+  const submit = wrapper.locator('input[type="submit"], button[type="submit"]').last();
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    submit.click(),
+  ]);
+  return observeInvalidJalali(page, formId, expectedGpp);
+}
+
 const qualificationModelControls = runAssociationModelControls();
 const browser = await chromium.launch({ headless: true });
 let selected;
+let selectedRevalidation;
 let nativeControl;
 try {
   const context = await browser.newContext();
   const page = await context.newPage();
   selected = await submitInvalidJalali(page, manifest.selected_form.id, true);
+  selectedRevalidation = await revalidateInvalidJalali(page, manifest.selected_form.id, true);
   nativeControl = await submitInvalidJalali(page, manifest.plain_form.id, false);
 } finally {
   await browser.close();
 }
 
-const requiredCurrent = [
-  selected.field_error_present,
-  selected.validation_summary_present,
-  selected.field_error_count === 1,
-  selected.label_relationship,
-  selected.aria_invalid === 'true',
-  selected.error_associated,
-  selected.visual_error_after_control,
-  selected.direction === 'rtl',
-  selected.keyboard.focus_moved,
-];
+const descriptionRelationshipPreserved = selected.aria_describedby_raw === nativeControl.aria_describedby_raw
+  && selected.description_associated === nativeControl.description_associated;
 const hostSemanticsPreserved = hostSemanticsPreservedFor(selected, nativeControl);
+const revalidationPreserved = Boolean(
+  selectedRevalidation.field_error_present
+    && selectedRevalidation.field_error_count === 1
+    && selectedRevalidation.error_id_unique
+    && selectedRevalidation.error_associated
+    && selectedRevalidation.error_reference_count === 1
+    && selectedRevalidation.all_reference_ids_resolve_uniquely
+    && selectedRevalidation.aria_describedby_raw === selected.aria_describedby_raw
+);
 
-let disposition = 'CURRENT_BEHAVIOR_QUALIFIED';
-let hardGate = 'PASS';
-if (!selected.field_error_present || !nativeControl.field_error_present) {
-  disposition = 'NOT_PROVEN';
-  hardGate = 'NOT_PROVEN';
-} else if (requiredCurrent.some(value => !value)) {
-  disposition = 'CONFIRMED_A11Y_DEFECT';
-  hardGate = 'FAIL';
-} else if (!hostSemanticsPreserved) {
-  disposition = 'METHOD_CHANGE_REQUIRED';
-  hardGate = 'FAIL';
-}
+const hardGates = {
+  validation_failure_authentic: selected.field_error_present && nativeControl.field_error_present,
+  admitted_gpp_scope_active: selected.gpp_active === true,
+  native_control_outside_gpp_scope: nativeControl.gpp_active === false,
+  exact_control_identified: Boolean(selected.input_id && selected.label_relationship),
+  one_field_error_only: selected.field_error_count === 1,
+  error_id_unique: selected.error_id_unique,
+  aria_invalid: selected.aria_invalid === 'true',
+  exact_one_error_reference: selected.error_reference_count === 1,
+  error_association: selected.error_associated,
+  every_reference_resolves_uniquely: selected.all_reference_ids_resolve_uniquely,
+  description_relationship_preserved: descriptionRelationshipPreserved,
+  no_native_global_repair: nativeControl.error_associated === false,
+  visual_error_after_control: selected.visual_error_after_control,
+  rtl: selected.direction === 'rtl',
+  keyboard_not_trapped: selected.keyboard.focus_moved,
+  host_semantics_preserved: hostSemanticsPreserved,
+  revalidation_preserves_association: revalidationPreserved,
+};
+
+const evidenceComplete = selected.field_error_present && nativeControl.field_error_present;
+const hardGate = evidenceComplete && Object.values(hardGates).every(Boolean) ? 'PASS' : (evidenceComplete ? 'FAIL' : 'NOT_PROVEN');
+const disposition = hardGate === 'PASS'
+  ? 'GPP_ADMITTED_PRESENTATION_REPAIRED'
+  : (hardGate === 'FAIL' ? 'CONFIRMED_A11Y_DEFECT' : 'NOT_PROVEN');
 
 const evidence = {
-  schema_version: '1.0.0',
+  schema_version: '2.0.0',
   work_unit: 'GPP-RP-WU-05-JALALI-VALIDATION-READING-ORDER',
   problems: ['P-24'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
   repository_head: repoSha,
-  objective: 'Qualify Jalali validation reading order and accessibility without changing host-owned validation semantics.',
-  non_goals: ['Jalali stored/display conversion', 'production CSS repair', 'Gravity Forms validation replacement'],
+  objective: 'Regression-protect the GPP-admitted Jalali validation association without changing Gravity Forms validation authority or globally repairing native forms.',
+  non_goals: ['Jalali stored/display conversion', 'Gravity Forms validation replacement', 'native Gravity Forms global accessibility repair'],
   runtime: {
     wordpress: '6.8.3',
     gravity_forms: manifest.runtime.gravity_forms_version,
@@ -361,25 +416,15 @@ const evidence = {
   qualification_model_controls: qualificationModelControls,
   control: nativeControl,
   current_gpp: selected,
-  hard_gates: {
-    validation_failure_authentic: selected.field_error_present && nativeControl.field_error_present,
-    one_field_error_only: selected.field_error_count === 1,
-    label_relationship: selected.label_relationship,
-    aria_invalid: selected.aria_invalid === 'true',
-    error_association: selected.error_associated,
-    visual_error_after_control: selected.visual_error_after_control,
-    rtl: selected.direction === 'rtl',
-    keyboard_not_trapped: selected.keyboard.focus_moved,
-    host_semantics_preserved: hostSemanticsPreserved,
-  },
+  revalidation_gpp: selectedRevalidation,
+  hard_gates: hardGates,
   hard_gate_result: hardGate,
   disposition,
-  interpretation: selected.source_indices.error !== selected.source_indices.control
-    ? 'DOM and visual order are evaluated together with explicit label/error associations; DOM-order difference alone is not classified as a defect.'
-    : 'DOM and visual order are aligned; accessibility is still decided from the full semantic/focus evidence.',
+  interpretation: 'Only the admitted GPP presentation is required to add the missing error relationship. Native Gravity Forms/PersianGravity validation state and message ownership remain unchanged.',
 };
 
 fs.mkdirSync(artifactDir, { recursive: true });
 const out = `${artifactDir}/gpp-rp-wu05-jalali-validation-reading-order.json`;
 fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
-console.log(JSON.stringify({ status: 'EVIDENCE_COMPLETE', disposition, hard_gate_result: hardGate, artifact: out }));
+console.log(JSON.stringify({ status: hardGate === 'PASS' ? 'EVIDENCE_COMPLETE' : 'EVIDENCE_INCONCLUSIVE', disposition, hard_gate_result: hardGate, artifact: out }));
+if (hardGate !== 'PASS') process.exitCode = 1;
