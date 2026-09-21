@@ -110,11 +110,25 @@ final class PluginSettingsAtomicityController {
             return;
         }
 
-        WordPressOptionStateStore::preview(
-            static function () use ( $name, $field, $value ) {
-                call_user_func( self::$commit_callbacks[ $name ], $field, $value );
+        try {
+            $restore_transient_state = self::transientStateRestorer( $name );
+            try {
+                WordPressOptionStateStore::preview(
+                    static function () use ( $name, $field, $value ) {
+                        call_user_func( self::$commit_callbacks[ $name ], $field, $value );
+                    }
+                );
+            } finally {
+                call_user_func( $restore_transient_state );
             }
-        );
+        } catch ( \Throwable $exception ) {
+            // Expected lifecycle failures are normally converted to Field errors
+            // by the original callback. An unexpected preview failure must also
+            // fail closed without turning validation into a second transaction.
+            if ( '' === self::fieldError( $field ) ) {
+                self::setFieldError( $field, 'The settings action could not be validated safely. Refresh the page and try again.' );
+            }
+        }
     }
 
     /**
@@ -147,11 +161,9 @@ final class PluginSettingsAtomicityController {
         // the original callback reject through the authentic Field error path.
         // Gravity Forms has already finished its validation phase at this point;
         // fail closed before save_values() can persist unrelated settings.
-        if ( is_object( $field ) && method_exists( $field, 'get_error' ) ) {
-            $error = $field->get_error();
-            if ( is_string( $error ) && '' !== $error ) {
-                throw new LifecycleException( 'settings_commit_rejected_after_validation', $error );
-            }
+        $error = self::fieldError( $field );
+        if ( '' !== $error ) {
+            throw new LifecycleException( 'settings_commit_rejected_after_validation', $error );
         }
 
         self::$committed[ $identity ] = true;
@@ -160,6 +172,36 @@ final class PluginSettingsAtomicityController {
 
     public static function isPreviewing() {
         return WordPressOptionStateStore::isPreviewActive();
+    }
+
+    /**
+     * Two historical callbacks also cache success feedback in request-local
+     * private/static properties. Preview must not make a rejected transaction
+     * claim success, so preserve and restore those non-canonical values around
+     * the dry run. Reflection is intentionally bounded to these two known GPP
+     * classes; lifecycle persistence itself is isolated by StateStore preview.
+     */
+    private static function transientStateRestorer( $name ) {
+        if ( 'inbox_setup_action' === $name ) {
+            $target = AddOn::get_instance();
+            $property = new \ReflectionProperty( AddOn::class, 'inbox_setup_result' );
+            $property->setAccessible( true );
+            $before = $property->getValue( $target );
+            return static function () use ( $property, $target, $before ) {
+                $property->setValue( $target, $before );
+            };
+        }
+
+        if ( 'entry_detail_visual_variant_action' === $name ) {
+            $property = new \ReflectionProperty( EntryDetailVisualVariantSettingsController::class, 'request_result' );
+            $property->setAccessible( true );
+            $before = $property->getValue();
+            return static function () use ( $property, $before ) {
+                $property->setValue( null, $before );
+            };
+        }
+
+        return static function () {};
     }
 
     private static function postedRowToken() {
@@ -172,6 +214,14 @@ final class PluginSettingsAtomicityController {
         return is_object( $field ) && isset( $field->name ) && is_string( $field->name )
             ? $field->name
             : '';
+    }
+
+    private static function fieldError( $field ) {
+        if ( ! is_object( $field ) || ! method_exists( $field, 'get_error' ) ) {
+            return '';
+        }
+        $error = $field->get_error();
+        return is_string( $error ) ? $error : '';
     }
 
     private static function stableValueIdentity( $value ) {
