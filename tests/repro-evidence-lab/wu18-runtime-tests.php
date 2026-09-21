@@ -1,5 +1,14 @@
 <?php
 require __DIR__ . '/wu18-runtime-tests-core.php';
+
+$host_inventory_path = trailingslashit( $artifact_dir ) . 'wu18-host-seam-inventory.json';
+if ( ! is_file( $host_inventory_path ) ) {
+    require __DIR__ . '/inspect-wu18-host-seams.php';
+}
+wu18_assert( is_file( $host_inventory_path ), 'WU18 exact-host seam inventory could not be produced for reusable runtime qualification.' );
+
+require __DIR__ . '/wu18-prepare-inbox-provider-fixture.php';
+require __DIR__ . '/wu18-persiangravity-runtime.php';
 require __DIR__ . '/wu18-formatter-contract.php';
 require __DIR__ . '/wu18-timeline-semantic-runtime.php';
 

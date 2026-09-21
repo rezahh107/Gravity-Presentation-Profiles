@@ -62,7 +62,9 @@ final class EntryDetailTimelineSemanticPresentation {
         self::$events = array();
 
         foreach ( $notes as $note ) {
-            self::$events[] = self::classify( $note, $steps );
+            $event = self::classify( $note, $steps );
+            $event['date_presentation'] = self::timelineDatePresentation( $note );
+            self::$events[] = $event;
         }
 
         return $notes;
@@ -210,6 +212,23 @@ final class EntryDetailTimelineSemanticPresentation {
         return $unknown;
     }
 
+    /**
+     * Gravity Flow 3.1.0 runtime qualification proves Timeline `date_created`
+     * is the raw UTC host timestamp supplied to get_note_header(). No visible
+     * Timeline date text is parsed. Any other host version or malformed source
+     * is deliberately left native until independently qualified.
+     */
+    private static function timelineDatePresentation( $note ) {
+        if ( ! defined( 'GRAVITY_FLOW_VERSION' ) || '3.1.0' !== GRAVITY_FLOW_VERSION ) {
+            return null;
+        }
+        if ( ! is_object( $note ) || ! isset( $note->date_created ) || ! is_scalar( $note->date_created ) ) {
+            return null;
+        }
+
+        return PersianDateFormatter::tryFormatUtcDateTime( (string) $note->date_created );
+    }
+
     private static function decorateNativeTimeline( $html, array $events ) {
         $index = 0;
         $pattern = '~(<div class="gravityflow-note-body-wrap"><div class="gravityflow-note-body">.*?<div class="gravityflow-note-body">)(.*?)(</div></div></div>)~s';
@@ -223,8 +242,28 @@ final class EntryDetailTimelineSemanticPresentation {
             static function ( $match ) use ( $events, &$index ) {
                 $event = isset( $events[ $index ] ) ? $events[ $index ] : null;
                 $index++;
-                if ( ! is_array( $event ) || self::FAMILY_UNKNOWN === $event['family'] ) {
+                if ( ! is_array( $event ) ) {
                     return $match[0];
+                }
+
+                $prefix = $match[1];
+                if ( ! empty( $event['date_presentation'] ) && is_string( $event['date_presentation'] ) ) {
+                    // Replace only the exact native date node selected by host
+                    // structure. The replacement value comes from raw note
+                    // timestamp semantics, never from parsing visible text.
+                    $replaced = preg_replace(
+                        '~(<div class="gravityflow-note-meta">).*?(</div>)~s',
+                        '$1' . esc_html( $event['date_presentation'] ) . '$2',
+                        $prefix,
+                        1
+                    );
+                    if ( is_string( $replaced ) ) {
+                        $prefix = $replaced;
+                    }
+                }
+
+                if ( self::FAMILY_UNKNOWN === $event['family'] ) {
+                    return $prefix . $match[2] . $match[3];
                 }
 
                 $title = esc_html( $event['title'] );
@@ -239,7 +278,7 @@ final class EntryDetailTimelineSemanticPresentation {
 
                 // Keep the authentic native inner event body byte-for-byte and
                 // append the owner-facing semantic presentation as its sibling.
-                return $match[1] . $match[2] . '</div>' . $presentation . '</div></div>';
+                return $prefix . $match[2] . '</div>' . $presentation . '</div></div>';
             },
             $html
         );
