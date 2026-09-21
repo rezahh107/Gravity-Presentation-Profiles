@@ -192,3 +192,18 @@ echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
 echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
+
+// GPP-RP-WU-04: qualification-only atomicity probe. Run after all existing
+// WU18 controls so its fresh synthetic settings forms cannot affect their state.
+$wu04_script = __DIR__ . '/wu04-gf-settings-atomicity.mjs';
+$wu04_output = array();
+$wu04_status = 0;
+exec( 'node ' . escapeshellarg( $wu04_script ) . ' 2>&1', $wu04_output, $wu04_status );
+if ( 0 !== $wu04_status || empty( $wu04_output ) ) {
+    throw new RuntimeException( 'WU04 GF settings atomicity qualification failed to produce evidence: ' . implode( "\n", array_slice( $wu04_output, -16 ) ) );
+}
+$wu04_summary = json_decode( end( $wu04_output ), true );
+if ( ! is_array( $wu04_summary ) || 'EVIDENCE_COMPLETE' !== ( $wu04_summary['status'] ?? null ) ) {
+    throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is incomplete.' );
+}
+echo "WU04_GF_SETTINGS_ATOMICITY_EVIDENCE_COMPLETE\n";
