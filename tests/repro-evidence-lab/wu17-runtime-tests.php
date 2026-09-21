@@ -190,7 +190,7 @@ wu17_test( 'WU17-RUNTIME-005', 'availability proof is exact-source and exact-bin
     return $details;
 } );
 
-wu17_test( 'WU17-RUNTIME-006', 'date_created and current_step are read from the authentic host without mutation', function () use ( $manifest ) {
+wu17_test( 'WU17-RUNTIME-006', 'date_created and current_step are read from the authentic host without mutation and retain native created-at presentation when PersianGravity is absent', function () use ( $manifest ) {
     $record = $manifest['entry_records'][0];
     $entry = GFAPI::get_entry( $record['entry_id'] );
     wu17_assert( ! is_wp_error( $entry ), 'Fixture entry unavailable.' );
@@ -198,11 +198,14 @@ wu17_test( 'WU17-RUNTIME-006', 'date_created and current_step are read from the 
     $api = new Gravity_Flow_API( (int) $record['form_id'] );
     $step = $api->get_current_step( $entry );
     wu17_assert( $step && $record['step_name'] === $step->get_name(), 'Gravity Flow current step differs from recorded authentic fixture state.' );
+    wu17_assert( ! class_exists( 'PGR_Jalali_Presentation', false ), 'WU17 native-fallback control unexpectedly has the optional PersianGravity facade loaded.' );
+    $native_created_at = GFCommon::format_date( $record['date_created'], false );
+    wu17_assert( is_scalar( $native_created_at ) && '' !== trim( (string) $native_created_at ), 'Gravity Forms native created-at presentation is unavailable.' );
     $html = apply_filters( 'gravityflow_inbox_field_value', '', (int) $record['form_id'], InboxPresentationAdapter::CARD_COLUMN, $entry );
-    wu17_assert( false !== strpos( $html, '۱۴۰۴/۱۰/۱۱، ۰۰:۰۰' ), 'Jalali/Persian created-at presentation missing.' );
+    wu17_assert( false !== strpos( $html, esc_html( trim( (string) $native_created_at ) ) ), 'Production card did not preserve Gravity Forms native created-at presentation while PersianGravity is absent.' );
     $stored_after = GFAPI::get_entry( $record['entry_id'] );
     wu17_assert( ! is_wp_error( $stored_after ) && $stored_before === $stored_after['date_created'] && $stored_before === $record['date_created'], 'Presentation mutated authoritative date_created.' );
-    return array( 'date_created' => $stored_before, 'current_step' => $step->get_name() );
+    return array( 'date_created' => $stored_before, 'current_step' => $step->get_name(), 'native_created_at' => trim( (string) $native_created_at ) );
 } );
 
 wu17_test( 'WU17-RUNTIME-007', 'optional Due remains absent without blocking a ready card', function () use ( $manifest ) {
