@@ -136,7 +136,13 @@ $source_evidence = wp_json_encode( $sources, JSON_UNESCAPED_SLASHES | JSON_UNESC
 wu18_assert( false !== strpos( $source_evidence, 'get_lead_notes' ), 'Gravity Flow Timeline source did not prove native Gravity Forms note retrieval.' );
 wu18_assert( false !== strpos( $source_evidence, '$note->date_created' ), 'Gravity Flow Entry Detail did not prove raw note date_created reaches the native header formatter.' );
 wu18_assert( false !== strpos( $source_evidence, 'format_date' ), 'Gravity Flow did not prove its native date presentation is downstream of raw note date_created.' );
-wu18_assert( false !== strpos( $source_evidence, 'current_time' ) && false !== strpos( $source_evidence, 'mysql' ) && false !== strpos( $source_evidence, 'true' ), 'Pinned host source did not prove Gravity Flow/GF note creation uses UTC WordPress time.' );
+
+$host_inventory_path = trailingslashit( $artifact_dir ) . 'wu18-host-seam-inventory.json';
+$host_inventory = is_file( $host_inventory_path ) ? json_decode( file_get_contents( $host_inventory_path ), true ) : null;
+wu18_assert( is_array( $host_inventory ), 'Pinned WU18 host seam inventory is unavailable for Timeline UTC qualification.' );
+wu18_assert( '3.1.0' === (string) ( $host_inventory['gravity_flow_version'] ?? '' ), 'Timeline UTC qualification is not bound to exact Gravity Flow 3.1.0 evidence.' );
+$host_inventory_evidence = wp_json_encode( $host_inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+wu18_assert( false !== strpos( $host_inventory_evidence, "'date_created' => current_time( 'mysql', true )," ), 'Pinned host seam inventory did not prove Gravity Flow activity timestamps use UTC WordPress time.' );
 
 $reflection = new ReflectionClass( EntryDetailTimelineSemanticPresentation::class );
 $classify = $reflection->getMethod( 'classify' );
