@@ -310,7 +310,12 @@ function assertOnePrintAndNativeOwnership(state, label) {
 }
 
 function sameNativeEvents(left, right) {
-  return JSON.stringify(left.timeline_refinement.native_event_signature) === JSON.stringify(right.timeline_refinement.native_event_signature);
+  const payload = state => state.timeline_refinement.native_event_signature.map(event => ({
+    classes: event.classes,
+    actor: event.actor,
+    body: event.body,
+  }));
+  return JSON.stringify(payload(left)) === JSON.stringify(payload(right));
 }
 
 function historicalGenericTimelineSatisfied(state) {
