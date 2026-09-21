@@ -13,6 +13,7 @@ final class PrintDossierPresentationAdapter {
     const INTENT_VALUE = 'dossier';
     const STYLE_VERSION = '1.0.1';
     const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
+    const DOSSIER_STYLE_HANDLE = 'gpp-print-dossier';
     const UTILITY_STYLE_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
     const UTILITY_SCRIPT_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
 
@@ -39,12 +40,13 @@ final class PrintDossierPresentationAdapter {
         // pre-permission in Gravity Flow 3.1.0 and must never expose Entry data.
         add_action( 'gravityflow_print_entry_footer', array( __CLASS__, 'renderPrintDossier' ), 20, 2 );
 
-        // Gravity Flow owns its isolated Print stylesheet list. Reuse Vazir's
-        // public loader only for explicit dossier intent so Vazir keeps font-file
-        // ownership while its already-admitted self-hosted @font-face reaches
-        // the Print document through the host's documented stylesheet seam.
+        // Gravity Flow owns its isolated Print stylesheet list. Keep the font
+        // provider first, then append the dossier stylesheet through the same
+        // native seam so the Print document has exactly one effective GPP CSS
+        // delivery path and Gravity Flow still owns document construction.
         if ( function_exists( 'add_filter' ) ) {
             add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeVazirPrintStyle' ), 20, 2 );
+            add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeDossierPrintStyle' ), 30, 2 );
         }
     }
 
@@ -84,6 +86,39 @@ final class PrintDossierPresentationAdapter {
         $styles = is_array( $styles ) ? $styles : array();
         if ( ! in_array( self::VAZIR_STYLE_HANDLE, $styles, true ) ) {
             $styles[] = self::VAZIR_STYLE_HANDLE;
+        }
+
+        return $styles;
+    }
+
+    /**
+     * Deliver the admitted dossier stylesheet through Gravity Flow's native
+     * isolated Print stylesheet list. This is the production form of the WU-03
+     * candidate seam; there is intentionally no parallel manual <link> path.
+     */
+    public static function includeDossierPrintStyle( $styles, $entry_ids ) {
+        unset( $entry_ids );
+
+        if ( ! self::isDossierIntent() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_register_style' ) ) {
+            return $styles;
+        }
+
+        $path = dirname( GPP_PLUGIN_FILE ) . '/assets/css/srwf-gravity-flow-print-dossier.css';
+        if ( ! is_file( $path ) || ! is_readable( $path ) ) {
+            return $styles;
+        }
+
+        wp_register_style(
+            self::DOSSIER_STYLE_HANDLE,
+            plugins_url( 'assets/css/srwf-gravity-flow-print-dossier.css', GPP_PLUGIN_FILE ),
+            array(),
+            self::STYLE_VERSION,
+            'all'
+        );
+
+        $styles = is_array( $styles ) ? $styles : array();
+        if ( ! in_array( self::DOSSIER_STYLE_HANDLE, $styles, true ) ) {
+            $styles[] = self::DOSSIER_STYLE_HANDLE;
         }
 
         return $styles;
@@ -281,7 +316,6 @@ final class PrintDossierPresentationAdapter {
             return;
         }
 
-        self::renderStylesheetLink();
         ( new PrintDossierRenderer() )->render( $model, $values, $options );
         $trace->record( 'PRINT_COMPOSITION_READY', 'ready_two_pages' );
         self::renderTrace( $trace );
@@ -333,16 +367,7 @@ final class PrintDossierPresentationAdapter {
         return true;
     }
 
-    private static function renderStylesheetLink() {
-        if ( ! defined( 'GPP_PLUGIN_FILE' ) ) {
-            return;
-        }
-        $href = plugins_url( 'assets/css/srwf-gravity-flow-print-dossier.css', GPP_PLUGIN_FILE );
-        echo '<link rel="stylesheet" id="gpp-print-dossier-css" href="' . esc_url( add_query_arg( 'ver', self::STYLE_VERSION, $href ) ) . '" type="text/css" media="all" />';
-    }
-
     private static function renderFailure( $reason, PrintDossierDecisionTrace $trace ) {
-        self::renderStylesheetLink();
         echo '<main class="gpp-print-dossier gpp-print-dossier--failure" dir="rtl" data-gpp-print-state="failure" data-gpp-print-failure="' . esc_attr( $reason ) . '">';
         echo '<h1>' . esc_html__( 'چاپ پرونده آماده نیست', 'gravity-presentation-profiles' ) . '</h1>';
         echo '<p>' . esc_html__( 'برای جلوگیری از چاپ ناقص یا نادرست، پرونده در این درخواست تولید نشد.', 'gravity-presentation-profiles' ) . '</p>';
