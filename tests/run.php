@@ -9,6 +9,7 @@ $cases = array(
     'persian-gravity-bridge-provider.php',
     'core-resolution.php',
     'gravity-forms-addon.php',
+    'plugin-settings-atomicity-controller.php',
     'form-presentation-ownership-settings.php',
     'form-presentation-ownership-runtime.php',
     'gravity-forms-json-settings-compat.php',

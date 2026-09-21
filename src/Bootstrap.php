@@ -7,6 +7,7 @@ use GravityPresentationProfiles\GravityForms\EntryDetailMappingAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController;
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
+use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
@@ -56,6 +57,7 @@ final class Bootstrap {
         EntryDetailMappingAdminController::register();
         EntryDetailSetupAdminController::register();
         EntryDetailVisualVariantSettingsController::register();
+        PluginSettingsAtomicityController::register();
 
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are
