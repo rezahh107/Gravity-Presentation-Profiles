@@ -263,9 +263,10 @@ $wu02_summary = json_decode( end( $wu02_output ), true );
 gpp_wu02_assert_qualified_summary( $wu02_summary );
 echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_QUALIFIED_FOR_PINNED_RUNTIME\n";
 
-// GPP-RP-WU-04: WU04 owns qualification semantics. WU18 validates only the
-// process/transport envelope and the referenced evidence artifact.
-$consume_wu04_transport = static function ( array $output, $status ) {
+// GPP-RP-WU-04: WU04 remains the sole semantic/classification authority. WU18
+// validates the transport/evidence envelope, then accepts only the authoritative
+// atomicity PASS terminal state before qualification may continue.
+$consume_wu04_qualified_result = static function ( array $output, $status ) {
     if ( 0 !== (int) $status || empty( $output ) ) {
         throw new RuntimeException( 'WU04 GF settings atomicity qualification did not complete conclusively.' );
     }
@@ -291,30 +292,55 @@ $consume_wu04_transport = static function ( array $output, $status ) {
         throw new RuntimeException( 'WU04 GF settings atomicity referenced evidence artifact is unavailable.' );
     }
 
+    if ( 'ATOMICITY_PROVEN' !== $summary['disposition'] || 'PASS' !== $summary['hard_gate_result'] ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity evidence did not reach ATOMICITY_PROVEN/PASS.' );
+    }
+
     return $summary;
 };
 
-$assert_wu04_transport_rejected = static function ( array $output, $status ) use ( $consume_wu04_transport ) {
+$assert_wu04_rejected = static function ( array $output, $status ) use ( $consume_wu04_qualified_result ) {
     try {
-        $consume_wu04_transport( $output, $status );
+        $consume_wu04_qualified_result( $output, $status );
     } catch ( RuntimeException $exception ) {
         return;
     }
-    throw new RuntimeException( 'WU04 transport falsification unexpectedly accepted an invalid qualification result.' );
+    throw new RuntimeException( 'WU04 qualification falsification unexpectedly accepted an invalid result.' );
 };
 
-$assert_wu04_transport_rejected( array(), 0 );
-$assert_wu04_transport_rejected( array( 'not-json' ), 0 );
-$assert_wu04_transport_rejected(
-    array( wp_json_encode( array(
-        'status' => 'EVIDENCE_COMPLETE',
-        'disposition' => 'SYNTHETIC_CONCLUSIVE',
-        'hard_gate_result' => 'SYNTHETIC',
-        'artifact' => $results_path,
-    ) ) ),
+$wu04_positive_summary = array(
+    'status' => 'EVIDENCE_COMPLETE',
+    'disposition' => 'ATOMICITY_PROVEN',
+    'hard_gate_result' => 'PASS',
+    'artifact' => $results_path,
+);
+$wu04_positive_control = false;
+try {
+    $consume_wu04_qualified_result( array( wp_json_encode( $wu04_positive_summary ) ), 0 );
+    $wu04_positive_control = true;
+} catch ( RuntimeException $exception ) {
+    $wu04_positive_control = false;
+}
+if ( ! $wu04_positive_control ) {
+    throw new RuntimeException( 'WU04 qualification positive control rejected ATOMICITY_PROVEN/PASS.' );
+}
+
+$assert_wu04_rejected( array(), 0 );
+$assert_wu04_rejected( array( 'not-json' ), 0 );
+$assert_wu04_rejected(
+    array( wp_json_encode( $wu04_positive_summary ) ),
     2
 );
-$assert_wu04_transport_rejected(
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'CONFIRMED_PARTIAL_MUTATION_DEFECT',
+        'hard_gate_result' => 'FAIL',
+        'artifact' => $results_path,
+    ) ) ),
+    0
+);
+$assert_wu04_rejected(
     array( wp_json_encode( array(
         'status' => 'EVIDENCE_INCONCLUSIVE',
         'disposition' => 'NOT_PROVEN',
@@ -323,24 +349,62 @@ $assert_wu04_transport_rejected(
     ) ) ),
     0
 );
-$assert_wu04_transport_rejected(
+$assert_wu04_rejected(
     array( wp_json_encode( array(
         'status' => 'EVIDENCE_COMPLETE',
-        'disposition' => 'SYNTHETIC_CONCLUSIVE',
-        'hard_gate_result' => 'SYNTHETIC',
-    ) ) ),
-    0
-);
-$assert_wu04_transport_rejected(
-    array( wp_json_encode( array(
-        'status' => 'EVIDENCE_COMPLETE',
-        'disposition' => array( 'not-a-scalar' ),
-        'hard_gate_result' => 'SYNTHETIC',
+        'disposition' => 'NOT_PROVEN',
+        'hard_gate_result' => 'NOT_PROVEN',
         'artifact' => $results_path,
     ) ) ),
     0
 );
-echo "WU04_GF_SETTINGS_ATOMICITY_TRANSPORT_FALSIFICATION_PASS\n";
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'ATOMICITY_PROVEN',
+        'hard_gate_result' => 'PASS',
+    ) ) ),
+    0
+);
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => array( 'not-a-scalar' ),
+        'hard_gate_result' => 'PASS',
+        'artifact' => $results_path,
+    ) ) ),
+    0
+);
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'ATOMICITY_PROVEN',
+        'hard_gate_result' => 'PASS',
+        'artifact' => $results_path . '.missing',
+    ) ) ),
+    0
+);
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'ATOMICITY_PROVEN',
+        'hard_gate_result' => 'FAIL',
+        'artifact' => $results_path,
+    ) ) ),
+    0
+);
+$assert_wu04_rejected(
+    array( wp_json_encode( array(
+        'status' => 'EVIDENCE_COMPLETE',
+        'disposition' => 'CONFIRMED_PARTIAL_MUTATION_DEFECT',
+        'hard_gate_result' => 'PASS',
+        'artifact' => $results_path,
+    ) ) ),
+    0
+);
+echo "WU04_GF_SETTINGS_ATOMICITY_QUALIFICATION_POSITIVE_CONTROL_PASS\n";
+echo "WU04_GF_SETTINGS_ATOMICITY_DEFECT_FAIL_FALSIFICATION_PASS\n";
+echo "WU04_GF_SETTINGS_ATOMICITY_FAIL_CLOSED_CONTROLS_PASS\n";
 
 // Run after the existing WU18 controls and WU02 qualification. WU04 may mutate
 // only its own ephemeral synthetic settings fixtures at this point.
@@ -349,7 +413,7 @@ $wu04_output = array();
 $wu04_status = 0;
 exec( 'node ' . escapeshellarg( $wu04_script ) . ' 2>&1', $wu04_output, $wu04_status );
 try {
-    $wu04_summary = $consume_wu04_transport( $wu04_output, $wu04_status );
+    $wu04_summary = $consume_wu04_qualified_result( $wu04_output, $wu04_status );
 } catch ( RuntimeException $exception ) {
     throw new RuntimeException(
         $exception->getMessage() . ' Output: ' . implode( "\n", array_slice( $wu04_output, -16 ) ),
@@ -357,4 +421,4 @@ try {
         $exception
     );
 }
-echo "WU04_GF_SETTINGS_ATOMICITY_EVIDENCE_COMPLETE\n";
+echo "WU04_GF_SETTINGS_ATOMICITY_PROVEN_PASS\n";
