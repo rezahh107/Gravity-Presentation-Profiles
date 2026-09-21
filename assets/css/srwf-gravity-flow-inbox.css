@@ -8,15 +8,18 @@
  */
 .gpp-inbox-surface,
 .gflow-inbox.gflow-grid.gflow-common {
+    /* The soft-neutral page canvas is deliberately host/theme-semantic. */
     --gpp-inbox-canvas: var(--wpds-color-background-surface-neutral-weak, #f7f8fc);
-    --gpp-inbox-surface: var(--wpds-color-background-surface-neutral, #fff);
-    --gpp-inbox-text: var(--wpds-color-foreground-content-neutral, #172033);
-    --gpp-inbox-text-muted: var(--wpds-color-foreground-content-neutral-weak, #475467);
-    --gpp-inbox-border: var(--wpds-color-stroke-surface-neutral-weak, #e4e7ec);
-    --gpp-inbox-control-border: var(--wpds-color-stroke-interactive-neutral, #8690a1);
-    --gpp-inbox-accent: var(--wpds-color-background-interactive-brand-strong, #1d4ed8);
-    --gpp-inbox-accent-active: var(--wpds-color-background-interactive-brand-strong-active, #1e40af);
-    --gpp-inbox-focus: var(--wpds-color-stroke-focus, #3858e9);
+
+    /* Admitted GPP component colors are deterministic profile-owned values. */
+    --gpp-inbox-surface: #fff;
+    --gpp-inbox-text: #172033;
+    --gpp-inbox-text-muted: #475467;
+    --gpp-inbox-border: #e4e7ec;
+    --gpp-inbox-control-border: #8690a1;
+    --gpp-inbox-accent: #1d4ed8;
+    --gpp-inbox-accent-active: #1e40af;
+    --gpp-inbox-focus: #3858e9;
 }
 
 .gpp-inbox-surface {
@@ -108,7 +111,7 @@
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-viewport {
-        background: var(--gpp-inbox-canvas);
+        background: var(--gpp-inbox-canvas) !important;
     }
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
@@ -120,7 +123,7 @@
         min-height: 0 !important;
         width: 100% !important;
         padding: 0.25rem;
-        background: var(--gpp-inbox-canvas);
+        background: var(--gpp-inbox-canvas) !important;
     }
 
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container > .ag-row {
@@ -296,7 +299,7 @@
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gpp-inbox-card__due--overdue dd {
-    color: var(--wpds-color-foreground-content-error, #b42318);
+    color: #b42318;
     font-weight: 700;
 }
 
