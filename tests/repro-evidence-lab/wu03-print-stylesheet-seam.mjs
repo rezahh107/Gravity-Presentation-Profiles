@@ -13,7 +13,9 @@ if (!artifactDir || !wpPath || !wpCli) throw new Error('WU03 requires the admitt
 const repoSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const playwrightVersion = JSON.parse(fs.readFileSync('node_modules/playwright/package.json', 'utf8')).version;
 const cssPath = path.resolve('assets/css/srwf-gravity-flow-print-dossier.css');
+const adapterPath = path.resolve('src/SRWF/GravityFlow/PrintDossierPresentationAdapter.php');
 const cssSha256 = crypto.createHash('sha256').update(fs.readFileSync(cssPath)).digest('hex');
+const adapterSource = fs.readFileSync(adapterPath, 'utf8');
 const requiredFontWeights = ['300', '400', '500', '700', '900'];
 const expectedFixtureMarker = 'vazir-loader-interface-local-font-fixture-v1';
 const expectedStyleVersion = '1.0.2';
@@ -32,6 +34,10 @@ const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fix
 if (!manifest?.alpha?.entry_id) throw new Error('WU03 print fixture manifest is incomplete.');
 const alpha = manifest.alpha;
 
+// WP-CLI eval is a separate request lifecycle and is not authoritative for
+// hooks registered later in an HTTP Print request. Use it only for immutable
+// adapter/font constants; the actual seam is proved by the authentic Print
+// response below.
 const runtimeContract = JSON.parse(wpEval(`
 $loader = class_exists('VazirFont_Loader') ? VazirFont_Loader::get_instance() : null;
 $adapter = '\\GravityPresentationProfiles\\SRWF\\GravityFlow\\PrintDossierPresentationAdapter';
@@ -39,26 +45,26 @@ echo wp_json_encode(array(
   'loader_available' => is_object($loader),
   'selected_weights' => is_object($loader) && method_exists($loader, 'get_selected_weights') ? $loader->get_selected_weights() : array(),
   'fixture_marker' => defined('GPP_WU03_FONT_PROVIDER_CONTRACT') ? GPP_WU03_FONT_PROVIDER_CONTRACT : null,
-  'vazir_filter_registered' => false !== has_filter('gravityflow_print_styles', array($adapter, 'includeVazirPrintStyle')),
-  'dossier_filter_registered' => false !== has_filter('gravityflow_print_styles', array($adapter, 'includeDossierPrintStyle')),
   'style_version' => $adapter::STYLE_VERSION,
   'dossier_style_handle' => $adapter::DOSSIER_STYLE_HANDLE,
   'vazir_style_handle' => $adapter::VAZIR_STYLE_HANDLE,
 ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
 `));
 
+const sourceContract = {
+  vazir_native_filter_declared: adapterSource.includes("add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeVazirPrintStyle' ), 20, 2 )"),
+  dossier_native_filter_declared: adapterSource.includes("add_filter( 'gravityflow_print_styles', array( __CLASS__, 'includeDossierPrintStyle' ), 30, 2 )"),
+  legacy_manual_link_absent: !adapterSource.includes("echo '<link") && !adapterSource.includes('gpp-print-dossier-css"'),
+};
+
 if (!runtimeContract.loader_available) throw new Error('WU03 font contract fixture did not expose VazirFont_Loader.');
 if (runtimeContract.fixture_marker !== expectedFixtureMarker) throw new Error('WU03 font contract fixture identity mismatch.');
 if (JSON.stringify(runtimeContract.selected_weights) !== JSON.stringify(requiredFontWeights)) throw new Error('WU03 font contract fixture weights mismatch.');
-if (!runtimeContract.vazir_filter_registered || !runtimeContract.dossier_filter_registered) {
-  throw new Error(`Canonical gravityflow_print_styles callbacks are not both registered: ${JSON.stringify(runtimeContract)}`);
-}
-if (runtimeContract.style_version !== expectedStyleVersion) {
-  throw new Error(`Unexpected dossier STYLE_VERSION: ${runtimeContract.style_version}`);
-}
+if (runtimeContract.style_version !== expectedStyleVersion) throw new Error(`Unexpected dossier STYLE_VERSION: ${runtimeContract.style_version}`);
 if (runtimeContract.dossier_style_handle !== 'gpp-print-dossier' || runtimeContract.vazir_style_handle !== 'vazir-font-frontend') {
   throw new Error(`Unexpected canonical style handles: ${JSON.stringify(runtimeContract)}`);
 }
+if (!Object.values(sourceContract).every(Boolean)) throw new Error(`Production adapter source no longer declares one native-only Print stylesheet path: ${JSON.stringify(sourceContract)}`);
 
 const cookies = JSON.parse(wpEval(`
 $u = get_user_by('login', 'bootstrap_admin');
@@ -146,6 +152,7 @@ try {
   state.font_contract_face_present = Boolean(fontContractStyle?.text?.includes("font-family: 'Vazir'"));
   state.all_font_contract_faces_loaded = requiredFontWeights.every(weight => state.font_faces.some(face => String(face.weight) === weight && face.status === 'loaded'));
   state.asset_version = dossierStyle?.href ? new URL(dossierStyle.href).searchParams.get('ver') : null;
+  state.asset_path_matches = Boolean(dossierStyle?.href && new URL(dossierStyle.href).pathname.endsWith('/gravity-presentation-profiles/assets/css/srwf-gravity-flow-print-dossier.css'));
 
   const pdfPath = path.join(artifactDir, 'gpp-rp-wu03-production-native-seam.pdf');
   await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true, scale: 1 });
@@ -158,9 +165,9 @@ try {
 const hardGates = {
   authentic_http_response: state.http_status === 200,
   dossier_ready: state.ready === true,
-  canonical_vazir_filter_registered: runtimeContract.vazir_filter_registered === true,
-  canonical_dossier_filter_registered: runtimeContract.dossier_filter_registered === true,
+  native_filter_source_contract: Object.values(sourceContract).every(Boolean),
   single_dossier_stylesheet_delivery: state.dossier_link_count === 1 && Boolean(state.dossier_style),
+  stylesheet_is_canonical_asset: state.asset_path_matches === true,
   deterministic_asset_identity: state.asset_version === expectedStyleVersion && cssSha256.length === 64,
   font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
   font_contract_loaded: state.all_font_contract_faces_loaded,
@@ -175,7 +182,7 @@ const hardGates = {
 const pass = Object.values(hardGates).every(Boolean);
 const disposition = pass ? 'PRODUCTION_NATIVE_SEAM_REGRESSION_PROVEN' : 'PRODUCTION_NATIVE_SEAM_REGRESSION_FAILED';
 const evidence = {
-  schema_version: '3.0.0',
+  schema_version: '3.1.0',
   work_unit: 'GPP-RP-WU-03-PRINT-STYLESHEET-SEAM',
   problems: ['P-18'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
@@ -198,7 +205,8 @@ const evidence = {
     style_version: runtimeContract.style_version,
     font_provider_fixture: runtimeContract.fixture_marker,
   },
-  canonical_registration: runtimeContract,
+  canonical_constants: runtimeContract,
+  production_source_contract: sourceContract,
   production_observation: state,
   hard_gates: hardGates,
   hard_gate_result: pass ? 'PASS' : 'FAIL',
