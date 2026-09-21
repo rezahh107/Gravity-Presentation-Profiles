@@ -85,15 +85,15 @@ foreach ( $contexts as $identity => $definition ) {
     }
 
     $manifest['contexts'][ $identity ] = array(
-        'page_id'      => (int) $page_id,
-        'url'          => $url,
-        'host_selector'=> '[data-gpp-comparative-host="' . $identity . '"]',
-        'intent'       => $definition['intent'],
+        'page_id'        => (int) $page_id,
+        'url'            => $url,
+        'host_selector'  => '[data-gpp-comparative-host="' . $identity . '"]',
+        'intent'         => $definition['intent'],
         'content_sha256' => hash( 'sha256', $definition['content'] ),
     );
 }
 
-$path = trailingslashit( $artifact_dir ) . 'inbox-width-rtl-fixture.json';
+$path = trailingslashit( $artifact_dir ) . 'pr4-inbox-width-rtl-fixture.json';
 file_put_contents(
     $path,
     wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
