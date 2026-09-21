@@ -33,14 +33,14 @@ const expected = {
 };
 const mutatedCanvas = 'rgb(1, 2, 3)';
 
-function roundedRect(element) {
-  const rect = element.getBoundingClientRect();
-  return {
-    x: Math.round(rect.x * 100) / 100,
-    y: Math.round(rect.y * 100) / 100,
-    width: Math.round(rect.width * 100) / 100,
-    height: Math.round(rect.height * 100) / 100,
-  };
+async function login(page) {
+  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
+  await page.fill('#user_login', 'bootstrap_admin');
+  await page.fill('#user_pass', ['wu21', 'bootstrap', 'pass', '2026'].join('-'));
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.click('#wp-submit'),
+  ]);
 }
 
 async function waitForCardMode(page) {
@@ -191,6 +191,7 @@ const results = {
   },
   viewports: [],
   assertions: {
+    authenticated_native_inbox: false,
     host_canvas_remains_semantic: false,
     gpp_owned_palette_resists_external_wpds_mutation: false,
     no_scope_leak: false,
@@ -201,6 +202,8 @@ const results = {
 };
 
 try {
+  await login(page);
+  results.assertions.authenticated_native_inbox = true;
   results.viewports.push(await verifyViewport(page, 1366, 1000));
   results.viewports.push(await verifyViewport(page, 760, 1000));
 
