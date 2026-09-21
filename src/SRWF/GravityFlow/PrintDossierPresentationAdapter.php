@@ -63,7 +63,7 @@ final class PrintDossierPresentationAdapter {
             return $styles;
         }
 
-        if ( ! class_exists( '\VazirFont_Loader' ) || ! method_exists( '\VazirFont_Loader', 'get_instance' ) ) {
+        if ( ! class_exists( '\\VazirFont_Loader' ) || ! method_exists( '\\VazirFont_Loader', 'get_instance' ) ) {
             return $styles;
         }
 
