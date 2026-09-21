@@ -14,33 +14,51 @@ const repoSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
 const playwrightVersion = JSON.parse(fs.readFileSync('node_modules/playwright/package.json', 'utf8')).version;
 const cssPath = path.resolve('assets/css/srwf-gravity-flow-print-dossier.css');
 const cssSha256 = crypto.createHash('sha256').update(fs.readFileSync(cssPath)).digest('hex');
-const vazirContractReferenceCommit = 'ad8feae35a4e1c27fb13d646fa18abf05bb4e7b1';
 const requiredFontWeights = ['300', '400', '500', '700', '900'];
 const expectedFixtureMarker = 'vazir-loader-interface-local-font-fixture-v1';
+const expectedStyleVersion = '1.0.2';
 
 function run(command, args, options = {}) {
   const cp = spawnSync(command, args, { encoding: 'utf8', env: process.env, ...options });
   if (cp.status !== 0) throw new Error(`${command} ${args.join(' ')} failed:\n${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
+
 function wpEval(code) {
   return run('php', [wpCli, `--path=${wpPath}`, 'eval', code]);
 }
 
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
+if (!manifest?.alpha?.entry_id) throw new Error('WU03 print fixture manifest is incomplete.');
 const alpha = manifest.alpha;
-const fontRuntime = JSON.parse(wpEval(`
+
+const runtimeContract = JSON.parse(wpEval(`
 $loader = class_exists('VazirFont_Loader') ? VazirFont_Loader::get_instance() : null;
+$adapter = '\\GravityPresentationProfiles\\SRWF\\GravityFlow\\PrintDossierPresentationAdapter';
 echo wp_json_encode(array(
   'loader_available' => is_object($loader),
   'selected_weights' => is_object($loader) && method_exists($loader, 'get_selected_weights') ? $loader->get_selected_weights() : array(),
   'fixture_marker' => defined('GPP_WU03_FONT_PROVIDER_CONTRACT') ? GPP_WU03_FONT_PROVIDER_CONTRACT : null,
-  'style_handle_registered_before_print' => function_exists('wp_style_is') ? wp_style_is('vazir-font-frontend', 'registered') : false,
+  'vazir_filter_registered' => false !== has_filter('gravityflow_print_styles', array($adapter, 'includeVazirPrintStyle')),
+  'dossier_filter_registered' => false !== has_filter('gravityflow_print_styles', array($adapter, 'includeDossierPrintStyle')),
+  'style_version' => $adapter::STYLE_VERSION,
+  'dossier_style_handle' => $adapter::DOSSIER_STYLE_HANDLE,
+  'vazir_style_handle' => $adapter::VAZIR_STYLE_HANDLE,
 ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
 `));
-if (!fontRuntime.loader_available) throw new Error('WU03 font contract fixture did not expose VazirFont_Loader.');
-if (fontRuntime.fixture_marker !== expectedFixtureMarker) throw new Error('WU03 font contract fixture identity mismatch.');
-if (JSON.stringify(fontRuntime.selected_weights) !== JSON.stringify(requiredFontWeights)) throw new Error('WU03 font contract fixture weights mismatch.');
+
+if (!runtimeContract.loader_available) throw new Error('WU03 font contract fixture did not expose VazirFont_Loader.');
+if (runtimeContract.fixture_marker !== expectedFixtureMarker) throw new Error('WU03 font contract fixture identity mismatch.');
+if (JSON.stringify(runtimeContract.selected_weights) !== JSON.stringify(requiredFontWeights)) throw new Error('WU03 font contract fixture weights mismatch.');
+if (!runtimeContract.vazir_filter_registered || !runtimeContract.dossier_filter_registered) {
+  throw new Error(`Canonical gravityflow_print_styles callbacks are not both registered: ${JSON.stringify(runtimeContract)}`);
+}
+if (runtimeContract.style_version !== expectedStyleVersion) {
+  throw new Error(`Unexpected dossier STYLE_VERSION: ${runtimeContract.style_version}`);
+}
+if (runtimeContract.dossier_style_handle !== 'gpp-print-dossier' || runtimeContract.vazir_style_handle !== 'vazir-font-frontend') {
+  throw new Error(`Unexpected canonical style handles: ${JSON.stringify(runtimeContract)}`);
+}
 
 const cookies = JSON.parse(wpEval(`
 $u = get_user_by('login', 'bootstrap_admin');
@@ -52,34 +70,6 @@ echo wp_json_encode(array(
 ));
 `));
 
-const muDir = path.join(wpPath, 'wp-content', 'mu-plugins');
-fs.mkdirSync(muDir, { recursive: true });
-const muPath = path.join(muDir, 'gpp-wu03-print-style-seam.php');
-fs.writeFileSync(muPath, `<?php
-add_filter('gravityflow_print_styles', static function ($styles, $entry_ids) {
-    unset($entry_ids);
-    if (!isset($_GET['gpp_wu03_styles']) || 'candidate' !== sanitize_key(wp_unslash($_GET['gpp_wu03_styles']))) return $styles;
-    if (!defined('GPP_PLUGIN_FILE')) return $styles;
-    $path = dirname(GPP_PLUGIN_FILE) . '/assets/css/srwf-gravity-flow-print-dossier.css';
-    if (!is_file($path) || !is_readable($path)) return $styles;
-    $handle = 'gpp-wu03-native-print-dossier';
-    wp_register_style($handle, plugins_url('assets/css/srwf-gravity-flow-print-dossier.css', GPP_PLUGIN_FILE), array(), \\GravityPresentationProfiles\\SRWF\\GravityFlow\\PrintDossierPresentationAdapter::STYLE_VERSION, 'all');
-    $styles = is_array($styles) ? $styles : array();
-    if (!in_array($handle, $styles, true)) $styles[] = $handle;
-    return $styles;
-}, 30, 2);
-add_action('gravityflow_print_entry_footer', static function () {
-    if (!isset($_GET['gpp_wu03_styles']) || 'candidate' !== sanitize_key(wp_unslash($_GET['gpp_wu03_styles']))) return;
-    ob_start(static function ($html) {
-        return preg_replace('/<link\\s+[^>]*id=["\\']gpp-print-dossier-css["\\'][^>]*\\/?>(?:\\s*)/i', '', $html);
-    });
-}, 19, 0);
-add_action('gravityflow_print_entry_footer', static function () {
-    if (!isset($_GET['gpp_wu03_styles']) || 'candidate' !== sanitize_key(wp_unslash($_GET['gpp_wu03_styles']))) return;
-    if (ob_get_level() > 0) ob_end_flush();
-}, 21, 0);
-`);
-
 function pdfInfo(pdfPath) {
   const out = run('pdfinfo', [pdfPath]);
   const pages = out.match(/^Pages:\s+(\d+)/m);
@@ -88,26 +78,37 @@ function pdfInfo(pdfPath) {
   return { pages: Number(pages[1]), width_pt: Number(size[1]), height_pt: Number(size[2]), label: size[3] || null };
 }
 
-async function capture(page, mode) {
-  const suffix = mode === 'candidate' ? '&gpp_wu03_styles=candidate' : '';
-  const url = `${baseUrl}/wp-admin/admin-ajax.php?action=gravityflow_print_entries&lid=${alpha.entry_id}&gpp_presentation=dossier${suffix}`;
+function isA4(pdf) {
+  return pdf.pages === 2 && Math.abs(pdf.width_pt - 595.28) < 1 && Math.abs(pdf.height_pt - 841.89) < 1;
+}
+
+fs.mkdirSync(artifactDir, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+let state;
+try {
+  const context = await browser.newContext();
+  await context.addCookies(cookies.map(cookie => ({ ...cookie, url: baseUrl })));
+  const page = await context.newPage({ viewport: { width: 1280, height: 1000 } });
+  const url = `${baseUrl}/wp-admin/admin-ajax.php?action=gravityflow_print_entries&lid=${alpha.entry_id}&gpp_presentation=dossier`;
   const response = await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForSelector('.gpp-print-dossier[data-gpp-print-state="ready"]', { timeout: 30000 });
   await page.emulateMedia({ media: 'print' });
   await page.evaluate(() => document.fonts?.ready);
 
-  const state = await page.evaluate(() => {
+  state = await page.evaluate(() => {
+    const dossier = document.querySelector('.gpp-print-dossier[data-gpp-print-state="ready"]');
     const sheets = Array.from(document.querySelectorAll('.gpp-print-sheet'));
     const sheet = sheets[0] || null;
-    const nodes = Array.from(document.querySelectorAll('link[rel="stylesheet"], style[id]')).map((node, index) => ({
+    const styleNodes = Array.from(document.querySelectorAll('link[rel="stylesheet"], style[id]')).map((node, index) => ({
       index,
       tag: node.tagName.toLowerCase(),
       id: node.id || null,
       href: node.tagName === 'LINK' ? node.href : null,
       text: node.tagName === 'STYLE' ? (node.textContent || '').slice(0, 12000) : null,
     }));
-    const dossier = document.querySelector('.gpp-print-dossier[data-gpp-print-state="ready"]');
-    const trace = document.querySelector('.gpp-print-decision-trace');
+    const fontFaces = document.fonts
+      ? Array.from(document.fonts).filter(face => /Vazir/i.test(face.family)).map(face => ({ family: face.family, weight: face.weight, status: face.status }))
+      : [];
     const dims = node => node ? {
       width: getComputedStyle(node).width,
       height: getComputedStyle(node).height,
@@ -116,16 +117,15 @@ async function capture(page, mode) {
       scroll_height: node.scrollHeight,
       client_height: node.clientHeight,
     } : null;
-    const fontFaces = document.fonts ? Array.from(document.fonts).filter(face => /Vazir/i.test(face.family)).map(face => ({ family: face.family, weight: face.weight, status: face.status })) : [];
+
     return {
       http_status: performance.getEntriesByType('navigation')[0]?.responseStatus || null,
       ready: Boolean(dossier),
       dir: dossier?.getAttribute('dir') || null,
       profile_id: dossier?.dataset.gppProfileId || null,
-      nodes,
-      manual_link_count: document.querySelectorAll('#gpp-print-dossier-css').length,
-      candidate_link_count: document.querySelectorAll('#gpp-wu03-native-print-dossier-css').length,
+      dossier_link_count: document.querySelectorAll('#gpp-print-dossier-css').length,
       font_contract_inline_count: document.querySelectorAll('#vazir-font-frontend-inline-css').length,
+      style_nodes: styleNodes,
       font_family: sheet ? getComputedStyle(sheet).fontFamily : null,
       font_faces: fontFaces,
       sheet_count: sheets.length,
@@ -133,134 +133,84 @@ async function capture(page, mode) {
       front: dims(document.querySelector('#gpp-print-front')),
       back: dims(document.querySelector('#gpp-print-back')),
       overflow_free: sheets.every(node => node.scrollWidth <= node.clientWidth + 1 && node.scrollHeight <= node.clientHeight + 1),
-      trace_text: trace?.textContent?.trim() || null,
-      text_content: dossier?.textContent?.replace(/\s+/g, ' ').trim() || null,
+      trace_text: document.querySelector('.gpp-print-decision-trace')?.textContent?.trim() || null,
     };
   });
   state.http_status = response?.status() ?? state.http_status;
 
-  const pdfPath = path.join(artifactDir, `gpp-rp-wu03-${mode}.pdf`);
+  const dossierStyle = state.style_nodes.find(node => node.id === 'gpp-print-dossier-css') || null;
+  const fontContractStyle = state.style_nodes.find(node => node.id === 'vazir-font-frontend-inline-css') || null;
+  state.dossier_style = dossierStyle;
+  state.font_contract_style = fontContractStyle;
+  state.dossier_after_font_contract = Boolean(fontContractStyle && dossierStyle && dossierStyle.index > fontContractStyle.index);
+  state.font_contract_face_present = Boolean(fontContractStyle?.text?.includes("font-family: 'Vazir'"));
+  state.all_font_contract_faces_loaded = requiredFontWeights.every(weight => state.font_faces.some(face => String(face.weight) === weight && face.status === 'loaded'));
+  state.asset_version = dossierStyle?.href ? new URL(dossierStyle.href).searchParams.get('ver') : null;
+
+  const pdfPath = path.join(artifactDir, 'gpp-rp-wu03-production-native-seam.pdf');
   await page.pdf({ path: pdfPath, printBackground: true, preferCSSPageSize: true, scale: 1 });
   state.pdf = pdfInfo(pdfPath);
   state.pdf_sha256 = crypto.createHash('sha256').update(fs.readFileSync(pdfPath)).digest('hex');
-  state.dossier_style = state.nodes.find(node => mode === 'candidate' ? node.id === 'gpp-wu03-native-print-dossier-css' : node.id === 'gpp-print-dossier-css') || null;
-  state.font_contract_style = state.nodes.find(node => node.id === 'vazir-font-frontend-inline-css') || null;
-  state.dossier_after_font_contract = Boolean(state.font_contract_style && state.dossier_style && state.dossier_style.index > state.font_contract_style.index);
-  state.font_contract_face_present = Boolean(state.font_contract_style?.text?.includes("font-family: 'Vazir'"));
-  state.all_font_contract_faces_loaded = requiredFontWeights.every(weight => state.font_faces.some(face => String(face.weight) === weight && face.status === 'loaded'));
-  state.asset_version = state.dossier_style?.href ? new URL(state.dossier_style.href).searchParams.get('ver') : null;
-  return state;
-}
-
-fs.mkdirSync(artifactDir, { recursive: true });
-const browser = await chromium.launch({ headless: true });
-let control;
-let candidate;
-try {
-  const context = await browser.newContext();
-  await context.addCookies(cookies.map(cookie => ({ ...cookie, url: baseUrl })));
-  const page = await context.newPage();
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  control = await capture(page, 'control');
-  candidate = await capture(page, 'candidate');
 } finally {
   await browser.close();
-  fs.rmSync(muPath, { force: true });
 }
 
-function isA4(pdf) {
-  return pdf.pages === 2 && Math.abs(pdf.width_pt - 595.28) < 1 && Math.abs(pdf.height_pt - 841.89) < 1;
-}
-function gate(state, mode) {
-  return {
-    http_ok: state.http_status === 200,
-    ready: state.ready,
-    stylesheet_present: Boolean(state.dossier_style),
-    stylesheet_single_delivery: mode === 'control' ? state.manual_link_count === 1 : state.candidate_link_count === 1 && state.manual_link_count === 0,
-    deterministic_asset_identity: state.asset_version === '1.0.1' && cssSha256.length === 64,
-    font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
-    font_contract_loaded: state.all_font_contract_faces_loaded,
-    dossier_font_family_contract: /Vazir/i.test(state.font_family || ''),
-    stylesheet_order_after_font_contract: state.dossier_after_font_contract,
-    rtl: state.dir === 'rtl',
-    front_back_order: state.sheet_count === 2 && JSON.stringify(state.page_order) === JSON.stringify(['front', 'back']),
-    a4_two_page_pdf: isA4(state.pdf),
-    no_overflow: state.overflow_free,
-  };
-}
-const controlGates = gate(control, 'control');
-const candidateGates = gate(candidate, 'candidate');
-const controlPass = Object.values(controlGates).every(Boolean);
-const candidatePass = Object.values(candidateGates).every(Boolean);
-const materialEquivalent =
-  control.ready && candidate.ready &&
-  control.profile_id === candidate.profile_id &&
-  control.font_family === candidate.font_family &&
-  control.text_content === candidate.text_content &&
-  control.trace_text === candidate.trace_text &&
-  JSON.stringify(control.page_order) === JSON.stringify(candidate.page_order) &&
-  control.front?.width === candidate.front?.width && control.front?.height === candidate.front?.height &&
-  control.back?.width === candidate.back?.width && control.back?.height === candidate.back?.height &&
-  JSON.stringify(control.pdf) === JSON.stringify(candidate.pdf) &&
-  control.asset_version === candidate.asset_version;
+const hardGates = {
+  authentic_http_response: state.http_status === 200,
+  dossier_ready: state.ready === true,
+  canonical_vazir_filter_registered: runtimeContract.vazir_filter_registered === true,
+  canonical_dossier_filter_registered: runtimeContract.dossier_filter_registered === true,
+  single_dossier_stylesheet_delivery: state.dossier_link_count === 1 && Boolean(state.dossier_style),
+  deterministic_asset_identity: state.asset_version === expectedStyleVersion && cssSha256.length === 64,
+  font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
+  font_contract_loaded: state.all_font_contract_faces_loaded,
+  dossier_font_family_contract: /Vazir/i.test(state.font_family || ''),
+  stylesheet_order_after_font_contract: state.dossier_after_font_contract,
+  rtl: state.dir === 'rtl',
+  front_back_order: state.sheet_count === 2 && JSON.stringify(state.page_order) === JSON.stringify(['front', 'back']),
+  a4_two_page_pdf: isA4(state.pdf),
+  no_overflow: state.overflow_free,
+};
 
-let disposition = 'NOT_PROVEN';
-if (controlPass && candidatePass && materialEquivalent) disposition = 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE';
-else if (!controlPass && candidatePass) disposition = 'OFFICIAL_NATIVE_SEAM_UNIQUELY_QUALIFIED';
-else if (controlPass && !candidatePass) disposition = 'KEEP_CURRENT_DELIVERY_QUALIFIED';
-
+const pass = Object.values(hardGates).every(Boolean);
+const disposition = pass ? 'PRODUCTION_NATIVE_SEAM_REGRESSION_PROVEN' : 'PRODUCTION_NATIVE_SEAM_REGRESSION_FAILED';
 const evidence = {
-  schema_version: '2.2.0',
+  schema_version: '3.0.0',
   work_unit: 'GPP-RP-WU-03-PRINT-STYLESHEET-SEAM',
   problems: ['P-18'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
   repository_head: repoSha,
-  objective: 'Compare current manual dossier stylesheet delivery with Gravity Flow native gravityflow_print_styles delivery while holding the admitted Vazir loader/handle contract constant in a self-contained test fixture.',
+  objective: 'Regression-protect the canonical production Gravity Flow print stylesheet seam after P-18 repair.',
   non_goals: [
-    'production Print delivery change',
-    'authorization change',
+    'compare historical manual and native alternatives',
+    'change Print authorization',
     'visual redesign',
-    'execution of the private Vazir package',
-    'binary or rendering equivalence between the local contract fixture and the private Vazir font files',
+    'execute the private Vazir package',
+    'claim equivalence to production font binaries',
   ],
   runtime: {
     wordpress: '6.8.3',
     gravity_forms: '3.1.1.1',
     gravity_flow: '3.1.0',
-    font_provider: {
-      mode: 'test_only_contract_fixture',
-      fixture_marker: fontRuntime.fixture_marker,
-      family_exposed_to_browser: 'Vazir',
-      backing_source: "local('Liberation Sans')",
-      private_vazir_package_loaded: false,
-    },
     node: process.version,
     playwright: playwrightVersion,
     dossier_css_sha256: cssSha256,
+    style_version: runtimeContract.style_version,
+    font_provider_fixture: runtimeContract.fixture_marker,
   },
-  font_contract: {
-    ...fontRuntime,
-    required_weights: requiredFontWeights,
-    gpp_runtime_handle: 'vazir-font-frontend',
-    private_reference_repository: 'rezahh107/Vazir',
-    private_reference_commit: vazirContractReferenceCommit,
-    reference_use: 'Implementation-time contract reference only; the private package is not fetched or executed by this CI run.',
-    package_equivalence: 'NOT_PROVEN',
-  },
-  control: { delivery: 'production_manual_footer_link', ...control, hard_gates: controlGates },
-  candidate: { delivery: 'test_only_gravityflow_print_styles', ...candidate, hard_gates: candidateGates },
-  comparison: { material_equivalent: materialEquivalent, pdf_bytes_equal: control.pdf_sha256 === candidate.pdf_sha256 },
-  hard_gate_result: controlPass && candidatePass ? 'PASS' : 'FAIL',
+  canonical_registration: runtimeContract,
+  production_observation: state,
+  hard_gates: hardGates,
+  hard_gate_result: pass ? 'PASS' : 'FAIL',
   disposition,
-  production_direction: disposition === 'OFFICIAL_NATIVE_SEAM_UNIQUELY_QUALIFIED'
-    ? 'Later production repair should move dossier CSS to gravityflow_print_styles and remove the manual footer link.'
-    : disposition === 'KEEP_CURRENT_DELIVERY_QUALIFIED'
-      ? 'Keep current manual delivery; native seam did not survive all hard gates.'
-      : disposition === 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE'
-        ? 'Both delivery methods survive the pinned runtime gates with the font-provider contract held constant. A later canonicalization PR may move dossier CSS to gravityflow_print_styles; actual private Vazir package execution remains outside this evidence claim.'
-        : null,
 };
 
 const out = path.join(artifactDir, 'gpp-rp-wu03-print-stylesheet-seam.json');
 fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
-console.log(JSON.stringify({ status: 'EVIDENCE_COMPLETE', disposition, hard_gate_result: evidence.hard_gate_result, artifact: out }));
+console.log(JSON.stringify({
+  status: pass ? 'EVIDENCE_COMPLETE' : 'EVIDENCE_FAILED',
+  disposition,
+  hard_gate_result: evidence.hard_gate_result,
+  artifact: out,
+}));
+if (!pass) process.exit(1);
