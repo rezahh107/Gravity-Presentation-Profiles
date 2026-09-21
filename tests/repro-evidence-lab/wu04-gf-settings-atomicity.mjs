@@ -28,40 +28,37 @@ $form = array(
 );
 $id = GFAPI::add_form($form);
 if (is_wp_error($id) || !$id) throw new RuntimeException('WU04 form creation failed.');
-echo (int) $id;
+echo (int)$id;
 `));
 }
 
-function state(formId) {
-  const raw = wpEval(`
-$operations = \\GravityPresentationProfiles\\GravityForms\\OperationsSetupService::forWordPress();
-$context = $operations->bindingContext(${Number(formId)});
-$bindings = new \\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle(
-  new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME),
-  new \\GravityPresentationProfiles\\Core\\Lifecycle\\EvidenceReferenceGate(array())
-);
-$activation = $bindings->resolve($context);
-$binding_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME);
-$visual_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME);
-$out = array(
-  'form_id' => ${Number(formId)},
-  'binding_activation' => $activation,
-  'binding_state_sha256' => hash('sha256', wp_json_encode($binding_option)),
-  'visual_state_sha256' => hash('sha256', wp_json_encode($visual_option)),
-);
-echo wp_json_encode($out, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
-`);
-  return JSON.parse(raw);
+function snapshot(formId) {
+  return JSON.parse(wpEval(`
++$operations = \\GravityPresentationProfiles\\GravityForms\\OperationsSetupService::forWordPress();
++$context = $operations->bindingContext(${Number(formId)});
++$bindings = new \\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle(
++  new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME),
++  new \\GravityPresentationProfiles\\Core\\Lifecycle\\EvidenceReferenceGate(array())
++);
++$binding_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\BindingSetLifecycle::OPTION_NAME);
++$visual_option = get_option(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME);
++echo wp_json_encode(array(
++  'form_id' => ${Number(formId)},
++  'binding_activation' => $bindings->resolve($context),
++  'binding_state_sha256' => hash('sha256', wp_json_encode($binding_option)),
++  'visual_state_sha256' => hash('sha256', wp_json_encode($visual_option)),
++), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
++`).replace(/^\+/gm, ''));
 }
 
 const rejectedFormId = createForm('WU04 Rejected Transaction');
 const validFormId = createForm('WU04 Valid Transaction');
-const rejectedBefore = state(rejectedFormId);
-const validBefore = state(validFormId);
+const rejectedBefore = snapshot(rejectedFormId);
+const validBefore = snapshot(validFormId);
 
 const settingsUrl = `${baseUrl}/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles`;
 const operationName = '_gform_setting_operations_setup_action';
-const invalidSiblingName = '_gform_setting_entry_detail_setup_action';
+const siblingName = '_gform_setting_entry_detail_setup_action';
 const invalidSiblingValue = 'wu04-invalid-sibling-action';
 
 async function login(page) {
@@ -74,36 +71,33 @@ async function login(page) {
   ]);
 }
 
-async function settingsShape(page) {
-  return page.evaluate(({ operationName, invalidSiblingName }) => {
+async function submitScenario(page, formId, invalidSibling) {
+  await page.goto(settingsUrl, { waitUntil: 'networkidle' });
+
+  const shape = await page.evaluate(({ operationName, siblingName }) => {
     const form = document.querySelector('#gform-settings');
     if (!(form instanceof HTMLFormElement)) return null;
-    const names = Array.from(form.elements)
-      .map(el => el.getAttribute?.('name'))
-      .filter(Boolean);
+    const names = Array.from(form.elements).map(el => el.getAttribute?.('name')).filter(Boolean);
+    const action = new URL(form.action, location.href);
     return {
-      form_id: form.id,
+      host_form_id: form.id,
       method: String(form.method || '').toUpperCase(),
-      action_path: new URL(form.action, location.href).pathname + new URL(form.action, location.href).search,
+      action_path: action.pathname + action.search,
       has_nonce: names.includes('gform_settings_save_nonce'),
       has_submit: names.includes('gform-settings-save'),
       has_operation: names.includes(operationName),
-      has_invalid_sibling: names.includes(invalidSiblingName),
+      has_sibling: names.includes(siblingName),
       control_names: [...new Set(names)].sort(),
     };
-  }, { operationName, invalidSiblingName });
-}
+  }, { operationName, siblingName });
 
-async function submitScenario(page, formId, invalidSibling) {
-  await page.goto(settingsUrl, { waitUntil: 'networkidle' });
-  const shape = await settingsShape(page);
-  if (!shape || shape.form_id !== 'gform-settings' || shape.method !== 'POST' || !shape.has_nonce || !shape.has_submit || !shape.has_operation || !shape.has_invalid_sibling) {
+  if (!shape || shape.host_form_id !== 'gform-settings' || shape.method !== 'POST' || !shape.has_nonce || !shape.has_submit || !shape.has_operation || !shape.has_sibling) {
     throw new Error(`Authentic GF settings form shape unavailable: ${JSON.stringify(shape)}`);
   }
 
   const operation = page.locator(`select[name="${operationName}"]`);
-  const sibling = page.locator(`select[name="${invalidSiblingName}"]`);
-  if (await operation.count() !== 1 || await sibling.count() !== 1) throw new Error('Required GPP settings selects are unavailable.');
+  const sibling = page.locator(`select[name="${siblingName}"]`);
+  if (await operation.count() !== 1 || await sibling.count() !== 1) throw new Error('Required GPP settings controls are unavailable.');
   await operation.selectOption(`form:${formId}`);
 
   if (invalidSibling) {
@@ -119,38 +113,37 @@ async function submitScenario(page, formId, invalidSibling) {
     await sibling.selectOption('');
   }
 
-  const submitted = await page.evaluate(({ operationName, invalidSiblingName }) => ({
+  const submitted = await page.evaluate(({ operationName, siblingName }) => ({
     operation: document.querySelector(`[name="${operationName}"]`)?.value || null,
-    sibling: document.querySelector(`[name="${invalidSiblingName}"]`)?.value || null,
-  }), { operationName, invalidSiblingName });
+    sibling: document.querySelector(`[name="${siblingName}"]`)?.value || null,
+  }), { operationName, siblingName });
 
   const submit = page.locator('[name="gform-settings-save"][value="save"]');
-  if (await submit.count() !== 1) throw new Error('GF settings save control unavailable.');
+  if (await submit.count() !== 1) throw new Error('Gravity Forms settings Save control is unavailable.');
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
     submit.click(),
   ]);
   await page.waitForLoadState('networkidle');
 
-  const response = await page.evaluate(({ invalidSiblingName, invalidSiblingValue }) => {
-    const sibling = document.querySelector(`[name="${invalidSiblingName}"]`);
+  const response = await page.evaluate(({ siblingName, invalidSiblingValue }) => {
+    const sibling = document.querySelector(`[name="${siblingName}"]`);
     const container = document.querySelector('#gform_setting_entry_detail_setup_action');
+    const containerText = (container?.textContent || '').replace(/\s+/g, ' ').trim();
     const bodyText = document.body?.innerText || '';
-    const containerText = container?.innerText || '';
-    const errorish = container ? Array.from(container.querySelectorAll('[class*="error"], [role="alert"]')).map(node => ({
-      class_name: node.className || null,
-      role: node.getAttribute('role'),
-      text: (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500),
-    })) : [];
     return {
-      url: location.href,
+      final_url: location.href,
       sibling_value_retained: sibling?.value === invalidSiblingValue,
-      sibling_container_text: containerText.replace(/\s+/g, ' ').trim().slice(0, 1500),
-      sibling_error_nodes: errorish,
+      sibling_container_text: containerText.slice(0, 1500),
+      sibling_error_nodes: container ? Array.from(container.querySelectorAll('[class*="error"], [role="alert"]')).map(node => ({
+        class_name: String(node.className || ''),
+        role: node.getAttribute('role'),
+        text: (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500),
+      })) : [],
       has_validation_language: /invalid|نامعتبر|خطا|Refresh the page and try again/i.test(containerText),
       has_saved_language: /Settings saved|تنظیمات.*ذخیره/i.test(bodyText),
     };
-  }, { invalidSiblingName, invalidSiblingValue });
+  }, { siblingName, invalidSiblingValue });
 
   return {
     request_shape: {
@@ -176,12 +169,13 @@ try {
   await browser.close();
 }
 
-const rejectedAfter = state(rejectedFormId);
-const validAfter = state(validFormId);
+const rejectedAfter = snapshot(rejectedFormId);
+const validAfter = snapshot(validFormId);
 const rejectedUi = rejectedRequest.response;
+
 const rejectedByHost = rejectedUi.sibling_value_retained && rejectedUi.has_validation_language && !rejectedUi.has_saved_language;
-const rejectedMutationPersisted = Boolean(rejectedAfter.binding_activation);
-const validMutationPersisted = Boolean(validAfter.binding_activation);
+const rejectedMutationPersisted = rejectedBefore.binding_activation === null && rejectedAfter.binding_activation !== null;
+const validMutationPersisted = validBefore.binding_activation === null && validAfter.binding_activation !== null;
 const validStateChanged = validBefore.binding_state_sha256 !== validAfter.binding_state_sha256;
 
 let disposition = 'NOT_PROVEN';
@@ -197,7 +191,7 @@ if (rejectedByHost && validMutationPersisted && validStateChanged) {
 }
 
 const evidence = {
-  schema_version: '1.0.0',
+  schema_version: '1.1.0',
   work_unit: 'GPP-RP-WU-04-GF-SETTINGS-ATOMICITY',
   problems: ['P-23'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
@@ -238,7 +232,7 @@ const evidence = {
     state_changed: validStateChanged,
   },
   hard_gates: {
-    authentic_gform_settings_post: rejectedRequest.request_shape.form_id === 'gform-settings' && rejectedRequest.request_shape.method === 'POST',
+    authentic_gform_settings_post: rejectedRequest.request_shape.host_form_id === 'gform-settings' && rejectedRequest.request_shape.method === 'POST',
     invalid_sibling_rejected: rejectedByHost,
     positive_control_mutates_canonical_state: validMutationPersisted && validStateChanged,
     rejected_transaction_does_not_persist_lifecycle_mutation: !rejectedMutationPersisted,
@@ -246,11 +240,14 @@ const evidence = {
   hard_gate_result: hardGate,
   disposition,
   narrow_repair_boundary: disposition === 'CONFIRMED_PARTIAL_MUTATION_DEFECT'
-    ? 'Move lifecycle-changing work out of per-field validation callbacks into a post-validation save boundary that runs only after the host settings transaction is globally valid; keep GF ownership of nonce/capability/field validation.'
+    ? 'Move lifecycle-changing work out of per-field validation callbacks into a post-validation save boundary that runs only after the host settings transaction is globally valid; keep Gravity Forms ownership of nonce, capability and field validation.'
     : null,
 };
 
 fs.mkdirSync(artifactDir, { recursive: true });
-const out = path.join(artifactDir, 'gpp-rp-wu04-gf-settings-atomicity.json');
-fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
-console.log(JSON.stringify({ status: 'EVIDENCE_COMPLETE', disposition, hard_gate_result: hardGate, artifact: out }));
+const retainedOut = path.join(artifactDir, 'wu18-gf-settings-save-wu04-atomicity.json');
+const dedicatedOut = path.join(artifactDir, 'gpp-rp-wu04-gf-settings-atomicity.json');
+const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+fs.writeFileSync(retainedOut, serialized);
+fs.writeFileSync(dedicatedOut, serialized);
+console.log(JSON.stringify({ status: 'EVIDENCE_COMPLETE', disposition, hard_gate_result: hardGate, artifact: retainedOut }));
