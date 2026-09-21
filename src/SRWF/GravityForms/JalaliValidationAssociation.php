@@ -5,8 +5,8 @@ namespace GravityPresentationProfiles\SRWF\GravityForms;
 use GravityPresentationProfiles\GravityForms\AddOn;
 
 /**
- * Adds the missing semantic relationship between the admitted SRWF Jalali
- * control and Gravity Forms' existing validation-message node.
+ * Adds the missing semantic relationship between an admitted GPP Jalali control
+ * and Gravity Forms' existing validation-message node.
  *
  * Gravity Forms/PersianGravity remain the sole validation authorities: this
  * adapter neither creates an error nor infers one from text. It only annotates
@@ -15,7 +15,10 @@ use GravityPresentationProfiles\GravityForms\AddOn;
  */
 final class JalaliValidationAssociation {
     const PROFILE_CLASS = 'gpp-profile-srwf-registration';
+    const DECLARATIVE_CAPABILITY_CLASS = 'gpp-cap-pgr-jalali-validation-message-after-control';
     const FIELD_TYPE = 'pgr_jalali_date';
+
+    private static $admitted_form_cache = array();
 
     public static function register() {
         if ( function_exists( 'add_filter' ) ) {
@@ -24,9 +27,15 @@ final class JalaliValidationAssociation {
     }
 
     public static function associateValidationError( $field_content, $field, $value, $lead_id, $form_id ) {
-        unset( $value, $lead_id );
+        unset( $value );
 
         if ( ! is_string( $field_content ) || '' === $field_content || ! is_object( $field ) ) {
+            return $field_content;
+        }
+
+        // This presentation repair belongs only to the public form render. Entry
+        // Detail and other host contexts keep their own native markup contracts.
+        if ( 0 !== (int) $lead_id ) {
             return $field_content;
         }
 
@@ -37,29 +46,118 @@ final class JalaliValidationAssociation {
 
         $form_id = absint( $form_id );
         $field_id = isset( $field->id ) ? absint( $field->id ) : 0;
-        if ( $form_id < 1 || $field_id < 1 || ! self::isAdmittedForm( $form_id ) ) {
-            return $field_content;
-        }
-
-        $error_id = 'validation_message_' . $form_id . '_' . $field_id;
-        if ( ! self::containsValidationNode( $field_content, $error_id ) ) {
+        if ( $form_id < 1 || $field_id < 1 || ! self::isAdmittedForm( $form_id ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
             return $field_content;
         }
 
         $input_id = 'input_' . $form_id . '_' . $field_id;
-        $pattern = '/<input\b(?=[^>]*\bid=(?:"' . preg_quote( $input_id, '/' ) . '"|\'' . preg_quote( $input_id, '/' ) . '\'))[^>]*>/i';
+        $facts = self::markupFacts( $field_content, $input_id );
+        if ( null === $facts ) {
+            return $field_content;
+        }
 
-        return preg_replace_callback(
-            $pattern,
-            static function ( $matches ) use ( $error_id ) {
-                return self::withErrorMessageReference( $matches[0], $error_id );
-            },
-            $field_content,
-            1
+        $error_id = $facts['error_id'];
+        $all_ids = $facts['all_ids'];
+        $described_by = self::idReferences( $facts['aria_describedby'] );
+        $error_message = self::idReferences( $facts['aria_errormessage'] );
+
+        // Preserve every ordinary help/description relationship. If the host has
+        // already emitted a dangling ARIA ID, fail closed rather than mixing a
+        // GPP association into markup whose complete reference set is not valid.
+        foreach ( array_merge( $described_by, $error_message ) as $reference ) {
+            if ( ! isset( $all_ids[ $reference ] ) ) {
+                return $field_content;
+            }
+        }
+
+        // Future-compatible: if the pinned host or PersianGravity later supplies
+        // the exact relationship itself, do not duplicate it through a second
+        // mechanism.
+        if ( in_array( $error_id, $described_by, true ) || in_array( $error_id, $error_message, true ) ) {
+            return $field_content;
+        }
+
+        $error_message[] = $error_id;
+        $processor = new \WP_HTML_Tag_Processor( $field_content );
+        $matched = 0;
+        while ( $processor->next_tag( array( 'tag_name' => 'INPUT' ) ) ) {
+            if ( $input_id !== (string) $processor->get_attribute( 'id' ) || ! $processor->has_class( 'pgr_jalali_date' ) ) {
+                continue;
+            }
+            $matched++;
+            if ( 1 !== $matched ) {
+                return $field_content;
+            }
+            if ( ! $processor->set_attribute( 'aria-errormessage', implode( ' ', $error_message ) ) ) {
+                return $field_content;
+            }
+        }
+
+        return 1 === $matched ? $processor->get_updated_html() : $field_content;
+    }
+
+    private static function markupFacts( $field_content, $input_id ) {
+        $processor = new \WP_HTML_Tag_Processor( $field_content );
+        $all_ids = array();
+        $input_count = 0;
+        $error_count = 0;
+        $error_id = null;
+        $aria_describedby = null;
+        $aria_errormessage = null;
+
+        while ( $processor->next_tag() ) {
+            $id = $processor->get_attribute( 'id' );
+            if ( is_string( $id ) && '' !== trim( $id ) ) {
+                if ( isset( $all_ids[ $id ] ) ) {
+                    // A duplicated ID cannot support a truthful programmatic
+                    // relationship, so leave the native field untouched.
+                    return null;
+                }
+                $all_ids[ $id ] = true;
+            }
+
+            if ( 'INPUT' === $processor->get_tag()
+                && $input_id === (string) $id
+                && $processor->has_class( 'pgr_jalali_date' ) ) {
+                $input_count++;
+                $aria_describedby = $processor->get_attribute( 'aria-describedby' );
+                $aria_errormessage = $processor->get_attribute( 'aria-errormessage' );
+            }
+
+            if ( $processor->has_class( 'gfield_validation_message' ) ) {
+                $error_count++;
+                if ( is_string( $id ) && '' !== trim( $id ) ) {
+                    $error_id = $id;
+                }
+            }
+        }
+
+        if ( 1 !== $input_count || 1 !== $error_count || ! is_string( $error_id ) || '' === trim( $error_id ) ) {
+            return null;
+        }
+
+        return array(
+            'all_ids' => $all_ids,
+            'error_id' => $error_id,
+            'aria_describedby' => $aria_describedby,
+            'aria_errormessage' => $aria_errormessage,
         );
     }
 
+    private static function idReferences( $value ) {
+        if ( ! is_string( $value ) || '' === trim( $value ) ) {
+            return array();
+        }
+        $ids = preg_split( '/\s+/', trim( $value ) );
+        return array_values( array_unique( array_filter( is_array( $ids ) ? $ids : array(), 'strlen' ) ) );
+    }
+
     private static function isAdmittedForm( $form_id ) {
+        if ( array_key_exists( $form_id, self::$admitted_form_cache ) ) {
+            return self::$admitted_form_cache[ $form_id ];
+        }
+
+        self::$admitted_form_cache[ $form_id ] = false;
         if ( ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_form' ) ) {
             return false;
         }
@@ -75,42 +173,13 @@ final class JalaliValidationAssociation {
                 return false;
             }
 
-            return in_array( self::PROFILE_CLASS, $state->semanticClasses(), true );
+            $classes = $state->semanticClasses();
+            self::$admitted_form_cache[ $form_id ] = in_array( self::PROFILE_CLASS, $classes, true )
+                || in_array( self::DECLARATIVE_CAPABILITY_CLASS, $classes, true );
         } catch ( \Throwable $exception ) {
-            return false;
-        }
-    }
-
-    private static function containsValidationNode( $field_content, $error_id ) {
-        if ( ! preg_match( '/<[^>]*\bid=(?:"' . preg_quote( $error_id, '/' ) . '"|\'' . preg_quote( $error_id, '/' ) . '\')[^>]*>/i', $field_content, $matches ) ) {
-            return false;
+            self::$admitted_form_cache[ $form_id ] = false;
         }
 
-        return 1 === preg_match( '/\bclass=(?:"[^"]*\bgfield_validation_message\b[^"]*"|\'[^\']*\bgfield_validation_message\b[^\']*\')/i', $matches[0] );
-    }
-
-    private static function withErrorMessageReference( $input_tag, $error_id ) {
-        if ( preg_match( '/\saria-errormessage=("|\')(.*?)\1/i', $input_tag, $matches ) ) {
-            $ids = preg_split( '/\s+/', trim( $matches[2] ) );
-            $ids = array_values( array_filter( is_array( $ids ) ? $ids : array(), 'strlen' ) );
-            if ( ! in_array( $error_id, $ids, true ) ) {
-                $ids[] = $error_id;
-            }
-            $replacement = ' aria-errormessage=' . $matches[1] . esc_attr( implode( ' ', $ids ) ) . $matches[1];
-            return preg_replace( '/\saria-errormessage=("|\')(.*?)\1/i', $replacement, $input_tag, 1 );
-        }
-
-        $updated = preg_replace(
-            '/\s*\/>$/',
-            ' aria-errormessage="' . esc_attr( $error_id ) . '" />',
-            $input_tag,
-            1,
-            $count
-        );
-        if ( 1 === $count ) {
-            return $updated;
-        }
-
-        return preg_replace( '/>$/', ' aria-errormessage="' . esc_attr( $error_id ) . '">', $input_tag, 1 );
+        return self::$admitted_form_cache[ $form_id ];
     }
 }
