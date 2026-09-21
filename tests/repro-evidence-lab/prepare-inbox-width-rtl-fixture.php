@@ -4,6 +4,9 @@
  *
  * Both pages render Gravity Flow's authentic frontend Inbox shortcode. The
  * only difference is the page/theme host geometry around that shortcode.
+ * The comparative host is server-rendered RTL so Gravity Flow / AG Grid sees
+ * the primary direction before client initialization; LTR remains a bounded
+ * browser smoke override in the comparative suite.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
@@ -29,7 +32,7 @@ $contexts = array(
         'slug'    => 'gpp-rp-inbox-full-width-host',
         'title'   => 'GPP RP Inbox Full Width Host',
         'content' => '<!-- wp:group {"align":"full","className":"gpp-rp-comparative-host gpp-rp-comparative-host--full","layout":{"type":"default"}} -->'
-            . '<div class="wp-block-group alignfull gpp-rp-comparative-host gpp-rp-comparative-host--full" data-gpp-comparative-host="FULL_WIDTH_HOST">'
+            . '<div class="wp-block-group alignfull gpp-rp-comparative-host gpp-rp-comparative-host--full" data-gpp-comparative-host="FULL_WIDTH_HOST" dir="rtl">'
             . '[gravityflow page="inbox"]'
             . '</div><!-- /wp:group -->',
         'intent'  => 'Theme/page shell supplies the available full page width; GPP owns only its bounded inner Inbox axis.',
@@ -38,7 +41,7 @@ $contexts = array(
         'slug'    => 'gpp-rp-inbox-constrained-host',
         'title'   => 'GPP RP Inbox Constrained Host',
         'content' => '<!-- wp:group {"className":"gpp-rp-comparative-host gpp-rp-comparative-host--constrained","style":{"dimensions":{"minHeight":"0px"}},"layout":{"type":"constrained","contentSize":"48rem"}} -->'
-            . '<div class="wp-block-group gpp-rp-comparative-host gpp-rp-comparative-host--constrained" data-gpp-comparative-host="CONSTRAINED_HOST">'
+            . '<div class="wp-block-group gpp-rp-comparative-host gpp-rp-comparative-host--constrained" data-gpp-comparative-host="CONSTRAINED_HOST" dir="rtl">'
             . '[gravityflow page="inbox"]'
             . '</div><!-- /wp:group -->',
         'intent'  => 'Diagnostic bounded parent; GPP must remain truthful to the parent instead of claiming viewport ownership.',
@@ -49,6 +52,7 @@ $manifest = array(
     'schema'         => 'gpp.inbox_width_rtl_fixture.v1',
     'data_class'     => 'SYNTHETIC_NON_PII',
     'shortcode'      => '[gravityflow page="inbox"]',
+    'initial_direction' => 'rtl',
     'theme'          => $theme,
     'wordpress'      => (string) get_bloginfo( 'version' ),
     'repository_sha' => (string) getenv( 'GPP_WU21_REPOSITORY_SHA' ),
