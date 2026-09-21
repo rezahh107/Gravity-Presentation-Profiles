@@ -1,17 +1,10 @@
 /* Native-first CSS projection over the authoritative Gravity Flow Inbox. */
 
 /*
- * The admitted frontend surface is normally centered inside a constrained host
- * column. Move that 100vw box from the host column's center to the viewport's
- * physical left edge with one relative offset. Using one offset avoids RTL
- * over-constraint behavior from paired negative margins and leaves the bounded
- * 70rem inner axis as the content-width owner.
+ * Full Width page geometry is host-owned. This native projection must not add a
+ * viewport-relative offset or breakout; the shared Inbox stylesheet consumes
+ * the actual host width and keeps the bounded 70rem inner axis as content owner.
  */
-.gpp-inbox-surface--full-width {
-    position: relative;
-    left: calc(50% - 50vw);
-    margin-inline: 0 !important;
-}
 
 /*
  * Gravity Flow owns these toolbar buttons and applies `transition: all .15s`.
