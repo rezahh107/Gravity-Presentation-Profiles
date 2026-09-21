@@ -6,7 +6,7 @@ GPP optionally consumes PersianGravity's public Jalali presentation facade for h
 
 This is presentation-only. Gravity Forms, Gravity Flow, and WordPress remain authoritative for stored values, timezone semantics, ordering, filtering, queries, workflow state, permissions, and transitions.
 
-The qualified provider contract is PersianGravity `v4.6.0`, source `d134c9ac81b177a32a3138f074fca3d1c1ebfae4`, through:
+The exact qualified provider contract is PersianGravity `v4.6.0`, source `d134c9ac81b177a32a3138f074fca3d1c1ebfae4`, through:
 
 ```php
 PGR_Jalali_Presentation::format_datetime(
@@ -15,7 +15,7 @@ PGR_Jalali_Presentation::format_datetime(
 ): ?string
 ```
 
-GPP does not load PersianGravity files, call its converter internals, or contain a Gregorian→Jalali conversion algorithm. The provider remains optional and is detected at the public-facade boundary.
+GPP does not load PersianGravity files, call its converter internals, or contain a Gregorian→Jalali conversion algorithm. The provider remains optional and is detected at the public-facade boundary. Provider releases other than the exact qualified `4.6.0` version remain native until separately qualified.
 
 ## Covered sources
 
@@ -46,7 +46,7 @@ Only that raw `note->date_created` seam is eligible for provider presentation, a
 
 ## Fail-safe behavior
 
-Native presentation is retained when PersianGravity is absent, the qualified provider version/capability cannot be established, the `jalali_presentation` module is disabled, the public facade is unavailable, the source contract or strict source shape is not qualified, the provider returns `null`, the date is outside the provider's validated range, or the optional provider raises an exception.
+Native presentation is retained when PersianGravity is absent, the provider version is not exactly the qualified `4.6.0` release, the qualified capability cannot be established, the `jalali_presentation` module is disabled, the public facade is unavailable, the source contract or strict source shape is not qualified, the provider returns `null`, the date is outside the provider's validated range, or the optional provider raises an exception.
 
 No provider state is persisted by GPP. No global WordPress date filter, save/update hook, database rewrite, browser-side conversion, AJAX conversion endpoint, parallel Timeline, or duplicate date state is introduced.
 
