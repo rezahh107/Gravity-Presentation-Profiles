@@ -23,6 +23,10 @@ function wpEval(code) {
 
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
+const fontRuntime = JSON.parse(wpEval(`echo wp_json_encode(array(
+  'vazir_loader_available' => class_exists('VazirFont_Loader'),
+  'authority' => 'PrintDossierPresentationAdapter::includeVazirPrintStyle',
+));`));
 const cookies = JSON.parse(wpEval(`
 $u = get_user_by('login', 'bootstrap_admin');
 if (!$u) { throw new RuntimeException('bootstrap_admin unavailable'); }
@@ -125,7 +129,7 @@ async function capture(page, mode) {
     ? link.id === 'gpp-wu03-native-print-dossier-css'
     : link.id === 'gpp-print-dossier-css') || null;
   state.vazir_style = state.links.find(link => link.id === 'vazir-font-frontend-css') || null;
-  state.dossier_after_vazir = Boolean(state.dossier_style && state.vazir_style && state.dossier_style.index > state.vazir_style.index);
+  state.dossier_after_vazir = state.vazir_style ? Boolean(state.dossier_style && state.dossier_style.index > state.vazir_style.index) : null;
   return state;
 }
 
@@ -144,12 +148,17 @@ try {
   fs.rmSync(muPath, { force: true });
 }
 
+const vazirAuthorityPreserved =
+  control.vazir_link_count === candidate.vazir_link_count &&
+  control.font_family === candidate.font_family;
+const stylesheetOrderPreserved = control.vazir_link_count > 0
+  ? control.dossier_after_vazir === true && candidate.dossier_after_vazir === true
+  : candidate.vazir_link_count === 0;
+
 const gate = state => ({
   ready: state.ready,
   stylesheet_present: Boolean(state.dossier_style),
   stylesheet_single_delivery: control === state ? state.manual_link_count === 1 : state.candidate_link_count === 1 && state.manual_link_count === 0,
-  stylesheet_order_after_vazir: state.dossier_after_vazir,
-  vazir_present: state.vazir_link_count === 1,
   rtl: state.dir === 'rtl',
   front_back_order: state.sheet_count === 2 && JSON.stringify(state.page_order) === JSON.stringify(['front', 'back']),
   exactly_two_pdf_pages: state.pdf_pages === 2,
@@ -170,15 +179,17 @@ const materialEquivalent =
   control.front?.height === candidate.front?.height &&
   control.back?.width === candidate.back?.width &&
   control.back?.height === candidate.back?.height &&
-  control.pdf_pages === candidate.pdf_pages;
+  control.pdf_pages === candidate.pdf_pages &&
+  control.pdf_sha256 === candidate.pdf_sha256;
+const sharedGatesPass = vazirAuthorityPreserved && stylesheetOrderPreserved;
 
 let disposition = 'NOT_PROVEN';
-if (controlPass && candidatePass && materialEquivalent) disposition = 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE';
-else if (!controlPass && candidatePass) disposition = 'OFFICIAL_NATIVE_SEAM_UNIQUELY_QUALIFIED';
-else if (controlPass && !candidatePass) disposition = 'KEEP_CURRENT_DELIVERY_QUALIFIED';
+if (controlPass && candidatePass && sharedGatesPass && materialEquivalent) disposition = 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE';
+else if (!controlPass && candidatePass && sharedGatesPass) disposition = 'OFFICIAL_NATIVE_SEAM_UNIQUELY_QUALIFIED';
+else if (controlPass && !candidatePass && sharedGatesPass) disposition = 'KEEP_CURRENT_DELIVERY_QUALIFIED';
 
 const evidence = {
-  schema_version: '1.0.0',
+  schema_version: '1.1.0',
   work_unit: 'GPP-RP-WU-03-PRINT-STYLESHEET-SEAM',
   problems: ['P-18'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
@@ -193,17 +204,28 @@ const evidence = {
     playwright: playwrightVersion,
     css_sha256: cssSha256,
   },
+  font_authority: {
+    ...fontRuntime,
+    control_vazir_link_count: control.vazir_link_count,
+    candidate_vazir_link_count: candidate.vazir_link_count,
+    delivery_state_preserved: vazirAuthorityPreserved,
+    stylesheet_order_preserved: stylesheetOrderPreserved,
+    font_acceptance: control.vazir_link_count > 0 ? 'PROVEN_IN_REPRODUCIBLE_SIMULATION' : 'NOT_PROVEN_IN_WU19_RUNTIME',
+    interpretation: control.vazir_link_count > 0
+      ? 'The existing Vazir-owned delivery is present and preserved by the candidate.'
+      : 'The pinned WU19 runtime has no admitted Vazir stylesheet delivery; production authority requires GPP to leave the native Print list unchanged rather than simulate a font. Candidate preserves that state, but font acceptance itself remains NOT_PROVEN.',
+  },
   control: { delivery: 'production_manual_footer_link', ...control, hard_gates: controlGates },
   candidate: { delivery: 'test_only_gravityflow_print_styles', ...candidate, hard_gates: candidateGates },
-  comparison: { material_equivalent: materialEquivalent },
-  hard_gate_result: controlPass || candidatePass ? 'PASS' : 'NOT_PROVEN',
+  comparison: { material_equivalent: materialEquivalent, vazir_authority_preserved: vazirAuthorityPreserved, stylesheet_order_preserved: stylesheetOrderPreserved },
+  hard_gate_result: (controlPass || candidatePass) && sharedGatesPass ? 'PASS' : 'NOT_PROVEN',
   disposition,
   production_direction: disposition === 'OFFICIAL_NATIVE_SEAM_UNIQUELY_QUALIFIED'
     ? 'Later production repair should move dossier CSS to gravityflow_print_styles and remove the manual footer link.'
     : disposition === 'KEEP_CURRENT_DELIVERY_QUALIFIED'
       ? 'Keep current manual delivery; native seam did not survive all hard gates.'
       : disposition === 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE'
-        ? 'No unique production direction is established by output behavior alone.'
+        ? 'Both delivery methods are equivalent on the pinned runtime; output behavior alone does not establish a unique repair direction. Prefer the official host seam only if canonicalization policy is adopted in a later repair PR.'
         : null,
 };
 
