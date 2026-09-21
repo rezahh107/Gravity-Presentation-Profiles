@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
@@ -16,6 +17,142 @@ function focusKind(id, className, tagName) {
   if (String(className || '').includes('pgr_jalali_date')) return 'jalali_control';
   if (String(id || '').includes('gform_submit_button')) return 'submit';
   return tagName ? String(tagName).toLowerCase() : 'none';
+}
+
+function deriveAssociationState(observation) {
+  const errorId = observation.error_id || null;
+  const errorIdUnique = observation.error_id_unique === true;
+  const descriptionId = observation.description_id || null;
+  const describedByReferences = observation.aria_describedby_references || [];
+  const errorMessageReferences = observation.aria_errormessage_references || [];
+
+  const resolvesToError = reference => Boolean(
+    errorId &&
+    errorIdUnique &&
+    reference?.id === errorId &&
+    reference?.match_count === 1 &&
+    reference?.resolves_to_error === true
+  );
+  const resolvesToDescription = reference => Boolean(
+    descriptionId &&
+    reference?.id === descriptionId &&
+    reference?.match_count === 1 &&
+    reference?.resolves_to_description === true
+  );
+
+  const viaDescribedBy = describedByReferences.some(resolvesToError);
+  const viaErrorMessage = errorMessageReferences.some(resolvesToError);
+
+  return {
+    error_associated: viaDescribedBy || viaErrorMessage,
+    error_association_mechanisms: {
+      aria_describedby: viaDescribedBy,
+      aria_errormessage: viaErrorMessage,
+    },
+    description_associated: describedByReferences.some(resolvesToDescription),
+  };
+}
+
+function hostSemanticsPreservedFor(selected, nativeControl) {
+  return selected.label_relationship === nativeControl.label_relationship &&
+    selected.error_associated === nativeControl.error_associated &&
+    selected.aria_invalid === nativeControl.aria_invalid &&
+    selected.field_error_count === nativeControl.field_error_count;
+}
+
+function runAssociationModelControls() {
+  const baseObservation = {
+    error_id: 'validation_1',
+    error_id_unique: true,
+    description_id: 'description_1',
+    aria_describedby_references: [],
+    aria_errormessage_references: [],
+  };
+  const resolvedError = {
+    id: 'validation_1',
+    match_count: 1,
+    resolves_to_error: true,
+    resolves_to_description: false,
+  };
+  const resolvedDescription = {
+    id: 'description_1',
+    match_count: 1,
+    resolves_to_error: false,
+    resolves_to_description: true,
+  };
+
+  const describedByOnly = deriveAssociationState({
+    ...baseObservation,
+    aria_describedby_references: [resolvedError],
+  });
+  assert.equal(describedByOnly.error_associated, true);
+  assert.equal(describedByOnly.error_association_mechanisms.aria_describedby, true);
+  assert.equal(describedByOnly.error_association_mechanisms.aria_errormessage, false);
+
+  const errorMessageOnly = deriveAssociationState({
+    ...baseObservation,
+    aria_errormessage_references: [resolvedError],
+  });
+  assert.equal(errorMessageOnly.error_associated, true);
+  assert.equal(errorMessageOnly.error_association_mechanisms.aria_describedby, false);
+  assert.equal(errorMessageOnly.error_association_mechanisms.aria_errormessage, true);
+
+  const noAssociation = deriveAssociationState(baseObservation);
+  assert.equal(noAssociation.error_associated, false);
+
+  const danglingReference = deriveAssociationState({
+    ...baseObservation,
+    aria_describedby_references: [{
+      id: 'validation_1',
+      match_count: 0,
+      resolves_to_error: false,
+      resolves_to_description: false,
+    }],
+  });
+  assert.equal(danglingReference.error_associated, false);
+
+  const differentNodeReference = deriveAssociationState({
+    ...baseObservation,
+    aria_errormessage_references: [{
+      id: 'different_node',
+      match_count: 1,
+      resolves_to_error: false,
+      resolves_to_description: false,
+    }],
+  });
+  assert.equal(differentNodeReference.error_associated, false);
+
+  const descriptionOnly = deriveAssociationState({
+    ...baseObservation,
+    aria_describedby_references: [resolvedDescription],
+  });
+  assert.equal(descriptionOnly.description_associated, true);
+  assert.equal(descriptionOnly.error_associated, false);
+
+  const selected = {
+    label_relationship: true,
+    aria_invalid: 'true',
+    field_error_count: 1,
+    ...errorMessageOnly,
+  };
+  const nativeControl = {
+    label_relationship: true,
+    aria_invalid: 'true',
+    field_error_count: 1,
+    ...describedByOnly,
+  };
+  assert.equal(hostSemanticsPreservedFor(selected, nativeControl), true);
+  assert.equal(hostSemanticsPreservedFor({ ...selected, ...danglingReference }, nativeControl), false);
+
+  return {
+    aria_describedby_positive: 'PASS',
+    aria_errormessage_positive: 'PASS',
+    missing_association_negative: 'PASS',
+    dangling_reference_negative: 'PASS',
+    different_node_negative: 'PASS',
+    description_independent: 'PASS',
+    selected_native_corrected_model: 'PASS',
+  };
 }
 
 async function submitInvalidJalali(page, formId, expectedGpp) {
@@ -52,8 +189,29 @@ async function submitInvalidJalali(page, formId, expectedGpp) {
     const directIndex = node => node ? direct.indexOf(node) : -1;
     const rect = node => node ? node.getBoundingClientRect() : null;
     const active = document.activeElement;
-    const describedBy = String(input?.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+    const nodesWithIds = Array.from(document.querySelectorAll('[id]'));
+    const referenceEvidence = attributeName => {
+      const raw = input?.getAttribute(attributeName) ?? null;
+      const ids = String(raw || '').split(/\s+/).filter(Boolean);
+      return {
+        raw,
+        ids,
+        references: ids.map(id => {
+          const matches = nodesWithIds.filter(node => node.id === id);
+          const resolvedNode = matches.length === 1 ? matches[0] : null;
+          return {
+            id,
+            match_count: matches.length,
+            resolves_to_error: Boolean(resolvedNode && error && resolvedNode === error),
+            resolves_to_description: Boolean(resolvedNode && description && resolvedNode === description),
+          };
+        }),
+      };
+    };
+    const describedBy = referenceEvidence('aria-describedby');
+    const errorMessage = referenceEvidence('aria-errormessage');
     const errorId = error?.id || null;
+    const errorIdMatchCount = errorId ? nodesWithIds.filter(node => node.id === errorId).length : 0;
     const labelFor = label?.getAttribute('for') || null;
     const inputId = input?.id || null;
     const inputRect = rect(input);
@@ -72,11 +230,16 @@ async function submitInvalidJalali(page, formId, expectedGpp) {
       label_for: labelFor,
       label_relationship: Boolean(inputId && labelFor === inputId),
       aria_invalid: input?.getAttribute('aria-invalid') || null,
-      aria_describedby: describedBy,
+      aria_describedby_raw: describedBy.raw,
+      aria_describedby: describedBy.ids,
+      aria_describedby_references: describedBy.references,
+      aria_errormessage_raw: errorMessage.raw,
+      aria_errormessage: errorMessage.ids,
+      aria_errormessage_references: errorMessage.references,
       error_id: errorId,
-      error_associated: Boolean(errorId && describedBy.includes(errorId)),
+      error_id_unique: Boolean(errorId && errorIdMatchCount === 1),
+      error_id_match_count: errorIdMatchCount,
       description_id: description?.id || null,
-      description_associated: Boolean(description?.id && describedBy.includes(description.id)),
       source_order: direct.map((node, index) => ({
         index,
         tag: node.tagName.toLowerCase(),
@@ -114,6 +277,7 @@ async function submitInvalidJalali(page, formId, expectedGpp) {
     };
   }, { formId, expectedGpp });
 
+  Object.assign(result, deriveAssociationState(result));
   result.active_after_validation.kind = focusKind(
     result.active_after_validation.id,
     result.active_after_validation.class_name,
@@ -139,6 +303,7 @@ async function submitInvalidJalali(page, formId, expectedGpp) {
   return result;
 }
 
+const qualificationModelControls = runAssociationModelControls();
 const browser = await chromium.launch({ headless: true });
 let selected;
 let nativeControl;
@@ -162,11 +327,7 @@ const requiredCurrent = [
   selected.direction === 'rtl',
   selected.keyboard.focus_moved,
 ];
-const hostSemanticsPreserved =
-  selected.label_relationship === nativeControl.label_relationship &&
-  selected.error_associated === nativeControl.error_associated &&
-  selected.aria_invalid === nativeControl.aria_invalid &&
-  selected.field_error_count === nativeControl.field_error_count;
+const hostSemanticsPreserved = hostSemanticsPreservedFor(selected, nativeControl);
 
 let disposition = 'CURRENT_BEHAVIOR_QUALIFIED';
 let hardGate = 'PASS';
@@ -197,6 +358,7 @@ const evidence = {
     playwright: playwrightVersion,
     browser: 'chromium',
   },
+  qualification_model_controls: qualificationModelControls,
   control: nativeControl,
   current_gpp: selected,
   hard_gates: {
