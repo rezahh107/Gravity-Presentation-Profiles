@@ -193,17 +193,56 @@ echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
 echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
 
-// GPP-RP-WU-04: qualification-only atomicity probe. Run after all existing
-// WU18 controls so its fresh synthetic settings forms cannot affect their state.
+// GPP-RP-WU-04: WU04 owns qualification semantics. WU18 only enforces the
+// process/transport contract: zero exit plus one well-formed conclusive envelope.
+$consume_wu04_transport = static function ( array $output, $status ) {
+    if ( 0 !== (int) $status || empty( $output ) ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity qualification did not complete conclusively.' );
+    }
+
+    $summary = json_decode( end( $output ), true );
+    if ( ! is_array( $summary ) || 'EVIDENCE_COMPLETE' !== ( $summary['status'] ?? null ) ) {
+        throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is malformed or inconclusive.' );
+    }
+
+    return $summary;
+};
+
+$assert_wu04_transport_rejected = static function ( array $output, $status ) use ( $consume_wu04_transport ) {
+    try {
+        $consume_wu04_transport( $output, $status );
+    } catch ( RuntimeException $exception ) {
+        return;
+    }
+    throw new RuntimeException( 'WU04 transport falsification unexpectedly accepted an invalid qualification result.' );
+};
+
+$assert_wu04_transport_rejected( array(), 0 );
+$assert_wu04_transport_rejected( array( 'not-json' ), 0 );
+$assert_wu04_transport_rejected(
+    array( wp_json_encode( array( 'status' => 'EVIDENCE_INCONCLUSIVE', 'disposition' => 'NOT_PROVEN', 'hard_gate_result' => 'NOT_PROVEN' ) ) ),
+    0
+);
+$assert_wu04_transport_rejected(
+    array( wp_json_encode( array( 'status' => 'EVIDENCE_INCONCLUSIVE', 'disposition' => 'NOT_PROVEN', 'hard_gate_result' => 'NOT_PROVEN' ) ) ),
+    2
+);
+echo "WU04_GF_SETTINGS_ATOMICITY_TRANSPORT_FALSIFICATION_PASS\n";
+
+// Run after all existing WU18 controls so the synthetic settings forms cannot
+// affect their state. A conclusive product defect remains a successful
+// qualification because WU04 itself returns zero for that terminal state.
 $wu04_script = __DIR__ . '/wu04-gf-settings-atomicity.mjs';
 $wu04_output = array();
 $wu04_status = 0;
 exec( 'node ' . escapeshellarg( $wu04_script ) . ' 2>&1', $wu04_output, $wu04_status );
-if ( 0 !== $wu04_status || empty( $wu04_output ) ) {
-    throw new RuntimeException( 'WU04 GF settings atomicity qualification failed to produce evidence: ' . implode( "\n", array_slice( $wu04_output, -16 ) ) );
-}
-$wu04_summary = json_decode( end( $wu04_output ), true );
-if ( ! is_array( $wu04_summary ) || 'EVIDENCE_COMPLETE' !== ( $wu04_summary['status'] ?? null ) ) {
-    throw new RuntimeException( 'WU04 GF settings atomicity evidence summary is incomplete.' );
+try {
+    $wu04_summary = $consume_wu04_transport( $wu04_output, $wu04_status );
+} catch ( RuntimeException $exception ) {
+    throw new RuntimeException(
+        $exception->getMessage() . ' Output: ' . implode( "\n", array_slice( $wu04_output, -16 ) ),
+        0,
+        $exception
+    );
 }
 echo "WU04_GF_SETTINGS_ATOMICITY_EVIDENCE_COMPLETE\n";
