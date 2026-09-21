@@ -192,3 +192,18 @@ echo "WU18_REAL_MAPPING_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_VISUAL_VARIANT_BROWSER_CONTROL_PASS\n";
 echo "WU18_ENTRY_DETAIL_WORKFLOW_PANEL_RUNTIME_GUARD_PASS\n";
 echo "WU18_ENTRY_DETAIL_TIMELINE_SEMANTIC_BROWSER_CONTROL_PASS\n";
+
+// GPP-RP-WU-02: run after the existing WU18 controls. The qualification may
+// mutate only ephemeral synthetic field values/conditional logic at this point.
+$wu02_script = __DIR__ . '/wu02-entry-visibility-differential.mjs';
+$wu02_output = array();
+$wu02_status = 0;
+exec( 'node ' . escapeshellarg( $wu02_script ) . ' 2>&1', $wu02_output, $wu02_status );
+if ( 0 !== $wu02_status || empty( $wu02_output ) ) {
+    throw new RuntimeException( 'WU02 Entry Detail visibility differential failed to produce evidence: ' . implode( "\n", array_slice( $wu02_output, -20 ) ) );
+}
+$wu02_summary = json_decode( end( $wu02_output ), true );
+if ( ! is_array( $wu02_summary ) || 'EVIDENCE_COMPLETE' !== ( $wu02_summary['status'] ?? null ) ) {
+    throw new RuntimeException( 'WU02 Entry Detail visibility evidence summary is incomplete.' );
+}
+echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_EVIDENCE_COMPLETE\n";
