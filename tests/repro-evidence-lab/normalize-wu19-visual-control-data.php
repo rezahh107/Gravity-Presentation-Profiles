@@ -63,26 +63,65 @@ $wu03_script = __DIR__ . '/wu03-print-stylesheet-seam.mjs';
 $wu03_output = array();
 $wu03_status = 0;
 
-// actions/checkout writes an authenticated GitHub extraheader into the local
-// repository config. A nested public clone must not inherit that header: doing
-// so makes Git prompt for credentials in the non-interactive runner. Clearing
-// only this runner-local checkout header leaves repository content untouched.
-$git_config_output = array();
-$git_config_status = 0;
-exec( 'git config --local --unset-all ' . escapeshellarg( 'http.https://github.com/.extraheader' ) . ' 2>/dev/null', $git_config_output, $git_config_status );
-if ( 0 !== $git_config_status && 5 !== $git_config_status ) {
-    throw new RuntimeException( 'WU03 could not clear the runner-local GitHub checkout extraheader.' );
+// The real Vazir repository is private and is not an allowed implicit runtime
+// dependency of this repository's CI token. WU03 only needs the already-admitted
+// loader contract to hold the font-delivery variable constant while comparing
+// two dossier stylesheet seams. Provide that contract in a temporary MU-plugin,
+// backed by a runner-local font so Chromium still exercises real font loading.
+// This deliberately does NOT claim execution or binary equivalence of the
+// private Vazir package; that limit is recorded in the emitted evidence.
+$wu03_fixture_dir = WP_CONTENT_DIR . '/mu-plugins';
+wp_mkdir_p( $wu03_fixture_dir );
+$wu03_fixture = $wu03_fixture_dir . '/gpp-wu03-font-contract-fixture.php';
+$wu03_fixture_php = <<<'PHP'
+<?php
+if ( ! defined( 'GPP_WU03_FONT_PROVIDER_CONTRACT' ) ) {
+    define( 'GPP_WU03_FONT_PROVIDER_CONTRACT', 'vazir-loader-interface-local-font-fixture-v1' );
 }
 
-// The production dossier uses 400/500/700, while the admitted Vazir authority
-// publishes 300/400/500/700/900. Exercise every authoritative face without
-// changing visible Print output so the browser proves delivery rather than only
-// parsing @font-face source. This probe is test-only and removed immediately.
-$wu03_probe_dir = WP_CONTENT_DIR . '/mu-plugins';
-wp_mkdir_p( $wu03_probe_dir );
-$wu03_probe = $wu03_probe_dir . '/gpp-wu03-font-probe.php';
-$wu03_probe_php = <<<'PHP'
-<?php
+if ( ! class_exists( 'VazirFont_Loader' ) ) {
+    final class VazirFont_Loader {
+        private static $instance = null;
+        private $enqueued = false;
+
+        public static function get_instance() {
+            if ( null === self::$instance ) {
+                self::$instance = new self();
+            }
+            return self::$instance;
+        }
+
+        public function get_selected_weights() {
+            return array( '300', '400', '500', '700', '900' );
+        }
+
+        public function enqueue_frontend_fonts() {
+            if ( $this->enqueued ) {
+                return;
+            }
+
+            $css = '';
+            foreach ( $this->get_selected_weights() as $weight ) {
+                $css .= "@font-face {\n";
+                $css .= "\tfont-family: 'Vazir';\n";
+                $css .= "\tfont-style: normal;\n";
+                $css .= "\tfont-weight: {$weight};\n";
+                $css .= "\tfont-display: swap;\n";
+                $css .= "\tsrc: local('Liberation Sans');\n";
+                $css .= "}\n\n";
+            }
+
+            wp_register_style( 'vazir-font-frontend', false, array(), 'wu03-contract-fixture' );
+            wp_enqueue_style( 'vazir-font-frontend' );
+            wp_add_inline_style( 'vazir-font-frontend', $css );
+            $this->enqueued = true;
+        }
+    }
+}
+
+// The production dossier uses only a subset of the admitted Vazir weights. The
+// hidden probe forces all five contract faces through Chromium's FontFaceSet so
+// WU03 verifies actual delivery/loading instead of merely parsing CSS text.
 add_action( 'gravityflow_print_entry_footer', static function () {
     if ( ! isset( $_GET['gpp_presentation'] ) || 'dossier' !== sanitize_key( wp_unslash( $_GET['gpp_presentation'] ) ) ) {
         return;
@@ -94,15 +133,15 @@ add_action( 'gravityflow_print_entry_footer', static function () {
     echo '</div>';
 }, 18, 0 );
 PHP;
-if ( false === file_put_contents( $wu03_probe, $wu03_probe_php ) ) {
-    throw new RuntimeException( 'WU03 could not create the temporary Vazir delivery probe.' );
+if ( false === file_put_contents( $wu03_fixture, $wu03_fixture_php ) ) {
+    throw new RuntimeException( 'WU03 could not create the temporary font contract fixture.' );
 }
 
 try {
     exec( 'node ' . escapeshellarg( $wu03_script ) . ' 2>&1', $wu03_output, $wu03_status );
 } finally {
-    if ( is_file( $wu03_probe ) ) {
-        unlink( $wu03_probe );
+    if ( is_file( $wu03_fixture ) ) {
+        unlink( $wu03_fixture );
     }
 }
 if ( 0 !== $wu03_status || empty( $wu03_output ) ) {
