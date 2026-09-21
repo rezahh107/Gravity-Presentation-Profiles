@@ -25,6 +25,7 @@ $runtime = read_json( $artifact_dir . '/runtime.json' );
 $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );
+$comparative = read_json( $artifact_dir . '/pr4-inbox-width-rtl-comparative.json' );
 $expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
 $expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
 function require_exact_test_ids( $suite, $expected, $label ) {
@@ -102,6 +103,7 @@ $evidence = array(
     'source_backed_seams' => $config['source_backed_seams'],
     'tests' => $tests,
     'mechanics' => $mechanics,
+    'comparative_repair_qualification' => $comparative,
     'acceptance_criteria' => $acceptance,
     'target_production_facts' => array(
         'form_ids' => 'UNBOUND',
@@ -119,6 +121,7 @@ $evidence = array(
         'config:tests/repro-evidence-lab/lab-config.json',
         'workflow:.github/workflows/wu21-repro-evidence-lab.yml',
         'fixture:synthetic-non-pii',
+        'comparative:pr4-inbox-width-rtl-comparative.json',
         'gravity-flow-package-sha256:' . $config['plugins']['gravity_flow']['sha256'],
         'gravity-forms-package-sha256:' . $config['plugins']['gravity_forms']['sha256']
     ),
