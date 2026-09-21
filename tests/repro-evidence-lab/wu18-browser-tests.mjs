@@ -247,14 +247,25 @@ await test('WU18-BROWSER-002', 'native workflow controls remain original and con
   if (ownership.in_dossier || !ownership.in_native_form || ownership.action_boxes !== 1 || ownership.status_boxes !== 1) throw new Error(`Native controls were cloned/moved: ${JSON.stringify(ownership)}`);
 
   const approve = status.locator('button[value="approved"]');
-  await page.evaluate(() => document.activeElement?.blur());
-  let keyboardFocused = false;
-  for (let i = 0; i < 80; i += 1) {
-    await page.keyboard.press('Tab');
-    keyboardFocused = await page.evaluate(() => document.activeElement?.value === 'approved');
-    if (keyboardFocused) break;
-  }
-  if (!keyboardFocused) throw new Error('Could not keyboard-focus the native Approve button.');
+  const sequential = await approve.evaluate(button => ({
+    tabIndex: button.tabIndex,
+    disabled: button.disabled,
+  }));
+  if (sequential.disabled || sequential.tabIndex < 0) throw new Error(`Native Approve button is not in the sequential keyboard focus order: ${JSON.stringify(sequential)}`);
+  await approve.focus();
+  await page.keyboard.press('Shift+Tab');
+  const previousFocus = await page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      tag: active?.tagName || null,
+      id: active?.id || null,
+      name: active?.getAttribute?.('name') || null,
+      value: active?.value ?? null,
+    };
+  });
+  await page.keyboard.press('Tab');
+  const keyboardFocused = await page.evaluate(() => document.activeElement?.value === 'approved');
+  if (!keyboardFocused) throw new Error(`Native Approve button is not reachable by sequential keyboard Tab navigation: ${JSON.stringify({ sequential, previousFocus })}`);
   const focus = await approve.evaluate(button => {
     const style = getComputedStyle(button);
     return {
@@ -289,7 +300,7 @@ await test('WU18-BROWSER-002', 'native workflow controls remain original and con
   });
   if (noteFocus.outlineStyle === 'none' || numericPx(noteFocus.outlineWidth) !== authority.focusWidth || numericPx(noteFocus.outlineOffset) !== authority.focusOffset || noteFocus.outlineColor !== authorityRgb.primary) throw new Error(`Native Note focus treatment drifted from authority: ${JSON.stringify(noteFocus)}`);
 
-  return { actions, ownership, focus, disabled, noteBase, noteFocus };
+  return { actions, ownership, sequential, previousFocus, focus, disabled, noteBase, noteFocus };
 });
 
 await test('WU18-BROWSER-003', 'native Timeline stays in place and follows admitted neutral History chronology', async () => {
