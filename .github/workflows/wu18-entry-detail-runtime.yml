@@ -22,6 +22,7 @@ on:
       - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
       - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
       - 'tests/repro-evidence-lab/wu18-post-browser-controls.php'
+      - 'tests/repro-evidence-lab/wu02-entry-visibility-differential.mjs'
       - 'profiles/srwf/operations/operations-package-v1.json'
       - 'gravity-presentation-profiles.php'
   workflow_dispatch:
