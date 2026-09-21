@@ -121,12 +121,14 @@ if ( ! class_exists( 'VazirFont_Loader' ) ) {
 
 // The production dossier uses only a subset of the admitted Vazir weights. The
 // hidden probe forces all five contract faces through Chromium's FontFaceSet so
-// WU03 verifies actual delivery/loading instead of merely parsing CSS text.
+// WU03 verifies actual delivery/loading instead of merely parsing CSS text. Keep
+// it fixed inside the physical page: an off-canvas negative bottom position
+// expands Chromium's print canvas and creates artificial extra PDF pages.
 add_action( 'gravityflow_print_entry_footer', static function () {
     if ( ! isset( $_GET['gpp_presentation'] ) || 'dossier' !== sanitize_key( wp_unslash( $_GET['gpp_presentation'] ) ) ) {
         return;
     }
-    echo '<div data-gpp-wu03-font-probe aria-hidden="true" style="position:absolute;inset:auto auto -10000px -10000px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">';
+    echo '<div data-gpp-wu03-font-probe aria-hidden="true" style="position:fixed;top:0;left:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">';
     foreach ( array( 300, 400, 500, 700, 900 ) as $weight ) {
         echo '<span style="font-family:Vazir,sans-serif;font-weight:' . (int) $weight . '">آ</span>';
     }
