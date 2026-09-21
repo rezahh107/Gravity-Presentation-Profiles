@@ -14,8 +14,9 @@ const repoSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
 const playwrightVersion = JSON.parse(fs.readFileSync('node_modules/playwright/package.json', 'utf8')).version;
 const cssPath = path.resolve('assets/css/srwf-gravity-flow-print-dossier.css');
 const cssSha256 = crypto.createHash('sha256').update(fs.readFileSync(cssPath)).digest('hex');
-const vazirCommit = 'ad8feae35a4e1c27fb13d646fa18abf05bb4e7b1';
-const vazirDir = path.join(wpPath, 'wp-content', 'plugins', 'vazir-font-wp');
+const vazirContractReferenceCommit = 'ad8feae35a4e1c27fb13d646fa18abf05bb4e7b1';
+const requiredFontWeights = ['300', '400', '500', '700', '900'];
+const expectedFixtureMarker = 'vazir-loader-interface-local-font-fixture-v1';
 
 function run(command, args, options = {}) {
   const cp = spawnSync(command, args, { encoding: 'utf8', env: process.env, ...options });
@@ -25,18 +26,6 @@ function run(command, args, options = {}) {
 function wpEval(code) {
   return run('php', [wpCli, `--path=${wpPath}`, 'eval', code]);
 }
-function wp(...args) {
-  return run('php', [wpCli, `--path=${wpPath}`, ...args]);
-}
-
-if (fs.existsSync(vazirDir)) fs.rmSync(vazirDir, { recursive: true, force: true });
-run('git', ['clone', '--filter=blob:none', '--no-tags', 'https://github.com/rezahh107/Vazir.git', vazirDir]);
-run('git', ['-C', vazirDir, 'checkout', '--detach', vazirCommit]);
-const actualVazirCommit = run('git', ['-C', vazirDir, 'rev-parse', 'HEAD']);
-if (actualVazirCommit !== vazirCommit) throw new Error('Pinned Vazir source identity mismatch.');
-wp('plugin', 'activate', 'vazir-font-wp');
-const vazirVersion = wp('plugin', 'get', 'vazir-font-wp', '--field=version');
-if (vazirVersion !== '1.3.0') throw new Error(`Unexpected Vazir version: ${vazirVersion}`);
 
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu19_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const alpha = manifest.alpha;
@@ -44,10 +33,15 @@ const fontRuntime = JSON.parse(wpEval(`
 $loader = class_exists('VazirFont_Loader') ? VazirFont_Loader::get_instance() : null;
 echo wp_json_encode(array(
   'loader_available' => is_object($loader),
-  'selected_weights' => is_object($loader) ? $loader->get_selected_weights() : array(),
-  'options' => class_exists('VazirFontPlugin') ? VazirFontPlugin::get_options() : array(),
+  'selected_weights' => is_object($loader) && method_exists($loader, 'get_selected_weights') ? $loader->get_selected_weights() : array(),
+  'fixture_marker' => defined('GPP_WU03_FONT_PROVIDER_CONTRACT') ? GPP_WU03_FONT_PROVIDER_CONTRACT : null,
+  'style_handle_registered_before_print' => function_exists('wp_style_is') ? wp_style_is('vazir-font-frontend', 'registered') : false,
 ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
 `));
+if (!fontRuntime.loader_available) throw new Error('WU03 font contract fixture did not expose VazirFont_Loader.');
+if (fontRuntime.fixture_marker !== expectedFixtureMarker) throw new Error('WU03 font contract fixture identity mismatch.');
+if (JSON.stringify(fontRuntime.selected_weights) !== JSON.stringify(requiredFontWeights)) throw new Error('WU03 font contract fixture weights mismatch.');
+
 const cookies = JSON.parse(wpEval(`
 $u = get_user_by('login', 'bootstrap_admin');
 if (!$u) throw new RuntimeException('bootstrap_admin unavailable');
@@ -130,7 +124,7 @@ async function capture(page, mode) {
       nodes,
       manual_link_count: document.querySelectorAll('#gpp-print-dossier-css').length,
       candidate_link_count: document.querySelectorAll('#gpp-wu03-native-print-dossier-css').length,
-      vazir_inline_count: document.querySelectorAll('#vazir-font-frontend-inline-css').length,
+      font_contract_inline_count: document.querySelectorAll('#vazir-font-frontend-inline-css').length,
       font_family: dossier ? getComputedStyle(dossier).fontFamily : null,
       font_faces: fontFaces,
       sheet_count: sheets.length,
@@ -149,10 +143,10 @@ async function capture(page, mode) {
   state.pdf = pdfInfo(pdfPath);
   state.pdf_sha256 = crypto.createHash('sha256').update(fs.readFileSync(pdfPath)).digest('hex');
   state.dossier_style = state.nodes.find(node => mode === 'candidate' ? node.id === 'gpp-wu03-native-print-dossier-css' : node.id === 'gpp-print-dossier-css') || null;
-  state.vazir_style = state.nodes.find(node => node.id === 'vazir-font-frontend-inline-css') || null;
-  state.dossier_after_vazir = Boolean(state.vazir_style && state.dossier_style && state.dossier_style.index > state.vazir_style.index);
-  state.vazir_font_face_present = Boolean(state.vazir_style?.text?.includes("font-family: 'Vazir'"));
-  state.all_vazir_faces_loaded = state.font_faces.length >= 5 && state.font_faces.every(face => face.status === 'loaded');
+  state.font_contract_style = state.nodes.find(node => node.id === 'vazir-font-frontend-inline-css') || null;
+  state.dossier_after_font_contract = Boolean(state.font_contract_style && state.dossier_style && state.dossier_style.index > state.font_contract_style.index);
+  state.font_contract_face_present = Boolean(state.font_contract_style?.text?.includes("font-family: 'Vazir'"));
+  state.all_font_contract_faces_loaded = requiredFontWeights.every(weight => state.font_faces.some(face => String(face.weight) === weight && face.status === 'loaded'));
   state.asset_version = state.dossier_style?.href ? new URL(state.dossier_style.href).searchParams.get('ver') : null;
   return state;
 }
@@ -183,9 +177,9 @@ function gate(state, mode) {
     stylesheet_present: Boolean(state.dossier_style),
     stylesheet_single_delivery: mode === 'control' ? state.manual_link_count === 1 : state.candidate_link_count === 1 && state.manual_link_count === 0,
     deterministic_asset_identity: state.asset_version === '1.0.1' && cssSha256.length === 64,
-    vazir_present: state.vazir_inline_count === 1 && state.vazir_font_face_present,
-    vazir_loaded: state.all_vazir_faces_loaded,
-    stylesheet_order_after_vazir: state.dossier_after_vazir,
+    font_contract_present: state.font_contract_inline_count === 1 && state.font_contract_face_present,
+    font_contract_loaded: state.all_font_contract_faces_loaded,
+    stylesheet_order_after_font_contract: state.dossier_after_font_contract,
     rtl: state.dir === 'rtl',
     front_back_order: state.sheet_count === 2 && JSON.stringify(state.page_order) === JSON.stringify(['front', 'back']),
     a4_two_page_pdf: isA4(state.pdf),
@@ -214,26 +208,42 @@ else if (!controlPass && candidatePass) disposition = 'OFFICIAL_NATIVE_SEAM_UNIQ
 else if (controlPass && !candidatePass) disposition = 'KEEP_CURRENT_DELIVERY_QUALIFIED';
 
 const evidence = {
-  schema_version: '2.0.0',
+  schema_version: '2.1.0',
   work_unit: 'GPP-RP-WU-03-PRINT-STYLESHEET-SEAM',
   problems: ['P-18'],
   claim_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
   repository_head: repoSha,
-  objective: 'Compare current manual dossier stylesheet delivery with Gravity Flow native gravityflow_print_styles delivery without modifying production delivery.',
-  non_goals: ['production Print delivery change', 'authorization change', 'visual redesign'],
+  objective: 'Compare current manual dossier stylesheet delivery with Gravity Flow native gravityflow_print_styles delivery while holding the admitted Vazir loader/handle contract constant in a self-contained test fixture.',
+  non_goals: [
+    'production Print delivery change',
+    'authorization change',
+    'visual redesign',
+    'execution of the private Vazir package',
+    'binary or rendering equivalence between the local contract fixture and the private Vazir font files',
+  ],
   runtime: {
     wordpress: '6.8.3',
     gravity_forms: '3.1.1.1',
     gravity_flow: '3.1.0',
-    vazir: { version: vazirVersion, repository: 'rezahh107/Vazir', commit: actualVazirCommit },
+    font_provider: {
+      mode: 'test_only_contract_fixture',
+      fixture_marker: fontRuntime.fixture_marker,
+      family_exposed_to_browser: 'Vazir',
+      backing_source: "local('Liberation Sans')",
+      private_vazir_package_loaded: false,
+    },
     node: process.version,
     playwright: playwrightVersion,
     dossier_css_sha256: cssSha256,
   },
-  font_authority: {
+  font_contract: {
     ...fontRuntime,
-    required_weights: ['300', '400', '500', '700', '900'],
-    authority: 'rezahh107/Vazir@ad8feae35a4e1c27fb13d646fa18abf05bb4e7b1',
+    required_weights: requiredFontWeights,
+    gpp_runtime_handle: 'vazir-font-frontend',
+    private_reference_repository: 'rezahh107/Vazir',
+    private_reference_commit: vazirContractReferenceCommit,
+    reference_use: 'Implementation-time contract reference only; the private package is not fetched or executed by this CI run.',
+    package_equivalence: 'NOT_PROVEN',
   },
   control: { delivery: 'production_manual_footer_link', ...control, hard_gates: controlGates },
   candidate: { delivery: 'test_only_gravityflow_print_styles', ...candidate, hard_gates: candidateGates },
@@ -245,7 +255,7 @@ const evidence = {
     : disposition === 'KEEP_CURRENT_DELIVERY_QUALIFIED'
       ? 'Keep current manual delivery; native seam did not survive all hard gates.'
       : disposition === 'EQUIVALENT_ALTERNATIVES_NO_MATERIAL_OUTPUT_DIFFERENCE'
-        ? 'Both delivery methods survive the pinned runtime gates. A later canonicalization PR may move dossier CSS to the official gravityflow_print_styles seam without an evidence-supported output change.'
+        ? 'Both delivery methods survive the pinned runtime gates with the font-provider contract held constant. A later canonicalization PR may move dossier CSS to gravityflow_print_styles; actual private Vazir package execution remains outside this evidence claim.'
         : null,
 };
 
