@@ -3,41 +3,39 @@
 namespace GravityPresentationProfiles\GravityForms;
 
 use GravityPresentationProfiles\Core\Lifecycle\LifecycleException;
-use GravityPresentationProfiles\Core\Lifecycle\SettingsLifecycleWorkflow;
-use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPolicy;
+use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 
 /**
  * Keeps lifecycle-changing GPP plugin-settings commands inside Gravity Forms'
  * native Settings transaction.
  *
- * In Gravity Forms 3.1.1.1 the prepared Settings renderer validates every
- * field first, then runs field save callbacks only when the complete settings
- * submission is valid. Existing GPP callbacks historically mixed validation
- * and mutation. This controller preserves those callbacks as the commit
- * implementation, replaces validation with read-only checks, and invokes the
- * mutation only from the host-owned post-validation field save phase.
+ * Gravity Forms 3.1.1.1 validates every prepared Settings field before it runs
+ * any field save callback. The historical GPP callbacks combined validation and
+ * lifecycle mutation, so a sibling validation error could arrive after GPP had
+ * already changed canonical state.
  *
- * Prepared renderer fields are Settings Field objects, not the original config
- * arrays. The controller therefore mutates those public callback properties in
- * place. This is important: replacing only array-shaped metadata would leave
- * the authentic renderer untouched and the historical validation-time mutation
- * path active.
+ * This controller keeps the existing callbacks as the single business-rule and
+ * lifecycle authority. During the host validation pass it runs them inside a
+ * request-local WordPressOptionStateStore preview, so the exact production
+ * lifecycle/CAS logic is exercised without persistence. Only after Gravity
+ * Forms accepts every sibling field does the native field save callback invoke
+ * the same callback against real state exactly once.
  *
- * No nonce, capability, dispatch, settings persistence, or error UI is
- * reimplemented here; those remain owned by the Gravity Forms Settings API.
+ * No nonce, capability, settings dispatch, persistence, or error presentation
+ * is reimplemented here; those remain owned by the Gravity Forms Settings API.
  */
 final class PluginSettingsAtomicityController {
     private static $commit_callbacks = array();
     private static $rewired = array();
     private static $committed = array();
 
-    private const FIELD_VALIDATORS = array(
-        'visual_profile_package_json'        => 'validateVisualPackage',
-        'operations_setup_action'            => 'validateFormAction',
-        'inbox_setup_action'                 => 'validateFormAction',
-        'entry_detail_setup_action'          => 'validateFormAction',
-        'binding_management_action'          => 'validateBindingAction',
-        'entry_detail_visual_variant_action' => 'validateVisualVariantAction',
+    private const MUTATING_FIELDS = array(
+        'visual_profile_package_json',
+        'operations_setup_action',
+        'inbox_setup_action',
+        'entry_detail_setup_action',
+        'binding_management_action',
+        'entry_detail_visual_variant_action',
     );
 
     public static function register() {
@@ -45,7 +43,7 @@ final class PluginSettingsAtomicityController {
             return;
         }
 
-        // GFAddOn creates the prepared plugin-settings renderer during its admin
+        // GFAddOn creates the prepared plugin-settings renderer during admin
         // initialization. EntryDetailVisualVariantSettingsController inserts its
         // optional command at priority 999, so run immediately afterwards and
         // retain one idempotent admin_head retry for host init-order variance.
@@ -66,16 +64,15 @@ final class PluginSettingsAtomicityController {
             return;
         }
 
-        foreach ( self::FIELD_VALIDATORS as $name => $validator ) {
+        foreach ( self::MUTATING_FIELDS as $name ) {
             if ( ! empty( self::$rewired[ $name ] ) ) {
                 continue;
             }
 
+            // The prepared Gravity Forms Settings renderer returns Field objects,
+            // not the original field-definition arrays.
             $field = $addon->get_field( $name, array() );
             if ( ! is_object( $field ) ) {
-                // Optional fields can legitimately be absent on the first retry.
-                // Core command fields are protected by exact-runtime WU-04; do
-                // not synthesize a second renderer or parallel POST path here.
                 continue;
             }
 
@@ -85,112 +82,46 @@ final class PluginSettingsAtomicityController {
             }
 
             self::$commit_callbacks[ $name ] = $original;
-            $field->validation_callback = array( __CLASS__, $validator );
+            $field->validation_callback = array( __CLASS__, 'validateWithoutCommit' );
             $field->save_callback = array( __CLASS__, 'commitValidatedAction' );
 
             $readback = $addon->get_field( $name, array() );
             if ( is_object( $readback )
                 && isset( $readback->validation_callback, $readback->save_callback )
-                && array( __CLASS__, $validator ) === $readback->validation_callback
+                && array( __CLASS__, 'validateWithoutCommit' ) === $readback->validation_callback
                 && array( __CLASS__, 'commitValidatedAction' ) === $readback->save_callback ) {
                 self::$rewired[ $name ] = true;
             }
         }
     }
 
-    public static function validateVisualPackage( $field, $value ) {
-        $json = self::visualPackageJsonString( $value );
-        if ( null === $json ) {
-            self::setFieldError( $field, 'Profile Package JSON must be text or a decoded JSON object.' );
-            return;
-        }
-        if ( '' === trim( $json ) ) {
+    /**
+     * Execute the exact historical validation callback against isolated copies
+     * of every GPP WordPress option state touched by that callback.
+     *
+     * The Field object is deliberately the authentic renderer object, so errors
+     * set by the callback remain visible to Gravity Forms and the submitted value
+     * remains available for correction when any sibling field rejects the form.
+     */
+    public static function validateWithoutCommit( $field, $value ) {
+        $name = self::fieldName( $field );
+        if ( '' === $name || ! isset( self::$commit_callbacks[ $name ] ) ) {
+            self::setFieldError( $field, 'The settings action could not be validated safely. Refresh the page and try again.' );
             return;
         }
 
-        try {
-            $validation = SettingsLifecycleWorkflow::forWordPress()->validateVisualJson( $json );
-            if ( empty( $validation['valid'] ) ) {
-                self::setFieldError( $field, isset( $validation['message'] ) ? $validation['message'] : 'Profile Package JSON is invalid.' );
+        WordPressOptionStateStore::preview(
+            static function () use ( $name, $field, $value ) {
+                call_user_func( self::$commit_callbacks[ $name ], $field, $value );
             }
-        } catch ( LifecycleException $exception ) {
-            self::setFieldError( $field, $exception->getMessage() );
-        } catch ( \Throwable $exception ) {
-            self::setFieldError( $field, 'Profile Package JSON could not be validated safely.' );
-        }
+        );
     }
 
-    public static function validateFormAction( $field, $value ) {
-        if ( ! is_string( $value ) || '' === trim( $value ) ) {
-            return;
-        }
-        if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ) ) ) {
-            $name = self::fieldName( $field );
-            $messages = array(
-                'operations_setup_action'   => 'The selected operations setup action is invalid. Refresh the page and try again.',
-                'inbox_setup_action'        => 'The selected Inbox setup action is invalid. Refresh the page and try again.',
-                'entry_detail_setup_action' => 'The selected Entry Detail setup action is invalid. Refresh the page and try again.',
-            );
-            self::setFieldError( $field, isset( $messages[ $name ] ) ? $messages[ $name ] : 'The selected setup action is invalid. Refresh the page and try again.' );
-        }
-    }
-
-    public static function validateBindingAction( $field, $value ) {
-        $row_token = self::postedRowToken();
-        $row_submission = '' !== $row_token;
-        if ( $row_submission ) {
-            $row_values = isset( $_POST['gpp_binding_row'] ) && is_array( $_POST['gpp_binding_row'] )
-                ? ( function_exists( 'wp_unslash' ) ? wp_unslash( $_POST['gpp_binding_row'] ) : $_POST['gpp_binding_row'] )
-                : array();
-            $encoded = isset( $row_values[ $row_token ] ) && is_scalar( $row_values[ $row_token ] )
-                ? (string) $row_values[ $row_token ]
-                : '';
-            $row_action = self::decodeBindingAction( $encoded );
-            if ( 1 !== preg_match( '/^[a-f0-9]{24}$/', $row_token )
-                || null === $row_action
-                || self::bindingRowToken( $row_action ) !== $row_token ) {
-                self::setFieldError( $field, 'The selected mapping row no longer matches its submitted action. Refresh the page and try again.' );
-                return;
-            }
-            $value = $encoded;
-        }
-
-        if ( ! is_string( $value ) || '' === trim( $value ) ) {
-            return;
-        }
-
-        $action = self::decodeBindingAction( $value );
-        if ( null === $action || ( ! $row_submission && 'rollback' !== $action['action'] ) ) {
-            self::setFieldError( $field, 'The selected binding management action is invalid. Refresh the page and try again.' );
-            return;
-        }
-
-        if ( in_array( $action['action'], array( 'repair', 'unmap', 'print_option', 'clear_print_option' ), true )
-            && OperationsBindingManagementPolicy::DIRECT_FIELD !== OperationsBindingManagementPolicy::kind( $action['semantic_slot_key'] ) ) {
-            self::setFieldError( $field, 'This semantic meaning is not admitted as a direct Gravity Forms field mapping.' );
-        }
-    }
-
-    public static function validateVisualVariantAction( $field, $value ) {
-        if ( ! is_string( $value ) || '' === trim( $value ) ) {
-            return;
-        }
-
-        try {
-            $choices = EntryDetailVisualVariantService::forWordPress()->settingsChoices();
-        } catch ( \Throwable $exception ) {
-            self::setFieldError( $field, 'Entry Detail design choices could not be validated safely.' );
-            return;
-        }
-
-        foreach ( $choices as $choice ) {
-            if ( isset( $choice['value'] ) && hash_equals( (string) $choice['value'], trim( $value ) ) ) {
-                return;
-            }
-        }
-        self::setFieldError( $field, 'The selected Entry Detail design action is no longer current. Refresh the page and try again.' );
-    }
-
+    /**
+     * Gravity Forms reaches this only after the complete Settings validation
+     * pass succeeds. The original callback is therefore allowed to touch real
+     * lifecycle state here, while the transient command itself is discarded.
+     */
     public static function commitValidatedAction( $field, $value ) {
         $name = self::fieldName( $field );
         if ( '' === $name || ! isset( self::$commit_callbacks[ $name ] ) ) {
@@ -198,7 +129,9 @@ final class PluginSettingsAtomicityController {
         }
 
         $row_token = 'binding_management_action' === $name ? self::postedRowToken() : '';
-        $has_action = '' !== $row_token || ( is_string( $value ) && '' !== trim( $value ) ) || ( 'visual_profile_package_json' === $name && is_array( $value ) && ! empty( $value ) );
+        $has_action = '' !== $row_token
+            || ( is_string( $value ) && '' !== trim( $value ) )
+            || ( 'visual_profile_package_json' === $name && is_array( $value ) && ! empty( $value ) );
         if ( ! $has_action ) {
             return '';
         }
@@ -207,65 +140,26 @@ final class PluginSettingsAtomicityController {
         if ( isset( self::$committed[ $identity ] ) ) {
             return '';
         }
-        self::$committed[ $identity ] = true;
 
-        // Gravity Forms 3.1.1.1 reaches field save callbacks only after the
-        // renderer's complete validation pass succeeds. Reusing the historical
-        // callback here preserves each command's lifecycle/CAS implementation,
-        // diagnostics and transient request feedback while removing its ability
-        // to mutate during a rejected sibling validation transaction.
         call_user_func( self::$commit_callbacks[ $name ], $field, $value );
+
+        // A concurrent state change between validation and this commit can make
+        // the original callback reject through the authentic Field error path.
+        // Gravity Forms has already finished its validation phase at this point;
+        // fail closed before save_values() can persist unrelated settings.
+        if ( is_object( $field ) && method_exists( $field, 'get_error' ) ) {
+            $error = $field->get_error();
+            if ( is_string( $error ) && '' !== $error ) {
+                throw new LifecycleException( 'settings_commit_rejected_after_validation', $error );
+            }
+        }
+
+        self::$committed[ $identity ] = true;
         return '';
     }
 
-    private static function decodeBindingAction( $value ) {
-        if ( ! is_string( $value ) || '' === $value || 1 !== preg_match( '/^[A-Za-z0-9_-]+$/', $value ) ) {
-            return null;
-        }
-        $padded = strtr( $value, '-_', '+/' );
-        $padding = strlen( $padded ) % 4;
-        if ( $padding ) {
-            $padded .= str_repeat( '=', 4 - $padding );
-        }
-        $decoded = base64_decode( $padded, true );
-        if ( false === $decoded ) {
-            return null;
-        }
-        $payload = json_decode( $decoded, true );
-        if ( ! is_array( $payload ) || empty( $payload['action'] ) ) {
-            return null;
-        }
-
-        $expected_by_action = array(
-            'repair' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'field_id', 'semantic_slot_key' ),
-            'unmap' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'semantic_slot_key' ),
-            'print_option' => array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'host_raw_value', 'semantic_slot_key' ),
-            'clear_print_option' => array( 'action', 'binding_set_id', 'binding_set_version', 'canonical_option', 'context_key', 'semantic_slot_key' ),
-            'rollback' => array( 'action', 'binding_set_id', 'binding_set_version', 'context_key', 'expected_binding_set_id', 'expected_binding_set_version' ),
-        );
-        if ( ! isset( $expected_by_action[ $payload['action'] ] ) ) {
-            return null;
-        }
-
-        $actual = array_keys( $payload );
-        $expected = $expected_by_action[ $payload['action'] ];
-        sort( $actual, SORT_STRING );
-        sort( $expected, SORT_STRING );
-        return $actual === $expected ? $payload : null;
-    }
-
-    private static function bindingRowToken( $action ) {
-        if ( ! is_array( $action ) || empty( $action['action'] ) ) {
-            return '';
-        }
-        if ( in_array( $action['action'], array( 'repair', 'unmap' ), true ) ) {
-            $parts = array( 'mapping', $action['context_key'], $action['binding_set_id'], $action['binding_set_version'], $action['semantic_slot_key'] );
-        } elseif ( in_array( $action['action'], array( 'print_option', 'clear_print_option' ), true ) ) {
-            $parts = array( 'print', $action['context_key'], $action['binding_set_id'], $action['binding_set_version'], $action['semantic_slot_key'], $action['canonical_option'] );
-        } else {
-            return '';
-        }
-        return substr( hash( 'sha256', implode( '|', array_map( 'strval', $parts ) ) ), 0, 24 );
+    public static function isPreviewing() {
+        return WordPressOptionStateStore::isPreviewActive();
     }
 
     private static function postedRowToken() {
@@ -275,24 +169,9 @@ final class PluginSettingsAtomicityController {
     }
 
     private static function fieldName( $field ) {
-        if ( is_array( $field ) && isset( $field['name'] ) && is_string( $field['name'] ) ) {
-            return $field['name'];
-        }
-        if ( is_object( $field ) && isset( $field->name ) && is_string( $field->name ) ) {
-            return $field->name;
-        }
-        return '';
-    }
-
-    private static function visualPackageJsonString( $value ) {
-        if ( is_string( $value ) ) {
-            return $value;
-        }
-        if ( ! is_array( $value ) ) {
-            return null;
-        }
-        $json = json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-        return false === $json ? null : $json;
+        return is_object( $field ) && isset( $field->name ) && is_string( $field->name )
+            ? $field->name
+            : '';
     }
 
     private static function stableValueIdentity( $value ) {
