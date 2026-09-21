@@ -11,7 +11,7 @@ final class PrintDossierPresentationAdapter {
     const SURFACE = 'print.dossier';
     const INTENT_KEY = 'gpp_presentation';
     const INTENT_VALUE = 'dossier';
-    const STYLE_VERSION = '1.0.1';
+    const STYLE_VERSION = '1.0.2';
     const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
     const DOSSIER_STYLE_HANDLE = 'gpp-print-dossier';
     const UTILITY_STYLE_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
