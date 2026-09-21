@@ -48,26 +48,51 @@ $c = isset( $e['comparative_repair_qualification'] ) && is_array( $e['comparativ
 req( 'gpp.comparative_repair_qualification.v1' === ( $c['schema'] ?? null ), 'Comparative schema mismatch' );
 req( getenv( 'GPP_WU21_REPOSITORY_SHA' ) === ( $c['repository_sha'] ?? null ), 'Comparative repository SHA mismatch' );
 req( '8265507e7330a1e444ee10eec0592e816e03fad3' === ( $c['authorized_baseline_sha'] ?? null ), 'Comparative authorized baseline mismatch' );
+req( '8f2f83e46450a3f6165bb560a74771053517ad22' === ( $c['qualified_pr65_head'] ?? null ), 'Qualified PR65 Head mismatch' );
 req( 'twentytwentyfive' === ( $c['theme']['observed']['template'] ?? null ), 'Comparative template identity mismatch' );
 req( 'twentytwentyfive' === ( $c['theme']['observed']['stylesheet'] ?? null ), 'Comparative stylesheet identity mismatch' );
 req( 'NOT_PROVEN' === ( $c['production_equivalence'] ?? null ), 'Comparative production equivalence must remain NOT_PROVEN' );
-req( in_array( $c['outcome'] ?? null, array( 'METHOD_CLOSED_IN_REPRODUCIBLE_SIMULATION', 'OWNER_GATE_REQUIRED', 'NOT_PROVEN' ), true ), 'Comparative outcome is invalid' );
 req( array( 'FULL_WIDTH_HOST', 'CONSTRAINED_HOST' ) === ( $c['contexts'] ?? null ), 'Comparative host contexts mismatch' );
 req( array( 'rtl', 'ltr' ) === ( $c['directions'] ?? null ), 'Comparative direction matrix mismatch' );
-req( isset( $c['control_reproduction']['status'] ) && in_array( $c['control_reproduction']['status'], array( 'REPRODUCED', 'NOT_REPRODUCED', 'NOT_PROVEN' ), true ), 'Comparative control reproduction state invalid' );
-req( isset( $c['candidates'] ) && 2 === count( $c['candidates'] ), 'Exactly CONTROL and CANDIDATE_HOST_OWNED must be frozen' );
+req( 'REPRODUCED' === ( $c['control_reproduction']['status'] ?? null ), 'Historical PR65 control defect was not reproduced' );
+req( isset( $c['candidates'] ) && 2 === count( $c['candidates'] ), 'Exactly CONTROL and CANDIDATE_HOST_OWNED must execute' );
 req( 'CONTROL' === ( $c['candidates'][0]['id'] ?? null ), 'CONTROL must execute first' );
-req( 'CANDIDATE_HOST_OWNED' === ( $c['candidates'][1]['id'] ?? null ), 'Host-owned candidate missing' );
-$allowed_gate_states = array( 'PASS', 'FAIL', 'NOT_PROVEN' );
-foreach ( array( 'CONTROL', 'CANDIDATE_HOST_OWNED' ) as $candidate ) {
-    req( isset( $c['per_candidate_gate_results'][ $candidate ] ), 'Missing comparative gate results for ' . $candidate );
-    for ( $i = 1; $i <= 10; $i++ ) {
-        $gate = 'G' . $i;
-        req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
-        req( in_array( $c['per_candidate_gate_results'][ $candidate ][ $gate ]['status'] ?? null, $allowed_gate_states, true ), 'Invalid gate state for ' . $candidate . ' ' . $gate );
-    }
+req( 'historical_production_control_replay' === ( $c['candidates'][0]['kind'] ?? null ), 'CONTROL must remain the historical production mechanism replay' );
+req( 'CANDIDATE_HOST_OWNED' === ( $c['candidates'][1]['id'] ?? null ), 'Host-owned production repair candidate missing' );
+req( 'production_repair' === ( $c['candidates'][1]['kind'] ?? null ), 'Host-owned candidate must be current production repair' );
+req( false === ( $c['candidates'][1]['identity']['test_css_injected'] ?? null ), 'Production candidate must not rely on test-only CSS injection' );
+req( 'CANDIDATE_HOST_OWNED' === ( $c['production_repair']['candidate'] ?? null ), 'Production repair candidate identity mismatch' );
+req( false === ( $c['production_repair']['test_css_injected'] ?? null ), 'Production repair evidence used test-only CSS injection' );
+req( isset( $c['production_repair']['files'] ) && 2 === count( $c['production_repair']['files'] ), 'Production repair CSS identity is incomplete' );
+foreach ( array( 'assets/css/srwf-gravity-flow-inbox.css', 'assets/css/srwf-gravity-flow-inbox-native.css' ) as $file ) {
+    req( ! empty( $c['production_repair']['files'][ $file ]['git_blob_sha'] ), 'Missing production CSS git blob identity: ' . $file );
+    req( ! empty( $c['production_repair']['files'][ $file ]['sha256'] ), 'Missing production CSS sha256 identity: ' . $file );
 }
 req( isset( $c['measurements'] ) && count( $c['measurements'] ) >= 18, 'Comparative measurement matrix is incomplete' );
+
+$expected_control = array(
+    'G1' => 'PASS',
+    'G2' => 'PASS',
+    'G3' => 'PASS',
+    'G4' => 'PASS',
+    'G5' => 'FAIL',
+    'G6' => 'PASS',
+    'G7' => 'FAIL',
+    'G8' => 'PASS',
+    'G9' => 'PASS',
+    'G10' => 'PASS',
+);
+foreach ( $expected_control as $gate => $status ) {
+    req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
+    req( $status === ( $c['per_candidate_gate_results']['CONTROL'][ $gate ]['status'] ?? null ), 'Historical CONTROL gate changed unexpectedly: ' . $gate );
+}
+for ( $i = 1; $i <= 10; $i++ ) {
+    $gate = 'G' . $i;
+    req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
+    req( 'PASS' === ( $c['per_candidate_gate_results']['CANDIDATE_HOST_OWNED'][ $gate ]['status'] ?? null ), 'Production Host-Owned repair did not pass ' . $gate );
+}
+req( array( 'CANDIDATE_HOST_OWNED' ) === ( $c['surviving_candidates'] ?? null ), 'Production Host-Owned repair is not the sole surviving candidate' );
+req( 'METHOD_CLOSED_IN_REPRODUCIBLE_SIMULATION' === ( $c['outcome'] ?? null ), 'Production repair method is not closed in reproducible simulation' );
 
 $copy = $e; $actual = $copy['content_digest']['value']; unset( $copy['content_digest'] ); $expected = hash( 'sha256', cj( $copy ) );
 req( hash_equals( $expected, $actual ), 'Content digest mismatch' );
