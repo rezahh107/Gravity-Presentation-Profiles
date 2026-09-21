@@ -11,7 +11,6 @@ final class PrintDossierPresentationAdapter {
     const SURFACE = 'print.dossier';
     const INTENT_KEY = 'gpp_presentation';
     const INTENT_VALUE = 'dossier';
-    const STYLE_VERSION = '1.0.2';
     const VAZIR_STYLE_HANDLE = 'vazir-font-frontend';
     const DOSSIER_STYLE_HANDLE = 'gpp-print-dossier';
     const UTILITY_STYLE_HANDLE = 'gpp-srwf-gravity-flow-print-utility';
@@ -64,7 +63,7 @@ final class PrintDossierPresentationAdapter {
             return $styles;
         }
 
-        if ( ! class_exists( '\\VazirFont_Loader' ) || ! method_exists( '\\VazirFont_Loader', 'get_instance' ) ) {
+        if ( ! class_exists( '\VazirFont_Loader' ) || ! method_exists( '\VazirFont_Loader', 'get_instance' ) ) {
             return $styles;
         }
 
@@ -104,7 +103,8 @@ final class PrintDossierPresentationAdapter {
         }
 
         $path = dirname( GPP_PLUGIN_FILE ) . '/assets/css/srwf-gravity-flow-print-dossier.css';
-        if ( ! is_file( $path ) || ! is_readable( $path ) ) {
+        $version = self::assetVersion( $path );
+        if ( false === $version ) {
             return $styles;
         }
 
@@ -112,7 +112,7 @@ final class PrintDossierPresentationAdapter {
             self::DOSSIER_STYLE_HANDLE,
             plugins_url( 'assets/css/srwf-gravity-flow-print-dossier.css', GPP_PLUGIN_FILE ),
             array(),
-            self::STYLE_VERSION,
+            $version,
             'all'
         );
 
