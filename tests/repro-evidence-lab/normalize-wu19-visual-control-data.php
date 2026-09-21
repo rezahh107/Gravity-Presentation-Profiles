@@ -57,8 +57,8 @@ wu19_normalize_current_components( $wu18['alpha'], 'Alpha First', 'Alpha Last' )
 wu19_normalize_current_components( $wu18['beta'], 'Beta First', 'Beta Last' );
 
 // GPP-RP-WU-03 reuses this already-admitted WU19 browser/PDF boundary. The
-// candidate is implemented only by a temporary MU-plugin created and removed by
-// the qualification script; production Print delivery remains untouched.
+// candidate is implemented only by temporary MU-plugin plumbing created and
+// removed during qualification; production Print delivery remains untouched.
 $wu03_script = __DIR__ . '/wu03-print-stylesheet-seam.mjs';
 $wu03_output = array();
 $wu03_status = 0;
@@ -74,7 +74,37 @@ if ( 0 !== $git_config_status && 5 !== $git_config_status ) {
     throw new RuntimeException( 'WU03 could not clear the runner-local GitHub checkout extraheader.' );
 }
 
-exec( 'node ' . escapeshellarg( $wu03_script ) . ' 2>&1', $wu03_output, $wu03_status );
+// The production dossier uses 400/500/700, while the admitted Vazir authority
+// publishes 300/400/500/700/900. Exercise every authoritative face without
+// changing visible Print output so the browser proves delivery rather than only
+// parsing @font-face source. This probe is test-only and removed immediately.
+$wu03_probe_dir = WP_CONTENT_DIR . '/mu-plugins';
+wp_mkdir_p( $wu03_probe_dir );
+$wu03_probe = $wu03_probe_dir . '/gpp-wu03-font-probe.php';
+$wu03_probe_php = <<<'PHP'
+<?php
+add_action( 'gravityflow_print_entry_footer', static function () {
+    if ( ! isset( $_GET['gpp_presentation'] ) || 'dossier' !== sanitize_key( wp_unslash( $_GET['gpp_presentation'] ) ) ) {
+        return;
+    }
+    echo '<div data-gpp-wu03-font-probe aria-hidden="true" style="position:absolute;inset:auto auto -10000px -10000px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">';
+    foreach ( array( 300, 400, 500, 700, 900 ) as $weight ) {
+        echo '<span style="font-family:Vazir,sans-serif;font-weight:' . (int) $weight . '">آ</span>';
+    }
+    echo '</div>';
+}, 18, 0 );
+PHP;
+if ( false === file_put_contents( $wu03_probe, $wu03_probe_php ) ) {
+    throw new RuntimeException( 'WU03 could not create the temporary Vazir delivery probe.' );
+}
+
+try {
+    exec( 'node ' . escapeshellarg( $wu03_script ) . ' 2>&1', $wu03_output, $wu03_status );
+} finally {
+    if ( is_file( $wu03_probe ) ) {
+        unlink( $wu03_probe );
+    }
+}
 if ( 0 !== $wu03_status || empty( $wu03_output ) ) {
     throw new RuntimeException( 'WU03 Print stylesheet seam qualification failed to produce evidence: ' . implode( "\n", array_slice( $wu03_output, -12 ) ) );
 }
