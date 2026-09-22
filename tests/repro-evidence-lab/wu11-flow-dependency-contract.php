@@ -108,27 +108,12 @@ $assert( ! empty( $viewer_state['gpp_read_only_admission']['eligible'] ) && empt
 $assert( $editor['permission_granted'] && $editor['can_update'] && ! empty( $editor['effective_editable_fields'] ), 'WU11 Approval editor host state changed.' );
 $assert( empty( $editor['gpp_read_only_admission']['eligible'] ) && 'native_editor_required' === ( $editor['gpp_read_only_admission']['reason'] ?? null ) && ! $editor['full_width_review_panel_eligible'], 'WU11 Approval editor no longer fails closed to native editing.' );
 
-// Reconstruct the already browser-proven User Input state on the same synthetic
-// transition fixture so its exact can_update/editable-fields values are recorded.
-wp_set_current_user( (int) $operator->ID );
-$transition = $manifest['transition'];
-$transition_entry = GFAPI::get_entry( (int) $transition['entry_id'] );
-$transition_api = new Gravity_Flow_API( (int) $transition['form_id'] );
-$approval_id = 0;
-$user_input_id = 0;
-foreach ( $transition_api->get_steps() as $candidate ) {
-    if ( ! is_object( $candidate ) || ! method_exists( $candidate, 'get_type' ) ) continue;
-    if ( 'approval' === $candidate->get_type() ) $approval_id = (int) $candidate->get_id();
-    if ( 'user_input' === $candidate->get_type() ) $user_input_id = (int) $candidate->get_id();
-}
-$assert( $approval_id > 0 && $user_input_id > 0, 'WU11 transition fixture lacks Approval/User Input steps.' );
-$send_user_input = $transition_api->send_to_step( $transition_entry, $user_input_id );
-$assert( false !== $send_user_input, 'WU11 could not reconstruct the native User Input state.' );
-$user_input = $render_state( $transition, $operator );
-$assert( 'user_input' === ( $user_input['current_step']['type'] ?? null ) && $user_input['permission_granted'] && $user_input['can_update'], 'WU11 reconstructed User Input host state changed.' );
+// Reuse the authentic browser-produced Approval -> User Input state instead of
+// fabricating a parallel transition fixture. This is intentionally sampled only
+// after WU18 has performed the real native action POST.
+$user_input = $render_state( $manifest['transition'], $operator );
+$assert( 'user_input' === ( $user_input['current_step']['type'] ?? null ) && $user_input['permission_granted'] && $user_input['can_update'], 'WU11 authentic User Input host state changed.' );
 $assert( ! $user_input['rendered']['gpp_dossier'] && $user_input['rendered']['native_editor'], 'WU11 User Input did not preserve native editor fallback.' );
-$fresh_transition = GFAPI::get_entry( (int) $transition['entry_id'] );
-$assert( false !== $transition_api->send_to_step( $fresh_transition, $approval_id ), 'WU11 could not restore transition fixture to Approval.' );
 
 $wu18 = $read_json( trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json', 'WU18 runtime' );
 $post_controls = $wu18['post_browser_controls'] ?? array();
@@ -190,14 +175,19 @@ $assert( 1 === $n4 && false !== strpos( $meta_result, $meta_node ) && false !== 
 
 $head = getenv( 'GITHUB_WORKSPACE' ) ? trim( (string) shell_exec( 'git -C ' . escapeshellarg( getenv( 'GITHUB_WORKSPACE' ) ) . ' rev-parse HEAD 2>/dev/null' ) ) : null;
 $contract = array(
-    'schema_version' => '1.0.0', 'work_unit' => 'GPP-RP-WU-11-FLOW-DEPENDENCY-REGRESSION',
+    'schema_version' => '1.1.0', 'work_unit' => 'GPP-RP-WU-11-FLOW-DEPENDENCY-REGRESSION',
     'problems' => array( 'P-16', 'P-17' ), 'claim_ceiling' => 'QUALIFIED_FOR_PINNED_RUNTIME', 'repository_head' => $head,
     'runtime' => array( 'wordpress' => get_bloginfo( 'version' ), 'php' => PHP_VERSION, 'gravity_forms' => (string) GFForms::$version, 'gravity_forms_package_sha256' => getenv( 'WU21_GF_SHA256' ) ?: null, 'gravity_flow' => GRAVITY_FLOW_VERSION, 'gravity_flow_package_sha256' => getenv( 'WU21_FLOW_SHA256' ) ?: null ),
     'p16' => array(
         'consumers' => array( 'EntryDetailPresentationAdapter::readOnlyReviewAdmission', 'EntryDetailPresentationAdapter::approvalProcessingEligibility', 'EntryDetailPresentationAdapter::canRelabelAction', 'EntryDetailFullWidthPresentationAdapter::isAdmittedFullWidthReview' ),
         'matrix' => array( 'current_approval_assignee_no_editable_fields' => $alpha, 'authorized_non_assignee' => $viewer_state, 'read_only_viewer' => array_merge( $viewer_state, array( 'same_authentic_fixture_as' => 'authorized_non_assignee' ) ), 'approval_with_editable_fields' => $editor, 'active_user_input' => $user_input, 'ordinary_post' => $ordinary_post, 'authentic_approval_action_post' => $approved_post, 'completed_no_current_step_get' => $complete_get ),
-        'degraded_seam_falsification' => array( 'can_update_unavailable' => 'FAIL_CLOSED', 'can_update_throwing' => 'FAIL_CLOSED', 'null_current_step' => 'FAIL_CLOSED', 'non_approval_step' => 'FAIL_CLOSED', 'repository_native_test' => 'tests/cases/gravity-flow-host-dependency-regressions.php' ),
-        'authentic_browser_transition_reused' => true, 'post_stale_state_proven' => $stale_state, 'classification' => 'EXISTING_DEPENDENCY_QUALIFIED', 'production_change_required' => false,
+        'degraded_seam_falsification' => array( 'can_update_unavailable' => 'FAIL_CLOSED_AFTER_REPAIR', 'can_update_throwing' => 'FAIL_CLOSED', 'null_current_step' => 'FAIL_CLOSED', 'non_approval_step' => 'FAIL_CLOSED', 'repository_native_test' => 'tests/cases/gravity-flow-host-dependency-regressions.php' ),
+        'authentic_browser_transition_reused' => true,
+        'post_stale_state_proven' => $stale_state,
+        'confirmed_fail_open_root_cause' => 'EntryDetailFullWidthPresentationAdapter previously treated an unavailable Gravity_Flow_Entry_Detail::can_update seam as if no negative host predicate existed.',
+        'repair' => 'Full Width admission now requires the native can_update capability and fails closed when it is absent, false, or throws.',
+        'classification' => 'PRODUCTION_HARDENING_REQUIRED',
+        'production_change_required' => true,
     ),
     'p17' => array(
         'host_seams' => array( 'gravityflow_timeline_notes', 'Gravity_Flow_Common::get_timeline_notes', 'Gravity_Flow_Common::get_timeline_note_step', '.gravityflow-note-body-wrap > .gravityflow-note-body > .gravityflow-note-body', '.gravityflow-note-meta' ),
