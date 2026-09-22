@@ -36,10 +36,13 @@ $model_loaded->setValue( null, true );
 $model = $adapter->getProperty( 'model' );
 $model->setAccessible( true );
 $model->setValue( null, new stdClass() );
+$surface_reached = $adapter->getProperty( 'surface_reached' );
+$surface_reached->setAccessible( true );
+$surface_reached->setValue( null, true );
 
 InboxPresentationAdapter::enqueueStyles();
 
-gpp_assert_same( 2, count( $GLOBALS['gpp_inbox_asset_styles'] ), 'Inbox must enqueue exactly its presentation and native projection styles.' );
+gpp_assert_same( 2, count( $GLOBALS['gpp_inbox_asset_styles'] ), 'Inbox must enqueue exactly its presentation and native projection styles after reachability is established.' );
 
 $plugin_root = dirname( GPP_PLUGIN_FILE );
 $expected = array(
