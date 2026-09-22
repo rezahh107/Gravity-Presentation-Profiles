@@ -56,6 +56,8 @@ async function inboxAssetState(page) {
     const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => ({
       id: link.id || '',
       href: link.href || '',
+      in_head: link.parentElement === document.head || document.head.contains(link),
+      parent_tag: link.parentElement?.tagName || null,
     }));
     const presentation = links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox\.css(?:\?|$)/.test(link.href));
     const native = links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox-native\.css(?:\?|$)/.test(link.href));
@@ -70,9 +72,13 @@ async function inboxAssetState(page) {
   });
 }
 
-function assertStylesPresent(state, label) {
+function assertStylesPresent(state, label, { requireHead = false } = {}) {
   assert.equal(state.presentation.length, 1, `${label}: presentation stylesheet count mismatch.`);
   assert.equal(state.native.length, 1, `${label}: native projection stylesheet count mismatch.`);
+  if (requireHead) {
+    assert.equal(state.presentation[0].in_head, true, `${label}: presentation stylesheet was delivered late outside document head.`);
+    assert.equal(state.native[0].in_head, true, `${label}: native projection stylesheet was delivered late outside document head.`);
+  }
 }
 
 function assertStylesAbsent(state, label) {
@@ -128,19 +134,19 @@ try {
   await page.goto(adminInboxUrl, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.positive_controls.admin_inbox = await inboxAssetState(page);
-  assertStylesPresent(results.positive_controls.admin_inbox, 'authentic admin Inbox');
+  assertStylesPresent(results.positive_controls.admin_inbox, 'authentic admin Inbox', { requireHead: true });
   assert.ok(results.positive_controls.admin_inbox.card_count > 0, 'Authentic admin Inbox lost Card Mode content.');
 
   await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.positive_controls.frontend_shortcode = await inboxAssetState(page);
-  assertStylesPresent(results.positive_controls.frontend_shortcode, 'authentic frontend shortcode Inbox');
+  assertStylesPresent(results.positive_controls.frontend_shortcode, 'authentic frontend shortcode Inbox', { requireHead: true });
   assert.equal(results.positive_controls.frontend_shortcode.gpp_surface_count, 1, 'Authentic frontend shortcode Inbox lost the admitted GPP surface wrapper.');
 
   await page.goto(p06.authentic_block_page.url, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.positive_controls.frontend_block = await inboxAssetState(page);
-  assertStylesPresent(results.positive_controls.frontend_block, 'authentic frontend block Inbox');
+  assertStylesPresent(results.positive_controls.frontend_block, 'authentic frontend block Inbox', { requireHead: true });
   assert.ok(results.positive_controls.frontend_block.card_count > 0, 'Authentic frontend block Inbox lost Card Mode content.');
 
   await page.goto(p06.unrelated_page.url, { waitUntil: 'networkidle' });
