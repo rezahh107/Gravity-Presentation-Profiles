@@ -118,11 +118,11 @@ final class InboxPresentationAdapter {
             return $html;
         }
 
-        // This filter is emitted only by Gravity Flow's native Inbox shortcode
-        // render path. It remains a truthful fallback for programmatic/dynamic
-        // shortcode rendering that could not be prequalified from post content.
+        // Block themes may pre-render post content before wp_head. Record the
+        // authentic render as reachability evidence, but leave style enqueueing
+        // to wp_enqueue_scripts so WordPress global styles retain their normal
+        // position ahead of the admitted PR66 Inbox presentation styles.
         self::$surface_reached = true;
-        self::enqueueStyles();
 
         if ( null === self::model() ) {
             return $html;
@@ -148,8 +148,8 @@ final class InboxPresentationAdapter {
     /**
      * Gravity Flow 3.1.0 also registers its native Inbox block. Post-content
      * prequalification normally enqueues the styles in the head. This exact
-     * render identity is a fallback for dynamic block rendering; arbitrary DOM
-     * lookalikes and unrelated blocks never qualify it.
+     * render identity can establish reachability during block-theme pre-render;
+     * arbitrary DOM lookalikes and unrelated blocks never qualify it.
      */
     public static function filterFrontendBlock( $block_content, $block ) {
         if ( ! is_string( $block_content ) || ! is_array( $block ) ) {
@@ -163,7 +163,6 @@ final class InboxPresentationAdapter {
         }
 
         self::$surface_reached = true;
-        self::enqueueStyles();
         return $block_content;
     }
 
