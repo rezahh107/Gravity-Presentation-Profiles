@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// P06 is an asset-admission prerequisite for every frontend Inbox regression.
+// Run it first so failures distinguish reachability/head-delivery defects from
+// downstream Card Mode, palette, accessibility, or geometry regressions.
+await import('./p06-inbox-asset-reachability-browser-test.mjs');
 await import('./browser-tests-core.mjs');
 await import('./wu17-inbox-accessibility-browser-test.mjs');
 await import('./p05-inbox-palette-contract-browser-test.mjs');
-await import('./p06-inbox-asset-reachability-browser-test.mjs');
 await import('./pr33-visual-fidelity-browser-tests.mjs');
 await import('./pr33-baseline-report.mjs');
 
