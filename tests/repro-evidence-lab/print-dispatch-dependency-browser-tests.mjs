@@ -298,9 +298,13 @@ await test('WU12-DISPATCH-003', 'native printPage exception releases Busy withou
     window.__wu12OpenCalls = [];
     window.__wu12BusyTransitions = [];
     const button = document.querySelector('[data-gpp-print-utility="dossier"] [data-gpp-dossier-print-button]');
-    const observer = new MutationObserver(() => window.__wu12BusyTransitions.push(button.getAttribute('aria-busy')));
-    observer.observe(button, { attributes: true, attributeFilter: ['aria-busy'] });
-    window.__wu12BusyObserver = observer;
+    const originalSetAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) {
+      if (this === button && name === 'aria-busy') {
+        window.__wu12BusyTransitions.push(String(value));
+      }
+      return originalSetAttribute.call(this, name, value);
+    };
     window.printPage = function (url) {
       window.__wu12ThrowDispatches.push(String(url));
       throw new Error('WU12 synthetic native dispatch failure before iframe handoff');
@@ -323,7 +327,7 @@ await test('WU12-DISPATCH-003', 'native printPage exception releases Busy withou
   requestRecorder.detach();
 
   if (state.dispatches.length !== 1 || !sameHref(state.dispatches[0], targetHref)) throw new Error(`Exception-path native dispatch mismatch: ${JSON.stringify(state.dispatches)}`);
-  if (!state.transitions.includes('true') || state.busy !== 'false') throw new Error(`Exception path did not visibly enter then release Busy: ${JSON.stringify(state)}`);
+  if (state.transitions[0] !== 'true' || state.transitions.at(-1) !== 'false' || state.busy !== 'false') throw new Error(`Exception path did not synchronously enter then release Busy: ${JSON.stringify(state)}`);
   if (state.openCalls.length !== 0) throw new Error(`Exception path silently fell back to window.open: ${JSON.stringify(state.openCalls)}`);
   if (requestRecorder.records.length !== 0) throw new Error(`Throw-before-handoff created native requests: ${JSON.stringify(requestRecorder.records)}`);
   if (signals.frameProbe?.matchingAdded !== 0 || signals.frameProbe?.matchingLoads !== 0) throw new Error(`Throw-before-handoff created matching iframe lifecycle: ${JSON.stringify(signals.frameProbe)}`);
@@ -334,6 +338,7 @@ await test('WU12-DISPATCH-003', 'native printPage exception releases Busy withou
     state_origin: 'SYNTHETIC_THROW_FROM_PRESENT_PRINT_PAGE',
     native_dispatch_attempts: state.dispatches.length,
     exact_url_preserved: true,
+    busy_transitions: state.transitions,
     busy_entered: true,
     busy_released: true,
     fallback_calls: state.openCalls.length,
