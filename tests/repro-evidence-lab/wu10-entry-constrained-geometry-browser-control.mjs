@@ -51,7 +51,7 @@ async function login() {
 
 async function applyCandidate() {
   if (candidateMode !== 'host-relative-width') return;
-  await page.addStyleTag({ content: '.gpp-entry-dossier { width: 100%; max-width: 1060px; }' });
+  await page.addStyleTag({ content: '.gpp-entry-dossier { width: 100%; max-width: 1060px; } @media (max-width: 600px) { .gpp-entry-dossier { width: calc(100% - 25px); max-width: none; } }' });
 }
 
 async function admissionProbe(name) {
@@ -109,7 +109,7 @@ async function readGeometry(expectDossier) {
       left: hostRect.left + parseFloat(hostStyle.borderLeftWidth || 0) + parseFloat(hostStyle.paddingLeft || 0),
       right: hostRect.right - parseFloat(hostStyle.borderRightWidth || 0) - parseFloat(hostStyle.paddingRight || 0),
       top: hostRect.top + parseFloat(hostStyle.borderTopWidth || 0) + parseFloat(hostStyle.paddingTop || 0),
-      bottom: hostRect.bottom - parseFloat(hostStyle.borderBottomWidth || 0) - parseFloat(hostStyle.paddingBottomWidth || 0),
+      bottom: hostRect.bottom - parseFloat(hostStyle.borderBottomWidth || 0) - parseFloat(hostStyle.paddingBottom || 0),
     };
     hostContent.width = hostContent.right - hostContent.left;
 
@@ -202,7 +202,7 @@ async function measureDossier(name, viewport, constrained=false) {
 
 async function measureNativeControl(name, viewport, constrained=false) {
   await page.setViewportSize(viewport);
-  await page.goto(entryUrl(manifest.negative), { waitUntil:'networkidle' });
+  await page.goto(entryUrl(manifest.editor), { waitUntil:'networkidle' });
   await page.waitForSelector('.entry-detail-view', { timeout:30000 });
   await configureHost(constrained);
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
