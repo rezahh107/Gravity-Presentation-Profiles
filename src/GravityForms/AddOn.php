@@ -1116,8 +1116,9 @@ final class AddOn extends \GFAddOn {
             return;
         }
 
-        $state  = $this->resolve_form_state( $form );
-        $assets = ( new AssetResolver() )->stylesFor( $state );
+        $state       = $this->resolve_form_state( $form );
+        $plugin_root = plugin_dir_path( GPP_PLUGIN_FILE );
+        $assets      = ( new AssetResolver( $plugin_root ) )->stylesFor( $state );
 
         if ( empty( $assets ) ) {
             if ( $state->isActive() ) {
@@ -1144,8 +1145,6 @@ final class AddOn extends \GFAddOn {
             return;
         }
 
-        $plugin_root = plugin_dir_path( GPP_PLUGIN_FILE );
-
         foreach ( $assets as $asset ) {
             if ( ! is_readable( $plugin_root . $asset['path'] ) ) {
                 RuntimeDiagnostics::recordOnce(
@@ -1157,6 +1156,17 @@ final class AddOn extends \GFAddOn {
                 );
                 return;
             }
+
+            if ( ! isset( $asset['version'] ) || ! is_string( $asset['version'] ) || '' === $asset['version'] ) {
+                RuntimeDiagnostics::recordOnce(
+                    DeclarativePresentationResolver::SURFACE,
+                    'GF_ASSET_READINESS',
+                    RuntimeDecisionTrace::RESULT_FAIL,
+                    'asset_identity_unavailable',
+                    'native_gravity_forms_form'
+                );
+                return;
+            }
         }
 
         foreach ( $assets as $asset ) {
@@ -1164,7 +1174,7 @@ final class AddOn extends \GFAddOn {
                 $asset['handle'],
                 plugins_url( $asset['path'], GPP_PLUGIN_FILE ),
                 $asset['dependencies'],
-                null
+                $asset['version']
             );
         }
 
