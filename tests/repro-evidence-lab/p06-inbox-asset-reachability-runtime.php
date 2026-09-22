@@ -144,8 +144,8 @@ p06_assert( p06_inbox_styles_enqueued(), 'Authentic frontend Inbox shortcode did
 $visual_option = VisualPackageLifecycle::OPTION_NAME;
 $visual_backup = get_option( $visual_option );
 $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( $visual_option ) );
-$deactivated = $visual->deactivate( array( 'surface' => InboxPresentationAdapter::SURFACE ) );
-p06_assert( is_array( $deactivated ), 'Inbox visual profile could not be deactivated for the exact-runtime negative control.' );
+$visual->deactivate( array( 'surface' => InboxPresentationAdapter::SURFACE ) );
+p06_assert( null === $visual->resolve( InboxPresentationAdapter::SURFACE ), 'Inbox visual profile remained active after the exact-runtime negative-control deactivation.' );
 
 try {
     p06_reset_styles();
