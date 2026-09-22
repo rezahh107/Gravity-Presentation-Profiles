@@ -176,6 +176,13 @@ final class InboxPresentationAdapter {
         $plugin_root = dirname( GPP_PLUGIN_FILE );
         $presentation_dependencies = array();
 
+        // WordPress 6.8.3 exposes block-theme layout rules through the enqueued
+        // global-styles handle. Preserve host ownership by making that active
+        // host cascade an explicit predecessor of the admitted Inbox stylesheet.
+        if ( function_exists( 'wp_style_is' ) && wp_style_is( 'global-styles', 'enqueued' ) ) {
+            $presentation_dependencies[] = 'global-styles';
+        }
+
         // WordPress 7.1 registers the public Design System token stylesheet as
         // wp-theme. Older supported runtimes simply use GPP's bounded fallbacks.
         if ( function_exists( 'wp_style_is' ) && wp_style_is( 'wp-theme', 'registered' ) ) {
