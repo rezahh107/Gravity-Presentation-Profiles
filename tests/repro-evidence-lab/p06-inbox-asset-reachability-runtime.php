@@ -133,7 +133,7 @@ foreach ( $registry as $name => $type ) {
 
 p06_assert( InboxPresentationAdapter::NATIVE_BLOCK === $inbox_block, 'Exact Gravity Flow 3.1.0 native Inbox block identity changed: ' . (string) $inbox_block );
 p06_assert( is_string( $inbox_block_output ) && '' !== $inbox_block_output, 'Authentic Inbox block output was not captured.' );
-p06_assert( p06_inbox_styles_enqueued(), 'Authentic dynamic Inbox block render did not enqueue both GPP Inbox styles.' );
+p06_assert( ! p06_inbox_styles_enqueued(), 'Registry discovery render must not itself be treated as a frontend request asset lifecycle.' );
 
 $lookalike_markup = '<div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div>';
 $block_page = p06_create_page( 'P06 Authentic Inbox Block', '<!-- wp:' . $inbox_block . ' /-->' );
@@ -170,7 +170,7 @@ p06_assert( ! p06_inbox_styles_enqueued(), 'Unrelated frontend page qualified In
 $block_result = array(
     'block_name' => $inbox_block,
     'native_markers' => true,
-    'dynamic_render_styles_enqueued' => true,
+    'registry_discovery_styles_enqueued' => false,
     'early_post_content_styles_enqueued' => true,
 );
 
