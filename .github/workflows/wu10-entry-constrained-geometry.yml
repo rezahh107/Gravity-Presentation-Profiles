@@ -44,7 +44,6 @@ jobs:
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
       WU10_ADMIN_PASSWORD: wu21-bootstrap-pass-2026
-      WU10_CANDIDATE_MODE: host-relative-width
 
     steps:
       - name: Checkout exact PR Head
