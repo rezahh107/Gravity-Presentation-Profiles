@@ -14,6 +14,23 @@ $GLOBALS['gpp_actions'] = array();
 $GLOBALS['gpp_filters'] = array();
 $GLOBALS['gpp_enqueued_styles'] = array();
 $GLOBALS['gpp_is_admin'] = false;
+$GLOBALS['gpp_is_singular'] = true;
+$GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => '' );
+
+class WP_Block_Type_Registry {
+    private static $instance;
+
+    public static function get_instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    public function is_registered( $name ) {
+        return InboxPresentationAdapter::NATIVE_BLOCK === $name;
+    }
+}
 
 function add_action( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
     $GLOBALS['gpp_actions'][] = array( $hook, $callback, $priority, $accepted_args );
@@ -25,6 +42,37 @@ function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
 
 function is_admin() {
     return (bool) $GLOBALS['gpp_is_admin'];
+}
+
+function is_singular() {
+    return (bool) $GLOBALS['gpp_is_singular'];
+}
+
+function get_queried_object() {
+    return $GLOBALS['gpp_queried_object'];
+}
+
+function shortcode_exists( $tag ) {
+    return 'gravityflow' === $tag;
+}
+
+function get_shortcode_regex( $tagnames = null ) {
+    unset( $tagnames );
+    return '(\[?)(gravityflow)([^\]]*)(\/)?\](?:(.*?)\[\/\2\])?(\]?)';
+}
+
+function shortcode_parse_atts( $text ) {
+    $atts = array();
+    if ( preg_match_all( '/([A-Za-z0-9_-]+)\s*=\s*["\']([^"\']*)["\']/', (string) $text, $matches, PREG_SET_ORDER ) ) {
+        foreach ( $matches as $match ) {
+            $atts[ strtolower( $match[1] ) ] = $match[2];
+        }
+    }
+    return $atts;
+}
+
+function has_block( $name, $content = null ) {
+    return is_string( $content ) && false !== strpos( $content, '<!-- wp:' . $name );
 }
 
 function wp_enqueue_style( $handle, $src = '', $dependencies = array(), $version = false, $media = 'all' ) {
@@ -79,9 +127,14 @@ $set_active_profile = static function ( $active ) use ( $model_loaded, $model ) 
     $model_loaded->setValue( null, true );
     $model->setValue( null, $active ? new stdClass() : null );
 };
-$reset_reachability = static function () use ( $surface_reached ) {
+$reset_request = static function ( $content = '', $admin = false, $singular = true ) use ( $surface_reached ) {
     $surface_reached->setValue( null, false );
     $GLOBALS['gpp_enqueued_styles'] = array();
+    $GLOBALS['gpp_is_admin'] = $admin;
+    $GLOBALS['gpp_is_singular'] = $singular;
+    $GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => $content );
+    $_GET = array();
+    $_REQUEST = array();
 };
 $style_handles = static function () {
     return array_map(
@@ -100,80 +153,89 @@ $assert_inbox_styles = static function ( $message ) use ( $style_handles ) {
 };
 
 InboxPresentationAdapter::register();
-gpp_assert_same( 1, count( $GLOBALS['gpp_actions'] ), 'Inbox presentation should register only one early admin enqueue hook.' );
-gpp_assert_same( 'admin_enqueue_scripts', $GLOBALS['gpp_actions'][0][0], 'Inbox presentation admin delivery must stay on the admin asset lifecycle.' );
-gpp_assert_same( array( InboxPresentationAdapter::class, 'enqueueAdminStyles' ), $GLOBALS['gpp_actions'][0][1], 'Admin enqueue must pass through the surface-qualified adapter method.' );
-gpp_assert_same( 4, count( $GLOBALS['gpp_filters'] ), 'Inbox presentation should register the two native data seams plus shortcode and block render seams.' );
-gpp_assert_same( 'gravityflow_columns_inbox_table', $GLOBALS['gpp_filters'][0][0], 'Native Inbox column seam changed unexpectedly.' );
-gpp_assert_same( 'gravityflow_inbox_field_value', $GLOBALS['gpp_filters'][1][0], 'Native Inbox value seam changed unexpectedly.' );
-gpp_assert_same( 'gravityflow_shortcode_inbox', $GLOBALS['gpp_filters'][2][0], 'Frontend shortcode reachability must remain tied to Gravity Flow Inbox rendering.' );
-gpp_assert_same( 'render_block', $GLOBALS['gpp_filters'][3][0], 'Frontend block output must be checked only after native Inbox execution has been observed.' );
-foreach ( $GLOBALS['gpp_actions'] as $action ) {
-    gpp_assert_true( 'wp_enqueue_scripts' !== $action[0], 'Profile activation must not globally enqueue Inbox styles on frontend requests.' );
-}
+gpp_assert_same( 2, count( $GLOBALS['gpp_actions'] ), 'Inbox presentation must use both normal WordPress asset lifecycles.' );
+gpp_assert_same( 'admin_enqueue_scripts', $GLOBALS['gpp_actions'][0][0], 'Admin Inbox delivery must stay on the admin asset lifecycle.' );
+gpp_assert_same( 'wp_enqueue_scripts', $GLOBALS['gpp_actions'][1][0], 'Frontend Inbox delivery must be decided before head styles print.' );
+gpp_assert_same( array( InboxPresentationAdapter::class, 'enqueueStyles' ), $GLOBALS['gpp_actions'][0][1], 'Admin enqueue must use the reachability-qualified asset method.' );
+gpp_assert_same( array( InboxPresentationAdapter::class, 'enqueueStyles' ), $GLOBALS['gpp_actions'][1][1], 'Frontend enqueue must use the reachability-qualified asset method.' );
+gpp_assert_same( 4, count( $GLOBALS['gpp_filters'] ), 'Inbox presentation must preserve native data, shortcode, and block seams.' );
 
 $set_active_profile( true );
-$reset_reachability();
+$reset_request();
 InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'An active Inbox profile alone must not deliver Inbox styles.' );
 
-$GLOBALS['gpp_is_admin'] = false;
-$_GET = array();
-InboxPresentationAdapter::enqueueAdminStyles();
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'An unrelated frontend request must not receive Inbox styles.' );
+$reset_request( '<p>Unrelated page.</p>' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'An unrelated singular frontend page must not receive Inbox styles.' );
+
+$reset_request( '[gravityflow page="inbox"]' );
+InboxPresentationAdapter::enqueueStyles();
+$assert_inbox_styles( 'An exact current-page Gravity Flow Inbox shortcode must qualify early style delivery.' );
+
+$reset_request( '[[gravityflow page="inbox"]]' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'An escaped shortcode must not qualify Inbox style delivery.' );
+
+$reset_request( '[gravityflow page="entry"]' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'A non-Inbox Gravity Flow shortcode must not qualify Inbox styles.' );
+
+$reset_request( '<!-- wp:gravityflow/inbox /-->' );
+InboxPresentationAdapter::enqueueStyles();
+$assert_inbox_styles( 'The exact registered native Inbox block in current post content must qualify early style delivery.' );
 
 $lookalike = '<div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div>';
-$returned = InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => 'example/lookalike' ) );
+$reset_request( '<!-- wp:html -->' . $lookalike . '<!-- /wp:html -->' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Native-looking markup inside an unrelated block must not qualify early style delivery.' );
+$returned = InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => 'core/html' ) );
 gpp_assert_same( $lookalike, $returned, 'Block qualification must never alter host output.' );
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Lookalike Inbox markup must not independently qualify style delivery.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Lookalike block render must not independently qualify style delivery.' );
 
-$reset_reachability();
-InboxPresentationAdapter::filterColumns( array( 'id' => 'Entry ID' ), array() );
-InboxPresentationAdapter::filterFrontendBlock( $lookalike, array() );
-$assert_inbox_styles( 'A block request that crossed the exact native Inbox table seam and rendered native Inbox markers must receive both styles.' );
+$reset_request( '<p>Dynamic host render.</p>' );
+$returned = InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) );
+gpp_assert_same( $lookalike, $returned, 'Authentic native block fallback must preserve host output.' );
+$assert_inbox_styles( 'The exact registered native Inbox block render seam must qualify dynamic fallback delivery.' );
 
-$reset_reachability();
+$reset_request( '<p>Dynamic shortcode host render.</p>' );
 $native_shortcode = '<div class="gravityflow_wrap"><div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div></div>';
 $wrapped = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
-$assert_inbox_styles( 'The authentic Gravity Flow Inbox shortcode render seam must receive both styles.' );
-gpp_assert_true( false !== strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Authentic active shortcode Inbox must retain the admitted GPP surface composition.' );
+$assert_inbox_styles( 'The authentic Gravity Flow Inbox shortcode render seam must qualify dynamic fallback delivery.' );
+gpp_assert_true( false !== strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Authentic active shortcode Inbox must retain admitted composition.' );
 
-$reset_reachability();
-$GLOBALS['gpp_is_admin'] = true;
+$reset_request( '', true );
 $_GET = array( 'page' => 'gravityflow-inbox' );
-InboxPresentationAdapter::enqueueAdminStyles();
+InboxPresentationAdapter::enqueueStyles();
 $assert_inbox_styles( 'The exact native admin Inbox list request must receive both styles.' );
 
-$reset_reachability();
+$reset_request( '', true );
 $_GET = array( 'page' => 'gravityflow-inbox', 'view' => 'entry', 'lid' => '42' );
-InboxPresentationAdapter::enqueueAdminStyles();
+InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Gravity Flow Entry Detail must not receive Inbox presentation styles.' );
 
-$reset_reachability();
+$reset_request( '', true );
 $_GET = array( 'page' => 'gf_settings' );
-InboxPresentationAdapter::enqueueAdminStyles();
+InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Unrelated wp-admin requests must not receive Inbox presentation styles.' );
 
-$reset_reachability();
+$reset_request( '', true );
 $_GET = array( 'action' => 'gravityflow_print_entries', 'lid' => '42', 'gpp_presentation' => 'dossier' );
 $_REQUEST = array( 'action' => 'gravityflow_print_entries' );
-InboxPresentationAdapter::enqueueAdminStyles();
+InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Gravity Flow Print requests must not receive Inbox presentation styles.' );
 
 $set_active_profile( false );
-$reset_reachability();
-$_GET = array( 'page' => 'gravityflow-inbox' );
-InboxPresentationAdapter::enqueueAdminStyles();
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Authentic admin Inbox must remain native when the Inbox profile is inactive.' );
-
-$reset_reachability();
+$reset_request( '[gravityflow page="inbox"]' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive authentic frontend Inbox must not receive GPP Inbox styles.' );
 $native_inactive = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
 gpp_assert_same( $native_shortcode, $native_inactive, 'Inactive frontend Inbox must remain native and unwrapped.' );
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive frontend Inbox must not receive GPP Inbox styles.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive shortcode fallback must not deliver GPP Inbox styles.' );
 
-$reset_reachability();
-InboxPresentationAdapter::filterColumns( array( 'id' => 'Entry ID' ), array() );
-InboxPresentationAdapter::filterFrontendBlock( $lookalike, array() );
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive authentic block path must not receive GPP Inbox styles.' );
+$reset_request( '', true );
+$_GET = array( 'page' => 'gravityflow-inbox' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive authentic admin Inbox must remain native without GPP Inbox styles.' );
 
 echo "INBOX_ASSET_REACHABILITY_PASS\n";
