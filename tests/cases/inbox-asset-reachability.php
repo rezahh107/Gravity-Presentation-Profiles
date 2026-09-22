@@ -195,13 +195,17 @@ gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Lookalike block rend
 
 $reset_request( '<p>Dynamic host render.</p>' );
 $returned = InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) );
-gpp_assert_same( $lookalike, $returned, 'Authentic native block fallback must preserve host output.' );
-$assert_inbox_styles( 'The exact registered native Inbox block render seam must qualify dynamic fallback delivery.' );
+gpp_assert_same( $lookalike, $returned, 'Authentic native block reachability must preserve host output.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Authentic block pre-render must not enqueue styles ahead of the WordPress asset lifecycle.' );
+InboxPresentationAdapter::enqueueStyles();
+$assert_inbox_styles( 'The exact registered native Inbox block render seam must qualify delivery when the asset lifecycle runs.' );
 
 $reset_request( '<p>Dynamic shortcode host render.</p>' );
 $native_shortcode = '<div class="gravityflow_wrap"><div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div></div>';
 $wrapped = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
-$assert_inbox_styles( 'The authentic Gravity Flow Inbox shortcode render seam must qualify dynamic fallback delivery.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Authentic shortcode pre-render must not enqueue styles ahead of the WordPress asset lifecycle.' );
+InboxPresentationAdapter::enqueueStyles();
+$assert_inbox_styles( 'The authentic Gravity Flow Inbox shortcode render seam must qualify delivery when the asset lifecycle runs.' );
 gpp_assert_true( false !== strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Authentic active shortcode Inbox must retain admitted composition.' );
 
 $reset_request( '', true );
@@ -231,7 +235,7 @@ InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive authentic frontend Inbox must not receive GPP Inbox styles.' );
 $native_inactive = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
 gpp_assert_same( $native_shortcode, $native_inactive, 'Inactive frontend Inbox must remain native and unwrapped.' );
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive shortcode fallback must not deliver GPP Inbox styles.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Inactive shortcode reachability must not deliver GPP Inbox styles.' );
 
 $reset_request( '', true );
 $_GET = array( 'page' => 'gravityflow-inbox' );
