@@ -43,7 +43,7 @@ jobs:
       WU21_FLOW_SIZE: '2603034'
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
-      WU10_ADMIN_PASSWORD: wu10-synthetic-admin-2026
+      WU10_ADMIN_PASSWORD: wu21-bootstrap-pass-2026
 
     steps:
       - name: Checkout exact PR Head
@@ -150,7 +150,7 @@ jobs:
         with:
           name: wu10-entry-constrained-geometry-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            /tmp/wu10-artifacts/wu10-entry-constrained-geometry.json
+            /tmp/wu10-artifacts/wu10-*.json
             /tmp/wu10-artifacts/wu10-*.png
             /tmp/wu10-artifacts/wu18-fixture-manifest.json
             /tmp/wu10-wp-server.log
