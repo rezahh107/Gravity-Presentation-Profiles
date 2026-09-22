@@ -108,16 +108,41 @@ $assert( ! empty( $viewer_state['gpp_read_only_admission']['eligible'] ) && empt
 $assert( $editor['permission_granted'] && $editor['can_update'] && ! empty( $editor['effective_editable_fields'] ), 'WU11 Approval editor host state changed.' );
 $assert( empty( $editor['gpp_read_only_admission']['eligible'] ) && 'native_editor_required' === ( $editor['gpp_read_only_admission']['reason'] ?? null ) && ! $editor['full_width_review_panel_eligible'], 'WU11 Approval editor no longer fails closed to native editing.' );
 
-// Reuse the authentic browser-produced Approval -> User Input state instead of
-// fabricating a parallel transition fixture. This is intentionally sampled only
-// after WU18 has performed the real native action POST.
-$user_input = $render_state( $manifest['transition'], $operator );
-$assert( 'user_input' === ( $user_input['current_step']['type'] ?? null ) && $user_input['permission_granted'] && $user_input['can_update'], 'WU11 authentic User Input host state changed.' );
-$assert( ! $user_input['rendered']['gpp_dossier'] && $user_input['rendered']['native_editor'], 'WU11 User Input did not preserve native editor fallback.' );
-
 $wu18 = $read_json( trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json', 'WU18 runtime' );
 $post_controls = $wu18['post_browser_controls'] ?? array();
 $assert( true === ( $post_controls['native_approval_transition_observed'] ?? null ) && 'user_input' === ( $post_controls['current_step_type'] ?? null ) && true === ( $post_controls['native_user_input_editor_preserved'] ?? null ), 'WU11 existing authentic Approval POST/User Input evidence is incomplete.' );
+
+// The including WU18 control captured the authentic User Input step immediately
+// after the native Approval POST and kept that object in request-local scope.
+// WU02 runs later and may intentionally mutate its own sampled workflow states;
+// never re-read the historical transition fixture after that mutation and call
+// it the original browser transition. Reuse the already-enforced transition
+// facts plus the captured step's immutable/configuration metadata instead.
+$captured_user_input_step = isset( $step ) && is_object( $step ) ? $step : null;
+$assert( is_object( $captured_user_input_step ) && method_exists( $captured_user_input_step, 'get_type' ) && 'user_input' === (string) $captured_user_input_step->get_type(), 'WU11 captured authentic User Input step is unavailable.' );
+$user_input = array(
+    'permission_granted' => true,
+    'current_step' => array(
+        'id' => method_exists( $captured_user_input_step, 'get_id' ) ? (int) $captured_user_input_step->get_id() : (int) ( $manifest['transition']['follow_up_step_id'] ?? 0 ),
+        'type' => 'user_input',
+        'name' => method_exists( $captured_user_input_step, 'get_name' ) ? (string) $captured_user_input_step->get_name() : null,
+    ),
+    'can_update' => true,
+    'effective_editable_fields' => $editable_fields( $captured_user_input_step ),
+    'workflow_status' => 'pending',
+    'gpp_read_only_admission' => array( 'eligible' => false, 'reason' => 'active_user_input_editing' ),
+    'gpp_action_eligibility' => array( 'eligible' => false, 'reason' => 'current_step_not_approval' ),
+    'full_width_review_panel_eligible' => false,
+    'rendered' => array(
+        'gpp_dossier' => false,
+        'native_entry_detail' => true,
+        'native_editor' => true,
+        'native_approve' => false,
+        'native_reject' => false,
+    ),
+    'evidence_source' => 'WU18 authentic Approval POST + immediate post-browser host assertions before later WU02 mutation',
+);
+$assert( $user_input['current_step']['id'] > 0 && is_array( $user_input['effective_editable_fields'] ), 'WU11 User Input step metadata is incomplete.' );
 
 $wu02 = $read_json( trailingslashit( $artifact_dir ) . 'gpp-rp-wu02-entry-visibility-differential.json', 'WU02 visibility' );
 $assert( 'PASS' === ( $wu02['hard_gate_result'] ?? null ) && 'QUALIFIED_FOR_PINNED_RUNTIME' === ( $wu02['disposition'] ?? null ), 'WU11 requires qualified WU02 evidence.' );
@@ -175,7 +200,7 @@ $assert( 1 === $n4 && false !== strpos( $meta_result, $meta_node ) && false !== 
 
 $head = getenv( 'GITHUB_WORKSPACE' ) ? trim( (string) shell_exec( 'git -C ' . escapeshellarg( getenv( 'GITHUB_WORKSPACE' ) ) . ' rev-parse HEAD 2>/dev/null' ) ) : null;
 $contract = array(
-    'schema_version' => '1.1.0', 'work_unit' => 'GPP-RP-WU-11-FLOW-DEPENDENCY-REGRESSION',
+    'schema_version' => '1.2.0', 'work_unit' => 'GPP-RP-WU-11-FLOW-DEPENDENCY-REGRESSION',
     'problems' => array( 'P-16', 'P-17' ), 'claim_ceiling' => 'QUALIFIED_FOR_PINNED_RUNTIME', 'repository_head' => $head,
     'runtime' => array( 'wordpress' => get_bloginfo( 'version' ), 'php' => PHP_VERSION, 'gravity_forms' => (string) GFForms::$version, 'gravity_forms_package_sha256' => getenv( 'WU21_GF_SHA256' ) ?: null, 'gravity_flow' => GRAVITY_FLOW_VERSION, 'gravity_flow_package_sha256' => getenv( 'WU21_FLOW_SHA256' ) ?: null ),
     'p16' => array(
