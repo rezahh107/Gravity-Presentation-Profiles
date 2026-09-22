@@ -1,11 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// P06 is an asset-admission prerequisite for every frontend Inbox regression.
-// Run it first so failures distinguish reachability/head-delivery defects from
-// downstream Card Mode, palette, accessibility, or geometry regressions.
-await import('./p06-inbox-asset-reachability-browser-test.mjs');
-await import('./p06-inbox-cascade-diagnostic.mjs');
 await import('./browser-tests-core.mjs');
 await import('./wu17-inbox-accessibility-browser-test.mjs');
 await import('./p05-inbox-palette-contract-browser-test.mjs');
@@ -36,3 +31,8 @@ await import('./inbox-human-display-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-bootstrap.mjs');
 await import('./inbox-width-rtl-comparative-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-finalize.mjs');
+
+// P06 exercises deliberate lifecycle mutation for its inactive-profile negative
+// control. Keep it after the established browser regressions so the new
+// qualification cannot alter the state observed by pre-existing suites.
+await import('./p06-inbox-asset-reachability-browser-test.mjs');
