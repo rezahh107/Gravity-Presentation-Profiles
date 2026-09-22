@@ -13,6 +13,7 @@ if ( ! defined( 'GPP_PLUGIN_FILE' ) ) {
 $GLOBALS['gpp_actions'] = array();
 $GLOBALS['gpp_filters'] = array();
 $GLOBALS['gpp_enqueued_styles'] = array();
+$GLOBALS['gpp_style_states'] = array();
 $GLOBALS['gpp_is_admin'] = false;
 $GLOBALS['gpp_is_singular'] = true;
 $GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => '' );
@@ -86,8 +87,8 @@ function wp_enqueue_style( $handle, $src = '', $dependencies = array(), $version
 }
 
 function wp_style_is( $handle, $status = 'enqueued' ) {
-    unset( $handle, $status );
-    return false;
+    $key = (string) $handle . ':' . (string) $status;
+    return ! empty( $GLOBALS['gpp_style_states'][ $key ] );
 }
 
 function plugins_url( $path, $plugin_file ) {
@@ -130,6 +131,7 @@ $set_active_profile = static function ( $active ) use ( $model_loaded, $model ) 
 $reset_request = static function ( $content = '', $admin = false, $singular = true ) use ( $surface_reached ) {
     $surface_reached->setValue( null, false );
     $GLOBALS['gpp_enqueued_styles'] = array();
+    $GLOBALS['gpp_style_states'] = array();
     $GLOBALS['gpp_is_admin'] = $admin;
     $GLOBALS['gpp_is_singular'] = $singular;
     $GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => $content );
@@ -170,8 +172,14 @@ InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'An unrelated singular frontend page must not receive Inbox styles.' );
 
 $reset_request( '[gravityflow page="inbox"]' );
+$GLOBALS['gpp_style_states']['global-styles:enqueued'] = true;
 InboxPresentationAdapter::enqueueStyles();
 $assert_inbox_styles( 'An exact current-page Gravity Flow Inbox shortcode must qualify early style delivery.' );
+gpp_assert_same(
+    array( 'global-styles' ),
+    $GLOBALS['gpp_enqueued_styles'][0]['dependencies'],
+    'When WordPress global styles are active, Inbox presentation must print after the host layout cascade.'
+);
 
 $reset_request( '[[gravityflow page="inbox"]]' );
 InboxPresentationAdapter::enqueueStyles();
