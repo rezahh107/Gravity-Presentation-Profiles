@@ -129,7 +129,9 @@ function gpp_wu09_candidate_rewrite_early_assets() {
     }
 
     $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
-    if ( function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' ) && function_exists( 'wp_dequeue_script' ) ) {
+    $script_was_enqueued = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' );
+    $GLOBALS['gpp_wu09_script_was_enqueued_early'] = $script_was_enqueued;
+    if ( $script_was_enqueued && function_exists( 'wp_dequeue_script' ) ) {
         wp_dequeue_script( $script );
     }
 
@@ -141,6 +143,16 @@ function gpp_wu09_candidate_rewrite_early_assets() {
     // profile/variant, preserving their registered dependency graph and versions.
     foreach ( $enqueued_styles as $style ) {
         wp_enqueue_style( $style );
+    }
+
+    // Evidence-only fallback probe: test the bounded alternative without
+    // changing production. The existing JS root guard must make this inert on
+    // genuine Entry Detail routes that never receive server admission markers.
+    $js_mode = isset( $_GET['gpp_wu09_js_mode'] ) && is_string( $_GET['gpp_wu09_js_mode'] )
+        ? sanitize_key( wp_unslash( $_GET['gpp_wu09_js_mode'] ) )
+        : '';
+    if ( 'early' === $js_mode && $script_was_enqueued && function_exists( 'wp_enqueue_script' ) ) {
+        wp_enqueue_script( $script );
     }
 }
 
@@ -182,9 +194,41 @@ function gpp_wu09_candidate_capture_dossier_finish( $form, $entry ) {
         return;
     }
 
+    $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
+    $js_mode = isset( $_GET['gpp_wu09_js_mode'] ) && is_string( $_GET['gpp_wu09_js_mode'] )
+        ? sanitize_key( wp_unslash( $_GET['gpp_wu09_js_mode'] ) )
+        : '';
+    $registered_before = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'registered' );
+    $enqueued_before = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' );
+    $footer_before = function_exists( 'did_action' ) ? did_action( 'wp_print_footer_scripts' ) : null;
+    $wp_footer_before = function_exists( 'did_action' ) ? did_action( 'wp_footer' ) : null;
+
     // Re-enqueue the already registered production handle. WordPress remains
     // responsible for the normal footer queue and once-only script printing.
-    wp_enqueue_script( EntryDetailPresentationAdapter::SCRIPT_HANDLE );
+    if ( 'early' !== $js_mode ) {
+        wp_enqueue_script( $script );
+    }
+
+    $event = array(
+        'request_uri' => isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '',
+        'is_admin' => function_exists( 'is_admin' ) ? (bool) is_admin() : null,
+        'mode' => '' === $js_mode ? 'post_admission' : $js_mode,
+        'marker_admitted' => true,
+        'script_registered_before' => $registered_before,
+        'script_enqueued_before' => $enqueued_before,
+        'script_enqueued_after' => function_exists( 'wp_script_is' ) ? (bool) wp_script_is( $script, 'enqueued' ) : null,
+        'wp_print_footer_scripts_before' => $footer_before,
+        'wp_footer_before' => $wp_footer_before,
+        'production_script_was_enqueued_early' => ! empty( $GLOBALS['gpp_wu09_script_was_enqueued_early'] ),
+    );
+    $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
+    if ( is_string( $artifact_dir ) && '' !== $artifact_dir ) {
+        file_put_contents(
+            trailingslashit( $artifact_dir ) . 'wu09-entry-asset-lifecycle.ndjson',
+            wp_json_encode( $event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n",
+            FILE_APPEND
+        );
+    }
 }
 
 add_action( 'gravityflow_entry_detail_content_before', 'gpp_wu09_candidate_capture_dossier_start', 19, 2 );
