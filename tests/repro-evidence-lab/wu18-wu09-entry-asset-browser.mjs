@@ -137,8 +137,15 @@ await test('WU09-Q1-ADMIN-ENTRY', 'authentic admin Entry Detail is reachable on 
   await page.goto(adminEntry(manifest.alpha), { waitUntil: 'networkidle' });
   const state = await assetState(page);
   assertAdmittedCssAndMarkers(state, 'admin Entry Detail');
-  assertPostAdmissionJs(state, 'admin Entry Detail');
-  return { ...state, lifecycle: latestLifecycleFor(state.url) };
+  return {
+    ...state,
+    post_admission_js_delivered: state.script_handle_count === 1
+      && state.entry_js_tag_count === 1
+      && state.entry_js_resource_count === 1
+      && state.markers?.previewBound === '1'
+      && state.script_after_dossier,
+    lifecycle: latestLifecycleFor(state.url),
+  };
 });
 
 await test('WU09-Q1-EDITOR', 'native Approval editor is a genuine Entry Detail route but remains marker-free', async () => {
@@ -311,8 +318,16 @@ await test('WU09-Q3-REPEAT-ADMITTED', 'fresh admitted requests each receive one 
     await page.goto(adminEntry(manifest.alpha), { waitUntil: 'networkidle' });
     const state = await assetState(page);
     assertAdmittedCssAndMarkers(state, `repeat admitted request ${i + 1}`);
-    assertPostAdmissionJs(state, `repeat admitted request ${i + 1}`);
-    observed.push({ script_handle_count: state.script_handle_count, resource_count: state.entry_js_resource_count, preview_bound: state.markers.previewBound });
+    observed.push({
+      script_handle_count: state.script_handle_count,
+      resource_count: state.entry_js_resource_count,
+      preview_bound: state.markers?.previewBound || null,
+      post_admission_js_delivered: state.script_handle_count === 1
+        && state.entry_js_tag_count === 1
+        && state.entry_js_resource_count === 1
+        && state.markers?.previewBound === '1'
+        && state.script_after_dossier,
+    });
   }
   return observed;
 });
@@ -372,19 +387,26 @@ await browser.close();
 
 const failures = results.filter(result => result.status === 'FAIL');
 const statusResult = results.find(result => result.id === 'WU09-Q1-FRONTEND-STATUS');
-const frontendAdmissionResults = results.filter(result => ['WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS', 'WU09-Q1-FRONTEND-STATUS-BLOCK'].includes(result.id) && result.status === 'PASS' && result.details?.supported !== false);
-const frontendLateJsReliable = frontendAdmissionResults.length > 0 && frontendAdmissionResults.every(result => result.details?.post_admission_js_delivered === true);
-const frontendLifecycle = frontendAdmissionResults.map(result => result.details?.lifecycle).filter(Boolean);
+const admittedRouteResults = results.filter(result =>
+  ['WU09-Q1-ADMIN-ENTRY', 'WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS', 'WU09-Q1-FRONTEND-STATUS-BLOCK'].includes(result.id)
+  && result.status === 'PASS'
+  && result.details?.supported !== false
+);
+const postAdmissionJsReliable = admittedRouteResults.length > 0
+  && admittedRouteResults.every(result => result.details?.post_admission_js_delivered === true);
+const admittedLifecycle = admittedRouteResults.map(result => result.details?.lifecycle).filter(Boolean);
 let postAdmissionJsFailureReason = null;
-if (!frontendLateJsReliable) {
-  if (frontendLifecycle.some(event => Number(event?.wp_print_footer_scripts_before) > 0 || Number(event?.wp_footer_before) > 0)) {
-    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission after the normal frontend footer lifecycle has already started';
-  } else if (frontendLifecycle.some(event => event?.script_registered_before === false)) {
-    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission before footer printing, but the existing Entry Detail JS handle is not registered at that lifecycle point, so normal late wp_enqueue_script(handle) cannot deliver it';
-  } else if (frontendLifecycle.some(event => event?.script_enqueued_after === false)) {
-    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission before footer printing, but normal late enqueue does not enter the footer queue reliably';
+if (!postAdmissionJsReliable) {
+  if (admittedLifecycle.some(event =>
+    Number(event?.wp_print_footer_scripts_before) > 0
+      || Number(event?.wp_footer_before) > 0
+      || Number(event?.admin_print_footer_scripts_before) > 0
+  )) {
+    postAdmissionJsFailureReason = 'at least one supported admitted Entry Detail route reaches dossier admission after its normal WordPress footer script lifecycle has already started';
+  } else if (admittedLifecycle.some(event => event?.script_enqueued_after === false)) {
+    postAdmissionJsFailureReason = 'at least one supported admitted Entry Detail route reaches dossier admission before footer printing, but normal late enqueue does not enter the footer queue reliably';
   } else {
-    postAdmissionJsFailureReason = 'supported frontend Entry Detail does not reliably deliver the existing JS through normal post-admission footer enqueue';
+    postAdmissionJsFailureReason = 'the existing JS is not delivered exactly once through normal post-admission footer enqueue on every supported admitted Entry Detail route';
   }
 }
 const fallbackIds = ['WU09-Q3-FALLBACK-FRONTEND', 'WU09-Q3-FALLBACK-EDITOR-GUARD', 'WU09-Q3-FALLBACK-UNRELATED-GUARD'];
@@ -414,7 +436,7 @@ const output = {
   },
   candidate: {
     css: cssQualified ? 'QUALIFIED_EARLY_REQUEST_GATED_CSS' : 'NOT_QUALIFIED',
-    js: frontendLateJsReliable ? 'QUALIFIED_POST_ADMISSION_JS' : 'NOT_QUALIFIED_FOR_POST_ADMISSION',
+    js: postAdmissionJsReliable ? 'QUALIFIED_POST_ADMISSION_JS' : 'NOT_QUALIFIED_FOR_POST_ADMISSION',
     post_admission_js_failure_reason: postAdmissionJsFailureReason,
     early_request_gated_js_fallback: fallbackQualified ? 'SUPPORTED_BY_EXECUTED_EVIDENCE' : 'NOT_PROVEN',
     authority: 'server dossier/admission markers remain required for duplicate suppression and admitted host chrome; JS root guard remains dossier-scoped',
