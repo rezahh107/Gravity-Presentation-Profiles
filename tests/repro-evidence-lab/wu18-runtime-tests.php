@@ -82,3 +82,5 @@ file_put_contents(
 );
 
 echo "WU18_RUNTIME_DECISION_TRACE_PASS\n";
+
+require __DIR__ . '/wu18-wu09-entry-asset-runtime.php';
