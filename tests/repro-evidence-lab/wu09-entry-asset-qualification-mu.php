@@ -6,7 +6,7 @@
  * Entry Detail asset callback so the intended CSS/JS delivery architecture can
  * be qualified without changing production PHP/CSS/JS.
  */
-if ( ! defined( 'ABSPATH' ) || '1' !== getenv( 'GPP_WU09_QUALIFICATION' ) ) {
+if ( ! defined( 'ABSPATH' ) ) {
     return;
 }
 
@@ -193,7 +193,7 @@ function gpp_wu09_candidate_enqueue_post_admission_js( $form, $entry ) {
 }
 
 function gpp_wu09_install_candidate_asset_delivery() {
-    if ( ! class_exists( EntryDetailPresentationAdapter::class ) ) {
+    if ( empty( $GLOBALS['gpp_wu09_probe']['id'] ) || ! class_exists( EntryDetailPresentationAdapter::class ) ) {
         return;
     }
 
