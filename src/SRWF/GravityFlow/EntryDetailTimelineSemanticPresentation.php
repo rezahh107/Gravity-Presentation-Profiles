@@ -40,7 +40,7 @@ final class EntryDetailTimelineSemanticPresentation {
         self::$buffering = false;
         self::$buffer_level = null;
 
-        if ( ! self::isEntryDetailRequest() || ! self::isFullWidthActive() ) {
+        if ( ! EntryDetailRequestReachability::isReachable() || ! self::isFullWidthActive() ) {
             return;
         }
 
@@ -342,22 +342,6 @@ final class EntryDetailTimelineSemanticPresentation {
         $value = self::normalizeEventValue( $value );
         $value = preg_replace( '/\s+/u', ' ', $value );
         return trim( is_string( $value ) ? $value : '' );
-    }
-
-    private static function isEntryDetailRequest() {
-        $view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
-        $lid = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
-
-        if ( 'entry' !== $view || $lid < 1 ) {
-            return false;
-        }
-
-        if ( function_exists( 'is_admin' ) && is_admin() ) {
-            $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-            return 'gravityflow-inbox' === $page;
-        }
-
-        return true;
     }
 
     private static function isFullWidthActive() {
