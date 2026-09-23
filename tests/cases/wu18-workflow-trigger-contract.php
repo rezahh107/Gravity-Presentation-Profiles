@@ -131,9 +131,14 @@ foreach ( array(
 }
 
 $wu19_paths = gpp_wu18_extract_pull_request_paths( $workflows['WU19'] );
-gpp_assert_true(
-    in_array( 'tests/repro-evidence-lab/setup-wu18-fixtures.php', $wu19_paths, true ),
-    'WU19 must preserve setup-wu18-fixtures.php because it is not matched by the selected wu18-* wildcard.'
-);
+foreach ( array(
+    'tests/repro-evidence-lab/setup-wu18-fixtures.php',
+    'tests/repro-evidence-lab/inspect-wu18-host-seams.php',
+) as $non_class_dependency ) {
+    gpp_assert_true(
+        in_array( $non_class_dependency, $wu19_paths, true ),
+        'WU19 must preserve required helper paths that are not matched by the selected wu18-* wildcard: ' . $non_class_dependency
+    );
+}
 
 echo "WU18_WORKFLOW_TRIGGER_CONTRACT_PASS\n";
