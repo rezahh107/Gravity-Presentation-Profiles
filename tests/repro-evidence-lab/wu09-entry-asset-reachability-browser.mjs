@@ -210,6 +210,17 @@ try {
   assert.equal(results.q1.native_editor_entry.state.native_editor_visible, true, 'Native editor fallback lost its host editor.');
   assert.notEqual(results.q1.native_editor_entry.state.native_table_display, 'none', 'CSS availability suppressed the native editor table without admission.');
 
+  const userInputEntry = queryUrl(`${baseUrl}/wp-admin/admin.php`, {
+    page: 'gravityflow-inbox', view: 'entry', id: wu18.transition.form_id, lid: wu18.transition.entry_id,
+  });
+  results.q1.native_user_input_entry = await pageEvidence(page, userInputEntry, 'admin-user-input');
+  assert.equal(results.q1.native_user_input_entry.state.styleLinks.length, 1, 'Genuine User Input Entry Detail must receive early CSS.');
+  assert.equal(results.q1.native_user_input_entry.state.scripts.length, 0, 'Native User Input fallback must not receive post-admission JS.');
+  assert.equal(results.q1.native_user_input_entry.state.dossier_count, 0, 'Native User Input unexpectedly emitted dossier.');
+  assert.equal(results.q1.native_user_input_entry.state.suppression_marker_count, 0, 'Native User Input unexpectedly emitted suppression marker.');
+  assert.equal(results.q1.native_user_input_entry.state.native_editor_visible, true, 'Native User Input editor is not visible.');
+  assert.notEqual(results.q1.native_user_input_entry.state.native_table_display, 'none', 'CSS availability suppressed native User Input without admission.');
+
   results.q1.ordinary_inbox = await pageEvidence(page, ordinaryInbox, 'ordinary-inbox');
   assertNoBaseAssets(results.q1.ordinary_inbox, 'ordinary Inbox');
 
@@ -320,6 +331,9 @@ try {
     results.q1.native_editor_entry.state.styleLinks.length === 1
     && results.q1.native_editor_entry.state.suppression_marker_count === 0
     && results.q1.native_editor_entry.state.native_table_display !== 'none'
+    && results.q1.native_user_input_entry.state.styleLinks.length === 1
+    && results.q1.native_user_input_entry.state.suppression_marker_count === 0
+    && results.q1.native_user_input_entry.state.native_table_display !== 'none'
   );
 
   await context.close();
@@ -350,6 +364,14 @@ try {
   assert.equal(editorProbe.post_permission_seam_reached, true, 'Native editor route did not reach host Entry Detail seam.');
   assert.equal(editorProbe.dossier_admitted, false, 'Native editor route was incorrectly admitted as dossier.');
   assert.equal(editorProbe.js_enqueued, false, 'Native editor route incorrectly received post-admission JS.');
+
+  const userInputProbe = byId.get('admin-user-input');
+  assert.ok(userInputProbe, 'Missing native User Input server probe.');
+  assert.equal(userInputProbe.candidate_reachable, true, 'Native User Input route was not recognized as genuine Entry Detail.');
+  assert.equal(userInputProbe.css_enqueued, true, 'Native User Input route did not receive early CSS.');
+  assert.equal(userInputProbe.post_permission_seam_reached, true, 'Native User Input route did not reach host Entry Detail seam.');
+  assert.equal(userInputProbe.dossier_admitted, false, 'Native User Input route was incorrectly admitted as dossier.');
+  assert.equal(userInputProbe.js_enqueued, false, 'Native User Input route incorrectly received post-admission JS.');
 
   for (const id of ['ordinary-inbox', 'unrelated-admin', 'missing-id', 'missing-lid', 'malformed-lid', 'wrong-admin-page', 'frontend-lookalike']) {
     const probe = byId.get(id);
