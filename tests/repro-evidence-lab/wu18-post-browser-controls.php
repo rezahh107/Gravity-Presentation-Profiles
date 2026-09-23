@@ -30,6 +30,26 @@ if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['transition'
     throw new RuntimeException( 'WU18 post-browser control manifest unavailable.' );
 }
 
+// GPP-RP-WU-09 evidence-only qualification. The Node probe installs its
+// temporary asset-delivery shim only for requests carrying gpp_wu09_probe,
+// exercises the live WU18 HTTP runtime, then removes the shim.
+$wu09_script = __DIR__ . '/wu09-entry-asset-reachability-browser.mjs';
+$wu09_output = array();
+$wu09_status = 0;
+exec( 'node ' . escapeshellarg( $wu09_script ) . ' 2>&1', $wu09_output, $wu09_status );
+$wu09_path = trailingslashit( $artifact_dir ) . 'wu09-entry-asset-reachability-qualification.json';
+$wu09_evidence = is_file( $wu09_path ) ? json_decode( file_get_contents( $wu09_path ), true ) : null;
+if ( 0 !== $wu09_status || ! is_array( $wu09_evidence ) || 'PASS' !== ( $wu09_evidence['status'] ?? null ) ) {
+    throw new RuntimeException(
+        'WU09 Entry Detail asset reachability qualification failed: ' . implode( "\n", array_slice( $wu09_output, -20 ) )
+    );
+}
+if ( 'QUALIFIED_EARLY_REQUEST_GATED_CSS' !== ( $wu09_evidence['q2']['classification'] ?? null )
+    || 'QUALIFIED_POST_ADMISSION_JS' !== ( $wu09_evidence['q3']['classification'] ?? null ) ) {
+    throw new RuntimeException( 'WU09 asset-delivery candidates did not reach the required independent qualifications.' );
+}
+echo "WU09_ENTRY_ASSET_REACHABILITY_QUALIFICATION_PASS\n";
+
 $operator = get_user_by( 'login', 'bootstrap_admin' );
 if ( ! $operator ) throw new RuntimeException( 'Pinned WU18 operator unavailable.' );
 wp_set_current_user( $operator->ID );
@@ -184,6 +204,7 @@ if ( ! is_array( $timeline_semantic_evidence )
 $results_path = trailingslashit( $artifact_dir ) . 'wu18-runtime-results.json';
 $results = is_file( $results_path ) ? json_decode( file_get_contents( $results_path ), true ) : array();
 if ( ! is_array( $results ) ) $results = array();
+$results['wu09_entry_asset_reachability_qualification'] = $wu09_evidence;
 $results['post_browser_controls'] = array(
     'native_approval_transition_observed' => true,
     'current_step_type' => $step->get_type(),
