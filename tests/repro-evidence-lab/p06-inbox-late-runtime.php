@@ -31,7 +31,7 @@ wp_print_styles();
 $head = ob_get_clean();
 $handles = array( InboxPresentationAdapter::STYLE_HANDLE, InboxPresentationAdapter::NATIVE_STYLE_HANDLE );
 foreach ( $handles as $handle ) {
-    if ( wp_style_is( $handle, 'enqueued' ) || false !== strpos( $head, 'id="' . $handle . '-css"' ) ) {
+    if ( wp_style_is( $handle, 'enqueued' ) || false !== strpos( $head, $handle . '-css' ) ) {
         throw new RuntimeException( 'Unrelated page received an Inbox stylesheet during head printing: ' . $handle );
     }
 }
@@ -55,10 +55,10 @@ if ( false === strpos( $output, 'data-js="gflow-inbox"' ) ) {
     throw new RuntimeException( 'Authentic late ' . $mode . ' render did not produce the native Inbox.' );
 }
 foreach ( $handles as $handle ) {
-    if ( 1 !== substr_count( $output, 'id="' . $handle . '-css"' ) || ! wp_style_is( $handle, 'done' ) ) {
+    if ( 1 !== substr_count( $output, $handle . '-css' ) || ! wp_style_is( $handle, 'done' ) ) {
         throw new RuntimeException(
             'Authentic late ' . $mode . ' did not emit exactly one completed style: ' . $handle
-            . ' count=' . substr_count( $output, 'id="' . $handle . '-css"' )
+            . ' count=' . substr_count( $output, $handle . '-css' )
             . ' registered=' . (int) wp_style_is( $handle, 'registered' )
             . ' enqueued=' . (int) wp_style_is( $handle, 'enqueued' )
             . ' done=' . (int) wp_style_is( $handle, 'done' )
@@ -68,8 +68,8 @@ foreach ( $handles as $handle ) {
         );
     }
 }
-$presentation = strpos( $output, 'id="' . $handles[0] . '-css"' );
-$native = strpos( $output, 'id="' . $handles[1] . '-css"' );
+$presentation = strpos( $output, $handles[0] . '-css' );
+$native = strpos( $output, $handles[1] . '-css' );
 $inbox = strpos( $output, 'data-js="gflow-inbox"' );
 if ( ! ( $presentation < $native && $native < $inbox ) ) {
     throw new RuntimeException( 'Late Inbox styles did not precede output in dependency order.' );
@@ -84,7 +84,7 @@ foreach ( array( 'assets/css/srwf-gravity-flow-inbox.css', 'assets/css/srwf-grav
 }
 $second = $render();
 foreach ( $handles as $handle ) {
-    if ( false !== strpos( $second, 'id="' . $handle . '-css"' ) ) {
+    if ( false !== strpos( $second, $handle . '-css' ) ) {
         throw new RuntimeException( 'Second late ' . $mode . ' render duplicated a stylesheet: ' . $handle );
     }
 }
