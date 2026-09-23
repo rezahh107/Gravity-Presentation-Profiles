@@ -5,6 +5,8 @@ use GravityPresentationProfiles\Core\Presentation\PersianGravityJalaliBridge;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantService;
 use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailRequestReachability;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PersianDateFormatter;
 
@@ -158,8 +160,55 @@ try {
         wu18_assert( $decode_text( $inbox_expected ) === $extract_inbox_created( $inbox_provider_card ), 'Production Inbox adapter did not apply exact PersianGravity output.' );
         wu18_assert( $inbox_raw === (string) GFAPI::get_entry( $inbox_entry_id )['date_created'], 'Provider-backed Inbox presentation mutated authoritative date_created.' );
 
-        EntryDetailPresentationAdapter::resetRuntimeCache();
-        list( $provider_entry_html, , $provider_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+        $timeline_capture_probe = array(
+            'pre_render' => array(
+                'is_admin' => function_exists( 'is_admin' ) ? is_admin() : null,
+                'is_singular' => function_exists( 'is_singular' ) ? is_singular() : null,
+                'is_reachable' => EntryDetailRequestReachability::isReachable(),
+            ),
+            'stages' => array(),
+        );
+        $timeline_capture_snapshot = static function ( $stage ) use ( &$timeline_capture_probe ) {
+            $reflection = new ReflectionClass( EntryDetailTimelineSemanticPresentation::class );
+            $buffering_property = $reflection->getProperty( 'buffering' );
+            $buffer_level_property = $reflection->getProperty( 'buffer_level' );
+            $events_property = $reflection->getProperty( 'events' );
+            $buffering_property->setAccessible( true );
+            $buffer_level_property->setAccessible( true );
+            $events_property->setAccessible( true );
+            $events = $events_property->getValue();
+            $timeline_capture_probe['stages'][ $stage ] = array(
+                'is_admin' => function_exists( 'is_admin' ) ? is_admin() : null,
+                'is_singular' => function_exists( 'is_singular' ) ? is_singular() : null,
+                'is_reachable' => EntryDetailRequestReachability::isReachable(),
+                'buffering' => (bool) $buffering_property->getValue(),
+                'buffer_level' => $buffer_level_property->getValue(),
+                'captured_event_count' => is_array( $events ) ? count( $events ) : null,
+            );
+        };
+        $timeline_before_probe = static function ( $form, $entry ) use ( $timeline_capture_snapshot ) {
+            $timeline_capture_snapshot( 'entry_detail_content_before_after_begin_capture' );
+        };
+        $timeline_notes_probe = static function ( $notes, $entry ) use ( $timeline_capture_snapshot ) {
+            $timeline_capture_snapshot( 'timeline_notes_after_capture' );
+            return $notes;
+        };
+        $timeline_after_probe = static function ( $form, $entry ) use ( $timeline_capture_snapshot ) {
+            $timeline_capture_snapshot( 'entry_detail_content_after_before_finish_capture' );
+        };
+        add_action( 'gravityflow_entry_detail_content_before', $timeline_before_probe, 2, 2 );
+        add_filter( 'gravityflow_timeline_notes', $timeline_notes_probe, 91, 2 );
+        add_action( 'gravityflow_entry_detail_content_after', $timeline_after_probe, 998, 2 );
+
+        try {
+            EntryDetailPresentationAdapter::resetRuntimeCache();
+            list( $provider_entry_html, , $provider_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
+        } finally {
+            remove_action( 'gravityflow_entry_detail_content_before', $timeline_before_probe, 2 );
+            remove_filter( 'gravityflow_timeline_notes', $timeline_notes_probe, 91 );
+            remove_action( 'gravityflow_entry_detail_content_after', $timeline_after_probe, 998 );
+            $timeline_capture_snapshot( 'post_render_after_finish_capture' );
+        }
         $entry_raw = (string) $provider_entry['date_created'];
         $entry_expected = $provider_for_utc( $entry_raw );
         wu18_assert( is_string( $entry_expected ) && '' !== $entry_expected, 'Exact provider returned no Entry Detail entry.created_at presentation.' );
@@ -183,6 +232,7 @@ try {
             'php_version' => PHP_VERSION,
             'persian_gravity_version' => defined( 'PGR_VERSION' ) ? PGR_VERSION : null,
             'gravity_flow_version' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
+            'request_and_capture_context' => $timeline_capture_probe,
             'timeline_raw_timestamps' => $timeline_raw_timestamps,
             'timeline_expected' => $timeline_expected,
             'timeline_actual' => $timeline_actual,
