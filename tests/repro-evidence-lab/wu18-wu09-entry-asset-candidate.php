@@ -3,11 +3,11 @@
  * WU09 evidence-only candidate lifecycle shim.
  *
  * This file is copied into the disposable WU18 mu-plugins directory only.
- * It does not ship as production behavior.
+ * It replaces the base Entry Detail asset callbacks for qualification requests;
+ * production source and shipped behavior remain unchanged.
  */
 
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
-use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
 function gpp_wu09_executable_gravityflow_shortcode_reaches_entry_detail( $content ) {
     if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' )
@@ -33,10 +33,12 @@ function gpp_wu09_executable_gravityflow_shortcode_reaches_entry_detail( $conten
         if ( '<' === $token[0] && ( 0 === strpos( $token, '<!--' ) || 0 === strpos( $token, '<![CDATA[' ) ) ) {
             continue;
         }
+
         $count = preg_match_all( '/' . $pattern . '/s', $token, $matches, PREG_SET_ORDER );
         if ( ! is_int( $count ) || $count < 1 ) {
             continue;
         }
+
         foreach ( $matches as $match ) {
             if ( ! isset( $match[1], $match[2], $match[3], $match[6] ) || 'gravityflow' !== $match[2] ) {
                 continue;
@@ -44,6 +46,7 @@ function gpp_wu09_executable_gravityflow_shortcode_reaches_entry_detail( $conten
             if ( '[' === $match[1] && ']' === $match[6] ) {
                 continue;
             }
+
             $atts = shortcode_parse_atts( $match[3] );
             if ( ! is_array( $atts ) ) {
                 continue;
@@ -107,63 +110,68 @@ function gpp_wu09_entry_request_reachable() {
     return gpp_wu09_frontend_entry_host_reachable();
 }
 
-function gpp_wu09_candidate_rewrite_early_assets() {
-    if ( ! class_exists( EntryDetailPresentationAdapter::class ) || ! class_exists( EntryDetailVisualVariant::class ) ) {
-        return;
+function gpp_wu09_entry_model_active() {
+    if ( ! class_exists( EntryDetailPresentationAdapter::class ) ) {
+        return false;
     }
 
-    $styles = array(
-        EntryDetailPresentationAdapter::STYLE_HANDLE,
-        EntryDetailVisualVariant::FULL_WIDTH_STYLE_HANDLE,
-        EntryDetailVisualVariant::FULL_WIDTH_WORKFLOW_PANEL_STYLE_HANDLE,
-        EntryDetailVisualVariant::FULL_WIDTH_TIMELINE_STYLE_HANDLE,
-    );
-    $enqueued_styles = array();
-    foreach ( $styles as $style ) {
-        if ( function_exists( 'wp_style_is' ) && wp_style_is( $style, 'enqueued' ) ) {
-            $enqueued_styles[] = $style;
-            if ( function_exists( 'wp_dequeue_style' ) ) {
-                wp_dequeue_style( $style );
-            }
-        }
-    }
-
-    $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
-    $script_was_enqueued = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' );
-    $GLOBALS['gpp_wu09_script_was_enqueued_early'] = $script_was_enqueued;
-    if ( $script_was_enqueued && function_exists( 'wp_dequeue_script' ) ) {
-        wp_dequeue_script( $script );
-    }
-
-    if ( ! gpp_wu09_entry_request_reachable() || ! function_exists( 'wp_enqueue_style' ) ) {
-        return;
-    }
-
-    // Re-enqueue only styles production already admitted for the active visual
-    // profile/variant, preserving their registered dependency graph and versions.
-    foreach ( $enqueued_styles as $style ) {
-        wp_enqueue_style( $style );
-    }
-
-    // Evidence-only fallback probe: test the bounded alternative without
-    // changing production. The existing JS root guard must make this inert on
-    // genuine Entry Detail routes that never receive server admission markers.
-    $js_mode = isset( $_GET['gpp_wu09_js_mode'] ) && is_string( $_GET['gpp_wu09_js_mode'] )
-        ? sanitize_key( wp_unslash( $_GET['gpp_wu09_js_mode'] ) )
-        : '';
-    if ( 'early' === $js_mode && $script_was_enqueued && function_exists( 'wp_enqueue_script' ) ) {
-        wp_enqueue_script( $script );
+    try {
+        $reflection = new ReflectionClass( EntryDetailPresentationAdapter::class );
+        $method = $reflection->getMethod( 'model' );
+        $method->setAccessible( true );
+        return null !== $method->invoke( null );
+    } catch ( Throwable $exception ) {
+        return false;
     }
 }
 
-add_action( 'admin_enqueue_scripts', 'gpp_wu09_candidate_rewrite_early_assets', 1000 );
-add_action( 'wp_enqueue_scripts', 'gpp_wu09_candidate_rewrite_early_assets', 1000 );
+function gpp_wu09_asset_version( $relative_path ) {
+    if ( ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'hash_file' ) ) {
+        return false;
+    }
+    $absolute = dirname( GPP_PLUGIN_FILE ) . '/' . ltrim( $relative_path, '/' );
+    if ( ! is_file( $absolute ) || ! is_readable( $absolute ) ) {
+        return false;
+    }
+    $hash = hash_file( 'sha256', $absolute );
+    return is_string( $hash ) && '' !== $hash ? substr( $hash, 0, 16 ) : false;
+}
+
+function gpp_wu09_enqueue_base_css() {
+    if ( ! gpp_wu09_entry_request_reachable() || ! gpp_wu09_entry_model_active()
+        || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+        return;
+    }
+
+    $path = 'assets/css/srwf-gravity-flow-entry-detail.css';
+    wp_enqueue_style(
+        EntryDetailPresentationAdapter::STYLE_HANDLE,
+        plugins_url( $path, GPP_PLUGIN_FILE ),
+        array(),
+        gpp_wu09_asset_version( $path )
+    );
+
+    $js_mode = isset( $_GET['gpp_wu09_js_mode'] ) && is_string( $_GET['gpp_wu09_js_mode'] )
+        ? sanitize_key( wp_unslash( $_GET['gpp_wu09_js_mode'] ) )
+        : '';
+    if ( 'early' === $js_mode && function_exists( 'wp_enqueue_script' ) ) {
+        $script_path = 'assets/js/srwf-gravity-flow-entry-detail.js';
+        wp_enqueue_script(
+            EntryDetailPresentationAdapter::SCRIPT_HANDLE,
+            plugins_url( $script_path, GPP_PLUGIN_FILE ),
+            array(),
+            gpp_wu09_asset_version( $script_path ),
+            true
+        );
+    }
+}
 
 function gpp_wu09_candidate_capture_dossier_start( $form, $entry ) {
     unset( $form, $entry );
     if ( ! gpp_wu09_entry_request_reachable() ) {
         return;
     }
+
     $GLOBALS['gpp_wu09_capture_level'] = ob_get_level();
     $GLOBALS['gpp_wu09_capture_active'] = ob_start();
 }
@@ -189,24 +197,27 @@ function gpp_wu09_candidate_capture_dossier_finish( $form, $entry ) {
         || false === strpos( $html, 'data-gpp-entry-detail="ready"' )
         || false === strpos( $html, 'data-gpp-review-mode="read-only"' )
         || false === strpos( $html, 'data-gpp-native-table-suppression="read-only-review"' )
-        || ! class_exists( EntryDetailPresentationAdapter::class )
-        || ! function_exists( 'wp_enqueue_script' ) ) {
+        || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_script' ) ) {
         return;
     }
 
-    $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
     $js_mode = isset( $_GET['gpp_wu09_js_mode'] ) && is_string( $_GET['gpp_wu09_js_mode'] )
         ? sanitize_key( wp_unslash( $_GET['gpp_wu09_js_mode'] ) )
         : '';
-    $registered_before = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'registered' );
-    $enqueued_before = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' );
+
     $footer_before = function_exists( 'did_action' ) ? did_action( 'wp_print_footer_scripts' ) : null;
     $wp_footer_before = function_exists( 'did_action' ) ? did_action( 'wp_footer' ) : null;
+    $admin_footer_before = function_exists( 'did_action' ) ? did_action( 'admin_print_footer_scripts' ) : null;
 
-    // Re-enqueue the already registered production handle. WordPress remains
-    // responsible for the normal footer queue and once-only script printing.
     if ( 'early' !== $js_mode ) {
-        wp_enqueue_script( $script );
+        $script_path = 'assets/js/srwf-gravity-flow-entry-detail.js';
+        wp_enqueue_script(
+            EntryDetailPresentationAdapter::SCRIPT_HANDLE,
+            plugins_url( $script_path, GPP_PLUGIN_FILE ),
+            array(),
+            gpp_wu09_asset_version( $script_path ),
+            true
+        );
     }
 
     $event = array(
@@ -214,13 +225,14 @@ function gpp_wu09_candidate_capture_dossier_finish( $form, $entry ) {
         'is_admin' => function_exists( 'is_admin' ) ? (bool) is_admin() : null,
         'mode' => '' === $js_mode ? 'post_admission' : $js_mode,
         'marker_admitted' => true,
-        'script_registered_before' => $registered_before,
-        'script_enqueued_before' => $enqueued_before,
-        'script_enqueued_after' => function_exists( 'wp_script_is' ) ? (bool) wp_script_is( $script, 'enqueued' ) : null,
+        'script_enqueued_after' => function_exists( 'wp_script_is' )
+            ? (bool) wp_script_is( EntryDetailPresentationAdapter::SCRIPT_HANDLE, 'enqueued' )
+            : null,
         'wp_print_footer_scripts_before' => $footer_before,
         'wp_footer_before' => $wp_footer_before,
-        'production_script_was_enqueued_early' => ! empty( $GLOBALS['gpp_wu09_script_was_enqueued_early'] ),
+        'admin_print_footer_scripts_before' => $admin_footer_before,
     );
+
     $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
     if ( is_string( $artifact_dir ) && '' !== $artifact_dir ) {
         file_put_contents(
@@ -231,5 +243,18 @@ function gpp_wu09_candidate_capture_dossier_finish( $form, $entry ) {
     }
 }
 
-add_action( 'gravityflow_entry_detail_content_before', 'gpp_wu09_candidate_capture_dossier_start', 19, 2 );
-add_action( 'gravityflow_entry_detail_content_before', 'gpp_wu09_candidate_capture_dossier_finish', 21, 2 );
+function gpp_wu09_install_asset_candidate() {
+    if ( ! class_exists( EntryDetailPresentationAdapter::class ) ) {
+        return;
+    }
+
+    remove_action( 'admin_enqueue_scripts', array( EntryDetailPresentationAdapter::class, 'enqueueAssets' ), 20 );
+    remove_action( 'wp_enqueue_scripts', array( EntryDetailPresentationAdapter::class, 'enqueueAssets' ), 20 );
+
+    add_action( 'admin_enqueue_scripts', 'gpp_wu09_enqueue_base_css', 19 );
+    add_action( 'wp_enqueue_scripts', 'gpp_wu09_enqueue_base_css', 19 );
+    add_action( 'gravityflow_entry_detail_content_before', 'gpp_wu09_candidate_capture_dossier_start', 19, 2 );
+    add_action( 'gravityflow_entry_detail_content_before', 'gpp_wu09_candidate_capture_dossier_finish', 21, 2 );
+}
+
+add_action( 'gform_loaded', 'gpp_wu09_install_asset_candidate', 50 );
