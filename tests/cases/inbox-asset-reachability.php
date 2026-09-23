@@ -14,6 +14,8 @@ $GLOBALS['gpp_actions'] = array();
 $GLOBALS['gpp_filters'] = array();
 $GLOBALS['gpp_enqueued_styles'] = array();
 $GLOBALS['gpp_style_states'] = array();
+$GLOBALS['gpp_registered_styles'] = array();
+$GLOBALS['gpp_printed_actions'] = array();
 $GLOBALS['gpp_is_admin'] = false;
 $GLOBALS['gpp_is_singular'] = true;
 $GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => '' );
@@ -77,6 +79,10 @@ function has_block( $name, $content = null ) {
 }
 
 function wp_enqueue_style( $handle, $src = '', $dependencies = array(), $version = false, $media = 'all' ) {
+    if ( '' === $src && isset( $GLOBALS['gpp_registered_styles'][ $handle ] ) ) {
+        $GLOBALS['gpp_style_states'][ $handle . ':enqueued' ] = true;
+        return;
+    }
     $GLOBALS['gpp_enqueued_styles'][] = array(
         'handle' => $handle,
         'src' => $src,
@@ -84,6 +90,26 @@ function wp_enqueue_style( $handle, $src = '', $dependencies = array(), $version
         'version' => $version,
         'media' => $media,
     );
+    $GLOBALS['gpp_registered_styles'][ $handle ] = end( $GLOBALS['gpp_enqueued_styles'] );
+    $GLOBALS['gpp_style_states'][ $handle . ':enqueued' ] = true;
+}
+
+function did_action( $hook ) {
+    return isset( $GLOBALS['gpp_printed_actions'][ $hook ] ) ? $GLOBALS['gpp_printed_actions'][ $hook ] : 0;
+}
+
+function wp_print_styles( $handles = false ) {
+    $GLOBALS['gpp_printed_actions']['wp_print_styles'] = did_action( 'wp_print_styles' ) + 1;
+    $handles = false === $handles ? array_keys( $GLOBALS['gpp_registered_styles'] ) : $handles;
+    foreach ( $handles as $handle ) {
+        if ( ! isset( $GLOBALS['gpp_registered_styles'][ $handle ] ) || wp_style_is( $handle, 'done' ) ) {
+            continue;
+        }
+        $style = $GLOBALS['gpp_registered_styles'][ $handle ];
+        wp_print_styles( $style['dependencies'] );
+        $GLOBALS['gpp_style_states'][ $handle . ':done' ] = true;
+        echo '<link id="' . $handle . '-css" rel="stylesheet" href="' . $style['src'] . '?ver=' . $style['version'] . '" />';
+    }
 }
 
 function wp_style_is( $handle, $status = 'enqueued' ) {
@@ -132,6 +158,8 @@ $reset_request = static function ( $content = '', $admin = false, $singular = tr
     $surface_reached->setValue( null, false );
     $GLOBALS['gpp_enqueued_styles'] = array();
     $GLOBALS['gpp_style_states'] = array();
+    $GLOBALS['gpp_registered_styles'] = array();
+    $GLOBALS['gpp_printed_actions'] = array();
     $GLOBALS['gpp_is_admin'] = $admin;
     $GLOBALS['gpp_is_singular'] = $singular;
     $GLOBALS['gpp_queried_object'] = (object) array( 'post_content' => $content );
@@ -215,6 +243,74 @@ gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Authentic shortcode 
 InboxPresentationAdapter::enqueueStyles();
 $assert_inbox_styles( 'The authentic Gravity Flow Inbox shortcode render seam must qualify delivery when the asset lifecycle runs.' );
 gpp_assert_true( false !== strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Authentic active shortcode Inbox must retain admitted composition.' );
+
+// The asset hook and head printing have completed before dynamically rendered Inbox output.
+$reset_request( '<p>Dynamic shortcode host render.</p>' );
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+ob_end_clean();
+$late_shortcode = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
+gpp_assert_same( 1, substr_count( $late_shortcode, 'id="' . InboxPresentationAdapter::STYLE_HANDLE . '-css"' ), 'Late shortcode must emit one presentation link.' );
+gpp_assert_same( 1, substr_count( $late_shortcode, 'id="' . InboxPresentationAdapter::NATIVE_STYLE_HANDLE . '-css"' ), 'Late shortcode must emit one native link.' );
+gpp_assert_true( strpos( $late_shortcode, '-css"' ) < strpos( $late_shortcode, 'data-gpp-inbox-surface=' ), 'Late shortcode CSS must precede Inbox output.' );
+gpp_assert_true( strpos( $late_shortcode, 'id="' . InboxPresentationAdapter::STYLE_HANDLE . '-css"' ) < strpos( $late_shortcode, 'id="' . InboxPresentationAdapter::NATIVE_STYLE_HANDLE . '-css"' ), 'Late native projection must follow presentation CSS.' );
+gpp_assert_true( false !== strpos( $late_shortcode, '?ver=' . substr( hash_file( 'sha256', dirname( GPP_PLUGIN_FILE ) . '/assets/css/srwf-gravity-flow-inbox.css' ), 0, 16 ) ), 'Late presentation must retain content-derived version.' );
+$second_shortcode = InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' );
+gpp_assert_same( 0, substr_count( $second_shortcode, '-css"' ), 'Second Inbox shortcode must not duplicate links.' );
+
+$reset_request( '<p>Dynamic block host render.</p>' );
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+ob_end_clean();
+$late_block = InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) );
+gpp_assert_same( 1, substr_count( $late_block, 'id="' . InboxPresentationAdapter::STYLE_HANDLE . '-css"' ), 'Late registered native block must emit one presentation link.' );
+gpp_assert_same( 1, substr_count( $late_block, 'id="' . InboxPresentationAdapter::NATIVE_STYLE_HANDLE . '-css"' ), 'Late registered native block must emit one native link.' );
+gpp_assert_true( strpos( $late_block, '-css"' ) < strpos( $late_block, $lookalike ), 'Late block CSS must precede its output.' );
+gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) ), 'Second Inbox block must not duplicate links.' );
+
+$reset_request( '[gravityflow page="inbox"]' );
+$GLOBALS['gpp_style_states']['global-styles:enqueued'] = true;
+$GLOBALS['gpp_style_states']['global-styles:done'] = true;
+$GLOBALS['gpp_style_states']['wp-theme:registered'] = true;
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+$head_styles = ob_get_clean();
+gpp_assert_same( 1, substr_count( $head_styles, 'id="' . InboxPresentationAdapter::STYLE_HANDLE . '-css"' ), 'Early head path must print the presentation link once.' );
+gpp_assert_same( 1, substr_count( $head_styles, 'id="' . InboxPresentationAdapter::NATIVE_STYLE_HANDLE . '-css"' ), 'Early head path must print the native link once.' );
+gpp_assert_same( 0, substr_count( InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' ), '-css"' ), 'An early head delivery must not repeat styles at render.' );
+gpp_assert_same( array( 'global-styles', 'wp-theme' ), $GLOBALS['gpp_registered_styles'][ InboxPresentationAdapter::STYLE_HANDLE ]['dependencies'], 'Host styles must precede presentation CSS when available.' );
+
+$reset_request( '<p>Unrelated.</p>' );
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+ob_end_clean();
+gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => 'core/html' ) ), 'Late unrelated block must emit no styles.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Late unrelated block must not enqueue styles.' );
+gpp_assert_same( $lookalike, InboxPresentationAdapter::filterShortcodeInbox( $lookalike, array(), '' ), 'Late lookalike shortcode output must not emit styles.' );
+
+$set_active_profile( false );
+$reset_request();
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+ob_end_clean();
+gpp_assert_same( $native_shortcode, InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' ), 'Late inactive shortcode must remain native without styles.' );
+gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) ), 'Late inactive block must remain native without styles.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Late inactive profile must not enqueue Inbox styles.' );
+$set_active_profile( true );
+
+$reset_request( '', true );
+InboxPresentationAdapter::enqueueStyles();
+ob_start();
+wp_print_styles();
+ob_end_clean();
+gpp_assert_same( $native_shortcode, InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' ), 'Admin render must not deliver frontend Inbox styles.' );
+gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) ), 'Admin block must not deliver frontend Inbox styles.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Admin render seam must not enqueue Inbox styles outside the admin list route.' );
 
 $reset_request( '', true );
 $_GET = array( 'page' => 'gravityflow-inbox' );

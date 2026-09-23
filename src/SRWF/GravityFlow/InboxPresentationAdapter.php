@@ -118,23 +118,21 @@ final class InboxPresentationAdapter {
             return $html;
         }
 
-        // Block themes may pre-render post content before wp_head. Record the
-        // authentic render as reachability evidence, but leave style enqueueing
-        // to wp_enqueue_scripts so WordPress global styles retain their normal
-        // position ahead of the admitted PR66 Inbox presentation styles.
+        // Pre-head renders still use the normal enqueue lifecycle. A render
+        // after head printing needs its own bounded delivery path.
         self::$surface_reached = true;
 
         if ( null === self::model() ) {
             return $html;
         }
         if ( false !== strpos( $html, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
-            return $html;
+            return self::prependLateStyles( $html );
         }
 
         $title = esc_html__( 'کارهای من', 'gravity-presentation-profiles' );
         $helper = esc_html__( 'پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.', 'gravity-presentation-profiles' );
 
-        return '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" dir="rtl" aria-labelledby="gpp-inbox-title">'
+        return self::prependLateStyles( '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" dir="rtl" aria-labelledby="gpp-inbox-title">'
             . '<div class="gpp-inbox-surface__inner">'
             . '<header class="gpp-inbox-surface__header">'
             . '<h1 class="gpp-inbox-surface__title" id="gpp-inbox-title">' . $title . '</h1>'
@@ -142,7 +140,7 @@ final class InboxPresentationAdapter {
             . '</header>'
             . '<div class="gpp-inbox-surface__host">' . $html . '</div>'
             . '</div>'
-            . '</section>';
+            . '</section>' );
     }
 
     /**
@@ -163,7 +161,34 @@ final class InboxPresentationAdapter {
         }
 
         self::$surface_reached = true;
-        return $block_content;
+        return null === self::model() ? $block_content : self::prependLateStyles( $block_content );
+    }
+
+    /** Print only the Inbox handles still pending after frontend head styles. */
+    private static function prependLateStyles( $content ) {
+        if ( ! function_exists( 'is_admin' ) || is_admin() || ! function_exists( 'did_action' ) || ! did_action( 'wp_print_styles' )
+            || ! function_exists( 'wp_style_is' ) || ! function_exists( 'wp_print_styles' ) ) {
+            return $content;
+        }
+
+        $pending = array();
+        foreach ( array( self::STYLE_HANDLE, self::NATIVE_STYLE_HANDLE ) as $handle ) {
+            if ( ! wp_style_is( $handle, 'done' ) ) {
+                $pending[] = $handle;
+            }
+        }
+        if ( ! $pending ) {
+            return $content;
+        }
+
+        // enqueueStyles owns URLs, content versions and host dependencies for
+        // both early and late delivery. WordPress resolves and marks printed
+        // handles as done, including dependencies, so later renders stay quiet.
+        self::enqueueStyles();
+        ob_start();
+        wp_print_styles( $pending );
+        $styles = ob_get_clean();
+        return $styles . $content;
     }
 
     public static function enqueueStyles() {
