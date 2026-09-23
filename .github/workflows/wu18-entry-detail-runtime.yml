@@ -423,6 +423,7 @@ jobs:
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu09-entry-*.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
+            /tmp/wu18-artifacts/wu18-persiangravity-timeline-diagnostic.json
             /tmp/wu18-artifacts/wu18-browser-results.json
             /tmp/wu18-artifacts/wu09-entry-asset-qualification.json
             /tmp/wu18-artifacts/wu09-entry-asset-browser-results.json
