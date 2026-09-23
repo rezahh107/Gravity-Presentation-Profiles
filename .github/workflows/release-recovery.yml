@@ -45,7 +45,7 @@ jobs:
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.33'
+          php-version: '8.2.34'
           coverage: none
 
       - name: Verify bounded recovery preconditions and version contract
@@ -222,7 +222,7 @@ jobs:
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.33'
+          php-version: '8.2.34'
           coverage: none
 
       - name: Install recovery tools
@@ -231,7 +231,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends zip unzip jq
-          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.34'
 
       - name: Bind recovery to exact current main and published source version
         shell: bash
