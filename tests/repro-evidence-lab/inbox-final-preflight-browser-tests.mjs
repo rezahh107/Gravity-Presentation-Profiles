@@ -77,6 +77,13 @@ async function load(page,url,width=1366,height=1000) {
   await page.evaluate(()=>document.fonts.ready);
 }
 
+async function searchQuery(search, value) {
+  await search.click();
+  await search.press('Control+A');
+  await search.press('Backspace');
+  if (value) await search.pressSequentially(value);
+}
+
 try {
   const context=await contextFor('bootstrap_admin'); const page=await context.newPage();
   for(const [name,url] of [['shortcode',manifest.frontend_inbox_url],['block',p06.authentic_block_page.url]]) {
@@ -86,14 +93,14 @@ try {
     await snapshot(page,`${name}-desktop-styles-disabled`);
     await load(page,url,390,844); await snapshot(page,`${name}-mobile`);
     const search=page.locator('[data-js="gflow-inbox-search"]');
-    await search.fill('PREFLIGHT_NO_MATCH_781339');
+    await searchQuery(search,'PREFLIGHT_NO_MATCH_781339');
     await page.waitForFunction(()=>document.querySelectorAll('.ag-center-cols-container > .ag-row').length===0);
     await snapshot(page,`${name}-no-result-mobile`);
-    await search.fill('');
+    await searchQuery(search,'');
     await page.waitForFunction(()=>document.querySelectorAll('.ag-center-cols-container > .ag-row').length>0);
     await snapshot(page,`${name}-search-cleared-mobile`);
     await load(page,url);
-    await search.fill('PREFLIGHT_NO_MATCH_781339');
+    await searchQuery(search,'PREFLIGHT_NO_MATCH_781339');
     await page.waitForFunction(()=>document.querySelectorAll('.ag-center-cols-container > .ag-row').length===0);
     await snapshot(page,`${name}-no-result-desktop`);
     await load(page,url,683,500); await snapshot(page,`${name}-half-viewport-reflow-NOT-browser-zoom`);
