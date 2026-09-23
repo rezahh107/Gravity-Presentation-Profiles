@@ -22,6 +22,11 @@ if ( ! function_exists( 'absint' ) ) {
         return abs( (int) $value );
     }
 }
+if ( ! function_exists( 'is_admin' ) ) {
+    function is_admin() {
+        return true;
+    }
+}
 
 Autoloader::register();
 
@@ -55,7 +60,7 @@ $full_width_eligibility->setAccessible( true );
 $full_width_active = $full_width_reflection->getProperty( 'full_width_active' );
 $full_width_active->setAccessible( true );
 $full_width_active->setValue( null, true );
-$_GET = array( 'view' => 'entry', 'lid' => '42' );
+$_GET = array( 'page' => 'gravityflow-inbox', 'view' => 'entry', 'lid' => '42' );
 
 $approval_read_only = new WU11_Fake_Entry_Step( 'approval' );
 $approval_editor = new WU11_Fake_Entry_Step( 'approval', array( '7' ) );
