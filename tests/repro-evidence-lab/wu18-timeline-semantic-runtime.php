@@ -141,8 +141,34 @@ $host_inventory_path = trailingslashit( $artifact_dir ) . 'wu18-host-seam-invent
 $host_inventory = is_file( $host_inventory_path ) ? json_decode( file_get_contents( $host_inventory_path ), true ) : null;
 wu18_assert( is_array( $host_inventory ), 'Pinned WU18 host seam inventory is unavailable for Timeline UTC qualification.' );
 wu18_assert( '3.1.0' === (string) ( $host_inventory['gravity_flow_version'] ?? '' ), 'Timeline UTC qualification is not bound to exact Gravity Flow 3.1.0 evidence.' );
-$host_inventory_evidence = wp_json_encode( $host_inventory, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-wu18_assert( false !== strpos( $host_inventory_evidence, "'date_created' => current_time( 'mysql', true )," ), 'Pinned host seam inventory did not prove Gravity Flow activity timestamps use UTC WordPress time.' );
+
+$flow_package_sha256 = getenv( 'WU21_FLOW_SHA256' );
+wu18_assert(
+    is_string( $flow_package_sha256 )
+        && hash_equals( 'ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404', strtolower( $flow_package_sha256 ) ),
+    'Timeline UTC qualification is not bound to the exact pinned Gravity Flow 3.1.0 source package.'
+);
+
+$host_main_sha256 = (string) ( $host_inventory['gravity_flow_main_sha256'] ?? '' );
+wu18_assert(
+    1 === preg_match( '/^[a-f0-9]{64}$/D', strtolower( $host_main_sha256 ) ),
+    'Pinned Gravity Flow package identity evidence is unavailable for Timeline UTC qualification.'
+);
+
+require_once __DIR__ . '/wu18-timeline-utc-source-evidence.php';
+try {
+    $timeline_utc_source_evidence = wu18_timeline_utc_source_evidence(
+        WP_PLUGIN_DIR . '/gravityflow',
+        $host_main_sha256
+    );
+} catch ( Throwable $exception ) {
+    throw new RuntimeException(
+        'Pinned Gravity Flow UTC source evidence failed: ' . $exception->getMessage(),
+        0,
+        $exception
+    );
+}
+$timeline_utc_source_evidence['package_sha256'] = strtolower( $flow_package_sha256 );
 
 $reflection = new ReflectionClass( EntryDetailTimelineSemanticPresentation::class );
 $classify = $reflection->getMethod( 'classify' );
@@ -188,6 +214,7 @@ $probe = array(
         'visible_text_parsed' => false,
         'workflow_submitted_matches_entry_date_created' => true,
         'native_note_creation_utc_source_proven' => true,
+        'gravity_flow_utc_source_provenance' => $timeline_utc_source_evidence,
         'provider_backed_system_event' => $workflow_submitted_jalali,
         'provider_backed_native_note' => $synthetic_control_jalali,
         'malformed_raw_source_native_fallback' => true,
