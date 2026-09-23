@@ -7,6 +7,7 @@
  */
 
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
 function gpp_wu09_executable_gravityflow_shortcode_reaches_entry_detail( $content ) {
     if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' )
@@ -107,23 +108,38 @@ function gpp_wu09_entry_request_reachable() {
 }
 
 function gpp_wu09_candidate_rewrite_early_assets() {
-    if ( ! class_exists( EntryDetailPresentationAdapter::class ) ) {
+    if ( ! class_exists( EntryDetailPresentationAdapter::class ) || ! class_exists( EntryDetailVisualVariant::class ) ) {
         return;
     }
 
-    $style = EntryDetailPresentationAdapter::STYLE_HANDLE;
-    $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
-    $style_active = function_exists( 'wp_style_is' ) && wp_style_is( $style, 'enqueued' );
-    $script_active = function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' );
-
-    if ( $style_active && function_exists( 'wp_dequeue_style' ) ) {
-        wp_dequeue_style( $style );
+    $styles = array(
+        EntryDetailPresentationAdapter::STYLE_HANDLE,
+        EntryDetailVisualVariant::FULL_WIDTH_STYLE_HANDLE,
+        EntryDetailVisualVariant::FULL_WIDTH_WORKFLOW_PANEL_STYLE_HANDLE,
+        EntryDetailVisualVariant::FULL_WIDTH_TIMELINE_STYLE_HANDLE,
+    );
+    $enqueued_styles = array();
+    foreach ( $styles as $style ) {
+        if ( function_exists( 'wp_style_is' ) && wp_style_is( $style, 'enqueued' ) ) {
+            $enqueued_styles[] = $style;
+            if ( function_exists( 'wp_dequeue_style' ) ) {
+                wp_dequeue_style( $style );
+            }
+        }
     }
-    if ( $script_active && function_exists( 'wp_dequeue_script' ) ) {
+
+    $script = EntryDetailPresentationAdapter::SCRIPT_HANDLE;
+    if ( function_exists( 'wp_script_is' ) && wp_script_is( $script, 'enqueued' ) && function_exists( 'wp_dequeue_script' ) ) {
         wp_dequeue_script( $script );
     }
 
-    if ( $style_active && gpp_wu09_entry_request_reachable() && function_exists( 'wp_enqueue_style' ) ) {
+    if ( ! gpp_wu09_entry_request_reachable() || ! function_exists( 'wp_enqueue_style' ) ) {
+        return;
+    }
+
+    // Re-enqueue only styles production already admitted for the active visual
+    // profile/variant, preserving their registered dependency graph and versions.
+    foreach ( $enqueued_styles as $style ) {
         wp_enqueue_style( $style );
     }
 }
