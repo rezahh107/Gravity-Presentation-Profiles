@@ -134,13 +134,19 @@ final class EntryDetailFullWidthPresentationAdapter {
             return false;
         }
 
+        // Full Width workflow guidance is meaningful only when Gravity Flow's
+        // own editability predicate is available. Missing host capability is not
+        // permission to infer actionability from presentation state.
+        if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) || ! method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' ) ) {
+            return false;
+        }
+
         try {
             if ( 'approval' !== (string) $current_step->get_type() ) {
                 return false;
             }
 
-            if ( class_exists( 'Gravity_Flow_Entry_Detail' ) && method_exists( 'Gravity_Flow_Entry_Detail', 'can_update' )
-                && ! \Gravity_Flow_Entry_Detail::can_update( $current_step ) ) {
+            if ( ! \Gravity_Flow_Entry_Detail::can_update( $current_step ) ) {
                 return false;
             }
 
