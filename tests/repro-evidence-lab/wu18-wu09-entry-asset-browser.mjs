@@ -194,6 +194,22 @@ await test('WU09-Q1-FRONTEND-STATUS', 'frontend Status shortcode Entry Detail su
   return { supported: true, ...state, post_admission_js_delivered: state.entry_js_tag_count === 1 && state.entry_js_resource_count === 1 && state.markers?.previewBound === '1', lifecycle };
 });
 
+await test('WU09-Q1-FRONTEND-STATUS-BLOCK', 'registered native Status block Entry Detail support is measured rather than assumed', async () => {
+  const fixture = qualification.frontend_fixtures.status_block;
+  if (!fixture) return { supported: false, reason: 'gravityflow/status block not registered in pinned runtime' };
+  await page.goto(frontendEntry(fixture, manifest.alpha), { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  const hostDetail = state.native_table_present || state.status_count > 0 || state.dossier_count > 0;
+  if (!hostDetail) {
+    if (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0) throw new Error(`Unsupported Status block detail route received Entry Detail assets: ${JSON.stringify(state)}`);
+    return { supported: false, ...state };
+  }
+  assertAdmittedCssAndMarkers(state, 'frontend Status block Entry Detail');
+  const lifecycle = latestLifecycleFor(state.url);
+  if (state.entry_js_tag_count > 1 || state.entry_js_resource_count > 1) throw new Error(`Frontend Status block duplicated Entry Detail JS: ${JSON.stringify(state)}`);
+  return { supported: true, ...state, post_admission_js_delivered: state.entry_js_tag_count === 1 && state.entry_js_resource_count === 1 && state.markers?.previewBound === '1', lifecycle };
+});
+
 await test('WU09-Q1-ADMIN-INBOX-NEGATIVE', 'ordinary admin Inbox does not receive Entry Detail assets', async () => {
   await page.goto(adminInbox, { waitUntil: 'networkidle' });
   const state = await assetState(page);
@@ -308,22 +324,25 @@ await test('WU09-Q4-PERMISSION-DENIED', 'non-authorized viewer never gains dossi
   return state;
 });
 
-await test('WU09-Q4-PRINT-NEGATIVE', 'native Print response does not receive Entry Detail base assets', async () => {
+await test('WU09-Q4-PRINT-NEGATIVE', 'authentic native Print document does not receive Entry Detail base assets', async () => {
   const response = await context.request.get(printUrl(manifest.alpha));
   const contentType = response.headers()['content-type'] || '';
   const body = await response.body();
   const text = body.toString('utf8');
+  if (response.status() !== 200) throw new Error(`Native Print request did not return HTTP 200: ${response.status()}`);
+  const nativeForm = /<[^>]+id=["']view-container["'][^>]*>\s*<form\b/i.test(text);
+  if (!nativeForm) throw new Error(`Native Print response did not reach the authentic #view-container > form document: ${text.slice(0, 800)}`);
   if (text.includes(styleHandle) || text.includes(scriptHandle) || text.includes('srwf-gravity-flow-entry-detail.css') || text.includes('srwf-gravity-flow-entry-detail.js')) {
-    throw new Error('Print response contains Entry Detail base asset delivery.');
+    throw new Error('Authentic native Print document contains Entry Detail base asset delivery.');
   }
-  return { status: response.status(), content_type: contentType, bytes: body.length };
+  return { status: response.status(), content_type: contentType, bytes: body.length, native_view_container_form: true };
 });
 
 await browser.close();
 
 const failures = results.filter(result => result.status === 'FAIL');
 const statusResult = results.find(result => result.id === 'WU09-Q1-FRONTEND-STATUS');
-const frontendAdmissionResults = results.filter(result => ['WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS'].includes(result.id) && result.status === 'PASS' && result.details?.supported !== false);
+const frontendAdmissionResults = results.filter(result => ['WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS', 'WU09-Q1-FRONTEND-STATUS-BLOCK'].includes(result.id) && result.status === 'PASS' && result.details?.supported !== false);
 const frontendLateJsReliable = frontendAdmissionResults.length > 0 && frontendAdmissionResults.every(result => result.details?.post_admission_js_delivered === true);
 const frontendLifecycle = frontendAdmissionResults.map(result => result.details?.lifecycle).filter(Boolean);
 let postAdmissionJsFailureReason = null;
@@ -341,7 +360,7 @@ if (!frontendLateJsReliable) {
 const fallbackIds = ['WU09-Q3-FALLBACK-FRONTEND', 'WU09-Q3-FALLBACK-EDITOR-GUARD', 'WU09-Q3-FALLBACK-UNRELATED-GUARD'];
 const fallbackQualified = fallbackIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
 const cssCriticalIds = [
-  'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-USER-INPUT','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS',
+  'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-USER-INPUT','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS','WU09-Q1-FRONTEND-STATUS-BLOCK',
   'WU09-Q1-ADMIN-INBOX-NEGATIVE','WU09-Q1-UNRELATED-ADMIN-NEGATIVE','WU09-Q1-UNRELATED-FRONTEND-QUERY-NEGATIVE',
   'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-ADMIN-MISSING-ID','WU09-Q1-FRONTEND-MISSING-ID','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q4-PRINT-NEGATIVE'
 ];
@@ -356,6 +375,7 @@ const output = {
     frontend_inbox_shortcode: 'SUPPORTED_AND_EXERCISED',
     frontend_inbox_block: qualification.frontend_fixtures.inbox_block ? 'SUPPORTED_AND_EXERCISED' : 'NOT_REGISTERED',
     frontend_status_shortcode: statusResult?.details?.supported === false ? 'NOT_OBSERVED_AS_ENTRY_DETAIL' : 'SUPPORTED_AND_EXERCISED',
+    frontend_status_block: results.find(result => result.id === 'WU09-Q1-FRONTEND-STATUS-BLOCK')?.details?.supported === false ? 'NOT_OBSERVED_AS_ENTRY_DETAIL' : 'SUPPORTED_AND_EXERCISED',
     ordinary_inbox: 'NEGATIVE_CONTROL',
     unrelated_admin: 'NEGATIVE_CONTROL',
     unrelated_frontend: 'NEGATIVE_CONTROL',
