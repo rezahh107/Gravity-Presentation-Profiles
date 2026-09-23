@@ -15,13 +15,7 @@ on:
       - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
       - 'tests/repro-evidence-lab/create-wu18-unbound-form.php'
-      - 'tests/repro-evidence-lab/wu18-admin-setup-request.php'
-      - 'tests/repro-evidence-lab/wu18-admin-settings-context-probe.php'
-      - 'tests/repro-evidence-lab/wu18-entry-detail-setup-state.php'
-      - 'tests/repro-evidence-lab/wu18-gf-settings-save-qualification.py'
-      - 'tests/repro-evidence-lab/wu18-runtime-tests.php'
-      - 'tests/repro-evidence-lab/wu18-browser-tests.mjs'
-      - 'tests/repro-evidence-lab/wu18-post-browser-controls.php'
+      - 'tests/repro-evidence-lab/wu18-*'
       - 'tests/repro-evidence-lab/wu02-entry-visibility-differential.mjs'
       - 'profiles/srwf/operations/operations-package-v1.json'
       - 'gravity-presentation-profiles.php'
@@ -176,7 +170,6 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"gravity_flow_api_loaded_before_autoload_check": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
           grep -q '"form_bound_api_constructible": true' "$WU21_ARTIFACT_DIR/wu18-admin-settings-context.json"
-
           # Backward-compatibility negative control. This remains distinct from
           # the primary user-facing Gravity Forms settings-save qualification.
           legacy_failure_body=/tmp/wu18-entry-detail-legacy-failure-body.html
