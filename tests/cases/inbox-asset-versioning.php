@@ -11,10 +11,43 @@ if ( ! defined( 'GPP_PLUGIN_FILE' ) ) {
 }
 
 $GLOBALS['gpp_inbox_asset_styles'] = array();
+$GLOBALS['gpp_inbox_asset_wp_theme_registered'] = false;
+$GLOBALS['gpp_inbox_asset_global_styles_enqueued'] = true;
+$GLOBALS['gpp_is_admin'] = true;
+
+function add_action( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
+    unset( $hook, $callback, $priority, $accepted_args );
+}
+
+function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
+    unset( $hook, $callback, $priority, $accepted_args );
+}
+
+function is_admin() {
+    return (bool) $GLOBALS['gpp_is_admin'];
+}
+
+function wp_unslash( $value ) {
+    return $value;
+}
+
+function sanitize_key( $key ) {
+    return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
+}
 
 function plugins_url( $path, $plugin_file ) {
     unset( $plugin_file );
-    return 'https://example.test/wp-content/plugins/gravity-presentation-profiles/' . ltrim( (string) $path, '/' );
+    return 'https://example.invalid/wp-content/plugins/gravity-presentation-profiles/' . ltrim( $path, '/' );
+}
+
+function wp_style_is( $handle, $status = 'enqueued' ) {
+    if ( 'global-styles' === $handle && 'enqueued' === $status ) {
+        return (bool) $GLOBALS['gpp_inbox_asset_global_styles_enqueued'];
+    }
+    if ( 'wp-theme' === $handle && 'registered' === $status ) {
+        return (bool) $GLOBALS['gpp_inbox_asset_wp_theme_registered'];
+    }
+    return false;
 }
 
 function wp_enqueue_style( $handle, $src = '', $dependencies = array(), $version = false, $media = 'all' ) {
@@ -37,45 +70,33 @@ $model = $adapter->getProperty( 'model' );
 $model->setAccessible( true );
 $model->setValue( null, new stdClass() );
 
+$_GET = array( 'page' => 'gravityflow-inbox' );
 InboxPresentationAdapter::enqueueStyles();
 
-gpp_assert_same( 2, count( $GLOBALS['gpp_inbox_asset_styles'] ), 'Inbox must enqueue exactly its presentation and native projection styles.' );
+gpp_assert_same( 2, count( $GLOBALS['gpp_inbox_asset_styles'] ), 'Inbox styles should enqueue as one presentation/native pair.' );
+$presentation = $GLOBALS['gpp_inbox_asset_styles'][0];
+$native = $GLOBALS['gpp_inbox_asset_styles'][1];
 
-$plugin_root = dirname( GPP_PLUGIN_FILE );
-$expected = array(
-    InboxPresentationAdapter::STYLE_HANDLE => array(
-        'path' => 'assets/css/srwf-gravity-flow-inbox.css',
-        'dependencies' => array(),
-    ),
-    InboxPresentationAdapter::NATIVE_STYLE_HANDLE => array(
-        'path' => 'assets/css/srwf-gravity-flow-inbox-native.css',
-        'dependencies' => array( InboxPresentationAdapter::STYLE_HANDLE ),
-    ),
-);
+gpp_assert_same( InboxPresentationAdapter::STYLE_HANDLE, $presentation['handle'], 'Presentation stylesheet handle changed.' );
+gpp_assert_same( array( 'global-styles' ), $presentation['dependencies'], 'Active WordPress global styles must precede the host-owned Inbox presentation cascade.' );
+gpp_assert_same( InboxPresentationAdapter::NATIVE_STYLE_HANDLE, $native['handle'], 'Native projection stylesheet handle changed.' );
+gpp_assert_same( array( InboxPresentationAdapter::STYLE_HANDLE ), $native['dependencies'], 'Native projection stylesheet must stay ordered after the presentation stylesheet.' );
+gpp_assert_true( is_string( $presentation['version'] ) && 16 === strlen( $presentation['version'] ), 'Presentation stylesheet requires deterministic content-derived version identity.' );
+gpp_assert_true( is_string( $native['version'] ) && 16 === strlen( $native['version'] ), 'Native projection stylesheet requires deterministic content-derived version identity.' );
+gpp_assert_same( substr( hash_file( 'sha256', dirname( GPP_PLUGIN_FILE ) . '/assets/css/srwf-gravity-flow-inbox.css' ), 0, 16 ), $presentation['version'], 'Presentation stylesheet version must bind to exact bytes.' );
+gpp_assert_same( substr( hash_file( 'sha256', dirname( GPP_PLUGIN_FILE ) . '/assets/css/srwf-gravity-flow-inbox-native.css' ), 0, 16 ), $native['version'], 'Native projection stylesheet version must bind to exact bytes.' );
 
-foreach ( $GLOBALS['gpp_inbox_asset_styles'] as $style ) {
-    gpp_assert_true( isset( $expected[ $style['handle'] ] ), 'Unexpected Inbox style handle was enqueued.' );
-    $contract = $expected[ $style['handle'] ];
-    $absolute = $plugin_root . '/' . $contract['path'];
-    $hash = hash_file( 'sha256', $absolute );
-    gpp_assert_true( is_string( $hash ) && '' !== $hash, 'Inbox stylesheet content hash must be readable.' );
-    gpp_assert_same( substr( $hash, 0, 16 ), $style['version'], 'Inbox stylesheet cache key must be derived from the exact shipped bytes: ' . $style['handle'] );
-    gpp_assert_same( $contract['dependencies'], $style['dependencies'], 'Inbox stylesheet dependencies must remain unchanged: ' . $style['handle'] );
-    gpp_assert_true( '1.0.0' !== $style['version'], 'Inbox stylesheet cache key must not remain the historical hard-coded version.' );
-}
+$GLOBALS['gpp_inbox_asset_styles'] = array();
+$GLOBALS['gpp_inbox_asset_wp_theme_registered'] = true;
+InboxPresentationAdapter::resetRuntimeCache();
+$model_loaded->setValue( null, true );
+$model->setValue( null, new stdClass() );
+$_GET = array( 'page' => 'gravityflow-inbox' );
+InboxPresentationAdapter::enqueueStyles();
 
-$asset_version = $adapter->getMethod( 'assetVersion' );
-$asset_version->setAccessible( true );
-$temp = tempnam( sys_get_temp_dir(), 'gpp-inbox-asset-' );
-gpp_assert_true( false !== $temp, 'A temporary asset file is required for cache-key falsification.' );
-file_put_contents( $temp, 'old-css-bytes' );
-$first = $asset_version->invoke( null, $temp );
-file_put_contents( $temp, 'new-css-bytes' );
-$second = $asset_version->invoke( null, $temp );
-@unlink( $temp );
-
-gpp_assert_true( is_string( $first ) && '' !== $first, 'Content-derived cache key must be available for readable assets.' );
-gpp_assert_true( is_string( $second ) && '' !== $second, 'Changed asset bytes must still produce a cache key.' );
-gpp_assert_true( $first !== $second, 'Changing stylesheet bytes must change the cache key even when the plugin version is unchanged.' );
+gpp_assert_same( 3, count( $GLOBALS['gpp_inbox_asset_styles'] ), 'Registered wp-theme dependency should be enqueued with the Inbox style pair.' );
+gpp_assert_same( 'wp-theme', $GLOBALS['gpp_inbox_asset_styles'][0]['handle'], 'wp-theme must be enqueued when the host registers it.' );
+gpp_assert_same( array( 'global-styles', 'wp-theme' ), $GLOBALS['gpp_inbox_asset_styles'][1]['dependencies'], 'Presentation stylesheet must preserve both active host dependencies in deterministic order.' );
+gpp_assert_same( array( InboxPresentationAdapter::STYLE_HANDLE ), $GLOBALS['gpp_inbox_asset_styles'][2]['dependencies'], 'Native projection stylesheet dependency ordering changed when wp-theme is available.' );
 
 echo "INBOX_ASSET_VERSIONING_PASS\n";

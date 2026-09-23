@@ -32,3 +32,8 @@ await import('./inbox-human-display-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-bootstrap.mjs');
 await import('./inbox-width-rtl-comparative-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-finalize.mjs');
+
+// P06 exercises deliberate lifecycle mutation for its inactive-profile negative
+// control. Keep it after the established browser regressions so the new
+// qualification cannot alter the state observed by pre-existing suites.
+await import('./p06-inbox-asset-reachability-browser-test.mjs');

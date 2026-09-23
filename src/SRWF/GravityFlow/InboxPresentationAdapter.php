@@ -20,11 +20,13 @@ final class InboxPresentationAdapter {
     const CARD_COLUMN = 'gpp_case_card';
     const STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox';
     const NATIVE_STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox-native';
+    const NATIVE_BLOCK = 'gravityflow/inbox';
 
     private static $model_loaded = false;
     private static $model = null;
     private static $form_cache = array();
     private static $presentation_resolver = null;
+    private static $surface_reached = false;
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
@@ -36,6 +38,11 @@ final class InboxPresentationAdapter {
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'filterColumns' ), 100, 2 );
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
         add_filter( 'gravityflow_shortcode_inbox', array( __CLASS__, 'filterShortcodeInbox' ), 20, 3 );
+        add_filter( 'render_block', array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
+
+        // Styles must enter the normal WordPress head lifecycle so the admitted
+        // PR66 host-width cascade remains deterministic. Reachability is resolved
+        // independently inside enqueueStyles(); profile activation is not enough.
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
     }
@@ -45,6 +52,7 @@ final class InboxPresentationAdapter {
         self::$model = null;
         self::$form_cache = array();
         self::$presentation_resolver = null;
+        self::$surface_reached = false;
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -103,20 +111,28 @@ final class InboxPresentationAdapter {
     public static function filterShortcodeInbox( $html, $atts, $content ) {
         unset( $atts, $content );
 
-        if ( null === self::model() || ! is_string( $html ) ) {
+        if ( ! is_string( $html ) ) {
             return $html;
         }
         if ( false === strpos( $html, 'gflow-inbox gflow-grid gflow-common' ) || false === strpos( $html, 'data-js="gflow-inbox"' ) ) {
             return $html;
         }
-        if ( false !== strpos( $html, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
+
+        // Pre-head renders still use the normal enqueue lifecycle. A render
+        // after head printing needs its own bounded delivery path.
+        self::$surface_reached = true;
+
+        if ( null === self::model() ) {
             return $html;
+        }
+        if ( false !== strpos( $html, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
+            return self::prependLateStyles( $html );
         }
 
         $title = esc_html__( 'کارهای من', 'gravity-presentation-profiles' );
         $helper = esc_html__( 'پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.', 'gravity-presentation-profiles' );
 
-        return '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" dir="rtl" aria-labelledby="gpp-inbox-title">'
+        return self::prependLateStyles( '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" dir="rtl" aria-labelledby="gpp-inbox-title">'
             . '<div class="gpp-inbox-surface__inner">'
             . '<header class="gpp-inbox-surface__header">'
             . '<h1 class="gpp-inbox-surface__title" id="gpp-inbox-title">' . $title . '</h1>'
@@ -124,11 +140,59 @@ final class InboxPresentationAdapter {
             . '</header>'
             . '<div class="gpp-inbox-surface__host">' . $html . '</div>'
             . '</div>'
-            . '</section>';
+            . '</section>' );
+    }
+
+    /**
+     * Gravity Flow 3.1.0 also registers its native Inbox block. Post-content
+     * prequalification normally enqueues the styles in the head. This exact
+     * render identity can establish reachability during block-theme pre-render;
+     * arbitrary DOM lookalikes and unrelated blocks never qualify it.
+     */
+    public static function filterFrontendBlock( $block_content, $block ) {
+        if ( ! is_string( $block_content ) || ! is_array( $block ) ) {
+            return $block_content;
+        }
+        if ( self::NATIVE_BLOCK !== ( isset( $block['blockName'] ) ? $block['blockName'] : null ) || ! self::nativeInboxBlockRegistered() ) {
+            return $block_content;
+        }
+        if ( false === strpos( $block_content, 'gflow-inbox' ) || false === strpos( $block_content, 'data-js="gflow-inbox"' ) ) {
+            return $block_content;
+        }
+
+        self::$surface_reached = true;
+        return null === self::model() ? $block_content : self::prependLateStyles( $block_content );
+    }
+
+    /** Print only the Inbox handles still pending after frontend head styles. */
+    private static function prependLateStyles( $content ) {
+        if ( ! function_exists( 'is_admin' ) || is_admin() || ! function_exists( 'did_action' ) || ! did_action( 'wp_print_styles' )
+            || ! function_exists( 'wp_style_is' ) || ! function_exists( 'wp_print_styles' ) ) {
+            return $content;
+        }
+
+        $pending = array();
+        foreach ( array( self::STYLE_HANDLE, self::NATIVE_STYLE_HANDLE ) as $handle ) {
+            if ( ! wp_style_is( $handle, 'done' ) ) {
+                $pending[] = $handle;
+            }
+        }
+        if ( ! $pending ) {
+            return $content;
+        }
+
+        // enqueueStyles owns URLs, content versions and host dependencies for
+        // both early and late delivery. WordPress resolves and marks printed
+        // handles as done, including dependencies, so later renders stay quiet.
+        self::enqueueStyles();
+        ob_start();
+        wp_print_styles( $pending );
+        $styles = ob_get_clean();
+        return $styles . $content;
     }
 
     public static function enqueueStyles() {
-        if ( null === self::model() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+        if ( ! self::currentRequestReachesInbox() || null === self::model() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
             return;
         }
 
@@ -136,6 +200,13 @@ final class InboxPresentationAdapter {
         $native_path = 'assets/css/srwf-gravity-flow-inbox-native.css';
         $plugin_root = dirname( GPP_PLUGIN_FILE );
         $presentation_dependencies = array();
+
+        // WordPress 6.8.3 exposes block-theme layout rules through the enqueued
+        // global-styles handle. Preserve host ownership by making that active
+        // host cascade an explicit predecessor of the admitted Inbox stylesheet.
+        if ( function_exists( 'wp_style_is' ) && wp_style_is( 'global-styles', 'enqueued' ) ) {
+            $presentation_dependencies[] = 'global-styles';
+        }
 
         // WordPress 7.1 registers the public Design System token stylesheet as
         // wp-theme. Older supported runtimes simply use GPP's bounded fallbacks.
@@ -156,6 +227,88 @@ final class InboxPresentationAdapter {
             array( self::STYLE_HANDLE ),
             self::assetVersion( $plugin_root . '/' . $native_path )
         );
+    }
+
+    private static function currentRequestReachesInbox() {
+        if ( self::$surface_reached ) {
+            return true;
+        }
+
+        if ( self::isNativeInboxListRequest() || self::isFrontendInboxRequest() ) {
+            self::$surface_reached = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function isNativeInboxListRequest() {
+        if ( ! function_exists( 'is_admin' ) || ! is_admin() ) {
+            return false;
+        }
+
+        $page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+        $view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+
+        return 'gravityflow-inbox' === $page && '' === $view;
+    }
+
+    private static function isFrontendInboxRequest() {
+        if ( ! function_exists( 'is_admin' ) || is_admin() || ! function_exists( 'is_singular' ) || ! is_singular() || ! function_exists( 'get_queried_object' ) ) {
+            return false;
+        }
+
+        $object = get_queried_object();
+        if ( ! is_object( $object ) || ! isset( $object->post_content ) || ! is_string( $object->post_content ) ) {
+            return false;
+        }
+
+        $content = $object->post_content;
+        return self::contentHasInboxShortcode( $content ) || self::contentHasInboxBlock( $content );
+    }
+
+    private static function contentHasInboxShortcode( $content ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' ) || ! shortcode_exists( 'gravityflow' ) || ! function_exists( 'get_shortcode_regex' ) || ! function_exists( 'shortcode_parse_atts' ) ) {
+            return false;
+        }
+
+        $pattern = get_shortcode_regex( array( 'gravityflow' ) );
+        if ( ! is_string( $pattern ) || '' === $pattern || false === preg_match_all( '/' . $pattern . '/s', $content, $matches, PREG_SET_ORDER ) ) {
+            return false;
+        }
+
+        foreach ( $matches as $match ) {
+            if ( ! isset( $match[1], $match[2], $match[3], $match[6] ) || 'gravityflow' !== $match[2] ) {
+                continue;
+            }
+            if ( '[' === $match[1] && ']' === $match[6] ) {
+                continue;
+            }
+
+            $atts = shortcode_parse_atts( $match[3] );
+            if ( is_array( $atts ) && isset( $atts['page'] ) && 'inbox' === sanitize_key( (string) $atts['page'] ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function contentHasInboxBlock( $content ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'has_block' ) || ! self::nativeInboxBlockRegistered() ) {
+            return false;
+        }
+
+        return has_block( self::NATIVE_BLOCK, $content );
+    }
+
+    private static function nativeInboxBlockRegistered() {
+        if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
+            return false;
+        }
+
+        $registry = \WP_Block_Type_Registry::get_instance();
+        return is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $registry->is_registered( self::NATIVE_BLOCK );
     }
 
     private static function assetVersion( $absolute_path ) {
