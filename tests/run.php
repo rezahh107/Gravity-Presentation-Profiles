@@ -60,6 +60,7 @@ $cases = array(
     'entry-detail-full-width-css-contract.php',
     'entry-detail-timeline-semantic-presentation.php',
     'timeline-utc-source-evidence.php',
+    'wu18-workflow-trigger-contract.php',
     'gravity-flow-host-dependency-regressions.php',
     'entry-detail-full-width-workflow-panel-presentation.php',
     'entry-detail-full-width-asset-scope.php',
