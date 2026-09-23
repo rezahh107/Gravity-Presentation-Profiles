@@ -87,6 +87,16 @@ async function waitForNativeInbox(page) {
 
 runRuntimeQualification();
 
+for (const mode of ['shortcode', 'block']) {
+  const script = path.join(repoRoot, 'tests/repro-evidence-lab/p06-inbox-late-runtime.php');
+  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', script], {
+    encoding: 'utf8',
+    env: { ...process.env, P06_LATE_SURFACE: mode },
+  });
+  if (cp.status !== 0) throw new Error(`P06 late ${mode} runtime qualification failed:\n${cp.stdout}\n${cp.stderr}`);
+  process.stdout.write(cp.stdout);
+}
+
 const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const p06 = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 if (!manifest?.frontend_inbox_url || !manifest?.entry_records?.[0] || !p06?.authentic_block_page?.url || !p06?.lookalike_page?.url || !p06?.unrelated_page?.url) {

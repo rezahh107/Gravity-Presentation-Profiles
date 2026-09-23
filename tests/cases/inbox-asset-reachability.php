@@ -309,7 +309,7 @@ InboxPresentationAdapter::enqueueStyles();
 ob_start();
 wp_print_styles();
 ob_end_clean();
-gpp_assert_same( 0, substr_count( InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' ), '-css"' ), 'Admin render must not deliver frontend Inbox styles.' );
+gpp_assert_same( $native_shortcode, InboxPresentationAdapter::filterShortcodeInbox( $native_shortcode, array(), '' ), 'Admin render must not deliver frontend Inbox styles.' );
 gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => InboxPresentationAdapter::NATIVE_BLOCK ) ), 'Admin block must not deliver frontend Inbox styles.' );
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Admin render seam must not enqueue Inbox styles outside the admin list route.' );
 
