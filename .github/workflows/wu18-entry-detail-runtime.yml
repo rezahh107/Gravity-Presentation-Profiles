@@ -16,6 +16,7 @@ on:
       - 'tests/repro-evidence-lab/inspect-wu18-host-seams.php'
       - 'tests/repro-evidence-lab/create-wu18-unbound-form.php'
       - 'tests/repro-evidence-lab/wu18-*'
+      - 'tests/repro-evidence-lab/wu09-entry-*'
       - 'tests/repro-evidence-lab/wu02-entry-visibility-differential.mjs'
       - 'profiles/srwf/operations/operations-package-v1.json'
       - 'gravity-presentation-profiles.php'
@@ -364,6 +365,9 @@ jobs:
 
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-wu18-fixtures.php
           test -s "$WU21_ARTIFACT_DIR/wu18-fixture-manifest.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu09-entry-route-discovery.php
+          test -s "$WU21_ARTIFACT_DIR/wu09-entry-route-discovery.json"
+          cat "$WU21_ARTIFACT_DIR/wu09-entry-route-discovery.json"
       - name: Execute native PHP/runtime assertions
         shell: bash
         run: |
@@ -417,6 +421,7 @@ jobs:
             /tmp/wu18-artifacts/wu18-entry-detail-setup-settings-*.json
             /tmp/wu18-artifacts/wu18-gf-settings-save-*.json
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
+            /tmp/wu18-artifacts/wu09-entry-*.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
             /tmp/wu18-artifacts/wu09-entry-asset-qualification.json
