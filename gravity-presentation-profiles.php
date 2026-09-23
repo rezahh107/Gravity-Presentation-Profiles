@@ -12,6 +12,7 @@
 
 // Release authority: the plugin-header Version is canonical; release tooling
 // machine-checks the Gravity Forms Add-On version mirror before packaging.
+// Qualification-only PR trigger: no runtime behavior change; do not merge this branch.
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
