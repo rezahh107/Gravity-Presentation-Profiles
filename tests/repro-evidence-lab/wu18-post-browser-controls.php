@@ -263,6 +263,10 @@ $wu02_summary = json_decode( end( $wu02_output ), true );
 gpp_wu02_assert_qualified_summary( $wu02_summary );
 echo "WU02_ENTRY_VISIBILITY_DIFFERENTIAL_QUALIFIED_FOR_PINNED_RUNTIME\n";
 
+// WU11 consumes the already-authenticated WU18 browser transition, Timeline,
+// and WU02 POST/complete evidence in one explicit host-dependency contract.
+require __DIR__ . '/wu11-flow-dependency-contract.php';
+
 // GPP-RP-WU-04: WU04 remains the sole semantic/classification authority. WU18
 // validates the transport/evidence envelope, then accepts only the authoritative
 // atomicity PASS terminal state before qualification may continue.

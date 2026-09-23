@@ -3,8 +3,8 @@
     --gpp-entry-group-line: #e7eaf0;
     direction: rtl;
     box-sizing: border-box;
-    width: 1060px;
-    max-width: min(1060px, calc(100vw - 32px));
+    width: 100%;
+    max-width: 1060px;
     margin: 0 0 24px;
     padding: 30px 36px;
     border: 1px solid #e4e7ec;

@@ -59,6 +59,7 @@ $cases = array(
     'entry-detail-visual-variant.php',
     'entry-detail-full-width-css-contract.php',
     'entry-detail-timeline-semantic-presentation.php',
+    'gravity-flow-host-dependency-regressions.php',
     'entry-detail-full-width-workflow-panel-presentation.php',
     'entry-detail-full-width-asset-scope.php',
     'print-dossier-presentation-model.php',
