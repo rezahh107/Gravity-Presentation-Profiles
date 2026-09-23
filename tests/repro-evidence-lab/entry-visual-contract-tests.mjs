@@ -11,7 +11,7 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const ownerHtml = process.env.GPP_ENTRY_OWNER_HTML;
 const expectedHtml = { size: 119765, sha256: '1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69' };
-const comparatorVersion = 'entry-vnext-browser-comparator-v3-native-history';
+const comparatorVersion = 'entry-vnext-browser-comparator-v4-host-relative';
 const evidenceSchemaVersion = '2.0.0';
 const admittedReviewSelector = '.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]';
 const canonical = ['header', 'current-task', 'education', 'candidate-details', 'contact', 'school', 'documents', 'registration-finance', 'history'];
@@ -207,7 +207,17 @@ async function collectRenderedEntryDetailState(page, profile) {
     const education = regionElements.education || null;
     const h1 = root.querySelector(profile.h1);
     const taskHeading = root.querySelector(profile.taskHeading);
+    const host = root.closest('#post-body-content') || document.querySelector('#post-body-content');
     const rootRect = rect(root);
+    const hostRect = rect(host);
+    const hostStyle = host ? getComputedStyle(host) : null;
+    const hostContentWidth = hostRect && hostStyle
+      ? hostRect.width
+        - parseFloat(hostStyle.borderInlineStartWidth || 0)
+        - parseFloat(hostStyle.borderInlineEndWidth || 0)
+        - parseFloat(hostStyle.paddingInlineStart || 0)
+        - parseFloat(hostStyle.paddingInlineEnd || 0)
+      : null;
     const headerRect = rect(header);
     const taskRect = rect(task);
     const educationRect = rect(education);
@@ -223,6 +233,7 @@ async function collectRenderedEntryDetailState(page, profile) {
       viewportOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       geometry: {
         root: rootRect,
+        hostContentWidth,
         header: headerRect,
         task: taskRect,
         education: educationRect,
@@ -291,13 +302,19 @@ function compareAgainstVNextContract(actual, reference, context) {
 
   const referenceWidth = reference.geometry.root?.width;
   const actualWidth = actual.geometry.root?.width;
-  const widthTolerance = Math.max(10, (referenceWidth || 0) * 0.02);
+  const hostContentWidth = actual.geometry.hostContentWidth;
+  const expectedWidth = Number.isFinite(hostContentWidth) && Number.isFinite(referenceWidth)
+    ? Math.min(referenceWidth, hostContentWidth)
+    : referenceWidth;
+  const widthTolerance = Math.max(10, (expectedWidth || 0) * 0.02);
   const rootPaddingStartOk = closeEnough(actual.tokens.root?.paddingInlineStart, reference.tokens.root?.paddingInlineStart, 0.75);
   const rootPaddingEndOk = closeEnough(actual.tokens.root?.paddingInlineEnd, reference.tokens.root?.paddingInlineEnd, 0.75);
-  if (!closeEnough(actualWidth, referenceWidth, widthTolerance) || !rootPaddingStartOk || !rootPaddingEndOk) {
+  if (!closeEnough(actualWidth, expectedWidth, widthTolerance) || !rootPaddingStartOk || !rootPaddingEndOk) {
     fail('DOSSIER_INLINE_GEOMETRY', {
       actualWidth,
       referenceWidth,
+      hostContentWidth,
+      expectedWidth,
       widthTolerance,
       actualPaddingInlineStart: actual.tokens.root?.paddingInlineStart,
       referencePaddingInlineStart: reference.tokens.root?.paddingInlineStart,
@@ -425,6 +442,7 @@ async function runPositive(context, reference, viewport, resultId, viewportId, s
       comparison_summary: {
         actual_root_width: actual.geometry.root?.width,
         reference_root_width: reference.geometry.root?.width,
+        actual_host_content_width: actual.geometry.hostContentWidth,
         actual_task_gap_from_header: actual.geometry.taskGapFromHeader,
         reference_task_gap_from_header: reference.geometry.taskGapFromHeader,
       },
