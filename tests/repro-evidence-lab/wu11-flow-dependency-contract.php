@@ -6,6 +6,7 @@ use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantService;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailRequestReachability;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
@@ -32,6 +33,7 @@ $editable_fields = static function ( $step ) {
 $assert( defined( 'GRAVITY_FLOW_VERSION' ) && '3.1.0' === GRAVITY_FLOW_VERSION, 'WU11 requires exact Gravity Flow 3.1.0.' );
 $assert( class_exists( 'GFForms' ) && '3.1.1.1' === (string) GFForms::$version, 'WU11 requires exact Gravity Forms 3.1.1.1.' );
 if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+require_once ABSPATH . 'wp-admin/includes/screen.php';
 
 $operator = get_user_by( 'login', 'bootstrap_admin' );
 $viewer = get_user_by( 'login', 'wu21_viewer' );
@@ -59,18 +61,38 @@ $render_state = static function ( $record, $user ) use ( $assert, $editable_fiel
     $permission = Gravity_Flow_Entry_Detail::is_permission_granted( $entry, $form, $step );
     $can_update = is_object( $step ) ? (bool) Gravity_Flow_Entry_Detail::can_update( $step ) : false;
     $fields = $editable_fields( $step );
-    EntryDetailPresentationAdapter::resetRuntimeCache();
-    RuntimeDiagnostics::resetSurface( EntryDetailPresentationAdapter::SURFACE );
-    ob_start();
-    Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, array( 'show_header' => false ) );
-    $html = (string) ob_get_clean();
-
     $old_get = $_GET;
+    $old_current_screen = isset( $GLOBALS['current_screen'] ) ? $GLOBALS['current_screen'] : null;
+    $old_typenow = isset( $GLOBALS['typenow'] ) ? $GLOBALS['typenow'] : null;
+    $old_taxnow = isset( $GLOBALS['taxnow'] ) ? $GLOBALS['taxnow'] : null;
+    $_GET['page'] = 'gravityflow-inbox';
     $_GET['view'] = 'entry';
     $_GET['lid'] = (string) (int) $record['entry_id'];
+    set_current_screen( 'toplevel_page_gravityflow-inbox' );
+    $assert( is_admin(), 'WU11 admin Entry Detail harness did not establish WordPress admin screen context.' );
+    $assert( EntryDetailRequestReachability::isReachable(), 'WU11 admin Entry Detail harness did not satisfy production request reachability.' );
+
     $full_active->setValue( null, true );
-    try { $full_eligible = (bool) $full_predicate->invoke( null, $step ); }
-    finally { $full_active->setValue( null, null ); $_GET = $old_get; }
+    try {
+        EntryDetailPresentationAdapter::resetRuntimeCache();
+        RuntimeDiagnostics::resetSurface( EntryDetailPresentationAdapter::SURFACE );
+        ob_start();
+        Gravity_Flow_Entry_Detail::entry_detail( $form, $entry, $step, array( 'show_header' => false ) );
+        $html = (string) ob_get_clean();
+        $full_eligible = (bool) $full_predicate->invoke( null, $step );
+        $read_only_state = $read_only->invoke( null, $step );
+        $action_state = $action->invoke( null, $step );
+    } finally {
+        $full_active->setValue( null, null );
+        $_GET = $old_get;
+        if ( $old_current_screen instanceof WP_Screen ) {
+            $old_current_screen->set_current_screen();
+        } else {
+            unset( $GLOBALS['current_screen'] );
+            $GLOBALS['typenow'] = $old_typenow;
+            $GLOBALS['taxnow'] = $old_taxnow;
+        }
+    }
 
     return array(
         'permission_granted' => (bool) $permission,
@@ -82,8 +104,8 @@ $render_state = static function ( $record, $user ) use ( $assert, $editable_fiel
         'can_update' => $can_update,
         'effective_editable_fields' => $fields,
         'workflow_status' => method_exists( $api, 'get_status' ) ? $api->get_status( $entry ) : null,
-        'gpp_read_only_admission' => $read_only->invoke( null, $step ),
-        'gpp_action_eligibility' => $action->invoke( null, $step ),
+        'gpp_read_only_admission' => $read_only_state,
+        'gpp_action_eligibility' => $action_state,
         'full_width_review_panel_eligible' => $full_eligible,
         'rendered' => array(
             'gpp_dossier' => false !== strpos( $html, 'data-gpp-entry-detail="ready"' ),
