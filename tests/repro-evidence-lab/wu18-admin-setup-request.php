@@ -145,7 +145,7 @@ register_shutdown_function(
             $runtime = $after['runtime'] ?? array();
             foreach ( array(
                 'wordpress_version' => '7.1.1',
-                'php_version' => '8.3.33',
+                'php_version' => '8.3.35',
                 'gravity_forms_version' => '3.1.1.1',
                 'gravity_flow_version' => '3.1.0',
             ) as $key => $expected ) {
