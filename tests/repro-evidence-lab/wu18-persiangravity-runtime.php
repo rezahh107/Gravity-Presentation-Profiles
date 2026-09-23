@@ -169,13 +169,34 @@ try {
         $provider_notes = Gravity_Flow_Common::get_timeline_notes( $provider_entry );
         wu18_assert( is_array( $provider_notes ) && array() !== $provider_notes, 'Authentic Timeline notes unavailable for provider application proof.' );
         $timeline_expected = array();
+        $timeline_raw_timestamps = array();
         foreach ( $provider_notes as $note ) {
             wu18_assert( is_object( $note ) && isset( $note->date_created ) && 1 === preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', (string) $note->date_created ), 'Timeline raw timestamp is not the qualified host UTC shape.' );
+            $timeline_raw_timestamps[] = (string) $note->date_created;
             $formatted = $provider_for_utc( (string) $note->date_created );
             wu18_assert( is_string( $formatted ) && '' !== $formatted, 'Exact provider returned no Timeline presentation for a qualified raw note timestamp.' );
             $timeline_expected[] = $decode_text( $formatted );
         }
         $timeline_actual = $extract_timeline_meta( $provider_entry_html );
+        $timeline_diagnostic_path = trailingslashit( $artifact_dir ) . 'wu18-persiangravity-timeline-diagnostic.json';
+        $timeline_diagnostic = array(
+            'php_version' => PHP_VERSION,
+            'persian_gravity_version' => defined( 'PGR_VERSION' ) ? PGR_VERSION : null,
+            'gravity_flow_version' => defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null,
+            'timeline_raw_timestamps' => $timeline_raw_timestamps,
+            'timeline_expected' => $timeline_expected,
+            'timeline_actual' => $timeline_actual,
+            'expected_count' => count( $timeline_expected ),
+            'actual_count' => count( $timeline_actual ),
+            'exact_match' => $timeline_expected === $timeline_actual,
+        );
+        wu18_assert(
+            false !== file_put_contents(
+                $timeline_diagnostic_path,
+                wp_json_encode( $timeline_diagnostic, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
+            ),
+            'Could not write PersianGravity Timeline diagnostic artifact.'
+        );
         wu18_assert( count( $timeline_expected ) === count( $timeline_actual ), 'Provider-backed Timeline changed the authentic event count.' );
         wu18_assert( $timeline_expected === $timeline_actual, 'Production Timeline did not apply exact PersianGravity output in native event order.' );
 
