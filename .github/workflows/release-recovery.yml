@@ -56,9 +56,10 @@ jobs:
           set -euo pipefail
           source scripts/release/release-lib.sh
           release_assert_version_mirrors .
-          version="$(release_plugin_version .)"
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+          version='0.2.0'
           release_is_production_version "$version"
-          test "$version" = '0.2.0'
           bash -n scripts/release/smoke-zip.sh
 
           workflow='.github/workflows/release-recovery.yml'
