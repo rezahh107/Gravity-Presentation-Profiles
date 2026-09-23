@@ -5,6 +5,7 @@ use GravityPresentationProfiles\Core\Presentation\PersianGravityJalaliBridge;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantService;
 use GravityPresentationProfiles\SRWF\GravityFlow\BoundHostValueReader;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailRequestReachability;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PersianDateFormatter;
 
@@ -15,6 +16,7 @@ $provider_source_sha = 'd134c9ac81b177a32a3138f074fca3d1c1ebfae4';
 
 require_once ABSPATH . 'wp-admin/includes/file.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
+require_once ABSPATH . 'wp-admin/includes/screen.php';
 
 wu18_assert( function_exists( 'WP_Filesystem' ) && WP_Filesystem(), 'WordPress filesystem could not initialize for exact provider package extraction.' );
 $tmp = download_url( $provider_url, 60 );
@@ -104,9 +106,15 @@ if ( 'full_width' !== $variant_before['variant'] ) {
 }
 
 $original_get = $_GET;
+$original_current_screen = isset( $GLOBALS['current_screen'] ) ? $GLOBALS['current_screen'] : null;
+$original_typenow = isset( $GLOBALS['typenow'] ) ? $GLOBALS['typenow'] : null;
+$original_taxnow = isset( $GLOBALS['taxnow'] ) ? $GLOBALS['taxnow'] : null;
 $_GET['view'] = 'entry';
 $_GET['page'] = 'gravityflow-inbox';
 $_GET['lid'] = (int) $manifest['alpha']['entry_id'];
+set_current_screen( 'toplevel_page_gravityflow-inbox' );
+wu18_assert( is_admin(), 'WU18 admin Entry Detail harness did not establish WordPress admin screen context.' );
+wu18_assert( EntryDetailRequestReachability::isReachable(), 'WU18 admin Entry Detail harness did not satisfy production request reachability.' );
 
 try {
     list( $native_entry_html, , $native_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
@@ -196,6 +204,13 @@ try {
     }
 } finally {
     $_GET = $original_get;
+    if ( $original_current_screen instanceof WP_Screen ) {
+        $original_current_screen->set_current_screen();
+    } else {
+        unset( $GLOBALS['current_screen'] );
+        $GLOBALS['typenow'] = $original_typenow;
+        $GLOBALS['taxnow'] = $original_taxnow;
+    }
     if ( $variant_changed ) {
         $variant_now = $variant_service->activeFacts();
         if ( 'active' === $variant_now['state'] ) {

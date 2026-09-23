@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: gpp-production-release-v1
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'workflow_dispatch' && 'gpp-production-release-v1' || format('gpp-release-recovery-contract-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GPP_RELEASE_DB_NAME: wordpress_recovery
@@ -45,7 +45,7 @@ jobs:
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.33'
+          php-version: '8.2.34'
           coverage: none
 
       - name: Verify bounded recovery preconditions and version contract
@@ -56,9 +56,10 @@ jobs:
           set -euo pipefail
           source scripts/release/release-lib.sh
           release_assert_version_mirrors .
-          version="$(release_plugin_version .)"
+          test "$(release_plugin_version .)" = '0.0.0-dev'
+          test "$(release_addon_version .)" = '0.0.0-dev'
+          version='0.2.0'
           release_is_production_version "$version"
-          test "$version" = '0.2.0'
           bash -n scripts/release/smoke-zip.sh
 
           workflow='.github/workflows/release-recovery.yml'
@@ -222,7 +223,7 @@ jobs:
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.33'
+          php-version: '8.2.34'
           coverage: none
 
       - name: Install recovery tools
@@ -231,7 +232,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends zip unzip jq
-          test "$(php -r 'echo PHP_VERSION;')" = '8.2.33'
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.34'
 
       - name: Bind recovery to exact current main and published source version
         shell: bash

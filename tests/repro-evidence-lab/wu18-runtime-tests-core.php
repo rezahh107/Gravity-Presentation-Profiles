@@ -193,8 +193,16 @@ wu18_assert( false !== strpos( $editor_html, 'entry-detail-view' ) && false !== 
 wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'native_editor_required' ), 'Native-editor fallback diagnostic missing.' );
 wu18_assert( null !== wu18_trace_reason( $editor_trace, 'ENTRY_DETAIL_PRESENTATION_OUTPUT', 'native_editor_required' ), 'Native-editor output SKIP diagnostic missing.' );
 
-// A structurally invalid host payload must not produce a marker. Native host
-// rendering is unaffected because this direct adapter control never touches it.
+// A structurally invalid host payload must not produce a marker or enqueue the
+// progressive-enhancement script. Native host rendering is unaffected because
+// this direct adapter control never touches it.
+if ( function_exists( 'wp_dequeue_script' ) ) {
+    wp_dequeue_script( EntryDetailPresentationAdapter::SCRIPT_HANDLE );
+}
+wu18_assert(
+    ! function_exists( 'wp_script_is' ) || ! wp_script_is( EntryDetailPresentationAdapter::SCRIPT_HANDLE, 'enqueued' ),
+    'Structural fallback control could not establish a clean Entry Detail script queue.'
+);
 EntryDetailPresentationAdapter::resetRuntimeCache();
 $bad_entry = $alpha_entry;
 $bad_entry['form_id'] = (int) $alpha_entry['form_id'] + 999;
@@ -203,6 +211,10 @@ EntryDetailPresentationAdapter::renderDossier( $alpha_form, $bad_entry );
 $bad_html = ob_get_clean();
 $bad_trace = RuntimeDiagnostics::snapshot( 'gravity_flow.entry_detail' );
 wu18_assert( '' === $bad_html, 'Structurally invalid host payload emitted GPP output.' );
+wu18_assert(
+    ! function_exists( 'wp_script_is' ) || ! wp_script_is( EntryDetailPresentationAdapter::SCRIPT_HANDLE, 'enqueued' ),
+    'Structurally invalid dossier admission enqueued progressive-enhancement JS.'
+);
 wu18_assert( null !== wu18_trace_reason( $bad_trace, 'ENTRY_DETAIL_NATIVE_TABLE_SUPPRESSION', 'structural_readiness_not_satisfied' ), 'Structural fallback suppression diagnostic missing.' );
 
 // Profile inactive is a native-only request: prove the output/suppression gate

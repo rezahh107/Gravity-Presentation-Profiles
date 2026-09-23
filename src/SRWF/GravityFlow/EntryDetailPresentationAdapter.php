@@ -44,8 +44,8 @@ final class EntryDetailPresentationAdapter {
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderDossier' ), 20, 2 );
         add_filter( 'gravityflow_approve_label_workflow_detail', array( __CLASS__, 'filterApproveLabel' ), 20, 2 );
         add_filter( 'gravityflow_reject_label_workflow_detail', array( __CLASS__, 'filterRejectLabel' ), 20, 2 );
-        add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueAssets' ), 20 );
-        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueAssets' ), 20 );
+        add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueBaseStyles' ), 20 );
+        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueBaseStyles' ), 20 );
     }
 
     public static function resetRuntimeCache() {
@@ -206,6 +206,7 @@ final class EntryDetailPresentationAdapter {
         }
 
         echo $html;
+        self::enqueueProgressiveEnhancementScript();
 
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
@@ -234,32 +235,38 @@ final class EntryDetailPresentationAdapter {
             : $label;
     }
 
-    public static function enqueueAssets() {
-        if ( null === self::model() || ! defined( 'GPP_PLUGIN_FILE' ) ) {
+    public static function enqueueBaseStyles() {
+        if ( ! EntryDetailRequestReachability::isReachable() || null === self::model()
+            || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
             return;
         }
 
         $plugin_root = dirname( GPP_PLUGIN_FILE );
         $style_path = 'assets/css/srwf-gravity-flow-entry-detail.css';
+
+        wp_enqueue_style(
+            self::STYLE_HANDLE,
+            plugins_url( $style_path, GPP_PLUGIN_FILE ),
+            array(),
+            self::assetVersion( $plugin_root . '/' . $style_path )
+        );
+    }
+
+    private static function enqueueProgressiveEnhancementScript() {
+        if ( ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_script' ) ) {
+            return;
+        }
+
+        $plugin_root = dirname( GPP_PLUGIN_FILE );
         $script_path = 'assets/js/srwf-gravity-flow-entry-detail.js';
 
-        if ( function_exists( 'wp_enqueue_style' ) ) {
-            wp_enqueue_style(
-                self::STYLE_HANDLE,
-                plugins_url( $style_path, GPP_PLUGIN_FILE ),
-                array(),
-                self::assetVersion( $plugin_root . '/' . $style_path )
-            );
-        }
-        if ( function_exists( 'wp_enqueue_script' ) ) {
-            wp_enqueue_script(
-                self::SCRIPT_HANDLE,
-                plugins_url( $script_path, GPP_PLUGIN_FILE ),
-                array(),
-                self::assetVersion( $plugin_root . '/' . $script_path ),
-                true
-            );
-        }
+        wp_enqueue_script(
+            self::SCRIPT_HANDLE,
+            plugins_url( $script_path, GPP_PLUGIN_FILE ),
+            array(),
+            self::assetVersion( $plugin_root . '/' . $script_path ),
+            true
+        );
     }
 
     private static function assetVersion( $absolute_path ) {

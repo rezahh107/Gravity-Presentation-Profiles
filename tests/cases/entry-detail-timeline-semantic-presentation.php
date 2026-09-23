@@ -22,7 +22,8 @@ gpp_assert_true( false !== strpos( $semantic, "gravityflow_entry_detail_content_
 gpp_assert_true( false !== strpos( $semantic, 'data-gpp-profile-id="' ) && false !== strpos( $semantic, 'data-gpp-entry-detail="ready"' ) && false !== strpos( $semantic, 'data-gpp-review-mode="read-only"' ), 'Semantic output must fail closed unless lifecycle-backed Full Width read-only Review is admitted.' );
 gpp_assert_true( false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_ID' ) && false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PACKAGE_VERSION' ) && false !== strpos( $semantic, 'EntryDetailVisualVariant::FULL_WIDTH_PROFILE_ID' ), 'Semantic Timeline admission must reuse the exact Full Width lifecycle identities.' );
 gpp_assert_true( false !== strpos( $semantic, '$visual->resolve( EntryDetailVisualVariant::SURFACE )' ), 'Semantic Timeline admission must resolve the same lifecycle surface as the Full Width adapter.' );
-gpp_assert_true( false !== strpos( $semantic, "'entry' !== \$view || \$lid < 1" ) && false !== strpos( $semantic, "'gravityflow-inbox' === \$page" ), 'Semantic Timeline request admission must match the proven Full Width Entry Detail request seam.' );
+gpp_assert_true( false !== strpos( $semantic, 'EntryDetailRequestReachability::isReachable()' ), 'Semantic Timeline request admission must use the shared qualified Entry Detail reachability predicate.' );
+gpp_assert_true( false === strpos( $semantic, 'private static function isEntryDetailRequest()' ), 'Semantic Timeline must not keep a divergent Entry Detail request definition.' );
 foreach ( array( '::PACKAGE_ID', '::PACKAGE_VERSION', '::PROFILE_FULL_WIDTH' ) as $invalid_alias ) {
     gpp_assert_true( false === strpos( $semantic, $invalid_alias ), 'Semantic Timeline must not reference nonexistent visual-variant alias ' . $invalid_alias . '.' );
 }

@@ -13,6 +13,13 @@ if ( ! defined( 'GPP_PLUGIN_FILE' ) ) {
 $GLOBALS['gpp_entry_detail_asset_styles'] = array();
 $GLOBALS['gpp_entry_detail_asset_scripts'] = array();
 
+function sanitize_key( $value ) {
+    return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', (string) $value ) );
+}
+function wp_unslash( $value ) { return $value; }
+function absint( $value ) { return abs( (int) $value ); }
+function is_admin() { return true; }
+
 function plugins_url( $path, $plugin_file ) {
     unset( $plugin_file );
     return 'https://example.test/wp-content/plugins/gravity-presentation-profiles/' . ltrim( (string) $path, '/' );
@@ -36,10 +43,22 @@ $model = $adapter->getProperty( 'model' );
 $model->setAccessible( true );
 $model->setValue( null, new stdClass() );
 
-EntryDetailPresentationAdapter::enqueueAssets();
+$_GET = array(
+    'page' => 'gravityflow-inbox',
+    'view' => 'entry',
+    'lid' => '17',
+);
 
-gpp_assert_same( 1, count( $GLOBALS['gpp_entry_detail_asset_styles'] ), 'Entry Detail must enqueue its stylesheet once.' );
-gpp_assert_same( 1, count( $GLOBALS['gpp_entry_detail_asset_scripts'] ), 'Entry Detail must enqueue its script once.' );
+EntryDetailPresentationAdapter::enqueueBaseStyles();
+
+gpp_assert_same( 1, count( $GLOBALS['gpp_entry_detail_asset_styles'] ), 'Reachable active Entry Detail must enqueue its stylesheet once.' );
+gpp_assert_same( 0, count( $GLOBALS['gpp_entry_detail_asset_scripts'] ), 'Early Entry Detail asset enqueue must not enqueue progressive-enhancement JS.' );
+
+$enqueue_script = $adapter->getMethod( 'enqueueProgressiveEnhancementScript' );
+$enqueue_script->setAccessible( true );
+$enqueue_script->invoke( null );
+
+gpp_assert_same( 1, count( $GLOBALS['gpp_entry_detail_asset_scripts'] ), 'Post-admission Entry Detail JS enqueue must enqueue its script once.' );
 
 $plugin_root = dirname( GPP_PLUGIN_FILE );
 $contracts = array(
@@ -48,12 +67,12 @@ $contracts = array(
 );
 
 foreach ( $contracts as $contract ) {
-    $asset = $contract['asset'];
+    $asset_record = $contract['asset'];
     $path = $contract['path'];
     $hash = hash_file( 'sha256', $plugin_root . '/' . $path );
     gpp_assert_true( is_string( $hash ) && '' !== $hash, 'Entry Detail shipped asset hash must be readable.' );
-    gpp_assert_same( substr( $hash, 0, 16 ), $asset['version'], 'Entry Detail cache key must derive from exact shipped bytes.' );
-    gpp_assert_true( '1.0.0' !== $asset['version'], 'Entry Detail cache key must not remain fixed at the historical version.' );
+    gpp_assert_same( substr( $hash, 0, 16 ), $asset_record['version'], 'Entry Detail cache key must derive from exact shipped bytes.' );
+    gpp_assert_true( '1.0.0' !== $asset_record['version'], 'Entry Detail cache key must not remain fixed at the historical version.' );
 }
 
 $asset_version = $adapter->getMethod( 'assetVersion' );
