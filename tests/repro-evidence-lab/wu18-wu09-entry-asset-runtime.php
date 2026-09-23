@@ -81,6 +81,10 @@ if ( is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $r
 
 $status_block_registered = is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $registry->is_registered( 'gravityflow/status' );
 
+$status_block_page = $status_block_registered
+    ? gpp_wu09_create_page( 'WU09 Frontend Status Block Entry Detail', '<!-- wp:gravityflow/status /-->' )
+    : null;
+
 $candidate_source = __DIR__ . '/wu18-wu09-entry-asset-candidate.php';
 $mu_target = WPMU_PLUGIN_DIR . '/gpp-wu09-entry-asset-candidate.php';
 wu18_assert( is_readable( $candidate_source ), 'WU09 candidate shim source is missing.' );
@@ -119,6 +123,7 @@ $qualification = array(
         'status_shortcode' => $status_shortcode_page,
         'inbox_block' => $inbox_block_page,
         'status_block_registered' => $status_block_registered,
+        'status_block' => $status_block_page,
         'unrelated' => $unrelated_frontend_page,
     ),
     'admin_entry' => array(
