@@ -275,6 +275,36 @@ await test('WU09-Q2-MARKER-AUTHORITY', 'CSS availability on editor route does no
   return state;
 });
 
+await test('WU09-Q2-INACTIVE-PROFILE', 'authentic Entry Detail route receives no base assets when the Entry Detail profile is inactive', async () => {
+  const deactivate = `
+  $option = \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME;
+  update_option('gpp_wu09_visual_state_backup', get_option($option), false);
+  $visual = new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(
+      new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore($option)
+  );
+  $visual->deactivate(array('surface' => \\GravityPresentationProfiles\\SRWF\\GravityFlow\\EntryDetailPresentationAdapter::SURFACE));
+  echo null === $visual->resolve(\\GravityPresentationProfiles\\SRWF\\GravityFlow\\EntryDetailPresentationAdapter::SURFACE) ? 'INACTIVE' : 'ACTIVE';
+  `;
+  const restore = `
+  $option = \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME;
+  $backup = get_option('gpp_wu09_visual_state_backup');
+  update_option($option, $backup, false);
+  delete_option('gpp_wu09_visual_state_backup');
+  echo 'RESTORED';
+  `;
+  if (wpEval(deactivate) !== 'INACTIVE') throw new Error('Unable to establish inactive Entry Detail profile control.');
+  try {
+    await page.goto(adminEntry(manifest.alpha), { waitUntil: 'networkidle' });
+    const state = await assetState(page);
+    if (state.style_handle_count !== 0 || state.entry_css_link_count !== 0 || state.script_handle_count !== 0 || state.entry_js_resource_count !== 0 || state.dossier_count !== 0) {
+      throw new Error(`Inactive profile received GPP Entry Detail assets/admission: ${JSON.stringify(state)}`);
+    }
+    return state;
+  } finally {
+    if (wpEval(restore) !== 'RESTORED') throw new Error('Failed to restore Entry Detail profile after inactive control.');
+  }
+});
+
 await test('WU09-Q3-REPEAT-ADMITTED', 'fresh admitted requests each receive one normal footer script and never duplicate within a document', async () => {
   const observed = [];
   for (let i = 0; i < 2; i++) {
@@ -362,7 +392,7 @@ const fallbackQualified = fallbackIds.every(id => results.find(result => result.
 const cssCriticalIds = [
   'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-USER-INPUT','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS','WU09-Q1-FRONTEND-STATUS-BLOCK',
   'WU09-Q1-ADMIN-INBOX-NEGATIVE','WU09-Q1-UNRELATED-ADMIN-NEGATIVE','WU09-Q1-UNRELATED-FRONTEND-QUERY-NEGATIVE',
-  'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-ADMIN-MISSING-ID','WU09-Q1-FRONTEND-MISSING-ID','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q4-PRINT-NEGATIVE'
+  'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-ADMIN-MISSING-ID','WU09-Q1-FRONTEND-MISSING-ID','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q2-INACTIVE-PROFILE','WU09-Q4-PRINT-NEGATIVE'
 ];
 const cssQualified = cssCriticalIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
 const output = {
