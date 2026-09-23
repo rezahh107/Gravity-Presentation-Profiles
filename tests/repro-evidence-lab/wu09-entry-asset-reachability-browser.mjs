@@ -248,7 +248,8 @@ try {
   const shortcodeNativeLink = shortcodeLinks.find(href => {
     const u = new URL(href);
     return Number(u.searchParams.get('lid')) === Number(alpha.entry_id);
-  }) || shortcodeLinks[0] || null;
+  }) || null;
+  const shortcodeObservedLink = shortcodeNativeLink || shortcodeLinks[0] || null;
 
   const shortcodeCandidate = shortcodeNativeLink || queryUrl(base.frontend_inbox_url, {
     view: 'entry', id: alpha.form_id, lid: alpha.entry_id,
@@ -256,8 +257,9 @@ try {
   const shortcodeEntry = await pageEvidence(page, shortcodeCandidate, 'frontend-shortcode-entry');
   const shortcodeSupported = shortcodeEntry.state.native_table_present || shortcodeEntry.state.dossier_count > 0;
   results.q1.frontend_shortcode_entry = {
-    native_link_observed: Boolean(shortcodeNativeLink),
-    native_link: shortcodeNativeLink,
+    native_link_observed: Boolean(shortcodeObservedLink),
+    native_link: shortcodeObservedLink,
+    matching_alpha_link_observed: Boolean(shortcodeNativeLink),
     supported: shortcodeSupported,
     evidence: shortcodeEntry,
   };
@@ -269,15 +271,17 @@ try {
   const blockNativeLink = blockLinks.find(href => {
     const u = new URL(href);
     return Number(u.searchParams.get('lid')) === Number(alpha.entry_id);
-  }) || blockLinks[0] || null;
+  }) || null;
+  const blockObservedLink = blockNativeLink || blockLinks[0] || null;
   const blockCandidate = blockNativeLink || queryUrl(extra.block_url, {
     view: 'entry', id: alpha.form_id, lid: alpha.entry_id,
   });
   const blockEntry = await pageEvidence(page, blockCandidate, 'frontend-block-entry');
   const blockSupported = blockEntry.state.native_table_present || blockEntry.state.dossier_count > 0;
   results.q1.frontend_block_entry = {
-    native_link_observed: Boolean(blockNativeLink),
-    native_link: blockNativeLink,
+    native_link_observed: Boolean(blockObservedLink),
+    native_link: blockObservedLink,
+    matching_alpha_link_observed: Boolean(blockNativeLink),
     supported: blockSupported,
     evidence: blockEntry,
   };
