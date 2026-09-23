@@ -150,6 +150,15 @@ await test('WU09-Q1-EDITOR', 'native Approval editor is a genuine Entry Detail r
   return state;
 });
 
+await test('WU09-Q1-USER-INPUT', 'native User Input is a genuine Entry Detail route but remains marker-free', async () => {
+  await page.goto(adminEntry(manifest.transition), { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  if (state.style_handle_count !== 1 || state.entry_css_link_count < 1) throw new Error(`User Input route lost request-gated CSS: ${JSON.stringify(state)}`);
+  if (state.dossier_count !== 0 || state.markers !== null || !state.native_editor_visible || state.native_table_display === 'none') throw new Error(`User Input route was treated as admitted GPP Review: ${JSON.stringify(state)}`);
+  if (state.script_handle_count !== 0 || state.entry_js_tag_count !== 0 || state.entry_js_resource_count !== 0) throw new Error(`User Input route received post-admission JS without admission: ${JSON.stringify(state)}`);
+  return state;
+});
+
 await test('WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'authentic frontend Inbox shortcode serves Entry Detail on the same page', async () => {
   await page.goto(frontendEntry(qualification.frontend_fixtures.inbox_shortcode, manifest.alpha), { waitUntil: 'networkidle' });
   const state = await assetState(page);
@@ -213,6 +222,26 @@ await test('WU09-Q1-MALFORMED-ADMIN-NEGATIVE', 'incomplete admin Entry Detail-lo
   const state = await assetState(page);
   if (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0) throw new Error(`Malformed admin route received Entry Detail assets: ${JSON.stringify(state)}`);
   return state;
+});
+
+await test('WU09-Q1-ADMIN-MISSING-ID', 'view=entry plus lid is measured without assuming a separate form-id requirement', async () => {
+  const url = `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox&view=entry&lid=${manifest.alpha.entry_id}`;
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  const hostDetail = state.native_table_present || state.status_count > 0 || state.dossier_count > 0;
+  if (!hostDetail && (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0)) throw new Error(`Missing-id admin route was a request-gate false positive: ${JSON.stringify(state)}`);
+  if (hostDetail && state.entry_css_link_count < 1) throw new Error(`Host-supported missing-id admin route was a request-gate false negative: ${JSON.stringify(state)}`);
+  return { supported: hostDetail, ...state };
+});
+
+await test('WU09-Q1-FRONTEND-MISSING-ID', 'frontend view=entry plus lid is measured without assuming a separate form-id requirement', async () => {
+  const url = withQuery(qualification.frontend_fixtures.inbox_shortcode.url, { view: 'entry', id: null, lid: manifest.alpha.entry_id });
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  const hostDetail = state.native_table_present || state.status_count > 0 || state.dossier_count > 0;
+  if (!hostDetail && (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0)) throw new Error(`Missing-id frontend route was a request-gate false positive: ${JSON.stringify(state)}`);
+  if (hostDetail && state.entry_css_link_count < 1) throw new Error(`Host-supported missing-id frontend route was a request-gate false negative: ${JSON.stringify(state)}`);
+  return { supported: hostDetail, ...state };
 });
 
 await test('WU09-Q1-MALFORMED-FRONTEND-NEGATIVE', 'incomplete authentic frontend Entry Detail-looking request is not asset-reachable', async () => {
@@ -296,12 +325,25 @@ const failures = results.filter(result => result.status === 'FAIL');
 const statusResult = results.find(result => result.id === 'WU09-Q1-FRONTEND-STATUS');
 const frontendAdmissionResults = results.filter(result => ['WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS'].includes(result.id) && result.status === 'PASS' && result.details?.supported !== false);
 const frontendLateJsReliable = frontendAdmissionResults.length > 0 && frontendAdmissionResults.every(result => result.details?.post_admission_js_delivered === true);
+const frontendLifecycle = frontendAdmissionResults.map(result => result.details?.lifecycle).filter(Boolean);
+let postAdmissionJsFailureReason = null;
+if (!frontendLateJsReliable) {
+  if (frontendLifecycle.some(event => Number(event?.wp_print_footer_scripts_before) > 0 || Number(event?.wp_footer_before) > 0)) {
+    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission after the normal frontend footer lifecycle has already started';
+  } else if (frontendLifecycle.some(event => event?.script_registered_before === false)) {
+    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission before footer printing, but the existing Entry Detail JS handle is not registered at that lifecycle point, so normal late wp_enqueue_script(handle) cannot deliver it';
+  } else if (frontendLifecycle.some(event => event?.script_enqueued_after === false)) {
+    postAdmissionJsFailureReason = 'supported frontend Entry Detail reaches dossier admission before footer printing, but normal late enqueue does not enter the footer queue reliably';
+  } else {
+    postAdmissionJsFailureReason = 'supported frontend Entry Detail does not reliably deliver the existing JS through normal post-admission footer enqueue';
+  }
+}
 const fallbackIds = ['WU09-Q3-FALLBACK-FRONTEND', 'WU09-Q3-FALLBACK-EDITOR-GUARD', 'WU09-Q3-FALLBACK-UNRELATED-GUARD'];
 const fallbackQualified = fallbackIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
 const cssCriticalIds = [
-  'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS',
+  'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-USER-INPUT','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS',
   'WU09-Q1-ADMIN-INBOX-NEGATIVE','WU09-Q1-UNRELATED-ADMIN-NEGATIVE','WU09-Q1-UNRELATED-FRONTEND-QUERY-NEGATIVE',
-  'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q4-PRINT-NEGATIVE'
+  'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-ADMIN-MISSING-ID','WU09-Q1-FRONTEND-MISSING-ID','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q4-PRINT-NEGATIVE'
 ];
 const cssQualified = cssCriticalIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
 const output = {
@@ -323,7 +365,7 @@ const output = {
   candidate: {
     css: cssQualified ? 'QUALIFIED_EARLY_REQUEST_GATED_CSS' : 'NOT_QUALIFIED',
     js: frontendLateJsReliable ? 'QUALIFIED_POST_ADMISSION_JS' : 'NOT_QUALIFIED_FOR_POST_ADMISSION',
-    post_admission_js_failure_reason: frontendLateJsReliable ? null : 'supported frontend Entry Detail renders dossier after the normal footer script print point or otherwise too late for reliable footer delivery',
+    post_admission_js_failure_reason: postAdmissionJsFailureReason,
     early_request_gated_js_fallback: fallbackQualified ? 'SUPPORTED_BY_EXECUTED_EVIDENCE' : 'NOT_PROVEN',
     authority: 'server dossier/admission markers remain required for duplicate suppression and admitted host chrome; JS root guard remains dossier-scoped',
   },
