@@ -103,6 +103,11 @@ function assertAdmittedAssets(result, label) {
 }
 
 const repositoryHead = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const repoRoot = process.env.GITHUB_WORKSPACE || process.cwd();
+const qualificationMuSource = path.join(repoRoot, 'tests/repro-evidence-lab/wu09-entry-asset-qualification-mu.php');
+const qualificationMuTarget = path.join(wpPath, 'wp-content/mu-plugins/gpp-wu09-entry-asset-qualification.php');
+fs.mkdirSync(path.dirname(qualificationMuTarget), { recursive: true });
+fs.copyFileSync(qualificationMuSource, qualificationMuTarget);
 const wu18 = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu18_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const base = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 if (!wu18?.alpha?.form_id || !wu18?.alpha?.entry_id || !wu18?.editor?.entry_id || !base?.frontend_inbox_url) {
@@ -382,6 +387,8 @@ try {
     };
   }
 
+  fs.rmSync(qualificationMuTarget, { force: true });
+
   fs.writeFileSync(
     path.join(artifactDir, 'wu09-entry-asset-reachability-qualification.json'),
     `${JSON.stringify(results, null, 2)}\n`
@@ -397,6 +404,7 @@ try {
   results.error = String(error?.stack || error).slice(0, 12000);
   try { await context.close(); } catch {}
   try { await browser.close(); } catch {}
+  try { fs.rmSync(qualificationMuTarget, { force: true }); } catch {}
   fs.writeFileSync(
     path.join(artifactDir, 'wu09-entry-asset-reachability-qualification.json'),
     `${JSON.stringify(results, null, 2)}\n`
