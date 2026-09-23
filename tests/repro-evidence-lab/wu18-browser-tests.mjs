@@ -570,3 +570,5 @@ if (failures.length) {
 }
 
 console.log('WU18_BROWSER_NATIVE_CHROME_AUTHORITY_PASS');
+
+await import('./wu18-wu09-entry-asset-browser.mjs');
