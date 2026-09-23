@@ -64,6 +64,15 @@ function get_shortcode_regex( $tagnames = null ) {
     return '(\[?)(gravityflow)([^\]]*)(\/)?\](?:(.*?)\[\/\2\])?(\]?)';
 }
 
+function wp_html_split( $input ) {
+    return preg_split(
+        '/(<!--[\\s\\S]*?(?:-->|$)|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>|$)|<[^>]*>)/',
+        (string) $input,
+        -1,
+        PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY
+    );
+}
+
 function shortcode_parse_atts( $text ) {
     $atts = array();
     if ( preg_match_all( '/([A-Za-z0-9_-]+)\s*=\s*["\']([^"\']*)["\']/', (string) $text, $matches, PREG_SET_ORDER ) ) {
@@ -208,6 +217,14 @@ gpp_assert_same(
     $GLOBALS['gpp_enqueued_styles'][0]['dependencies'],
     'When WordPress global styles are active, Inbox presentation must print after the host layout cascade.'
 );
+
+$reset_request( '<!-- [gravityflow page="inbox"] -->' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'A Gravity Flow Inbox shortcode inside an HTML comment must not qualify Inbox style delivery.' );
+
+$reset_request( '<![CDATA[ [gravityflow page="inbox"] ]]>' );
+InboxPresentationAdapter::enqueueStyles();
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'A Gravity Flow Inbox shortcode inside CDATA must not qualify Inbox style delivery.' );
 
 $reset_request( '[[gravityflow page="inbox"]]' );
 InboxPresentationAdapter::enqueueStyles();

@@ -137,6 +137,8 @@ p06_assert( ! p06_inbox_styles_enqueued(), 'Registry discovery render must not i
 
 $lookalike_markup = '<div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div>';
 $block_page = p06_create_page( 'P06 Authentic Inbox Block', '<!-- wp:' . $inbox_block . ' /-->' );
+$commented_shortcode_page = p06_create_page( 'P06 Inert Commented Inbox Shortcode', '<!-- [gravityflow page="inbox"] -->' );
+$cdata_shortcode_page = p06_create_page( 'P06 Inert CDATA Inbox Shortcode', '<![CDATA[ [gravityflow page="inbox"] ]]>' );
 $lookalike_page = p06_create_page( 'P06 Lookalike Inbox Block', '<!-- wp:html -->' . $lookalike_markup . '<!-- /wp:html -->' );
 $unrelated_page = p06_create_page( 'P06 Unrelated Frontend', '<!-- wp:paragraph --><p>P06 unrelated frontend control.</p><!-- /wp:paragraph -->' );
 
@@ -147,6 +149,22 @@ p06_assert( p06_inbox_styles_enqueued(), 'Current queried page containing the au
 $shortcode_output = do_shortcode( '[gravityflow page="inbox"]' );
 p06_assert( false !== strpos( $shortcode_output, 'data-js="gflow-inbox"' ), 'Authentic frontend Inbox shortcode did not render the native target.' );
 p06_assert( false !== strpos( $shortcode_output, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Active authentic frontend Inbox shortcode did not retain the admitted GPP wrapper.' );
+
+p06_reset_styles();
+p06_set_frontend_page_query( $commented_shortcode_page['page_id'] );
+InboxPresentationAdapter::enqueueStyles();
+p06_assert( ! wp_style_is( InboxPresentationAdapter::STYLE_HANDLE, 'enqueued' ), 'Commented Inbox shortcode qualified the presentation stylesheet.' );
+p06_assert( ! wp_style_is( InboxPresentationAdapter::NATIVE_STYLE_HANDLE, 'enqueued' ), 'Commented Inbox shortcode qualified the native projection stylesheet.' );
+$commented_shortcode_output = do_shortcode( '<!-- [gravityflow page="inbox"] -->' );
+p06_assert( false === strpos( $commented_shortcode_output, 'data-js="gflow-inbox"' ), 'WordPress 6.8.3 unexpectedly executed the commented Inbox shortcode control.' );
+
+p06_reset_styles();
+p06_set_frontend_page_query( $cdata_shortcode_page['page_id'] );
+InboxPresentationAdapter::enqueueStyles();
+p06_assert( ! wp_style_is( InboxPresentationAdapter::STYLE_HANDLE, 'enqueued' ), 'CDATA Inbox shortcode qualified the presentation stylesheet.' );
+p06_assert( ! wp_style_is( InboxPresentationAdapter::NATIVE_STYLE_HANDLE, 'enqueued' ), 'CDATA Inbox shortcode qualified the native projection stylesheet.' );
+$cdata_shortcode_output = do_shortcode( '<![CDATA[ [gravityflow page="inbox"] ]]>' );
+p06_assert( false === strpos( $cdata_shortcode_output, 'data-js="gflow-inbox"' ), 'WordPress 6.8.3 unexpectedly executed the CDATA Inbox shortcode control.' );
 
 p06_reset_styles();
 p06_set_frontend_page_query( $block_page['page_id'] );
@@ -201,6 +219,8 @@ $fixture = array(
     'registered_gravity_flow_blocks' => $flow_blocks,
     'inbox_block' => $block_result,
     'authentic_block_page' => $block_page,
+    'commented_shortcode_page' => $commented_shortcode_page,
+    'cdata_shortcode_page' => $cdata_shortcode_page,
     'lookalike_page' => $lookalike_page,
     'unrelated_page' => $unrelated_page,
 );
@@ -212,6 +232,8 @@ file_put_contents(
             'status' => 'PASS',
             'authentic_block' => $block_result,
             'shortcode_early_styles_enqueued' => true,
+            'commented_shortcode_early_styles_enqueued' => false,
+            'cdata_shortcode_early_styles_enqueued' => false,
             'block_early_styles_enqueued' => true,
             'lookalike_block_styles_enqueued' => false,
             'unrelated_frontend_styles_enqueued' => false,

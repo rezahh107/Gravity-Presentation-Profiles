@@ -268,26 +268,49 @@ final class InboxPresentationAdapter {
     }
 
     private static function contentHasInboxShortcode( $content ) {
-        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' ) || ! shortcode_exists( 'gravityflow' ) || ! function_exists( 'get_shortcode_regex' ) || ! function_exists( 'shortcode_parse_atts' ) ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' ) || ! shortcode_exists( 'gravityflow' )
+            || ! function_exists( 'get_shortcode_regex' ) || ! function_exists( 'shortcode_parse_atts' ) || ! function_exists( 'wp_html_split' ) ) {
+            return false;
+        }
+
+        $tokens = wp_html_split( $content );
+        if ( ! is_array( $tokens ) ) {
             return false;
         }
 
         $pattern = get_shortcode_regex( array( 'gravityflow' ) );
-        if ( ! is_string( $pattern ) || '' === $pattern || false === preg_match_all( '/' . $pattern . '/s', $content, $matches, PREG_SET_ORDER ) ) {
+        if ( ! is_string( $pattern ) || '' === $pattern ) {
             return false;
         }
 
-        foreach ( $matches as $match ) {
-            if ( ! isset( $match[1], $match[2], $match[3], $match[6] ) || 'gravityflow' !== $match[2] ) {
-                continue;
-            }
-            if ( '[' === $match[1] && ']' === $match[6] ) {
+        foreach ( $tokens as $token ) {
+            if ( ! is_string( $token ) || '' === $token ) {
                 continue;
             }
 
-            $atts = shortcode_parse_atts( $match[3] );
-            if ( is_array( $atts ) && isset( $atts['page'] ) && 'inbox' === sanitize_key( (string) $atts['page'] ) ) {
-                return true;
+            // Match WordPress shortcode execution semantics: HTML comments and
+            // CDATA are inert even when their raw text looks like a shortcode.
+            if ( '<' === $token[0] && ( 0 === strpos( $token, '<!--' ) || 0 === strpos( $token, '<![CDATA[' ) ) ) {
+                continue;
+            }
+
+            $match_count = preg_match_all( '/' . $pattern . '/s', $token, $matches, PREG_SET_ORDER );
+            if ( false === $match_count || 0 === $match_count ) {
+                continue;
+            }
+
+            foreach ( $matches as $match ) {
+                if ( ! isset( $match[1], $match[2], $match[3], $match[6] ) || 'gravityflow' !== $match[2] ) {
+                    continue;
+                }
+                if ( '[' === $match[1] && ']' === $match[6] ) {
+                    continue;
+                }
+
+                $atts = shortcode_parse_atts( $match[3] );
+                if ( is_array( $atts ) && isset( $atts['page'] ) && 'inbox' === sanitize_key( (string) $atts['page'] ) ) {
+                    return true;
+                }
             }
         }
 
