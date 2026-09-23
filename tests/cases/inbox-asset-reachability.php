@@ -222,7 +222,7 @@ $reset_request( '<!-- [gravityflow page="inbox"] -->' );
 InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'A Gravity Flow Inbox shortcode inside an HTML comment must not qualify Inbox style delivery.' );
 
-$reset_request( '<![CDATA[[gravityflow page="inbox"]]]>' );
+$reset_request( '<![CDATA[ [gravityflow page="inbox"] ]]>' );
 InboxPresentationAdapter::enqueueStyles();
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'A Gravity Flow Inbox shortcode inside CDATA must not qualify Inbox style delivery.' );
 
