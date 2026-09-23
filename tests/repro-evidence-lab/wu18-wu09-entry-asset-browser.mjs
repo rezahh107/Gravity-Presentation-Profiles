@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -307,7 +307,7 @@ const cssQualified = cssCriticalIds.every(id => results.find(result => result.id
 const output = {
   schema_version: '1.0.0',
   work_unit: 'GPP-RP-WU-09-ENTRY-ASSET-REACHABILITY-REPAIR',
-  repository_head: process.env.GPP_WU21_REPOSITORY_SHA || process.env.GITHUB_SHA || null,
+  repository_head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   runtime: qualification.runtime,
   request_reachability: {
     admin_entry: 'SUPPORTED_AND_EXERCISED',
