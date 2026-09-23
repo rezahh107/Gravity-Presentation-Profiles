@@ -37,3 +37,6 @@ await import('./inbox-width-rtl-comparative-finalize.mjs');
 // control. Keep it after the established browser regressions so the new
 // qualification cannot alter the state observed by pre-existing suites.
 await import('./p06-inbox-asset-reachability-browser-test.mjs');
+
+// Qualification-only final Inbox preflight capture. DO NOT MERGE.
+await import('./inbox-final-preflight-browser-tests.mjs');
