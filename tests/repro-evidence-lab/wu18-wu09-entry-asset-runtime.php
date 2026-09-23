@@ -1,9 +1,9 @@
 <?php
 /**
- * WU09 evidence-only qualification setup.
+ * WU09 production Entry Detail asset lifecycle regression setup.
  *
- * Reuses the existing pinned WU18 runtime and prepares request-shape fixtures
- * plus a disposable candidate asset lifecycle shim for browser qualification.
+ * Reuses the pinned WU18 runtime and prepares authentic request-shape fixtures.
+ * The browser qualification exercises shipped production code directly.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
@@ -15,7 +15,7 @@ $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $base = get_option( 'gpp_wu21_fixture_manifest' );
 $wu18 = get_option( 'gpp_wu18_fixture_manifest' );
 if ( ! is_string( $artifact_dir ) || '' === $artifact_dir || ! is_array( $base ) || ! is_array( $wu18 ) ) {
-    throw new RuntimeException( 'WU09 qualification requires the existing WU18/WU21 fixture runtime.' );
+    throw new RuntimeException( 'WU09 production regression requires the existing WU18/WU21 fixture runtime.' );
 }
 
 $gf = get_file_data( WP_PLUGIN_DIR . '/gravityforms/gravityforms.php', array( 'Version' => 'Version' ) );
@@ -85,16 +85,10 @@ $status_block_page = $status_block_registered
     ? gpp_wu09_create_page( 'WU09 Frontend Status Block Entry Detail', '<!-- wp:gravityflow/status /-->' )
     : null;
 
-$candidate_source = __DIR__ . '/wu18-wu09-entry-asset-candidate.php';
-$mu_target = WPMU_PLUGIN_DIR . '/gpp-wu09-entry-asset-candidate.php';
-wu18_assert( is_readable( $candidate_source ), 'WU09 candidate shim source is missing.' );
-wu18_assert( is_dir( WPMU_PLUGIN_DIR ) || wp_mkdir_p( WPMU_PLUGIN_DIR ), 'WU09 mu-plugin directory is unavailable.' );
-wu18_assert( copy( $candidate_source, $mu_target ), 'WU09 candidate shim could not be installed into the disposable runtime.' );
-
 $qualification = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'work_unit' => 'GPP-RP-WU-09-ENTRY-ASSET-REACHABILITY-REPAIR',
-    'mode' => 'EVIDENCE_ONLY_NO_PRODUCTION_CHANGE',
+    'mode' => 'PRODUCTION_IMPLEMENTATION_REGRESSION',
     'runtime' => array(
         'wordpress' => get_bloginfo( 'version' ),
         'php' => PHP_VERSION,
@@ -111,12 +105,20 @@ $qualification = array(
     'production_baseline' => array(
         'style_handle' => EntryDetailPresentationAdapter::STYLE_HANDLE,
         'script_handle' => EntryDetailPresentationAdapter::SCRIPT_HANDLE,
-        'current_base_gate' => 'active_model_only',
+        'base_css_gate' => 'qualified_request_reachability_plus_active_model',
+        'progressive_js_gate' => 'successful_buffered_dossier_admission',
         'server_admission_markers' => array(
             'data-gpp-entry-detail=ready',
             'data-gpp-review-mode=read-only',
             'data-gpp-native-table-suppression=read-only-review',
         ),
+    ),
+    'production_under_test' => array(
+        'request_reachability' => 'src/SRWF/GravityFlow/EntryDetailRequestReachability.php',
+        'entry_detail_adapter' => 'src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php',
+        'base_css' => 'assets/css/srwf-gravity-flow-entry-detail.css',
+        'progressive_js' => 'assets/js/srwf-gravity-flow-entry-detail.js',
+        'candidate_shim_installed' => false,
     ),
     'frontend_fixtures' => array(
         'inbox_shortcode' => $inbox_shortcode_page,
@@ -130,11 +132,6 @@ $qualification = array(
         'form_id' => (int) $wu18['alpha']['form_id'],
         'entry_id' => (int) $wu18['alpha']['entry_id'],
     ),
-    'candidate_shim' => array(
-        'path' => 'tests/repro-evidence-lab/wu18-wu09-entry-asset-candidate.php',
-        'mu_target' => $mu_target,
-        'production_files_modified' => false,
-    ),
 );
 
 update_option( 'gpp_wu09_entry_asset_qualification', $qualification, false );
@@ -143,4 +140,4 @@ file_put_contents(
     wp_json_encode( $qualification, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n"
 );
 
-echo "WU09_ENTRY_ASSET_QUALIFICATION_SETUP_PASS\n";
+echo "WU09_ENTRY_ASSET_PRODUCTION_SETUP_PASS\n";
