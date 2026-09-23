@@ -22,6 +22,10 @@ const manifest = option('gpp_wu21_fixture_manifest');
 const p06 = option('gpp_p06_fixture_manifest');
 assert.ok(p06?.authentic_block_page?.url, 'Run the existing P06 suite first; do not build another block fixture.');
 const routes = { shortcode: manifest.frontend_inbox_url, block: p06.authentic_block_page.url };
+// Earlier admitted suites add a human-display task. Read host truth rather
+// than incorrectly reusing WU17's pre-extension second-page count of five.
+const taskTotal = Number(evaluate(`$m=get_option('gpp_wu21_fixture_manifest'); $u=(int)$m['operator']['id']; wp_set_current_user($u); $total=0; Gravity_Flow_API::get_inbox_entries(array('filter_key'=>'workflow_user_id_'.$u,'user_id'=>$u,'paging'=>array('page_size'=>100)), $total); echo $total;`));
+assert.ok(Number.isInteger(taskTotal) && taskTotal > 20 && taskTotal <= 40, 'Two-page native fixture precondition changed.');
 const runtime = JSON.parse(fs.readFileSync(path.join(dir, 'runtime.json'), 'utf8'));
 assert.equal(runtime.wordpress.version, '6.8.3');
 assert.equal(runtime.php.version, '8.2.34');
@@ -32,7 +36,7 @@ assert.equal(evaluate('echo get_option("stylesheet");'), 'twentytwentyfive');
 const result = {
   repository_head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   runtime, theme_version: wp(['theme', 'get', 'twentytwentyfive', '--field=version']),
-  routes, observations: {}, interactions: {}, negatives: {},
+  routes, host_task_total: taskTotal, observations: {}, interactions: {}, negatives: {},
   ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION_ONLY',
   attribution: 'REQUIRES_EXECUTED_EVIDENCE_REVIEW',
   rtl_context: 'Test-only server language_attributes dir=rtl on the two existing pages; no CSS override, translated locale or target equivalence claim.',
@@ -175,7 +179,7 @@ try {
       await header.click(); const first = await header.getAttribute('aria-sort'); const ids1 = (await state()).ids;
       await header.click(); const second = await header.getAttribute('aria-sort'); const ids2 = (await state()).ids;
       assert.ok(first && second && first !== second); assert.notDeepEqual(ids1, ids2);
-      await page.locator('[ref="btNext"]').click(); await waitRows(5); const next = await state(); assert.equal(next.cards, 5); assert.equal(next.page, '2');
+      await page.locator('[ref="btNext"]').click(); await waitRows(taskTotal - 20); const next = await state(); assert.equal(next.cards, taskTotal - 20); assert.equal(next.page, '2');
       await page.locator('[ref="btPrevious"]').click(); await waitRows(20);
       assert.equal(await header.getAttribute('aria-sort'), second);
       return { first, second, ids1, ids2, next, restored: await state() };
