@@ -419,6 +419,8 @@ jobs:
             /tmp/wu18-artifacts/wu18-fixture-manifest.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-browser-results.json
+            /tmp/wu18-artifacts/wu09-entry-asset-qualification.json
+            /tmp/wu18-artifacts/wu09-entry-asset-browser-results.json
             /tmp/wu18-artifacts/wu18-entry-detail-native-chrome-desktop.png
             /tmp/wu18-artifacts/wu18-entry-detail-native-chrome-mobile.png
             /tmp/wu18-gpp-settings.html
