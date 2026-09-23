@@ -109,12 +109,23 @@ async function assetState(page) {
   }, { styleHandle, scriptHandle, entryCssNeedle, entryJsNeedle });
 }
 
-function assertAdmittedEntry(state, label) {
+function assertAdmittedCssAndMarkers(state, label) {
   if (state.style_handle_count !== 1 || state.entry_css_link_count < 1) throw new Error(`${label}: request-gated Entry Detail CSS missing: ${JSON.stringify(state)}`);
   if (state.dossier_count !== 1 || state.markers?.ready !== 'ready' || state.markers?.review !== 'read-only' || state.markers?.suppression !== 'read-only-review') throw new Error(`${label}: admitted dossier markers missing: ${JSON.stringify(state)}`);
+  if (state.native_table_display !== 'none' || !state.status_visible || !state.timeline_visible) throw new Error(`${label}: native suppression/status/timeline contract changed: ${JSON.stringify(state)}`);
+}
+function assertPostAdmissionJs(state, label) {
   if (state.script_handle_count !== 1 || state.entry_js_tag_count !== 1 || state.entry_js_resource_count !== 1) throw new Error(`${label}: post-admission JS was not delivered exactly once: ${JSON.stringify(state)}`);
   if (state.markers?.previewBound !== '1' || !state.script_after_dossier) throw new Error(`${label}: JS did not bind only after admitted dossier output: ${JSON.stringify(state)}`);
-  if (state.native_table_display !== 'none' || !state.status_visible || !state.timeline_visible) throw new Error(`${label}: native suppression/status/timeline contract changed: ${JSON.stringify(state)}`);
+}
+function lifecycleEvents() {
+  const file = path.join(artifactDir, 'wu09-entry-asset-lifecycle.ndjson');
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+}
+function latestLifecycleFor(url) {
+  const pathname = new URL(url).pathname + new URL(url).search;
+  return lifecycleEvents().filter(event => event.request_uri === pathname).at(-1) || null;
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -125,8 +136,9 @@ await login(page);
 await test('WU09-Q1-ADMIN-ENTRY', 'authentic admin Entry Detail is reachable on the native Gravity Flow Inbox route', async () => {
   await page.goto(adminEntry(manifest.alpha), { waitUntil: 'networkidle' });
   const state = await assetState(page);
-  assertAdmittedEntry(state, 'admin Entry Detail');
-  return state;
+  assertAdmittedCssAndMarkers(state, 'admin Entry Detail');
+  assertPostAdmissionJs(state, 'admin Entry Detail');
+  return { ...state, lifecycle: latestLifecycleFor(state.url) };
 });
 
 await test('WU09-Q1-EDITOR', 'native Approval editor is a genuine Entry Detail route but remains marker-free', async () => {
@@ -141,8 +153,10 @@ await test('WU09-Q1-EDITOR', 'native Approval editor is a genuine Entry Detail r
 await test('WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'authentic frontend Inbox shortcode serves Entry Detail on the same page', async () => {
   await page.goto(frontendEntry(qualification.frontend_fixtures.inbox_shortcode, manifest.alpha), { waitUntil: 'networkidle' });
   const state = await assetState(page);
-  assertAdmittedEntry(state, 'frontend Inbox shortcode Entry Detail');
-  return state;
+  assertAdmittedCssAndMarkers(state, 'frontend Inbox shortcode Entry Detail');
+  const lifecycle = latestLifecycleFor(state.url);
+  if (state.entry_js_tag_count > 1 || state.entry_js_resource_count > 1) throw new Error(`Frontend Inbox shortcode duplicated Entry Detail JS: ${JSON.stringify(state)}`);
+  return { ...state, post_admission_js_delivered: state.entry_js_tag_count === 1 && state.entry_js_resource_count === 1 && state.markers?.previewBound === '1', lifecycle };
 });
 
 await test('WU09-Q1-FRONTEND-INBOX-BLOCK', 'registered native Inbox block serves Entry Detail on the same page when available', async () => {
@@ -150,8 +164,10 @@ await test('WU09-Q1-FRONTEND-INBOX-BLOCK', 'registered native Inbox block serves
   if (!fixture) return { supported: false, reason: 'gravityflow/inbox block not registered in pinned runtime' };
   await page.goto(frontendEntry(fixture, manifest.alpha), { waitUntil: 'networkidle' });
   const state = await assetState(page);
-  assertAdmittedEntry(state, 'frontend Inbox block Entry Detail');
-  return { supported: true, ...state };
+  assertAdmittedCssAndMarkers(state, 'frontend Inbox block Entry Detail');
+  const lifecycle = latestLifecycleFor(state.url);
+  if (state.entry_js_tag_count > 1 || state.entry_js_resource_count > 1) throw new Error(`Frontend Inbox block duplicated Entry Detail JS: ${JSON.stringify(state)}`);
+  return { supported: true, ...state, post_admission_js_delivered: state.entry_js_tag_count === 1 && state.entry_js_resource_count === 1 && state.markers?.previewBound === '1', lifecycle };
 });
 
 await test('WU09-Q1-FRONTEND-STATUS', 'frontend Status shortcode Entry Detail support is measured rather than assumed', async () => {
@@ -163,8 +179,10 @@ await test('WU09-Q1-FRONTEND-STATUS', 'frontend Status shortcode Entry Detail su
     if (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0) throw new Error(`Unsupported Status detail route received Entry Detail assets: ${JSON.stringify(state)}`);
     return { supported: false, ...state };
   }
-  assertAdmittedEntry(state, 'frontend Status shortcode Entry Detail');
-  return { supported: true, ...state };
+  assertAdmittedCssAndMarkers(state, 'frontend Status shortcode Entry Detail');
+  const lifecycle = latestLifecycleFor(state.url);
+  if (state.entry_js_tag_count > 1 || state.entry_js_resource_count > 1) throw new Error(`Frontend Status duplicated Entry Detail JS: ${JSON.stringify(state)}`);
+  return { supported: true, ...state, post_admission_js_delivered: state.entry_js_tag_count === 1 && state.entry_js_resource_count === 1 && state.markers?.previewBound === '1', lifecycle };
 });
 
 await test('WU09-Q1-ADMIN-INBOX-NEGATIVE', 'ordinary admin Inbox does not receive Entry Detail assets', async () => {
@@ -217,10 +235,37 @@ await test('WU09-Q3-REPEAT-ADMITTED', 'fresh admitted requests each receive one 
   for (let i = 0; i < 2; i++) {
     await page.goto(adminEntry(manifest.alpha), { waitUntil: 'networkidle' });
     const state = await assetState(page);
-    assertAdmittedEntry(state, `repeat admitted request ${i + 1}`);
+    assertAdmittedCssAndMarkers(state, `repeat admitted request ${i + 1}`);
+    assertPostAdmissionJs(state, `repeat admitted request ${i + 1}`);
     observed.push({ script_handle_count: state.script_handle_count, resource_count: state.entry_js_resource_count, preview_bound: state.markers.previewBound });
   }
   return observed;
+});
+
+await test('WU09-Q3-FALLBACK-FRONTEND', 'early request-gated JS fallback loads once and binds through the existing admitted-dossier root guard', async () => {
+  const url = withQuery(frontendEntry(qualification.frontend_fixtures.inbox_shortcode, manifest.alpha), { gpp_wu09_js_mode: 'early' });
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  assertAdmittedCssAndMarkers(state, 'early fallback frontend admitted Entry Detail');
+  if (state.script_handle_count !== 1 || state.entry_js_tag_count !== 1 || state.entry_js_resource_count !== 1 || state.markers?.previewBound !== '1') throw new Error(`Early request-gated fallback failed on admitted frontend Entry Detail: ${JSON.stringify(state)}`);
+  return state;
+});
+
+await test('WU09-Q3-FALLBACK-EDITOR-GUARD', 'early request-gated JS fallback remains behaviorally inert without server dossier admission', async () => {
+  const url = withQuery(adminEntry(manifest.editor), { gpp_wu09_js_mode: 'early' });
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  if (state.style_handle_count !== 1 || state.script_handle_count !== 1 || state.entry_js_resource_count !== 1) throw new Error(`Early fallback assets were not request-gated on genuine editor route: ${JSON.stringify(state)}`);
+  if (state.dossier_count !== 0 || state.markers !== null || !state.native_editor_visible || state.native_table_display === 'none') throw new Error(`Early fallback JS changed native editor behavior without server admission: ${JSON.stringify(state)}`);
+  return state;
+});
+
+await test('WU09-Q3-FALLBACK-UNRELATED-GUARD', 'early fallback JS remains absent when request reachability is false', async () => {
+  const url = withQuery(qualification.frontend_fixtures.unrelated.url, { view: 'entry', id: manifest.alpha.form_id, lid: manifest.alpha.entry_id, gpp_wu09_js_mode: 'early' });
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const state = await assetState(page);
+  if (state.entry_css_link_count !== 0 || state.entry_js_tag_count !== 0 || state.entry_js_resource_count !== 0) throw new Error(`Early fallback leaked to unrelated frontend query: ${JSON.stringify(state)}`);
+  return state;
 });
 
 await test('WU09-Q4-PERMISSION-DENIED', 'non-authorized viewer never gains dossier admission or post-admission JS authority', async () => {
@@ -249,6 +294,16 @@ await browser.close();
 
 const failures = results.filter(result => result.status === 'FAIL');
 const statusResult = results.find(result => result.id === 'WU09-Q1-FRONTEND-STATUS');
+const frontendAdmissionResults = results.filter(result => ['WU09-Q1-FRONTEND-INBOX-SHORTCODE', 'WU09-Q1-FRONTEND-INBOX-BLOCK', 'WU09-Q1-FRONTEND-STATUS'].includes(result.id) && result.status === 'PASS' && result.details?.supported !== false);
+const frontendLateJsReliable = frontendAdmissionResults.length > 0 && frontendAdmissionResults.every(result => result.details?.post_admission_js_delivered === true);
+const fallbackIds = ['WU09-Q3-FALLBACK-FRONTEND', 'WU09-Q3-FALLBACK-EDITOR-GUARD', 'WU09-Q3-FALLBACK-UNRELATED-GUARD'];
+const fallbackQualified = fallbackIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
+const cssCriticalIds = [
+  'WU09-Q1-ADMIN-ENTRY','WU09-Q1-EDITOR','WU09-Q1-FRONTEND-INBOX-SHORTCODE','WU09-Q1-FRONTEND-INBOX-BLOCK','WU09-Q1-FRONTEND-STATUS',
+  'WU09-Q1-ADMIN-INBOX-NEGATIVE','WU09-Q1-UNRELATED-ADMIN-NEGATIVE','WU09-Q1-UNRELATED-FRONTEND-QUERY-NEGATIVE',
+  'WU09-Q1-MALFORMED-ADMIN-NEGATIVE','WU09-Q1-MALFORMED-FRONTEND-NEGATIVE','WU09-Q2-MARKER-AUTHORITY','WU09-Q4-PRINT-NEGATIVE'
+];
+const cssQualified = cssCriticalIds.every(id => results.find(result => result.id === id)?.status === 'PASS');
 const output = {
   schema_version: '1.0.0',
   work_unit: 'GPP-RP-WU-09-ENTRY-ASSET-REACHABILITY-REPAIR',
@@ -266,16 +321,18 @@ const output = {
     malformed_requests: 'NEGATIVE_CONTROL',
   },
   candidate: {
-    css: failures.length ? 'NOT_QUALIFIED' : 'QUALIFIED_EARLY_REQUEST_GATED_CSS',
-    js: failures.length ? 'NOT_QUALIFIED_FOR_POST_ADMISSION' : 'QUALIFIED_POST_ADMISSION_JS',
-    authority: 'server dossier/admission markers remain required for suppression and late JS',
+    css: cssQualified ? 'QUALIFIED_EARLY_REQUEST_GATED_CSS' : 'NOT_QUALIFIED',
+    js: frontendLateJsReliable ? 'QUALIFIED_POST_ADMISSION_JS' : 'NOT_QUALIFIED_FOR_POST_ADMISSION',
+    post_admission_js_failure_reason: frontendLateJsReliable ? null : 'supported frontend Entry Detail renders dossier after the normal footer script print point or otherwise too late for reliable footer delivery',
+    early_request_gated_js_fallback: fallbackQualified ? 'SUPPORTED_BY_EXECUTED_EVIDENCE' : 'NOT_PROVEN',
+    authority: 'server dossier/admission markers remain required for duplicate suppression and admitted host chrome; JS root guard remains dossier-scoped',
   },
   results,
 };
 fs.mkdirSync(artifactDir, { recursive: true });
 fs.writeFileSync(path.join(artifactDir, 'wu09-entry-asset-browser-results.json'), `${JSON.stringify(output, null, 2)}\n`);
 
-if (failures.length) {
+if (failures.length || !cssQualified || !fallbackQualified) {
   console.error(JSON.stringify(output, null, 2));
   process.exit(1);
 }
