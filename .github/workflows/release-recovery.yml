@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: gpp-production-release-v1
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'workflow_dispatch' && 'gpp-production-release-v1' || format('gpp-release-recovery-contract-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GPP_RELEASE_DB_NAME: wordpress_recovery
