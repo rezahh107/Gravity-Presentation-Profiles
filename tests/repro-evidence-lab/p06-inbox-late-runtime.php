@@ -56,7 +56,16 @@ if ( false === strpos( $output, 'data-js="gflow-inbox"' ) ) {
 }
 foreach ( $handles as $handle ) {
     if ( 1 !== substr_count( $output, 'id="' . $handle . '-css"' ) || ! wp_style_is( $handle, 'done' ) ) {
-        throw new RuntimeException( 'Authentic late ' . $mode . ' did not emit exactly one completed style: ' . $handle );
+        throw new RuntimeException(
+            'Authentic late ' . $mode . ' did not emit exactly one completed style: ' . $handle
+            . ' count=' . substr_count( $output, 'id="' . $handle . '-css"' )
+            . ' registered=' . (int) wp_style_is( $handle, 'registered' )
+            . ' enqueued=' . (int) wp_style_is( $handle, 'enqueued' )
+            . ' done=' . (int) wp_style_is( $handle, 'done' )
+            . ' concat=' . (int) wp_styles()->do_concat
+            . ' wrapper=' . (int) ( false !== strpos( $output, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) )
+            . ' links=' . substr_count( $output, '<link' )
+        );
     }
 }
 $presentation = strpos( $output, 'id="' . $handles[0] . '-css"' );
