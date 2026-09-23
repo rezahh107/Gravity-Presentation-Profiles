@@ -290,7 +290,8 @@ wp_print_styles();
 ob_end_clean();
 gpp_assert_same( $lookalike, InboxPresentationAdapter::filterFrontendBlock( $lookalike, array( 'blockName' => 'core/html' ) ), 'Late unrelated block must emit no styles.' );
 gpp_assert_same( array(), $GLOBALS['gpp_enqueued_styles'], 'Late unrelated block must not enqueue styles.' );
-gpp_assert_same( $lookalike, InboxPresentationAdapter::filterShortcodeInbox( $lookalike, array(), '' ), 'Late lookalike shortcode output must not emit styles.' );
+$unrelated_shortcode = '<p>Unrelated shortcode output.</p>';
+gpp_assert_same( $unrelated_shortcode, InboxPresentationAdapter::filterShortcodeInbox( $unrelated_shortcode, array(), '' ), 'Late unrelated shortcode output must not emit styles.' );
 
 $set_active_profile( false );
 $reset_request();
