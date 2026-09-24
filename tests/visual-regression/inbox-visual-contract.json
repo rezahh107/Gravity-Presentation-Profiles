@@ -13,23 +13,196 @@
     "locale": "en-US",
     "timezone_id": "UTC",
     "device_scale_factor": 1,
-    "animations": "disabled"
+    "animations": "disabled",
+    "scope": "GPP_INBOX_SURFACE_ONLY",
+    "selector": "[data-gpp-inbox-surface=\"gravity_flow.inbox\"]"
   },
   "scenarios": [
-    { "id": "shortcode-desktop", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "design_authority_surface": "inbox-desktop", "design_authority_action": "default", "matrix": ["A","B","C","D","E","G","I","K","M"] },
-    { "id": "shortcode-mobile", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "design_authority_surface": "inbox-mobile", "design_authority_action": "default", "matrix": ["B","C","D","E","G","H","J","K","L","M"] },
-    { "id": "block-desktop", "family": "INBOX_AUTHENTIC_BLOCK", "viewport": { "width": 1440, "height": 1100 }, "design_authority_surface": "inbox-desktop", "design_authority_action": "default", "matrix": ["A","B","C","D","E","G","I","K","M"] },
-    { "id": "block-mobile", "family": "INBOX_AUTHENTIC_BLOCK", "viewport": { "width": 414, "height": 1100 }, "design_authority_surface": "inbox-mobile", "design_authority_action": "default", "matrix": ["B","C","D","E","G","H","J","K","L","M"] },
-    { "id": "shortcode-search-result", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_result", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-result", "matrix": ["C","D","G"] },
-    { "id": "shortcode-search-empty", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_empty", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-empty", "matrix": ["C","F","G"] },
-    { "id": "shortcode-pagination", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "pagination", "design_authority_surface": "inbox-desktop", "design_authority_action": "pagination-next", "matrix": ["D","G","I"] },
-    { "id": "shortcode-focus", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "action": "focus", "design_authority_surface": "inbox-mobile", "design_authority_action": "focus-search", "matrix": ["H","J","L"] }
+    {
+      "id": "shortcode-desktop",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "default",
+      "matrix": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "I",
+        "K",
+        "M"
+      ]
+    },
+    {
+      "id": "shortcode-mobile",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "default",
+      "matrix": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "H",
+        "J",
+        "K",
+        "L",
+        "M"
+      ]
+    },
+    {
+      "id": "block-desktop",
+      "family": "INBOX_AUTHENTIC_BLOCK",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "default",
+      "matrix": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "I",
+        "K",
+        "M"
+      ]
+    },
+    {
+      "id": "block-mobile",
+      "family": "INBOX_AUTHENTIC_BLOCK",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "default",
+      "matrix": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "H",
+        "J",
+        "K",
+        "L",
+        "M"
+      ]
+    },
+    {
+      "id": "shortcode-search-result",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "search_result",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "search-result",
+      "matrix": [
+        "C",
+        "D",
+        "G"
+      ]
+    },
+    {
+      "id": "shortcode-search-empty",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "search_empty",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "search-empty",
+      "matrix": [
+        "C",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "id": "shortcode-pagination",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "pagination",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "pagination-next",
+      "matrix": [
+        "D",
+        "G",
+        "I"
+      ]
+    },
+    {
+      "id": "shortcode-focus",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "action": "focus",
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "focus-search",
+      "matrix": [
+        "H",
+        "J",
+        "L"
+      ]
+    }
   ],
   "future_scenarios": {
-    "true_browser_zoom_200": { "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED", "note": "Must use genuine browser zoom; root-font scaling is not equivalent." },
-    "live_refresh": { "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE" },
-    "mixed_readiness": { "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE" },
-    "authentic_no_task": { "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE" },
-    "rtl": { "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE" }
+    "true_browser_zoom_200": {
+      "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED",
+      "note": "Must use genuine browser zoom; root-font scaling is not equivalent."
+    },
+    "live_refresh": {
+      "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE"
+    },
+    "mixed_readiness": {
+      "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE"
+    },
+    "authentic_no_task": {
+      "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE"
+    },
+    "rtl": {
+      "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE"
+    }
+  },
+  "host_runtime": {
+    "page_template": "elementor_header_footer",
+    "hello_elementor": {
+      "version": "3.5.1",
+      "commit": "e86d30a7d64b2ab59373422a14933bba3621ee04",
+      "sha256": "d5b36b9d33187bf8b9cd5ad324489aab7ad8c3a21b5f2e5df82c18964a026ce5"
+    },
+    "elementor": {
+      "version": "4.3.1",
+      "sha256": "9e947ce507a6c76d22ec7c710da96b65ecc7da18703dc662a6940f5443491c8d"
+    },
+    "elementor_pro": {
+      "version": "4.3.0",
+      "sha256": "4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0",
+      "classification": "OWNER_SUPPLIED_MODIFIED_PACKAGE"
+    },
+    "srwf_host_companion_active": false
   }
 }

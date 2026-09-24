@@ -51,8 +51,12 @@ jobs:
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
       WU21_PERMALINK_STRUCTURE: '/%postname%/'
-      WU21_ELEMENTOR_VERSION: '3.35.9'
-      WU21_ELEMENTOR_SHA256: ba125cbeef3302d32ba07edd5306d63dfc25772d84037f110cfeb95f9b415794
+      WU21_ELEMENTOR_VERSION: '4.3.1'
+      WU21_ELEMENTOR_SHA256: 9e947ce507a6c76d22ec7c710da96b65ecc7da18703dc662a6940f5443491c8d
+      WU21_ELEMENTOR_SIZE: '23188841'
+      WU21_ELEMENTOR_PRO_VERSION: '4.3.0'
+      WU21_ELEMENTOR_PRO_SHA256: 4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0
+      WU21_ELEMENTOR_PRO_SIZE: '3446055'
       WU21_HELLO_VERSION: '3.5.1'
       WU21_HELLO_COMMIT: e86d30a7d64b2ab59373422a14933bba3621ee04
       WU21_HELLO_SHA256: d5b36b9d33187bf8b9cd5ad324489aab7ad8c3a21b5f2e5df82c18964a026ce5
@@ -63,6 +67,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Assert repository and exact checkout identity
         shell: bash
@@ -295,24 +300,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 3 -o /tmp/elementor.zip "https://github.com/elementor/elementor/releases/download/$WU21_ELEMENTOR_VERSION/elementor-$WU21_ELEMENTOR_VERSION.zip"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const contract=JSON.parse(fs.readFileSync('tests/visual-regression/inbox-visual-contract.json','utf8')).host_runtime;
+          const env=process.env;
+          const checks=[
+            ['Elementor version',env.WU21_ELEMENTOR_VERSION,contract.elementor.version],
+            ['Elementor SHA-256',env.WU21_ELEMENTOR_SHA256,contract.elementor.sha256],
+            ['Elementor Pro version',env.WU21_ELEMENTOR_PRO_VERSION,contract.elementor_pro.version],
+            ['Elementor Pro SHA-256',env.WU21_ELEMENTOR_PRO_SHA256,contract.elementor_pro.sha256],
+            ['Hello Elementor version',env.WU21_HELLO_VERSION,contract.hello_elementor.version],
+            ['Hello Elementor commit',env.WU21_HELLO_COMMIT,contract.hello_elementor.commit],
+            ['Hello Elementor SHA-256',env.WU21_HELLO_SHA256,contract.hello_elementor.sha256],
+          ];
+          for(const [name,actual,expected] of checks) if(actual!==expected) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${name} workflow/contract identity mismatch.`);
+          NODE
+          curl -L --fail --retry 4 -o /tmp/elementor.zip "https://drive.usercontent.google.com/download?id=1tyRkQ4a_E_wz2cL2KcNPMr2Q5P5yX7UR&export=download&confirm=t"
+          curl -L --fail --retry 4 -o /tmp/elementor-pro.zip "https://drive.usercontent.google.com/download?id=1nSNzFyZJd1aMrManYhmXOxSzRgivjMwg&export=download&confirm=t"
           curl -L --fail --retry 3 -o /tmp/hello-elementor.tar.gz "https://github.com/elementor/hello-theme/archive/$WU21_HELLO_COMMIT.tar.gz"
           export WU21_ELEMENTOR_ACTUAL_SHA256="$(sha256sum /tmp/elementor.zip | cut -d' ' -f1)"
+          export WU21_ELEMENTOR_PRO_ACTUAL_SHA256="$(sha256sum /tmp/elementor-pro.zip | cut -d' ' -f1)"
           export WU21_HELLO_ACTUAL_SHA256="$(sha256sum /tmp/hello-elementor.tar.gz | cut -d' ' -f1)"
+          test "$(stat -c '%s' /tmp/elementor.zip)" = "$WU21_ELEMENTOR_SIZE"
+          test "$(stat -c '%s' /tmp/elementor-pro.zip)" = "$WU21_ELEMENTOR_PRO_SIZE"
           test "$WU21_ELEMENTOR_ACTUAL_SHA256" = "$WU21_ELEMENTOR_SHA256"
+          test "$WU21_ELEMENTOR_PRO_ACTUAL_SHA256" = "$WU21_ELEMENTOR_PRO_SHA256"
           test "$WU21_HELLO_ACTUAL_SHA256" = "$WU21_HELLO_SHA256"
           unzip -q /tmp/elementor.zip -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q /tmp/elementor-pro.zip -d "$WU21_WP_PATH/wp-content/plugins"
           mkdir -p /tmp/hello-theme
           tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-theme --strip-components=1
           mv /tmp/hello-theme "$WU21_WP_PATH/wp-content/themes/hello-elementor"
-          WU21_EXPECTED_ELEMENTOR_VERSION="$WU21_ELEMENTOR_VERSION" WU21_EXPECTED_HELLO_VERSION="$WU21_HELLO_VERSION" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+          php "$WU21_WP_CLI" config set WP_HTTP_BLOCK_EXTERNAL true --raw --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" config set WP_ACCESSIBLE_HOSTS '127.0.0.1,localhost' --path="$WU21_WP_PATH"
+          WU21_EXPECTED_ELEMENTOR_VERSION="$WU21_ELEMENTOR_VERSION" WU21_EXPECTED_ELEMENTOR_PRO_VERSION="$WU21_ELEMENTOR_PRO_VERSION" WU21_EXPECTED_HELLO_VERSION="$WU21_HELLO_VERSION" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
           $elementor = get_file_data(WP_PLUGIN_DIR . "/elementor/elementor.php", ["version" => "Version"]);
+          $elementor_pro = get_file_data(WP_PLUGIN_DIR . "/elementor-pro/elementor-pro.php", ["version" => "Version"]);
           $hello = wp_get_theme("hello-elementor");
-          if ($elementor["version"] !== getenv("WU21_EXPECTED_ELEMENTOR_VERSION") || $hello->get("Version") !== getenv("WU21_EXPECTED_HELLO_VERSION")) {
-              throw new RuntimeException("Pinned Elementor/Hello package identity mismatch.");
+          if (
+              $elementor["version"] !== getenv("WU21_EXPECTED_ELEMENTOR_VERSION")
+              || $elementor_pro["version"] !== getenv("WU21_EXPECTED_ELEMENTOR_PRO_VERSION")
+              || $hello->get("Version") !== getenv("WU21_EXPECTED_HELLO_VERSION")
+          ) {
+              throw new RuntimeException("Pinned Elementor/Elementor Pro/Hello package identity mismatch.");
           }
           '
           php "$WU21_WP_CLI" plugin activate elementor --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin activate elementor-pro --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-elementor-visual-host.php
           test -s "$WU21_ARTIFACT_DIR/integrated-visual-host.json"

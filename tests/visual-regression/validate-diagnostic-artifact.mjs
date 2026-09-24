@@ -1,5 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
+import { assertSerializedReferenceIdentity } from './reference-selection.mjs';
+
+const contract = JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json', import.meta.url), 'utf8'));
 
 const root = process.argv[2];
 if (!root || !fs.existsSync(root)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: diagnostic artifact root is missing.');
@@ -31,8 +35,11 @@ for (const scenario of manifest.scenarios) {
     if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing ${scenario.id}/${file}`);
   }
   const environment=read(path.join(scenario.id,'environment.json')); const host=read(path.join(scenario.id,'host-integration.json'));
-  if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.integrated_visual_host?.page_template!=='elementor_canvas' || environment.integrated_visual_host?.elementor_recognized!==true || environment.integrated_visual_host?.srwf_host_companion_active!==false || host.elementor_canvas!==true || host.elementor_page!==true || host.elementor_container_present!==true || host.surface_within_host!==true || host.document_horizontal_overflow>1) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
+  assertIntegratedHostIdentity(environment.integrated_visual_host, contract.host_runtime);
+  if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.capture_scope!==contract.capture.scope || environment.capture_selector!==contract.capture.selector || host.elementor_page!==true || host.elementor_container_present!==true || host.surface_present!==true || host.surface_within_host!==true || host.document_horizontal_overflow>1) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
   const metrics=read(path.join(scenario.id,'metrics.json')); const geometry=read(path.join(scenario.id,'geometry.json'));
+  assertSerializedReferenceIdentity({metrics,environment,scenario,mode:manifest.mode});
+  if (metrics.capture_scope!==contract.capture.scope) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid capture scope for ${scenario.id}`);
   if (typeof metrics.differing_pixel_ratio!=='number' || !Object.hasOwn(geometry.relationships||{},'last_card_to_pager_gap') || typeof geometry.relationships?.visual_vs_native_height_delta!=='number') {
     throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: incomplete metrics for ${scenario.id}`);
   }
