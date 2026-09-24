@@ -25,9 +25,20 @@ $fail = static function ( $message ) {
 if ( 'hello-elementor' !== get_option( 'stylesheet' ) || ! is_plugin_active( 'elementor/elementor.php' ) || ! is_plugin_active( 'elementor-pro/elementor-pro.php' ) ) {
 	$fail( 'pinned Hello Elementor + Elementor + Elementor Pro host is not active.' );
 }
-$companion_file = WP_PLUGIN_DIR . '/srwf-host-companion/srwf-host-companion.php';
-if ( is_plugin_active( 'srwf-host-companion/srwf-host-companion.php' ) || is_file( $companion_file ) ) {
-	$fail( 'SRWF-Host-Companion must remain retired and unregistered in the forward visual runtime.' );
+$registered_host_companions = array_values(
+	array_filter(
+		array_keys( get_plugins() ),
+		static fn( $plugin ) => str_starts_with( (string) $plugin, 'srwf-host-companion/' )
+	)
+);
+$active_host_companions = array_values(
+	array_filter(
+		$registered_host_companions,
+		static fn( $plugin ) => is_plugin_active( $plugin ) || is_plugin_active_for_network( $plugin )
+	)
+);
+if ( ! empty( $registered_host_companions ) || ! empty( $active_host_companions ) ) {
+	$fail( 'SRWF-Host-Companion must remain retired, unregistered, and non-executable in the forward visual runtime.' );
 }
 if ( count( $page_ids ) !== 2 ) {
 	$fail( 'Inbox host pages are unavailable.' );
@@ -67,6 +78,22 @@ if ( ( $export['page_settings']['template'] ?? null ) !== $contract['host_runtim
 if ( 'shortcode' !== ( $host_fixture['mount']['widget_type'] ?? null ) ) {
 	$fail( 'Elementor fixture mount widget identity is invalid.' );
 }
+$fixture_container = $export['content'][0] ?? null;
+$fixture_mount_widget = is_array( $fixture_container ) ? ( $fixture_container['elements'][0] ?? null ) : null;
+if (
+	! is_array( $fixture_container )
+	|| 'container' !== ( $fixture_container['elType'] ?? null )
+	|| empty( $fixture_container['id'] )
+	|| ! is_array( $fixture_mount_widget )
+	|| 'widget' !== ( $fixture_mount_widget['elType'] ?? null )
+	|| 'shortcode' !== ( $fixture_mount_widget['widgetType'] ?? null )
+	|| empty( $fixture_mount_widget['id'] )
+	|| ! str_contains( (string) ( $fixture_mount_widget['settings']['shortcode'] ?? '' ), $mount_token )
+) {
+	$fail( 'Elementor fixture designated Inbox container/mount semantics are malformed.' );
+}
+$fixture_container_id = (string) $fixture_container['id'];
+$fixture_mount_widget_id = (string) $fixture_mount_widget['id'];
 
 $replace_mount = static function ( $value, $token, $replacement, &$count ) use ( &$replace_mount ) {
 	if ( is_array( $value ) ) {
@@ -142,6 +169,8 @@ $identity      = array(
 		'elementor_document_type' => $export['document_type'],
 		'page_bindings'           => $page_bindings,
 		'active_kit_id'           => $kit_id,
+		'container_element_id'    => $fixture_container_id,
+		'mount_element_id'        => $fixture_mount_widget_id,
 	),
 	'hello_elementor'            => array( 'version' => $theme->get( 'Version' ), 'commit' => getenv( 'WU21_HELLO_COMMIT' ), 'expected_package_sha256' => getenv( 'WU21_HELLO_SHA256' ), 'actual_package_sha256' => getenv( 'WU21_HELLO_ACTUAL_SHA256' ) ),
 	'elementor'                  => array( 'version' => $elementor['version'], 'expected_package_sha256' => getenv( 'WU21_ELEMENTOR_SHA256' ), 'actual_package_sha256' => getenv( 'WU21_ELEMENTOR_ACTUAL_SHA256' ) ),

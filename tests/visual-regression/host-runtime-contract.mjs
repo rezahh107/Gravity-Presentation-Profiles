@@ -16,6 +16,7 @@ export function assertIntegratedHostIdentity(host, contract) {
   if (fixture.expected_sha256 !== expectedFixture.sha256 || fixture.actual_sha256 !== expectedFixture.sha256) fail('Elementor host fixture SHA-256 mismatch.');
   if (fixture.elementor_export_type !== 'page' || fixture.elementor_document_type !== 'wp-page') fail('Elementor host fixture export/document type mismatch.');
   if (!fixture.page_bindings || !Number.isInteger(fixture.page_bindings.frontend_shortcode) || !Number.isInteger(fixture.page_bindings.frontend_block)) fail('Elementor host fixture page bindings are incomplete.');
+  if (!/^[a-f0-9]{8}$/i.test(fixture.container_element_id || '') || !/^[a-f0-9]{8}$/i.test(fixture.mount_element_id || '') || fixture.container_element_id === fixture.mount_element_id) fail('Elementor host fixture designated container/mount identities are incomplete.');
 
   const assertPackage = (label, actual, expected, extras = {}) => {
     if (actual?.version !== expected?.version) fail(`${label} version mismatch.`);

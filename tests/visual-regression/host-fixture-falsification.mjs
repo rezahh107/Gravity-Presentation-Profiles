@@ -17,6 +17,7 @@ assert.equal(JSON.stringify(fixture.elementor_export?.content||[]).split(fixture
 const setup=fs.readFileSync('tests/repro-evidence-lab/setup-elementor-visual-host.php','utf8');
 assert.equal(setup.includes("'widgetType' => 'shortcode'"),false,'Setup PHP must not recreate Elementor composition manually.');
 assert.equal(setup.includes("'elType'   => 'container'"),false,'Setup PHP must not recreate Elementor composition manually.');
+assert.match(setup,/array_keys\( get_plugins\(\) \)/,'Setup must reject Host Companion registration through the WordPress plugin registry.');
 
 const h=contract.host_runtime;
 const packages={
@@ -26,7 +27,9 @@ const packages={
 };
 const synthetic={classification:'INTEGRATED_SRWF_VISUAL_HOST',page_template:h.page_template,elementor_recognized:true,srwf_host_companion_active:false,srwf_host_companion_registered:false,...packages};
 assert.throws(()=>assertIntegratedHostIdentity(synthetic,h),/bypassed the versioned Elementor fixture authority|fixture identity is unavailable/);
-const admitted={...synthetic,composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',host_fixture:{...h.fixture,expected_sha256:h.fixture.sha256,actual_sha256:h.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:1,frontend_block:2}}};
+const fixtureContainer=fixture.elementor_export.content[0];
+const fixtureMount=fixtureContainer.elements[0];
+const admitted={...synthetic,composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',host_fixture:{...h.fixture,expected_sha256:h.fixture.sha256,actual_sha256:h.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:1,frontend_block:2},container_element_id:fixtureContainer.id,mount_element_id:fixtureMount.id}};
 assert.doesNotThrow(()=>assertIntegratedHostIdentity(admitted,h));
 const wrongFixtureHash={...admitted,host_fixture:{...admitted.host_fixture,actual_sha256:'0'.repeat(64)}};
 assert.throws(()=>assertIntegratedHostIdentity(wrongFixtureHash,h),/fixture SHA-256 mismatch/);
@@ -34,4 +37,6 @@ const companion={...admitted,srwf_host_companion_active:true};
 assert.throws(()=>assertIntegratedHostIdentity(companion,h),/SRWF-Host-Companion/);
 const registeredCompanion={...admitted,srwf_host_companion_registered:true};
 assert.throws(()=>assertIntegratedHostIdentity(registeredCompanion,h),/SRWF-Host-Companion/);
-console.log('HOST_FIXTURE_FALSIFICATION_PASS synthetic_bypass_rejected=true admitted_fixture=true fixture_hash_mismatch_rejected=true companion_active_rejected=true companion_registered_rejected=true');
+const missingMountIdentity={...admitted,host_fixture:{...admitted.host_fixture,mount_element_id:null}};
+assert.throws(()=>assertIntegratedHostIdentity(missingMountIdentity,h),/designated container\/mount identities/);
+console.log('HOST_FIXTURE_FALSIFICATION_PASS synthetic_bypass_rejected=true admitted_fixture=true fixture_hash_mismatch_rejected=true designated_mount_identity_required=true companion_active_rejected=true companion_registered_rejected=true');
