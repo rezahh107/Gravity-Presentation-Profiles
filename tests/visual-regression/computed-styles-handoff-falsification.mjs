@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
+import { primaryFamily } from './font-runtime-contract.mjs';
 
 // Prove the original defect control really fails before exercising the repair.
 const evaluate = (_callback, argument) => argument;
@@ -16,8 +17,8 @@ const selectorsMatch = source.match(/const selectors = (\{[\s\S]*?\n\});\n\nasyn
 const diagnosticsMatch = source.match(/export async function diagnostics\(page\) \{[\s\S]*?\n\}/);
 const stylesMatch = source.match(/export async function styles\(page\) \{[\s\S]*?\n\}/);
 assert.ok(selectorsMatch && diagnosticsMatch && stylesMatch, 'Parameterized evaluate boundaries were not extractable.');
-const load = Function('physicalHorizontalGap', 'cssPixelNumber', `${selectorsMatch[0].replace(/\n\nasync function waitReady[\s\S]*/, '')}\n${diagnosticsMatch[0].replace('export ', '')}\n${stylesMatch[0].replace('export ', '')}\nreturn { selectors, diagnostics, styles };`);
-const { selectors, diagnostics, styles } = load(physicalHorizontalGap, cssPixelNumber);
+const load = Function('physicalHorizontalGap', 'cssPixelNumber', 'primaryFamily', `${selectorsMatch[0].replace(/\n\nasync function waitReady[\s\S]*/, '')}\n${diagnosticsMatch[0].replace('export ', '')}\n${stylesMatch[0].replace('export ', '')}\nreturn { selectors, diagnostics, styles };`);
+const { selectors, diagnostics, styles } = load(physicalHorizontalGap, cssPixelNumber, primaryFamily);
 
 const previousDocument = globalThis.document;
 const previousGetComputedStyle = globalThis.getComputedStyle;

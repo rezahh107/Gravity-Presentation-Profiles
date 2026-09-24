@@ -1,3 +1,4 @@
+import { assertVazirAuthorityIdentity } from './font-runtime-contract.mjs';
 export function assertIntegratedHostIdentity(host, contract) {
   const fail = message => { throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${message}`); };
   if (!host || !contract) fail('integrated host identity contract is unavailable.');
@@ -27,5 +28,6 @@ export function assertIntegratedHostIdentity(host, contract) {
   assertPackage('Hello Elementor', host.hello_elementor, contract.hello_elementor, { commit: contract.hello_elementor.commit });
   assertPackage('Elementor', host.elementor, contract.elementor);
   assertPackage('Elementor Pro', host.elementor_pro, contract.elementor_pro, { classification: contract.elementor_pro.classification });
+  assertVazirAuthorityIdentity(host.vazir_font, contract.vazir_font);
   return true;
 }

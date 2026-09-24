@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { evaluateDesignConvergence, projectScenarioStatus } from './design-convergence-policy.mjs';
 
-const policy={schema_version:'1.0.0',relations:{width:{kind:'numeric_delta',tolerance:2},columns:{kind:'discrete_exact'}}};
+const policy={schema_version:'1.0.0',relations:{width:{kind:'numeric_delta',tolerance:2},columns:{kind:'discrete_exact'}},action_requirements:{}};
 const stableCapture='PASS';
 const warning=evaluateDesignConvergence({width:{design:100,runtime:110,delta:10},columns:{design:2,runtime:2,delta:0}},policy,['width','columns']);
 assert.equal(warning.status,'WARNING');

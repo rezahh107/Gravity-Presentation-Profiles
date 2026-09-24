@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
 import { assertSerializedReferenceIdentity } from './reference-selection.mjs';
-import { assertDesignComparisonEvidence, projectScenarioStatus } from './design-convergence-policy.mjs';
+import { assertActionVisualCoverage, assertDesignComparisonEvidence, projectScenarioStatus } from './design-convergence-policy.mjs';
+import { assertArtifactVazirProvenance } from './font-runtime-contract.mjs';
 
 const contract = JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json', import.meta.url), 'utf8'));
 
@@ -33,6 +34,7 @@ if (String(zoom?.status||'').includes('NOT_EXECUTED') && manifest.scenarios.some
 for (const scenario of manifest.scenarios) {
   const scenarioContract=contract.scenarios.find(candidate=>candidate.id===scenario.id);
   if (!scenarioContract) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: scenario ${scenario.id} is absent from the versioned contract.`);
+  assertActionVisualCoverage(contract.design_comparison_policy,scenarioContract);
   for (const file of ['reference.png','actual.png','diff.png','metrics.json','scenario-state.json','geometry.json','computed-styles.json','dom-summary.json','environment.json']) {
     const target = path.join(root, scenario.id, file);
     if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing ${scenario.id}/${file}`);
@@ -43,6 +45,7 @@ for (const scenario of manifest.scenarios) {
   }
   const environment=read(path.join(scenario.id,'environment.json')); const host=read(path.join(scenario.id,'host-integration.json'));
   assertIntegratedHostIdentity(environment.integrated_visual_host, contract.host_runtime);
+  assertArtifactVazirProvenance(environment,contract.host_runtime.vazir_font);
   if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.capture_scope!==contract.capture.scope || environment.capture_selector!==contract.capture.selector || host.elementor_container_present!==true || host.fixture_mount_present!==true || host.surface_present!==true || host.surface_dom_nested_in_fixture_mount!==true || host.surface_dom_nested_in_elementor_container!==true || host.fixture_container_element_id!==environment.integrated_visual_host?.host_fixture?.container_element_id || host.fixture_mount_element_id!==environment.integrated_visual_host?.host_fixture?.mount_element_id) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
   const metrics=read(path.join(scenario.id,'metrics.json')); const geometry=read(path.join(scenario.id,'geometry.json')); const designComparison=read(path.join(scenario.id,'design-vs-runtime.json'));
   assertSerializedReferenceIdentity({metrics,environment,scenario,mode:manifest.mode});

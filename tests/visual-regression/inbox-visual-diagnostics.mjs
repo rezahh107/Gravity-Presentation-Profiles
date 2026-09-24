@@ -5,6 +5,8 @@ import path from 'node:path';
 import { comparePng, writeJson } from './visual-diagnostics-lib.mjs';
 import { applyScenarioAction } from './scenario-state.mjs';
 import { assertDesignMapping, compareDesignFacts, designFacts, prepareDesignAuthority } from './design-authority-runtime.mjs';
+import { assertActionVisualCoverage } from './design-convergence-policy.mjs';
+import { primaryFamily, proveVazirFontsLoaded } from './font-runtime-contract.mjs';
 import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
 import { selectComparisonReference } from './reference-selection.mjs';
 import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
@@ -21,6 +23,8 @@ const integratedHost = JSON.parse(fs.readFileSync(integratedHostPath));
 assertIntegratedHostIdentity(integratedHost, contract.host_runtime);
 if (contract.capture.scope !== 'GPP_INBOX_SURFACE_ONLY' || contract.capture.selector !== '[data-gpp-inbox-surface="gravity_flow.inbox"]') throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Inbox capture scope contract is invalid.');
 const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
+const stagedDesignAuthority = process.env.WU21_DESIGN_AUTHORITY_STAGE;
+if (!stagedDesignAuthority || !fs.existsSync(stagedDesignAuthority)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: staged Owner design authority with Vazir aliases is missing.');
 const wp = (code) => execFileSync('php', [process.env.WU21_WP_CLI, `--path=${process.env.WU21_WP_PATH}`, 'eval', code], { encoding: 'utf8' }).trim();
 
 // Reuse P06's authentic block fixture rather than creating a parallel surface.
@@ -51,7 +55,9 @@ const selectors = {
   searchInput: '[data-js="gflow-inbox-search"]', gridRoot: '[data-js="gflow-inbox"] .ag-root-wrapper',
   bodyViewport: '[data-js="gflow-inbox"] .ag-body-viewport', centerRows: '[data-js="gflow-inbox"] .ag-center-cols-container',
   firstCard: '.gpp-inbox-card', secondCard: '.gpp-inbox-card:nth-of-type(1)', pagination: '[data-js="gflow-inbox"] .ag-paging-panel',
-  rowSummary: '[data-js="gflow-inbox"] .ag-paging-row-summary-panel', manualRefresh: '[data-gpp-inbox-manual-refresh]', photo: '.gpp-inbox-card__photo',
+  rowSummary: '[data-js="gflow-inbox"] .ag-paging-row-summary-panel', pagerPageSummary: '[data-js="gflow-inbox"] .ag-paging-page-summary-panel',
+  pagerCurrent: '[data-js="gflow-inbox"] [ref="lbCurrent"]', pagerPrevious: '[data-js="gflow-inbox"] [ref="btPrevious"]', pagerNext: '[data-js="gflow-inbox"] [ref="btNext"]',
+  emptyState: '[data-js="gflow-inbox"] .ag-overlay-no-rows-center', manualRefresh: '[data-gpp-inbox-manual-refresh]', photo: '.gpp-inbox-card__photo',
 };
 
 async function waitReady(page) {
@@ -63,18 +69,25 @@ async function waitReady(page) {
 
 export async function diagnostics(page) {
   const result = await page.evaluate((map) => {
-    const visible = el => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+    const visible = el => el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
     const details = el => {
       if (!el) return null; const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
-      return { x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,display:s.display,overflow:s.overflow,direction:s.direction,gap:s.gap,padding:s.padding,fontSize:s.fontSize,lineHeight:s.lineHeight,borderRadius:s.borderRadius,boxShadow:s.boxShadow };
+      return {
+        x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,
+        display:s.display,overflow:s.overflow,direction:s.direction,gap:s.gap,padding:s.padding,fontSize:s.fontSize,lineHeight:s.lineHeight,fontFamily:s.fontFamily,fontWeight:s.fontWeight,
+        color:s.color,backgroundColor:s.backgroundColor,border:s.border,borderColor:s.borderColor,borderRadius:s.borderRadius,boxShadow:s.boxShadow,outline:s.outline,outlineOffset:s.outlineOffset,opacity:s.opacity
+      };
     };
+    const state=el=>el?(visible(el)?'VISIBLE':'HIDDEN'):'ABSENT';
+    const prop=(el,key)=>el?getComputedStyle(el)[key]:'ABSENT';
+    const elements=Object.fromEntries(Object.entries(map).map(([name,selector])=>[name,document.querySelector(selector)]));
     const anchors = { document: details(document.documentElement) };
-    for (const [name, selector] of Object.entries(map)) anchors[name] = details(document.querySelector(selector));
+    for (const [name, element] of Object.entries(elements)) anchors[name] = details(element);
     const cards = [...document.querySelectorAll('.gpp-inbox-card')].filter(visible);
     anchors.firstCard = details(cards[0]); anchors.secondCard = details(cards[1]); anchors.lastCard = details(cards.at(-1));
     const first = cards[0]?.getBoundingClientRect(), second = cards[1]?.getBoundingClientRect(), last = cards.at(-1)?.getBoundingClientRect();
-    const pager = document.querySelector(map.pagination)?.getBoundingClientRect();
-    const surfaceElement = document.querySelector(map.surface), surface = surfaceElement?.getBoundingClientRect(), inner = document.querySelector(map.inner)?.getBoundingClientRect();
+    const pager = elements.pagination?.getBoundingClientRect();
+    const surfaceElement = elements.surface, surface = surfaceElement?.getBoundingClientRect(), inner = elements.inner?.getBoundingClientRect();
     const rows = [...new Set(cards.map(c => Math.round(c.getBoundingClientRect().top)))];
     const visualHeight = cards.length ? Math.max(...cards.map(c => c.getBoundingClientRect().bottom)) - Math.min(...cards.map(c => c.getBoundingClientRect().top)) : 0;
     const nativeHeight = anchors.bodyViewport?.height ?? 0;
@@ -91,6 +104,40 @@ export async function diagnostics(page) {
       horizontal_overflow: surfaceElement ? Math.max(0, surfaceElement.scrollWidth-surfaceElement.clientWidth) : null,
       cards_per_visual_row: cards.length ? Math.max(...rows.map(y => cards.filter(c => Math.abs(c.getBoundingClientRect().top-y)<3).length)) : 0,
       mobile_pager_overlap: Boolean(last && pager && pager.top < last.bottom),
+      title_font_family:anchors.title?.fontFamily??null,
+      title_font_weight:anchors.title?.fontWeight??null,
+      search_font_family:anchors.searchInput?.fontFamily??null,
+      search_font_weight:anchors.searchInput?.fontWeight??null,
+      search_query_nonempty:elements.searchInput ? elements.searchInput.value.length>0 : null,
+      result_summary_visible:state(elements.rowSummary),
+      result_summary_font_size:prop(elements.rowSummary,'fontSize'),
+      result_summary_font_weight:prop(elements.rowSummary,'fontWeight'),
+      result_summary_color:prop(elements.rowSummary,'color'),
+      search_control_border_color:prop(elements.searchInput,'borderColor'),
+      search_control_background_color:prop(elements.searchInput,'backgroundColor'),
+      empty_state_visible:state(elements.emptyState),
+      empty_state_border:prop(elements.emptyState,'border'),
+      empty_state_background_color:prop(elements.emptyState,'backgroundColor'),
+      empty_state_border_radius:prop(elements.emptyState,'borderRadius'),
+      empty_state_padding:prop(elements.emptyState,'padding'),
+      empty_title_font_size:prop(elements.emptyState,'fontSize'),
+      empty_title_font_weight:prop(elements.emptyState,'fontWeight'),
+      empty_body_color:prop(elements.emptyState,'color'),
+      pager_current_visible:state(elements.pagerCurrent),
+      pager_current_background_color:prop(elements.pagerCurrent,'backgroundColor'),
+      pager_current_color:prop(elements.pagerCurrent,'color'),
+      pager_current_font_weight:prop(elements.pagerCurrent,'fontWeight'),
+      pager_current_border_radius:prop(elements.pagerCurrent,'borderRadius'),
+      pager_previous_disabled:elements.pagerPrevious ? Boolean(elements.pagerPrevious.classList.contains('ag-disabled') || elements.pagerPrevious.getAttribute('aria-disabled')==='true') : 'ABSENT',
+      pager_next_disabled:elements.pagerNext ? Boolean(elements.pagerNext.classList.contains('ag-disabled') || elements.pagerNext.getAttribute('aria-disabled')==='true') : 'ABSENT',
+      pager_previous_opacity:prop(elements.pagerPrevious,'opacity'),
+      pager_next_opacity:prop(elements.pagerNext,'opacity'),
+      pager_gap:prop(elements.pagerPageSummary,'gap'),
+      search_focus_outline:prop(elements.searchInput,'outline'),
+      search_focus_outline_offset:prop(elements.searchInput,'outlineOffset'),
+      search_focus_border_color:prop(elements.searchInput,'borderColor'),
+      search_focus_box_shadow:prop(elements.searchInput,'boxShadow'),
+      search_focus_height:anchors.searchInput?.height!=null ? `${anchors.searchInput.height}px` : 'ABSENT',
     }};
   }, selectors);
   result.relationships.two_card_horizontal_gap = physicalHorizontalGap(result.anchors.firstCard, result.anchors.secondCard);
@@ -99,13 +146,17 @@ export async function diagnostics(page) {
   result.relationships.first_card_border_radius_px = cssPixelNumber(result.anchors.firstCard?.borderRadius);
   result.relationships.first_card_padding = result.anchors.firstCard?.padding ?? null;
   result.relationships.first_card_box_shadow = result.anchors.firstCard?.boxShadow ?? null;
+  result.relationships.title_font_family_primary = primaryFamily(result.relationships.title_font_family);
+  result.relationships.search_font_family_primary = primaryFamily(result.relationships.search_font_family);
+  delete result.relationships.title_font_family;
+  delete result.relationships.search_font_family;
   return result;
 }
 
 export async function styles(page) {
   return page.evaluate((map) => Object.fromEntries(Object.entries(map).map(([name, selector]) => {
     const el=document.querySelector(selector); if(!el)return [name,null]; const s=getComputedStyle(el);
-    return [name,{display:s.display,position:s.position,width:s.width,maxWidth:s.maxWidth,height:s.height,minHeight:s.minHeight,gridTemplateColumns:s.gridTemplateColumns,gap:s.gap,margin:s.margin,padding:s.padding,direction:s.direction,textAlign:s.textAlign,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,background:s.background,border:s.border,borderRadius:s.borderRadius,boxShadow:s.boxShadow,overflow:s.overflow,transform:s.transform}];
+    return [name,{display:s.display,position:s.position,width:s.width,maxWidth:s.maxWidth,height:s.height,minHeight:s.minHeight,gridTemplateColumns:s.gridTemplateColumns,gap:s.gap,margin:s.margin,padding:s.padding,direction:s.direction,textAlign:s.textAlign,fontSize:s.fontSize,fontFamily:s.fontFamily,fontWeight:s.fontWeight,lineHeight:s.lineHeight,color:s.color,background:s.background,backgroundColor:s.backgroundColor,border:s.border,borderColor:s.borderColor,borderRadius:s.borderRadius,boxShadow:s.boxShadow,outline:s.outline,outlineOffset:s.outlineOffset,opacity:s.opacity,overflow:s.overflow,transform:s.transform}];
   })), selectors);
 }
 
@@ -123,7 +174,8 @@ async function dom(page) {
 const results=[];
 try {
   for (const scenario of contract.scenarios) {
-    assertDesignMapping(scenario);
+    assertDesignMapping(scenario, contract.design_comparison_policy);
+    assertActionVisualCoverage(contract.design_comparison_policy, scenario);
     const dir=path.join(out,scenario.id); fs.mkdirSync(dir,{recursive:true});
     const history=[];
     let activeStage='scenario_setup';
@@ -135,10 +187,12 @@ try {
       await runStage('navigation',()=>page.goto(url,{waitUntil:'networkidle'})); await runStage('inbox_readiness',()=>waitReady(page));
       const hostIntegration=await runStage('host_integration',async()=>{const fixtureIdentity=integratedHost.host_fixture;const evidence=await page.evaluate(({surfaceSelector,containerId,mountId})=>{const surface=document.querySelector(surfaceSelector);const mount=surface?.closest(`.elementor-element-${mountId}.elementor-widget-shortcode`);const host=mount?.closest(`.elementor-element-${containerId}.elementor-element[data-element_type="container"]`);return {elementor_page_marker:document.body.classList.contains('elementor-page'),elementor_container_present:Boolean(host),fixture_mount_present:Boolean(mount),surface_present:Boolean(surface),surface_dom_nested_in_fixture_mount:Boolean(mount&&surface&&mount.contains(surface)),surface_dom_nested_in_elementor_container:Boolean(host&&surface&&host.contains(surface)),fixture_container_element_id:containerId,fixture_mount_element_id:mountId,surface_horizontal_overflow:surface?Math.max(0,surface.scrollWidth-surface.clientWidth):null};},{surfaceSelector:selectors.surface,containerId:fixtureIdentity.container_element_id,mountId:fixtureIdentity.mount_element_id});writeJson(path.join(dir,'host-integration.json'),evidence);if(!evidence.elementor_container_present||!evidence.fixture_mount_present||!evidence.surface_present||!evidence.surface_dom_nested_in_fixture_mount||!evidence.surface_dom_nested_in_elementor_container)throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} failed designated versioned Elementor fixture mount integration.`);return evidence;});
       const scenarioState=await runStage('scenario_action',()=>applyScenarioAction(page,scenario.action,selectors));
+      const runtimeFontEvidence=await runStage('runtime_vazir_font_proof',()=>proveVazirFontsLoaded(page,contract.host_runtime.vazir_font,{title:selectors.title,search:selectors.searchInput},'runtime'));
       const designPage=await runStage('design_authority_page_create',()=>context.newPage());
       await runStage('design_authority_viewport',()=>designPage.setViewportSize(scenario.viewport));
-      const designState=await runStage('design_authority_action',()=>prepareDesignAuthority(designPage,scenario,repo));
+      const designState=await runStage('design_authority_action',()=>prepareDesignAuthority(designPage,scenario,repo,stagedDesignAuthority));
       await runStage('design_authority_fonts',()=>designPage.evaluate(async()=>{await document.fonts.ready;}));
+      const designFontEvidence=await runStage('design_authority_vazir_font_proof',()=>proveVazirFontsLoaded(designPage,contract.host_runtime.vazir_font,{title:'#inbox-view h1',search:'#case-search'},'design_authority'));
       await runStage('design_authority_capture',()=>designPage.locator('#inbox-view').screenshot({path:path.join(dir,'design-authority.png'),animations:'disabled'}));
       const designGeometry=await runStage('design_authority_geometry',()=>designFacts(designPage));
       await designPage.close();
@@ -152,7 +206,7 @@ try {
       const computed=await runStage('computed_styles_capture',()=>styles(page));
       const summary=await runStage('dom_summary_capture',()=>dom(page));
       const metrics=await runStage('png_compare',()=>comparePng(reference,actual,path.join(dir,'diff.png'),contract.comparator));
-      await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,cross_commit_baseline:'NOT_ACTIVATED',design_authority_pixel_comparison:'NOT_PERFORMED_UNLIKE_DOM_AND_CONTENT'});writeJson(path.join(dir,'scenario-state.json'),scenarioState);writeJson(path.join(dir,'design-authority-state.json'),designState);writeJson(path.join(dir,'design-geometry.json'),designGeometry);writeJson(path.join(dir,'design-vs-runtime.json'),designDelta);writeJson(path.join(dir,'host-integration.json'),hostIntegration);writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,capture_selector:contract.capture.selector,design_authority:{classification:'OWNER_APPROVED_DESIGN_AUTHORITY',approval_status:'OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN',surface:scenario.design_authority_surface,action:scenario.design_authority_action,sha256:'666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81'},integrated_visual_host:integratedHost,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms:{version:hostIdentity.gravity_forms,package_sha256:process.env.WU21_GF_SHA256||null},gravity_flow:{version:hostIdentity.gravity_flow,package_sha256:process.env.WU21_FLOW_SHA256||null},database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
+      await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,cross_commit_baseline:'NOT_ACTIVATED',design_authority_pixel_comparison:'NOT_PERFORMED_UNLIKE_DOM_AND_CONTENT'});writeJson(path.join(dir,'scenario-state.json'),scenarioState);writeJson(path.join(dir,'design-authority-state.json'),designState);writeJson(path.join(dir,'design-geometry.json'),designGeometry);writeJson(path.join(dir,'design-vs-runtime.json'),designDelta);writeJson(path.join(dir,'host-integration.json'),hostIntegration);writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,capture_selector:contract.capture.selector,design_authority:{classification:'OWNER_APPROVED_DESIGN_AUTHORITY',approval_status:'OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN',surface:scenario.design_authority_surface,action:scenario.design_authority_action,sha256:'666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81'},font_authority:integratedHost.vazir_font,font_load_evidence:{runtime:runtimeFontEvidence,design_authority:designFontEvidence},integrated_visual_host:integratedHost,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms:{version:hostIdentity.gravity_forms,package_sha256:process.env.WU21_GF_SHA256||null},gravity_flow:{version:hostIdentity.gravity_flow,package_sha256:process.env.WU21_FLOW_SHA256||null},database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
       const status=await runStage('status_projection',async()=>projectScenarioStatus({captureStability:metrics.comparator_result,designComparison:designDelta.evaluation,mode:contract.mode}));
       results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,reference_identity:referenceSelection.identity,design_authority_surface:scenario.design_authority_surface,design_authority_action:scenario.design_authority_action,design_authority_comparison:'EXECUTED_GEOMETRY_STYLE_RELATIONSHIPS',design_comparison_policy_version:designDelta.policy_version,design_comparison_status:designDelta.evaluation.status,design_warning_count:designDelta.evaluation.warning_count,design_relation_results:designDelta.evaluation.relations,host_integration:'PASS',capture_stability:metrics.comparator_result,screenshot_diff_ratio:metrics.differing_pixel_ratio,scenario_state:scenarioState,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
       writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:'complete',status:'PASS',history});

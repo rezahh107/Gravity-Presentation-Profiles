@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
-import { evaluateDesignConvergence } from './design-convergence-policy.mjs';
+import { assertActionVisualCoverage, evaluateDesignConvergence } from './design-convergence-policy.mjs';
+import { primaryFamily } from './font-runtime-contract.mjs';
 
 export const DESIGN_SURFACES = Object.freeze({
   'inbox-desktop': { label: 'A', device: 'desktop' },
@@ -11,19 +12,20 @@ export const DESIGN_SURFACES = Object.freeze({
 
 export const DESIGN_ACTIONS = new Set(['default', 'search-result', 'search-empty', 'pagination-next', 'focus-search']);
 
-export function assertDesignMapping(scenario) {
+export function assertDesignMapping(scenario, policy = null) {
   const surface = DESIGN_SURFACES[scenario.design_authority_surface];
   if (!surface) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: unknown Inbox design-authority surface for ${scenario.id}.`);
   if (!DESIGN_ACTIONS.has(scenario.design_authority_action)) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: unavailable design-authority action for ${scenario.id}.`);
   if ((scenario.id.includes('mobile') || scenario.id.includes('focus')) !== (surface.device === 'mobile')) {
     throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: scenario ${scenario.id} is mapped to the wrong reviewed A/B surface.`);
   }
+  if (policy) assertActionVisualCoverage(policy, scenario);
   return surface;
 }
 
-export async function prepareDesignAuthority(page, scenario, repositoryRoot) {
+export async function prepareDesignAuthority(page, scenario, repositoryRoot, stagedSource = null) {
   const surface = assertDesignMapping(scenario);
-  const source = path.join(repositoryRoot, 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html');
+  const source = stagedSource || path.join(repositoryRoot, 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html');
   if (!fs.existsSync(source)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Owner-approved design authority is missing.');
   await page.goto(pathToFileURL(source).href, { waitUntil: 'load' });
   await page.locator(`[data-surface="${scenario.design_authority_surface}"]`).click();
@@ -57,12 +59,77 @@ export async function prepareDesignAuthority(page, scenario, repositoryRoot) {
 
 export async function designFacts(page) {
   const result = await page.evaluate(() => {
-    const visible = element => element && getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().height > 0;
-    const fact = element => { if (!element) return null; const r=element.getBoundingClientRect(),s=getComputedStyle(element); return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,padding:s.padding,gap:s.gap,direction:s.direction,fontSize:s.fontSize,lineHeight:s.lineHeight,border:s.border,borderRadius:s.borderRadius,boxShadow:s.boxShadow}; };
+    const visible = element => element && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden' && element.getBoundingClientRect().height > 0;
+    const fact = element => {
+      if (!element) return null;
+      const r=element.getBoundingClientRect(),s=getComputedStyle(element);
+      return {
+        x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,padding:s.padding,gap:s.gap,direction:s.direction,
+        fontSize:s.fontSize,lineHeight:s.lineHeight,fontFamily:s.fontFamily,fontWeight:s.fontWeight,color:s.color,
+        backgroundColor:s.backgroundColor,border:s.border,borderColor:s.borderColor,borderRadius:s.borderRadius,boxShadow:s.boxShadow,
+        outline:s.outline,outlineOffset:s.outlineOffset,opacity:s.opacity,
+      };
+    };
+    const state=value=>value? (visible(value)?'VISIBLE':'HIDDEN') : 'ABSENT';
+    const prop=(value,key)=>value ? getComputedStyle(value)[key] : 'ABSENT';
     const cards=[...document.querySelectorAll('#case-grid .case-card')].filter(visible);
-    const surfaceElement=document.querySelector('#inbox-view'), surface=fact(surfaceElement), first=fact(cards[0]), second=fact(cards[1]), last=fact(cards.at(-1)), pager=fact(document.querySelector('#pagination'));
+    const surfaceElement=document.querySelector('#inbox-view');
+    const titleElement=document.querySelector('#inbox-view h1');
+    const searchElement=document.querySelector('#case-search');
+    const resultSummary=document.querySelector('#result-count');
+    const empty=document.querySelector('#empty-state');
+    const emptyTitle=empty?.querySelector('h2') || null;
+    const emptyBody=empty?.querySelector('p') || null;
+    const pager=document.querySelector('#pagination');
+    const pagerCurrent=pager?.querySelector('[aria-current="page"]') || null;
+    const pagerPrevious=document.querySelector('#prev-page');
+    const pagerNext=document.querySelector('#next-page');
+    const surface=fact(surfaceElement), first=fact(cards[0]), second=fact(cards[1]), last=fact(cards.at(-1)), pagerFact=fact(pager), title=fact(titleElement), search=fact(searchElement);
     const rows=[...new Set(cards.map(card=>Math.round(card.getBoundingClientRect().top)))];
-    return { anchors:{surface,title:fact(document.querySelector('#inbox-view h1')),helper:fact(document.querySelector('#inbox-view .page-heading p')),search:fact(document.querySelector('#case-search')),firstCard:first,secondCard:second,lastCard:last,pagination:pager,photo:fact(document.querySelector('#case-grid .avatar'))}, relationships:{first_card_width:first?.width??null,two_card_horizontal_gap:null,last_card_to_pager_gap:last&&pager?pager.y-last.bottom:null,cards_per_visual_row:cards.length?Math.max(...rows.map(y=>cards.filter(card=>Math.abs(card.getBoundingClientRect().top-y)<3).length)):0,horizontal_overflow:surfaceElement?Math.max(0,surfaceElement.scrollWidth-surfaceElement.clientWidth):null}};
+    return {
+      anchors:{surface,title,helper:fact(document.querySelector('#inbox-view .page-heading p')),search,firstCard:first,secondCard:second,lastCard:last,pagination:pagerFact,photo:fact(document.querySelector('#case-grid .avatar')),resultSummary:fact(resultSummary),emptyState:fact(empty),emptyTitle:fact(emptyTitle),emptyBody:fact(emptyBody),pagerCurrent:fact(pagerCurrent),pagerPrevious:fact(pagerPrevious),pagerNext:fact(pagerNext)},
+      relationships:{
+        first_card_width:first?.width??null,
+        two_card_horizontal_gap:null,
+        last_card_to_pager_gap:last&&pagerFact?pagerFact.y-last.bottom:null,
+        cards_per_visual_row:cards.length?Math.max(...rows.map(y=>cards.filter(card=>Math.abs(card.getBoundingClientRect().top-y)<3).length)):0,
+        horizontal_overflow:surfaceElement?Math.max(0,surfaceElement.scrollWidth-surfaceElement.clientWidth):null,
+        title_font_family:title?.fontFamily??null,
+        title_font_weight:title?.fontWeight??null,
+        search_font_family:search?.fontFamily??null,
+        search_font_weight:search?.fontWeight??null,
+        search_query_nonempty:searchElement ? searchElement.value.length>0 : null,
+        result_summary_visible:state(resultSummary),
+        result_summary_font_size:prop(resultSummary,'fontSize'),
+        result_summary_font_weight:prop(resultSummary,'fontWeight'),
+        result_summary_color:prop(resultSummary,'color'),
+        search_control_border_color:prop(searchElement,'borderColor'),
+        search_control_background_color:prop(searchElement,'backgroundColor'),
+        empty_state_visible:state(empty),
+        empty_state_border:prop(empty,'border'),
+        empty_state_background_color:prop(empty,'backgroundColor'),
+        empty_state_border_radius:prop(empty,'borderRadius'),
+        empty_state_padding:prop(empty,'padding'),
+        empty_title_font_size:prop(emptyTitle,'fontSize'),
+        empty_title_font_weight:prop(emptyTitle,'fontWeight'),
+        empty_body_color:prop(emptyBody,'color'),
+        pager_current_visible:state(pagerCurrent),
+        pager_current_background_color:prop(pagerCurrent,'backgroundColor'),
+        pager_current_color:prop(pagerCurrent,'color'),
+        pager_current_font_weight:prop(pagerCurrent,'fontWeight'),
+        pager_current_border_radius:prop(pagerCurrent,'borderRadius'),
+        pager_previous_disabled:pagerPrevious ? Boolean(pagerPrevious.disabled) : 'ABSENT',
+        pager_next_disabled:pagerNext ? Boolean(pagerNext.disabled) : 'ABSENT',
+        pager_previous_opacity:prop(pagerPrevious,'opacity'),
+        pager_next_opacity:prop(pagerNext,'opacity'),
+        pager_gap:prop(pager,'gap'),
+        search_focus_outline:prop(searchElement,'outline'),
+        search_focus_outline_offset:prop(searchElement,'outlineOffset'),
+        search_focus_border_color:prop(searchElement,'borderColor'),
+        search_focus_box_shadow:prop(searchElement,'boxShadow'),
+        search_focus_height:search?.height!=null ? `${search.height}px` : 'ABSENT',
+      }
+    };
   });
   result.relationships.two_card_horizontal_gap = physicalHorizontalGap(result.anchors.firstCard, result.anchors.secondCard);
   result.relationships.title_font_size_px = cssPixelNumber(result.anchors.title?.fontSize);
@@ -70,6 +137,10 @@ export async function designFacts(page) {
   result.relationships.first_card_border_radius_px = cssPixelNumber(result.anchors.firstCard?.borderRadius);
   result.relationships.first_card_padding = result.anchors.firstCard?.padding ?? null;
   result.relationships.first_card_box_shadow = result.anchors.firstCard?.boxShadow ?? null;
+  result.relationships.title_font_family_primary = primaryFamily(result.relationships.title_font_family);
+  result.relationships.search_font_family_primary = primaryFamily(result.relationships.search_font_family);
+  delete result.relationships.title_font_family;
+  delete result.relationships.search_font_family;
   return result;
 }
 

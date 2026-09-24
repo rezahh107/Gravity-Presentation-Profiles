@@ -22,8 +22,8 @@ $fail = static function ( $message ) {
 	throw new RuntimeException( 'VISUAL_TEST_INFRASTRUCTURE_FAILURE: ' . $message );
 };
 
-if ( 'hello-elementor' !== get_option( 'stylesheet' ) || ! is_plugin_active( 'elementor/elementor.php' ) || ! is_plugin_active( 'elementor-pro/elementor-pro.php' ) ) {
-	$fail( 'pinned Hello Elementor + Elementor + Elementor Pro host is not active.' );
+if ( 'hello-elementor' !== get_option( 'stylesheet' ) || ! is_plugin_active( 'elementor/elementor.php' ) || ! is_plugin_active( 'elementor-pro/elementor-pro.php' ) || ! is_plugin_active( 'vazir-font-wp/vazir-font-wp.php' ) ) {
+	$fail( 'pinned Hello Elementor + Elementor + Elementor Pro + Vazir host is not active.' );
 }
 $registered_host_companions = array_values(
 	array_filter(
@@ -43,6 +43,53 @@ if ( ! empty( $registered_host_companions ) || ! empty( $active_host_companions 
 if ( count( $page_ids ) !== 2 ) {
 	$fail( 'Inbox host pages are unavailable.' );
 }
+$font_contract_path = $artifact_dir . '/vazir-font-authority.json';
+$font_contract = $contract['host_runtime']['vazir_font'] ?? null;
+if ( ! is_array( $font_contract ) || ! is_file( $font_contract_path ) ) {
+	$fail( 'Vazir font source authority is missing.' );
+}
+$font_source = json_decode( file_get_contents( $font_contract_path ), true );
+if ( ! is_array( $font_source ) || JSON_ERROR_NONE !== json_last_error() ) {
+	$fail( 'Vazir font source authority is malformed.' );
+}
+foreach ( array( 'repository', 'commit', 'plugin_version', 'plugin_file', 'family' ) as $field ) {
+	if ( ( $font_source[ $field ] ?? null ) !== ( $font_contract[ $field ] ?? null ) ) {
+		$fail( 'Vazir font source identity mismatch: ' . $field . '.' );
+	}
+}
+if ( true !== ( $font_source['system_vazir_absent'] ?? null ) ) {
+	$fail( 'Vazir system-font absence proof is missing.' );
+}
+$font_plugin_file = WP_PLUGIN_DIR . '/vazir-font-wp/vazir-font-wp.php';
+$font_plugin = get_file_data( $font_plugin_file, array( 'version' => 'Version' ) );
+if ( ( $font_plugin['version'] ?? null ) !== ( $font_contract['plugin_version'] ?? null ) || ! class_exists( 'VazirFontPlugin' ) || ! class_exists( 'VazirFont_Loader' ) ) {
+	$fail( 'Vazir plugin runtime identity is invalid.' );
+}
+$font_options = VazirFontPlugin::get_options();
+$selected_weights = VazirFont_Loader::get_instance()->get_selected_weights();
+$expected_weights = array_keys( $font_contract['weights'] ?? array() );
+if ( empty( $font_options['enable_frontend'] ) || $selected_weights !== $expected_weights ) {
+	$fail( 'Vazir frontend delivery/weight contract is not active.' );
+}
+foreach ( $expected_weights as $weight ) {
+	$expected_font = $font_contract['weights'][ $weight ] ?? null;
+	$actual_font = $font_source['weights'][ $weight ] ?? null;
+	if (
+		! is_array( $expected_font )
+		|| ! is_array( $actual_font )
+		|| ( $actual_font['source_path'] ?? null ) !== ( $expected_font['source_path'] ?? null )
+		|| ( $actual_font['design_alias'] ?? null ) !== ( $expected_font['design_alias'] ?? null )
+		|| ( $actual_font['expected_blob_sha'] ?? null ) !== ( $expected_font['blob_sha'] ?? null )
+		|| ( $actual_font['actual_blob_sha'] ?? null ) !== ( $expected_font['blob_sha'] ?? null )
+		|| ( $actual_font['staged_blob_sha'] ?? null ) !== ( $expected_font['blob_sha'] ?? null )
+	) {
+		$fail( 'Vazir font byte identity mismatch for weight ' . $weight . '.' );
+	}
+}
+$font_identity = $font_source;
+$font_identity['plugin_active'] = true;
+$font_identity['frontend_enabled'] = true;
+$font_identity['selected_weights'] = $selected_weights;
 if ( ! is_array( $fixture_ref ) || empty( $fixture_ref['path'] ) || empty( $fixture_ref['sha256'] ) ) {
 	$fail( 'versioned Elementor host fixture contract is missing.' );
 }
@@ -181,7 +228,7 @@ $identity      = array(
 	'srwf_host_companion_active' => false,
 	'srwf_host_companion_registered' => false,
 	'persian_gravity'            => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),
-	'vazir_vazirmatn'            => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),
+	'vazir_font'                  => $font_identity,
 	'gtb'                        => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),
 	'capture_scope'              => 'GPP_INBOX_SURFACE_ONLY',
 	'composition'                => 'repository-versioned Elementor export/template/site-settings fixture reconstructed for both Inbox page families with one authentic mount point each',

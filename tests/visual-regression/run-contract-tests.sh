@@ -10,6 +10,8 @@ node tests/visual-regression/design-authority-contract.mjs
 node tests/visual-regression/integrated-host-design-falsification.mjs
 node tests/visual-regression/host-fixture-falsification.mjs
 node tests/visual-regression/design-convergence-falsification.mjs
+node tests/visual-regression/state-visual-falsification.mjs
+node tests/visual-regression/font-authority-falsification.mjs
 node tests/visual-regression/geometry-relations-falsification.mjs
 node tests/visual-regression/coverage-truth-falsification.mjs
 node tests/visual-regression/reference-identity-falsification.mjs

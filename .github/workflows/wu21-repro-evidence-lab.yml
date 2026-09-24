@@ -60,6 +60,12 @@ jobs:
       WU21_HELLO_VERSION: '3.5.1'
       WU21_HELLO_COMMIT: e86d30a7d64b2ab59373422a14933bba3621ee04
       WU21_HELLO_SHA256: d5b36b9d33187bf8b9cd5ad324489aab7ad8c3a21b5f2e5df82c18964a026ce5
+      WU21_VAZIR_REPOSITORY: rezahh107/Vazir
+      WU21_VAZIR_COMMIT: ad8feae35a4e1c27fb13d646fa18abf05bb4e7b1
+      WU21_VAZIR_PLUGIN_VERSION: '1.3.0'
+      WU21_VAZIR_SOURCE_PATH: /tmp/wu21-vazir-source
+      WU21_DESIGN_AUTHORITY_DIR: /tmp/wu21-artifacts/design-authority-runtime
+      WU21_DESIGN_AUTHORITY_STAGE: /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
 
     steps:
       - name: Checkout exact authorized PR Head
@@ -318,6 +324,9 @@ jobs:
             ['Hello Elementor version',env.WU21_HELLO_VERSION,contract.hello_elementor.version],
             ['Hello Elementor commit',env.WU21_HELLO_COMMIT,contract.hello_elementor.commit],
             ['Hello Elementor SHA-256',env.WU21_HELLO_SHA256,contract.hello_elementor.sha256],
+            ['Vazir repository',env.WU21_VAZIR_REPOSITORY,contract.vazir_font.repository],
+            ['Vazir commit',env.WU21_VAZIR_COMMIT,contract.vazir_font.commit],
+            ['Vazir plugin version',env.WU21_VAZIR_PLUGIN_VERSION,contract.vazir_font.plugin_version],
           ];
           for(const [name,actual,expected] of checks) if(actual!==expected) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${name} workflow/contract identity mismatch.`);
           NODE
@@ -332,6 +341,55 @@ jobs:
           test "$WU21_ELEMENTOR_ACTUAL_SHA256" = "$WU21_ELEMENTOR_SHA256"
           test "$WU21_ELEMENTOR_PRO_ACTUAL_SHA256" = "$WU21_ELEMENTOR_PRO_SHA256"
           test "$WU21_HELLO_ACTUAL_SHA256" = "$WU21_HELLO_SHA256"
+
+          rm -rf "$WU21_VAZIR_SOURCE_PATH" "$WU21_DESIGN_AUTHORITY_DIR" "$WU21_WP_PATH/wp-content/plugins/vazir-font-wp"
+          git init -q "$WU21_VAZIR_SOURCE_PATH"
+          git -C "$WU21_VAZIR_SOURCE_PATH" remote add origin "https://github.com/$WU21_VAZIR_REPOSITORY.git"
+          git -C "$WU21_VAZIR_SOURCE_PATH" fetch --quiet --depth=1 origin "$WU21_VAZIR_COMMIT"
+          git -C "$WU21_VAZIR_SOURCE_PATH" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$WU21_VAZIR_SOURCE_PATH" rev-parse HEAD)" = "$WU21_VAZIR_COMMIT"
+          mkdir -p "$WU21_WP_PATH/wp-content/plugins/vazir-font-wp"
+          git -C "$WU21_VAZIR_SOURCE_PATH" archive HEAD | tar -x -C "$WU21_WP_PATH/wp-content/plugins/vazir-font-wp"
+
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
+          const contract=JSON.parse(fs.readFileSync('tests/visual-regression/inbox-visual-contract.json','utf8')).host_runtime.vazir_font;
+          const refs=JSON.parse(fs.readFileSync('tests/visual-regression/references/manifest.json','utf8'));
+          const authorityRef=refs.references.find(item=>item.classification==='OWNER_APPROVED_DESIGN_AUTHORITY'&&item.repository_path==='tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html');
+          if(!authorityRef) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Owner design authority reference is unavailable for font staging.');
+          const source=process.env.WU21_VAZIR_SOURCE_PATH;
+          const stageDir=process.env.WU21_DESIGN_AUTHORITY_DIR;
+          const stageHtml=process.env.WU21_DESIGN_AUTHORITY_STAGE;
+          const actualCommit=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          if(actualCommit!==contract.commit) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Vazir source commit mismatch.');
+          const families=execFileSync('fc-list',[':', 'family'],{encoding:'utf8'}).split(/\r?\n/).flatMap(line=>line.split(',')).map(item=>item.trim());
+          if(families.some(item=>item==='Vazir')) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: unverified system-installed Vazir would make local() font provenance ambiguous.');
+          fs.mkdirSync(path.join(stageDir,'fonts'),{recursive:true});
+          const sourceHtml=authorityRef.repository_path;
+          const hash=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
+          const htmlBytes=fs.readFileSync(sourceHtml);
+          if(hash(htmlBytes)!==authorityRef.source_sha256) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Owner design authority bytes changed before staging.');
+          fs.copyFileSync(sourceHtml,stageHtml);
+          if(hash(fs.readFileSync(stageHtml))!==authorityRef.source_sha256) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: staged Owner design authority bytes changed.');
+          const weights={};
+          for(const [weight,spec] of Object.entries(contract.weights)){
+            const actualBlob=execFileSync('git',['-C',source,'hash-object',spec.source_path],{encoding:'utf8'}).trim();
+            if(actualBlob!==spec.blob_sha) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: Vazir weight ${weight} source blob mismatch.`);
+            const aliasPath=path.join(stageDir,'fonts',spec.design_alias);
+            fs.copyFileSync(path.join(source,spec.source_path),aliasPath);
+            const stagedBlob=execFileSync('git',['hash-object',aliasPath],{encoding:'utf8'}).trim();
+            if(stagedBlob!==spec.blob_sha) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: Vazir weight ${weight} staged alias mismatch.`);
+            weights[weight]={source_path:spec.source_path,design_alias:spec.design_alias,expected_blob_sha:spec.blob_sha,actual_blob_sha:actualBlob,staged_blob_sha:stagedBlob};
+          }
+          fs.writeFileSync(path.join(process.env.WU21_ARTIFACT_DIR,'vazir-font-authority.json'),JSON.stringify({
+            repository:contract.repository,commit:actualCommit,plugin_version:contract.plugin_version,plugin_file:contract.plugin_file,family:contract.family,
+            system_vazir_absent:true,owner_design_authority_sha256:authorityRef.source_sha256,weights
+          },null,2)+'\n');
+          NODE
+
           unzip -q /tmp/elementor.zip -d "$WU21_WP_PATH/wp-content/plugins"
           unzip -q /tmp/elementor-pro.zip -d "$WU21_WP_PATH/wp-content/plugins"
           mkdir -p /tmp/hello-theme
@@ -353,6 +411,22 @@ jobs:
           '
           php "$WU21_WP_CLI" plugin activate elementor --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" plugin activate elementor-pro --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin activate vazir-font-wp/vazir-font-wp.php --path="$WU21_WP_PATH"
+          WU21_EXPECTED_VAZIR_VERSION="$WU21_VAZIR_PLUGIN_VERSION" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+          $plugin = get_file_data(WP_PLUGIN_DIR . "/vazir-font-wp/vazir-font-wp.php", ["version" => "Version"]);
+          if (($plugin["version"] ?? "") !== getenv("WU21_EXPECTED_VAZIR_VERSION") || !class_exists("VazirFontPlugin") || !class_exists("VazirFont_Loader")) {
+              throw new RuntimeException("Pinned Vazir plugin identity mismatch.");
+          }
+          VazirFontPlugin::update_options([
+              "enable_frontend" => true,
+              "font_weights" => ["300","400","500","700","900"],
+          ]);
+          $options = VazirFontPlugin::get_options();
+          $weights = VazirFont_Loader::get_instance()->get_selected_weights();
+          if (empty($options["enable_frontend"]) || $weights !== ["300","400","500","700","900"]) {
+              throw new RuntimeException("Pinned Vazir frontend-delivery contract is not active.");
+          }
+          '
           php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-elementor-visual-host.php
           test -s "$WU21_ARTIFACT_DIR/integrated-visual-host.json"
@@ -408,6 +482,9 @@ jobs:
             /tmp/wu21-artifacts/pr4-*.png
             /tmp/wu21-artifacts/p06-fixture-*.json
             /tmp/wu21-artifacts/integrated-visual-host.json
+            /tmp/wu21-artifacts/vazir-font-authority.json
+            /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
+            /tmp/wu21-artifacts/design-authority-runtime/fonts
             /tmp/wu21-artifacts/visual-regression-diagnostics
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error

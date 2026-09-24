@@ -4,11 +4,12 @@ import { assertDesignMapping, compareDesignFacts } from './design-authority-runt
 import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
 
 const contract=JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json',import.meta.url)));
-for(const scenario of contract.scenarios) assert.doesNotThrow(()=>assertDesignMapping(scenario));
+for(const scenario of contract.scenarios) assert.doesNotThrow(()=>assertDesignMapping(scenario,contract.design_comparison_policy));
 assert.throws(()=>assertDesignMapping({...contract.scenarios[0],design_authority_surface:'detail-desktop'}),/unknown Inbox design-authority surface/);
 assert.throws(()=>assertDesignMapping({...contract.scenarios[0],design_authority_surface:'inbox-mobile'}),/wrong reviewed A\/B surface/);
 assert.throws(()=>assertDesignMapping({...contract.scenarios[0],design_authority_action:'invented-state'}),/unavailable design-authority action/);
 const hostContract=contract.host_runtime;
+const vazir={repository:hostContract.vazir_font.repository,commit:hostContract.vazir_font.commit,plugin_version:hostContract.vazir_font.plugin_version,plugin_file:hostContract.vazir_font.plugin_file,family:hostContract.vazir_font.family,system_vazir_absent:true,plugin_active:true,frontend_enabled:true,selected_weights:Object.keys(hostContract.vazir_font.weights),weights:Object.fromEntries(Object.entries(hostContract.vazir_font.weights).map(([weight,spec])=>[weight,{source_path:spec.source_path,design_alias:spec.design_alias,expected_blob_sha:spec.blob_sha,actual_blob_sha:spec.blob_sha,staged_blob_sha:spec.blob_sha}]))};
 const authenticHost={
   classification:'INTEGRATED_SRWF_VISUAL_HOST',
   composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',
@@ -17,6 +18,7 @@ const authenticHost={
   elementor_recognized:true,
   srwf_host_companion_active:false,
   srwf_host_companion_registered:false,
+  vazir_font:vazir,
   hello_elementor:{version:hostContract.hello_elementor.version,commit:hostContract.hello_elementor.commit,expected_package_sha256:hostContract.hello_elementor.sha256,actual_package_sha256:hostContract.hello_elementor.sha256},
   elementor:{version:hostContract.elementor.version,expected_package_sha256:hostContract.elementor.sha256,actual_package_sha256:hostContract.elementor.sha256},
   elementor_pro:{version:hostContract.elementor_pro.version,classification:hostContract.elementor_pro.classification,expected_package_sha256:hostContract.elementor_pro.sha256,actual_package_sha256:hostContract.elementor_pro.sha256},
