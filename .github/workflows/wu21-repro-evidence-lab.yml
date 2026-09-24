@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/wu21-repro-evidence-lab.yml'
       - 'tests/repro-evidence-lab/**'
+      - 'tests/visual-regression/**'
+      - 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html'
+      - 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html'
       - 'docs/evidence/WU21_REPRODUCIBLE_SIMULATION.md'
       - 'src/**'
       - 'assets/css/srwf-gravity-flow-inbox.css'
@@ -280,6 +283,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
           node tests/repro-evidence-lab/browser-tests.mjs
 
       - name: Publish Inbox visual diagnostic summary
@@ -325,6 +329,7 @@ jobs:
             /tmp/wu21-artifacts/wu17-*.json
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
+            /tmp/wu21-artifacts/p06-fixture-*.json
             /tmp/wu21-artifacts/visual-regression-diagnostics
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error
