@@ -36,131 +36,19 @@
     "srwf_host_companion_active": false
   },
   "scenarios": [
-    {
-      "id": "shortcode-desktop",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 1440,
-        "height": 1100
-      },
-      "design_authority_surface": "inbox-desktop",
-      "design_authority_action": "default",
-      "matrix": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E",
-        "G",
-        "I",
-        "K",
-        "M"
-      ]
-    },
-    {
-      "id": "shortcode-mobile",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 414,
-        "height": 1100
-      },
-      "design_authority_surface": "inbox-mobile",
-      "design_authority_action": "default",
-      "matrix": [
-        "B",
-        "C",
-        "D",
-        "E",
-        "G",
-        "H",
-        "J",
-        "K",
-        "L",
-        "M"
-      ]
-    },
-    {
-      "id": "shortcode-search-result",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 1440,
-        "height": 1100
-      },
-      "action": "search_result",
-      "design_authority_surface": "inbox-desktop",
-      "design_authority_action": "search-result",
-      "matrix": [
-        "C",
-        "D",
-        "G"
-      ]
-    },
-    {
-      "id": "shortcode-search-empty",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 1440,
-        "height": 1100
-      },
-      "action": "search_empty",
-      "design_authority_surface": "inbox-desktop",
-      "design_authority_action": "search-empty",
-      "matrix": [
-        "C",
-        "F",
-        "G"
-      ]
-    },
-    {
-      "id": "shortcode-pagination",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 1440,
-        "height": 1100
-      },
-      "action": "pagination",
-      "design_authority_surface": "inbox-desktop",
-      "design_authority_action": "pagination-next",
-      "matrix": [
-        "D",
-        "G",
-        "I"
-      ]
-    },
-    {
-      "id": "shortcode-focus",
-      "family": "INBOX_SHORTCODE",
-      "viewport": {
-        "width": 414,
-        "height": 1100
-      },
-      "action": "focus",
-      "design_authority_surface": "inbox-mobile",
-      "design_authority_action": "focus-search",
-      "matrix": [
-        "H",
-        "J",
-        "L"
-      ]
-    }
+    { "id": "shortcode-desktop", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "design_authority_surface": "inbox-desktop", "design_authority_action": "default", "matrix": ["A","B","C","D","E","G","I","K","M"] },
+    { "id": "shortcode-mobile", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "design_authority_surface": "inbox-mobile", "design_authority_action": "default", "matrix": ["B","C","D","E","G","H","J","K","L","M"] },
+    { "id": "shortcode-search-result", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_result", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-result", "matrix": ["C","D","G"] },
+    { "id": "shortcode-search-empty", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_empty", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-empty", "matrix": ["C","F","G"] },
+    { "id": "shortcode-pagination", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "pagination", "design_authority_surface": "inbox-desktop", "design_authority_action": "pagination-next", "matrix": ["D","G","I"] },
+    { "id": "shortcode-focus", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "action": "focus", "design_authority_surface": "inbox-mobile", "design_authority_action": "focus-search", "matrix": ["H","J","L"] }
   ],
   "future_scenarios": {
-    "true_browser_zoom_200": {
-      "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED",
-      "note": "Must use genuine browser zoom; root-font scaling is not equivalent."
-    },
-    "live_refresh": {
-      "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE"
-    },
-    "mixed_readiness": {
-      "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE"
-    },
-    "authentic_no_task": {
-      "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE"
-    },
-    "rtl": {
-      "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE"
-    }
+    "true_browser_zoom_200": { "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED", "note": "Must use genuine browser zoom; root-font scaling is not equivalent." },
+    "live_refresh": { "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE" },
+    "mixed_readiness": { "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE" },
+    "authentic_no_task": { "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE" },
+    "rtl": { "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE" }
   },
   "non_comparable_current_product_surfaces": {
     "authentic_block": {
