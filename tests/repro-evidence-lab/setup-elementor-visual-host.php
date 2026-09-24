@@ -67,7 +67,7 @@ if ( ( $font_plugin['version'] ?? null ) !== ( $font_contract['plugin_version'] 
 }
 $font_options = VazirFontPlugin::get_options();
 $selected_weights = VazirFont_Loader::get_instance()->get_selected_weights();
-$expected_weights = array_keys( $font_contract['weights'] ?? array() );
+$expected_weights = array_map( 'strval', array_keys( $font_contract['weights'] ?? array() ) );
 if ( empty( $font_options['enable_frontend'] ) || $selected_weights !== $expected_weights ) {
 	$fail( 'Vazir frontend delivery/weight contract is not active.' );
 }
