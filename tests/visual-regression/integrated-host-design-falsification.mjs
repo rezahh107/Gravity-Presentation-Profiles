@@ -12,7 +12,7 @@ const hostContract=contract.host_runtime;
 const authenticHost={
   classification:'INTEGRATED_SRWF_VISUAL_HOST',
   composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',
-  host_fixture:{...hostContract.fixture,expected_sha256:hostContract.fixture.sha256,actual_sha256:hostContract.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:101,frontend_block:102}},
+  host_fixture:{...hostContract.fixture,expected_sha256:hostContract.fixture.sha256,actual_sha256:hostContract.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:101,frontend_block:102},container_element_id:'7a4c91e2',mount_element_id:'5db3e8f1'},
   page_template:hostContract.page_template,
   elementor_recognized:true,
   srwf_host_companion_active:false,
