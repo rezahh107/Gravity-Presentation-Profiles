@@ -23,7 +23,8 @@ const environment={font_authority:authority,integrated_visual_host:{vazir_font:a
 assert.doesNotThrow(()=>assertArtifactVazirProvenance(environment,contract));
 const missingProvenance=structuredClone(environment);delete missingProvenance.font_authority;
 assert.throws(()=>assertArtifactVazirProvenance(missingProvenance,contract),/source\/package authority is missing/);
-const inconsistent=structuredClone(environment);inconsistent.integrated_visual_host.vazir_font.commit='0'.repeat(40);
+const inconsistent=structuredClone(environment);inconsistent.integrated_visual_host.vazir_font={...inconsistent.integrated_visual_host.vazir_font,commit:'0'.repeat(40)};
+assert.equal(inconsistent.font_authority.commit,contract.commit);
 assert.throws(()=>assertArtifactVazirProvenance(inconsistent,contract),/does not match integrated-host identity/);
 const wrongDesign=structuredClone(environment);wrongDesign.font_authority.owner_design_authority_sha256='different';
 assert.throws(()=>assertArtifactVazirProvenance(wrongDesign,contract),/design authority SHA-256 provenance is inconsistent/);
