@@ -20,9 +20,11 @@ for (const file of [
 
 assert.equal(covered('docs/unrelated-note.md'), false, 'Unrelated documentation unexpectedly triggers WU21.');
 const browserEntry = fs.readFileSync('tests/repro-evidence-lab/browser-tests.mjs', 'utf8');
+const visualWorkflowAt = workflow.indexOf('node tests/visual-regression/inbox-visual-diagnostics.mjs');
+const deferredP06At = workflow.indexOf('node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs');
 const bootstrapAt = browserEntry.indexOf("import('./p06-fixture-bootstrap.mjs')");
-const visualAt = browserEntry.indexOf("import('../visual-regression/inbox-visual-diagnostics.mjs')");
 const p06QualificationAt = browserEntry.indexOf("import('./p06-inbox-asset-reachability-browser-test.mjs')");
-assert.ok(bootstrapAt >= 0 && bootstrapAt < visualAt, 'Authoritative P06 fixture bootstrap must precede visual diagnostics.');
-assert.ok(visualAt < p06QualificationAt, 'Visual diagnostics must precede P06 deliberate inactive-profile mutation.');
+assert.ok(bootstrapAt >= 0 && p06QualificationAt > bootstrapAt, 'Authoritative P06 bootstrap must precede its qualification consumer.');
+assert.ok(workflow.includes('GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs'), 'WU21 must defer the deliberate P06 mutation until after visual capture.');
+assert.ok(visualWorkflowAt >= 0 && visualWorkflowAt < deferredP06At, 'Visual diagnostics must precede P06 deliberate inactive-profile mutation.');
 console.log(`WU21_TRIGGER_COVERAGE_PASS patterns=${JSON.stringify(patterns)}`);

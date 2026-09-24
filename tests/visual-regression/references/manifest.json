@@ -10,7 +10,12 @@
       "source_sha256": "666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81",
       "repository_path": "tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html",
       "comparison": "GEOMETRY_STYLE_CONVERGENCE_AUTHORITY_NOT_FULL_PAGE_PIXEL_CONTRACT",
-      "approval_status": "OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN"
+      "approval_status": "OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN",
+      "inbox_surfaces": {
+        "A": "inbox-desktop",
+        "B": "inbox-mobile"
+      },
+      "excluded_surfaces": ["detail-desktop", "detail-mobile", "print-front", "print-back"]
     },
     {
       "id": "owner-vnext-html",

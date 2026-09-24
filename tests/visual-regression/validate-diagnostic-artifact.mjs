@@ -26,6 +26,12 @@ for (const scenario of manifest.scenarios) {
     const target = path.join(root, scenario.id, file);
     if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing ${scenario.id}/${file}`);
   }
+  for (const file of ['design-authority.png','design-authority-state.json','design-geometry.json','design-vs-runtime.json','host-integration.json']) {
+    const target = path.join(root, scenario.id, file);
+    if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing ${scenario.id}/${file}`);
+  }
+  const environment=read(path.join(scenario.id,'environment.json')); const host=read(path.join(scenario.id,'host-integration.json'));
+  if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.integrated_visual_host?.page_template!=='elementor_canvas' || environment.integrated_visual_host?.srwf_host_companion_active!==false || host.elementor_canvas!==true || host.surface_within_host!==true || host.document_horizontal_overflow>1) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
   const metrics=read(path.join(scenario.id,'metrics.json')); const geometry=read(path.join(scenario.id,'geometry.json'));
   if (typeof metrics.differing_pixel_ratio!=='number' || !Object.hasOwn(geometry.relationships||{},'last_card_to_pager_gap') || typeof geometry.relationships?.visual_vs_native_height_delta!=='number') {
     throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: incomplete metrics for ${scenario.id}`);

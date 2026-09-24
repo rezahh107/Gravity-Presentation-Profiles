@@ -51,6 +51,11 @@ jobs:
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
       WU21_PERMALINK_STRUCTURE: '/%postname%/'
+      WU21_ELEMENTOR_VERSION: '3.35.9'
+      WU21_ELEMENTOR_SHA256: ba125cbeef3302d32ba07edd5306d63dfc25772d84037f110cfeb95f9b415794
+      WU21_HELLO_VERSION: '3.5.1'
+      WU21_HELLO_COMMIT: e86d30a7d64b2ab59373422a14933bba3621ee04
+      WU21_HELLO_SHA256: d5b36b9d33187bf8b9cd5ad324489aab7ad8c3a21b5f2e5df82c18964a026ce5
 
     steps:
       - name: Checkout exact authorized PR Head
@@ -284,7 +289,38 @@ jobs:
         run: |
           set -euo pipefail
           node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
-          node tests/repro-evidence-lab/browser-tests.mjs
+          GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
+
+      - name: Establish pinned Hello Elementor integrated visual host
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o /tmp/elementor.zip "https://github.com/elementor/elementor/releases/download/$WU21_ELEMENTOR_VERSION/elementor-$WU21_ELEMENTOR_VERSION.zip"
+          curl -L --fail --retry 3 -o /tmp/hello-elementor.tar.gz "https://github.com/elementor/hello-theme/archive/$WU21_HELLO_COMMIT.tar.gz"
+          echo "$WU21_ELEMENTOR_SHA256  /tmp/elementor.zip" | sha256sum -c -
+          echo "$WU21_HELLO_SHA256  /tmp/hello-elementor.tar.gz" | sha256sum -c -
+          unzip -q /tmp/elementor.zip -d "$WU21_WP_PATH/wp-content/plugins"
+          mkdir -p /tmp/hello-theme
+          tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-theme --strip-components=1
+          mv /tmp/hello-theme "$WU21_WP_PATH/wp-content/themes/hello-elementor"
+          grep -Eq '^Version:[[:space:]]*3\.35\.9$' "$WU21_WP_PATH/wp-content/plugins/elementor/elementor.php"
+          grep -Eq '^Version:[[:space:]]*3\.5\.1$' "$WU21_WP_PATH/wp-content/themes/hello-elementor/style.css"
+          php "$WU21_WP_CLI" plugin activate elementor --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-elementor-visual-host.php
+          test -s "$WU21_ARTIFACT_DIR/integrated-visual-host.json"
+
+      - name: Execute integrated SRWF visual diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/visual-regression/inbox-visual-diagnostics.mjs
+
+      - name: Complete deferred P06 mutation qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
 
       - name: Publish Inbox visual diagnostic summary
         if: always()
@@ -330,6 +366,7 @@ jobs:
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
             /tmp/wu21-artifacts/p06-fixture-*.json
+            /tmp/wu21-artifacts/integrated-visual-host.json
             /tmp/wu21-artifacts/visual-regression-diagnostics
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error

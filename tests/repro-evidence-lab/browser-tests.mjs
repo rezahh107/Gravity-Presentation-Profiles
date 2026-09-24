@@ -37,11 +37,9 @@ await import('./inbox-width-rtl-comparative-finalize.mjs');
 // late-runtime consumer. The later P06 qualification reuses this same state.
 await import('./p06-fixture-bootstrap.mjs');
 
-// Diagnostic-only visual capture reuses WU21/WU17/P06 fixtures. It runs before
-// P06's deliberate inactive-profile mutation and never updates references.
-await import('../visual-regression/inbox-visual-diagnostics.mjs');
-
 // P06 exercises deliberate lifecycle mutation for its inactive-profile negative
 // control. Keep it after the established browser regressions so the new
 // qualification cannot alter the state observed by pre-existing suites.
-await import('./p06-inbox-asset-reachability-browser-test.mjs');
+if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
+  await import('./p06-inbox-asset-reachability-browser-test.mjs');
+}

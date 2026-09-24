@@ -4,12 +4,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { comparePng, writeJson } from './visual-diagnostics-lib.mjs';
 import { applyScenarioAction } from './scenario-state.mjs';
+import { assertDesignMapping, compareDesignFacts, designFacts, prepareDesignAuthority } from './design-authority-runtime.mjs';
 
 const repo = process.env.GITHUB_WORKSPACE || process.cwd();
 const out = path.join(process.env.WU21_ARTIFACT_DIR || '/tmp/wu21-artifacts', 'visual-regression-diagnostics');
 const contract = JSON.parse(fs.readFileSync(path.join(repo, 'tests/visual-regression/inbox-visual-contract.json')));
 const runtime = JSON.parse(fs.readFileSync(path.join(process.env.WU21_ARTIFACT_DIR, 'runtime.json')));
 const fixture = JSON.parse(fs.readFileSync(path.join(process.env.WU21_ARTIFACT_DIR, 'fixture-manifest.json')));
+const integratedHostPath = path.join(process.env.WU21_ARTIFACT_DIR, 'integrated-visual-host.json');
+if (!fs.existsSync(integratedHostPath)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: integrated Hello Elementor host manifest is missing.');
+const integratedHost = JSON.parse(fs.readFileSync(integratedHostPath));
+if (integratedHost.page_template !== 'elementor_canvas' || integratedHost.srwf_host_companion_active !== false) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated visual host identity.');
 const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const wp = (code) => execFileSync('php', [process.env.WU21_WP_CLI, `--path=${process.env.WU21_WP_PATH}`, 'eval', code], { encoding: 'utf8' }).trim();
 
@@ -22,6 +27,7 @@ for (const mode of ['shortcode', 'block']) {
 const p06 = JSON.parse(wp('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"), JSON_UNESCAPED_SLASHES);'));
 if (!fixture.frontend_inbox_url || !p06?.authentic_block_page?.url) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: WU21/P06 Inbox fixture URLs are unavailable.');
 const hostIdentity = JSON.parse(wp(`$t=wp_get_theme(); $gf=get_file_data(WP_PLUGIN_DIR.'/gravityforms/gravityforms.php',array('v'=>'Version')); $flow=get_file_data(WP_PLUGIN_DIR.'/gravityflow/gravityflow.php',array('v'=>'Version')); global $wpdb; echo wp_json_encode(array('wordpress'=>get_bloginfo('version'),'php'=>PHP_VERSION,'gravity_forms'=>$gf['v'],'gravity_flow'=>$flow['v'],'theme'=>array('template'=>get_option('template'),'stylesheet'=>get_option('stylesheet'),'version'=>$t->get('Version')),'database'=>$wpdb->db_version()));`));
+if (hostIdentity.theme.stylesheet !== 'hello-elementor') throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Hello Elementor is not the active visual host.');
 
 const cookies = JSON.parse(wp(`$u=get_user_by('login','bootstrap_admin'); $e=time()+900; echo wp_json_encode(array(array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'auth')),array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in'))));`));
 const browser = await chromium.launch({ headless: true });
@@ -105,6 +111,7 @@ async function dom(page) {
 const results=[];
 try {
   for (const scenario of contract.scenarios) {
+    assertDesignMapping(scenario);
     const dir=path.join(out,scenario.id); fs.mkdirSync(dir,{recursive:true});
     const history=[];
     let activeStage='scenario_setup';
@@ -114,18 +121,28 @@ try {
       page=await runStage('page_create',()=>context.newPage()); await runStage('viewport',()=>page.setViewportSize(scenario.viewport));
       const url=scenario.family==='INBOX_AUTHENTIC_BLOCK'?p06.authentic_block_page.url:fixture.frontend_inbox_url;
       await runStage('navigation',()=>page.goto(url,{waitUntil:'networkidle'})); await runStage('inbox_readiness',()=>waitReady(page));
+      const hostIntegration=await runStage('host_integration',()=>page.evaluate((surfaceSelector)=>{const surface=document.querySelector(surfaceSelector);const body=document.body;const r=surface?.getBoundingClientRect();const br=body.getBoundingClientRect();return {elementor_canvas:body.classList.contains('elementor-template-canvas'),surface_present:Boolean(surface),surface_within_host:Boolean(r&&r.left>=br.left-1&&r.right<=br.right+1),document_horizontal_overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};},selectors.surface));
+      if(!hostIntegration.elementor_canvas||!hostIntegration.surface_present||!hostIntegration.surface_within_host||hostIntegration.document_horizontal_overflow>1) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} failed neutral host integration.`);
       const scenarioState=await runStage('scenario_action',()=>applyScenarioAction(page,scenario.action,selectors));
+      const designPage=await runStage('design_authority_page_create',()=>context.newPage());
+      await runStage('design_authority_viewport',()=>designPage.setViewportSize(scenario.viewport));
+      const designState=await runStage('design_authority_action',()=>prepareDesignAuthority(designPage,scenario,repo));
+      await runStage('design_authority_fonts',()=>designPage.evaluate(async()=>{await document.fonts.ready;}));
+      await runStage('design_authority_capture',()=>designPage.locator('#inbox-view').screenshot({path:path.join(dir,'design-authority.png'),animations:'disabled'}));
+      const designGeometry=await runStage('design_authority_geometry',()=>designFacts(designPage));
+      await designPage.close();
       const reference=path.join(dir,'reference.png'),actual=path.join(dir,'actual.png');
       let referenceIdentity='SAME_RUN_STABILITY_CONTROL';
       await runStage('reference_capture',async()=>{if(scenario.reference?.path){const source=path.join(repo,scenario.reference.path);if(!fs.existsSync(source))throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: configured reference missing: ${scenario.reference.path}`);if(contract.mode==='APPROVED_VISUAL_CONTRACT'&&scenario.reference.classification!=='OWNER_APPROVED_GOLDEN')throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} is not backed by an Owner-approved Golden.`);fs.copyFileSync(source,reference);referenceIdentity=scenario.reference.classification;}else{if(contract.mode==='APPROVED_VISUAL_CONTRACT')throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} has no approved Golden.`);await page.screenshot({path:reference,fullPage:true,animations:'disabled'});await page.waitForTimeout(100);}});
       await runStage('actual_capture',()=>page.screenshot({path:actual,fullPage:true,animations:'disabled'}));
       const geometry=await runStage('geometry_capture',()=>diagnostics(page));
+      const designDelta=await runStage('design_convergence_compare',async()=>compareDesignFacts(designGeometry,geometry));
       const computed=await runStage('computed_styles_capture',()=>styles(page));
       const summary=await runStage('dom_summary_capture',()=>dom(page));
       const metrics=await runStage('png_compare',()=>comparePng(reference,actual,path.join(dir,'diff.png'),contract.comparator));
-      await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceIdentity,cross_commit_baseline:scenario.reference?'ACTIVATED_BY_REVIEWED_CONFIG':'NOT_ACTIVATED'});writeJson(path.join(dir,'scenario-state.json'),scenarioState);writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceIdentity,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms_version:hostIdentity.gravity_forms,gravity_flow_version:hostIdentity.gravity_flow,database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
+      await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:'SAME_RUN_CAPTURE_STABILITY_CONTROL',cross_commit_baseline:'NOT_ACTIVATED',design_authority_pixel_comparison:'NOT_PERFORMED_UNLIKE_DOM_AND_CONTENT'});writeJson(path.join(dir,'scenario-state.json'),scenarioState);writeJson(path.join(dir,'design-authority-state.json'),designState);writeJson(path.join(dir,'design-geometry.json'),designGeometry);writeJson(path.join(dir,'design-vs-runtime.json'),designDelta);writeJson(path.join(dir,'host-integration.json'),hostIntegration);writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:'SAME_RUN_CAPTURE_STABILITY_CONTROL',design_authority:{classification:'OWNER_APPROVED_DESIGN_AUTHORITY',approval_status:'OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN',surface:scenario.design_authority_surface,action:scenario.design_authority_action,sha256:'666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81'},integrated_visual_host:integratedHost,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms:{version:hostIdentity.gravity_forms,package_sha256:process.env.WU21_GF_SHA256||null},gravity_flow:{version:hostIdentity.gravity_flow,package_sha256:process.env.WU21_FLOW_SHA256||null},database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
       const status=metrics.comparator_result==='PASS'?'PASS':contract.mode==='APPROVED_VISUAL_CONTRACT'?'VISUAL_CONTRACT_FAIL':'VISUAL_REGRESSION_WARNING';
-      results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,screenshot_diff_ratio:metrics.differing_pixel_ratio,scenario_state:scenarioState,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.document_horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
+      results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,design_authority_surface:scenario.design_authority_surface,design_authority_action:scenario.design_authority_action,design_authority_comparison:'EXECUTED_GEOMETRY_STYLE_RELATIONSHIPS',host_integration:'PASS',capture_stability:metrics.comparator_result,screenshot_diff_ratio:metrics.differing_pixel_ratio,scenario_state:scenarioState,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.document_horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
       writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:'complete',status:'PASS',history});
     } catch(error) {
       const failure={status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',scenario:scenario.id,failed_stage:activeStage,error:{name:error?.name||'Error',message:String(error?.message||error),stack:String(error?.stack||error)},completed_scenarios:results.map(result=>result.id),artifact_directory:dir};
