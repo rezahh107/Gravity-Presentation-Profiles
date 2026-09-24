@@ -5,6 +5,18 @@ const root = process.argv[2];
 if (!root || !fs.existsSync(root)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: diagnostic artifact root is missing.');
 const read = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
 const manifest = read('manifest.json');
+if (manifest.status === 'VISUAL_TEST_INFRASTRUCTURE_FAILURE') {
+  const failure = manifest.infrastructure_failure;
+  if (!failure?.scenario || !failure?.failed_stage || !failure?.error?.stack) {
+    throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: incomplete failure provenance in visual manifest.');
+  }
+  const failureFile = path.join(root, failure.scenario, 'infrastructure-failure.json');
+  const stateFile = path.join(root, failure.scenario, 'capture-state.json');
+  if (!fs.existsSync(failureFile) || !fs.existsSync(stateFile)) {
+    throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing staged failure evidence for ${failure.scenario}.`);
+  }
+  throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${failure.scenario} failed at ${failure.failed_stage}: ${failure.error.stack}`);
+}
 if (!['PREVIEW_DIAGNOSTIC', 'APPROVED_VISUAL_CONTRACT'].includes(manifest.mode) || !Array.isArray(manifest.scenarios) || !manifest.scenarios.length) {
   throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid visual manifest.');
 }

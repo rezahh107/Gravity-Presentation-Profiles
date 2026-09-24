@@ -292,13 +292,13 @@ jobs:
         run: |
           manifest="$WU21_ARTIFACT_DIR/visual-regression-diagnostics/manifest.json"
           if [[ -s "$manifest" ]]; then
-            node tests/visual-regression/validate-diagnostic-artifact.mjs "$WU21_ARTIFACT_DIR/visual-regression-diagnostics"
             {
               echo '## Inbox visual diagnostics'
               echo '```json'
               cat "$manifest"
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            node tests/visual-regression/validate-diagnostic-artifact.mjs "$WU21_ARTIFACT_DIR/visual-regression-diagnostics"
           else
             echo '## Inbox visual diagnostics: VISUAL_TEST_INFRASTRUCTURE_FAILURE' >> "$GITHUB_STEP_SUMMARY"
             exit 1

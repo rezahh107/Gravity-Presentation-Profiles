@@ -105,33 +105,35 @@ const results=[];
 try {
   for (const scenario of contract.scenarios) {
     const dir=path.join(out,scenario.id); fs.mkdirSync(dir,{recursive:true});
-    const page=await context.newPage(); await page.setViewportSize(scenario.viewport);
-    const url=scenario.family==='INBOX_AUTHENTIC_BLOCK'?p06.authentic_block_page.url:fixture.frontend_inbox_url;
-    await page.goto(url,{waitUntil:'networkidle'}); await waitReady(page);
-    const search=page.locator(selectors.searchInput);
-    if(scenario.action==='search_result'){await search.fill('00:24:00');await page.waitForTimeout(300);}
-    if(scenario.action==='search_empty'){await search.fill('VISUAL-NO-RESULT-SYNTHETIC');await page.waitForTimeout(300);}
-    if(scenario.action==='pagination'){const next=page.locator('[ref="btNext"]');if(await next.count())await next.click();await page.waitForTimeout(300);}
-    if(scenario.action==='focus')await search.focus();
-    const reference=path.join(dir,'reference.png'),actual=path.join(dir,'actual.png');
-    let referenceIdentity='SAME_RUN_STABILITY_CONTROL';
-    if (scenario.reference?.path) {
-      const source=path.join(repo,scenario.reference.path);
-      if (!fs.existsSync(source)) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: configured reference missing: ${scenario.reference.path}`);
-      if (contract.mode==='APPROVED_VISUAL_CONTRACT' && scenario.reference.classification!=='OWNER_APPROVED_GOLDEN') throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} is not backed by an Owner-approved Golden.`);
-      fs.copyFileSync(source,reference); referenceIdentity=scenario.reference.classification;
-    } else {
-      if (contract.mode==='APPROVED_VISUAL_CONTRACT') throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} has no approved Golden.`);
-      await page.screenshot({path:reference,fullPage:true,animations:'disabled'}); await page.waitForTimeout(100);
-    }
-    await page.screenshot({path:actual,fullPage:true,animations:'disabled'});
-    const geometry=await diagnostics(page), computed=await styles(page), summary=await dom(page);
-    const metrics=comparePng(reference,actual,path.join(dir,'diff.png'),contract.comparator);
-    writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceIdentity,cross_commit_baseline:scenario.reference?'ACTIVATED_BY_REVIEWED_CONFIG':'NOT_ACTIVATED'});
-    writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);
-    writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceIdentity,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms_version:hostIdentity.gravity_forms,gravity_flow_version:hostIdentity.gravity_flow,database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});
-    const status=metrics.comparator_result==='PASS'?'PASS':contract.mode==='APPROVED_VISUAL_CONTRACT'?'VISUAL_CONTRACT_FAIL':'VISUAL_REGRESSION_WARNING';
-    results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,screenshot_diff_ratio:metrics.differing_pixel_ratio,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.document_horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary}); await page.close();
+    const history=[];
+    let activeStage='scenario_setup';
+    const runStage=async(name,operation)=>{activeStage=name;history.push({stage:name,status:'STARTED'});writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:name,status:'RUNNING',history});try{const value=await operation();history[history.length-1].status='PASS';writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:name,status:'RUNNING',history});return value;}catch(error){history[history.length-1].status='FAIL';history[history.length-1].error={name:error?.name||'Error',message:String(error?.message||error),stack:String(error?.stack||error)};writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:name,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',history});throw error;}};
+    let page;
+    try {
+      page=await runStage('page_create',()=>context.newPage()); await runStage('viewport',()=>page.setViewportSize(scenario.viewport));
+      const url=scenario.family==='INBOX_AUTHENTIC_BLOCK'?p06.authentic_block_page.url:fixture.frontend_inbox_url;
+      await runStage('navigation',()=>page.goto(url,{waitUntil:'networkidle'})); await runStage('inbox_readiness',()=>waitReady(page));
+      const search=page.locator(selectors.searchInput);
+      await runStage('scenario_action',async()=>{if(scenario.action==='search_result'){await search.fill('00:24:00');await page.waitForTimeout(300);}if(scenario.action==='search_empty'){await search.fill('VISUAL-NO-RESULT-SYNTHETIC');await page.waitForTimeout(300);}if(scenario.action==='pagination'){const next=page.locator('[ref="btNext"]');if(await next.count())await next.click();await page.waitForTimeout(300);}if(scenario.action==='focus')await search.focus();});
+      const reference=path.join(dir,'reference.png'),actual=path.join(dir,'actual.png');
+      let referenceIdentity='SAME_RUN_STABILITY_CONTROL';
+      await runStage('reference_capture',async()=>{if(scenario.reference?.path){const source=path.join(repo,scenario.reference.path);if(!fs.existsSync(source))throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: configured reference missing: ${scenario.reference.path}`);if(contract.mode==='APPROVED_VISUAL_CONTRACT'&&scenario.reference.classification!=='OWNER_APPROVED_GOLDEN')throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} is not backed by an Owner-approved Golden.`);fs.copyFileSync(source,reference);referenceIdentity=scenario.reference.classification;}else{if(contract.mode==='APPROVED_VISUAL_CONTRACT')throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${scenario.id} has no approved Golden.`);await page.screenshot({path:reference,fullPage:true,animations:'disabled'});await page.waitForTimeout(100);}});
+      await runStage('actual_capture',()=>page.screenshot({path:actual,fullPage:true,animations:'disabled'}));
+      const geometry=await runStage('geometry_capture',()=>diagnostics(page));
+      const computed=await runStage('computed_styles_capture',()=>styles(page));
+      const summary=await runStage('dom_summary_capture',()=>dom(page));
+      const metrics=await runStage('png_compare',()=>comparePng(reference,actual,path.join(dir,'diff.png'),contract.comparator));
+      await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceIdentity,cross_commit_baseline:scenario.reference?'ACTIVATED_BY_REVIEWED_CONFIG':'NOT_ACTIVATED'});writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceIdentity,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms_version:hostIdentity.gravity_forms,gravity_flow_version:hostIdentity.gravity_flow,database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
+      const status=metrics.comparator_result==='PASS'?'PASS':contract.mode==='APPROVED_VISUAL_CONTRACT'?'VISUAL_CONTRACT_FAIL':'VISUAL_REGRESSION_WARNING';
+      results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,screenshot_diff_ratio:metrics.differing_pixel_ratio,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.document_horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
+      writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:'complete',status:'PASS',history});
+    } catch(error) {
+      const failure={status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',scenario:scenario.id,failed_stage:activeStage,error:{name:error?.name||'Error',message:String(error?.message||error),stack:String(error?.stack||error)},completed_scenarios:results.map(result=>result.id),artifact_directory:dir};
+      writeJson(path.join(dir,'infrastructure-failure.json'),failure);
+      writeJson(path.join(out,'manifest.json'),{mode:contract.mode,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',repository_sha:repositorySha,baseline_identity:'NO_CROSS_COMMIT_RUNTIME_BASELINE_ADMITTED',scenarios:[...results.map(({geometry,dom,...result})=>result),{id:scenario.id,family:scenario.family,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',failed_stage:activeStage}],warning_count:results.filter(result=>result.status!=='PASS').length,failure_count:0,infrastructure_failure_count:1,first_meaningful_divergence:null,evidence_ceiling:'Partial diagnostic evidence; capture pipeline did not complete.',infrastructure_failure:failure});
+      console.error(`INBOX_VISUAL_DIAGNOSTIC_INFRASTRUCTURE_FAILURE=${JSON.stringify(failure)}`);
+      throw error;
+    } finally { if(page)await page.close().catch(()=>{}); }
   }
 } finally { await browser.close(); }
 const largest=results.reduce((a,b)=>a.screenshot_diff_ratio>b.screenshot_diff_ratio?a:b,results[0]);
