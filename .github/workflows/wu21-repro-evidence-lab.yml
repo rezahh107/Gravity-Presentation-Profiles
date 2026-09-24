@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Assert repository and exact checkout identity
         shell: bash
@@ -64,6 +64,16 @@ jobs:
           actual="$(git rev-parse HEAD)"
           expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           echo "GPP_WU21_REPOSITORY_SHA=$actual" >> "$GITHUB_ENV"
+          if [[ "${{ github.event_name }}" = "pull_request" ]]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}"..."$actual" > /tmp/wu21-changed-files.txt
+          else
+            : > /tmp/wu21-changed-files.txt
+          fi
+          {
+            echo 'GPP_CHANGED_FILES<<EOF'
+            cat /tmp/wu21-changed-files.txt
+            echo EOF
+          } >> "$GITHUB_ENV"
           test "$actual" = "$expected"
           mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
 
@@ -232,9 +242,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(node --version)" = "v22.19.0"
-          npm install --no-save --package-lock=false playwright@1.55.0
+          npm install --no-save --package-lock=false playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
           npx playwright install --with-deps chromium
-          node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1); console.log(p.version)"
+          node -e "for(const [p,v] of [['playwright','1.55.0'],['pixelmatch','7.1.0'],['pngjs','7.0.0']]){const a=require(p+'/package.json').version;if(a!==v)process.exit(1);console.log(p+'@'+a)}"
+          bash tests/visual-regression/run-contract-tests.sh
 
       - name: Start ephemeral WordPress HTTP server
         shell: bash
@@ -271,6 +282,24 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/browser-tests.mjs
 
+      - name: Publish Inbox visual diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          manifest="$WU21_ARTIFACT_DIR/visual-regression-diagnostics/manifest.json"
+          if [[ -s "$manifest" ]]; then
+            node tests/visual-regression/validate-diagnostic-artifact.mjs "$WU21_ARTIFACT_DIR/visual-regression-diagnostics"
+            {
+              echo '## Inbox visual diagnostics'
+              echo '```json'
+              cat "$manifest"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## Inbox visual diagnostics: VISUAL_TEST_INFRASTRUCTURE_FAILURE' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Build immutable content-addressed evidence from actual results
         id: evidence
         shell: bash
@@ -296,6 +325,7 @@ jobs:
             /tmp/wu21-artifacts/wu17-*.json
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
+            /tmp/wu21-artifacts/visual-regression-diagnostics
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error
           retention-days: 30

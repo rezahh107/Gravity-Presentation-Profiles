@@ -33,6 +33,10 @@ await import('./inbox-width-rtl-comparative-bootstrap.mjs');
 await import('./inbox-width-rtl-comparative-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-finalize.mjs');
 
+// Diagnostic-only visual capture reuses WU21/WU17/P06 fixtures. It runs before
+// P06's deliberate inactive-profile mutation and never updates references.
+await import('../visual-regression/inbox-visual-diagnostics.mjs');
+
 // P06 exercises deliberate lifecycle mutation for its inactive-profile negative
 // control. Keep it after the established browser regressions so the new
 // qualification cannot alter the state observed by pre-existing suites.
