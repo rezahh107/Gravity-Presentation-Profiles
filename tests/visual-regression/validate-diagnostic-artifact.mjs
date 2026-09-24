@@ -22,7 +22,7 @@ if (!['PREVIEW_DIAGNOSTIC', 'APPROVED_VISUAL_CONTRACT'].includes(manifest.mode) 
 }
 read('changed-files.json');
 for (const scenario of manifest.scenarios) {
-  for (const file of ['reference.png','actual.png','diff.png','metrics.json','geometry.json','computed-styles.json','dom-summary.json','environment.json']) {
+  for (const file of ['reference.png','actual.png','diff.png','metrics.json','scenario-state.json','geometry.json','computed-styles.json','dom-summary.json','environment.json']) {
     const target = path.join(root, scenario.id, file);
     if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: missing ${scenario.id}/${file}`);
   }
@@ -30,5 +30,10 @@ for (const scenario of manifest.scenarios) {
   if (typeof metrics.differing_pixel_ratio!=='number' || !Object.hasOwn(geometry.relationships||{},'last_card_to_pager_gap') || typeof geometry.relationships?.visual_vs_native_height_delta!=='number') {
     throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: incomplete metrics for ${scenario.id}`);
   }
+  const state=read(path.join(scenario.id,'scenario-state.json'));
+  if (scenario.id==='shortcode-search-result' && !(state.observed_rows===1 && state.observed_cards===1 && state.unique_fixture_present===true)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: search_result postcondition evidence is invalid.');
+  if (scenario.id==='shortcode-search-empty' && !(state.observed_rows===0 && state.observed_cards===0 && state.authentic_grid_surface_present===true && state.empty_state_kind==='NATIVE_GRID_ZERO_ROWS')) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: search_empty postcondition evidence is invalid.');
+  if (scenario.id==='shortcode-pagination' && !(state.initial_rows===20 && state.observed_rows===5 && state.native_next_control===true)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: pagination postcondition evidence is invalid.');
+  if (scenario.id==='shortcode-focus' && state.search_input_owns_focus!==true) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: focus postcondition evidence is invalid.');
 }
 console.log(`VISUAL_DIAGNOSTIC_ARTIFACT_PASS scenarios=${manifest.scenarios.length} status=${manifest.status}`);

@@ -7,6 +7,7 @@ before="$(sha256sum tests/visual-regression/references/manifest.json tests/visua
 node tests/visual-regression/comparator-falsification.mjs
 node tests/visual-regression/computed-styles-handoff-falsification.mjs
 node tests/visual-regression/design-authority-contract.mjs
+node tests/visual-regression/scenario-state-falsification.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs
 after="$(sha256sum tests/visual-regression/references/manifest.json tests/visual-regression/inbox-visual-contract.json)"
 test "$before" = "$after"
