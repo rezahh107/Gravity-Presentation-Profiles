@@ -6,6 +6,7 @@ cd "$root"
 before="$(sha256sum tests/visual-regression/references/manifest.json tests/visual-regression/inbox-visual-contract.json)"
 node tests/visual-regression/comparator-falsification.mjs
 node tests/visual-regression/computed-styles-handoff-falsification.mjs
+node tests/visual-regression/design-authority-contract.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs
 after="$(sha256sum tests/visual-regression/references/manifest.json tests/visual-regression/inbox-visual-contract.json)"
 test "$before" = "$after"
@@ -34,4 +35,19 @@ if node tests/visual-regression/validate-diagnostic-artifact.mjs "$tmp/diagnosti
 fi
 grep -Fq 'shortcode-desktop failed at geometry_capture: SyntheticStageError: diagnostic probe' "$tmp/validator-error.log"
 
-echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true staged_failure_provenance=true'
+node - "$tmp" <<'NODE'
+const fs=require('fs');const path=require('path');const root=process.argv[2];
+const source=JSON.parse(fs.readFileSync('tests/visual-regression/references/manifest.json','utf8'));
+const missing=structuredClone(source);missing.references[0].repository_path=path.join(root,'missing-design-authority.html');
+fs.writeFileSync(path.join(root,'missing-authority.json'),JSON.stringify(missing));
+const changed=structuredClone(source);changed.references[0].source_sha256='0'.repeat(64);
+fs.writeFileSync(path.join(root,'changed-authority.json'),JSON.stringify(changed));
+NODE
+if node tests/visual-regression/design-authority-contract.mjs "$tmp/missing-authority.json" >/dev/null 2>&1; then
+  echo 'Missing design authority unexpectedly passed.' >&2; exit 1
+fi
+if node tests/visual-regression/design-authority-contract.mjs "$tmp/changed-authority.json" >/dev/null 2>&1; then
+  echo 'Modified design-authority hash unexpectedly passed.' >&2; exit 1
+fi
+
+echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true staged_failure_provenance=true design_authority_fail_closed=true'

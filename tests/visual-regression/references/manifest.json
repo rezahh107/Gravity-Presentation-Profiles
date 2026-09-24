@@ -3,14 +3,14 @@
   "references": [
     {
       "id": "owner-combined-final-html",
-      "classification": "DESIGN_REFERENCE_ONLY",
-      "surface": "inbox-and-entry-design-reference",
-      "scenario": "side-by-side-only",
+      "classification": "OWNER_APPROVED_DESIGN_AUTHORITY",
+      "surface": "gravity_flow.inbox",
+      "scenario": "inbox-design-convergence",
       "source": "Google Drive title PersianGravity-Visual-Reference-Final.html; already materialized by WU21",
       "source_sha256": "666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81",
       "repository_path": "tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html",
-      "comparison": "SIDE_BY_SIDE_NOT_PIXEL_CONTRACT",
-      "approval_status": "NOT_APPROVED_AS_RUNTIME_GOLDEN"
+      "comparison": "GEOMETRY_STYLE_CONVERGENCE_AUTHORITY_NOT_FULL_PAGE_PIXEL_CONTRACT",
+      "approval_status": "OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN"
     },
     {
       "id": "owner-vnext-html",
