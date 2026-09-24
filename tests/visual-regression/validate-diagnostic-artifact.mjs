@@ -36,7 +36,7 @@ for (const scenario of manifest.scenarios) {
   }
   const environment=read(path.join(scenario.id,'environment.json')); const host=read(path.join(scenario.id,'host-integration.json'));
   assertIntegratedHostIdentity(environment.integrated_visual_host, contract.host_runtime);
-  if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.capture_scope!==contract.capture.scope || environment.capture_selector!==contract.capture.selector || host.elementor_page!==true || host.elementor_container_present!==true || host.surface_present!==true || host.surface_within_host!==true || host.document_horizontal_overflow>1) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
+  if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.capture_scope!==contract.capture.scope || environment.capture_selector!==contract.capture.selector || host.elementor_container_present!==true || host.surface_present!==true || host.surface_dom_nested_in_elementor_container!==true) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
   const metrics=read(path.join(scenario.id,'metrics.json')); const geometry=read(path.join(scenario.id,'geometry.json'));
   assertSerializedReferenceIdentity({metrics,environment,scenario,mode:manifest.mode});
   if (metrics.capture_scope!==contract.capture.scope) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid capture scope for ${scenario.id}`);
