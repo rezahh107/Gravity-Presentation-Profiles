@@ -49,7 +49,7 @@ async function waitReady(page) {
   await page.waitForTimeout(150);
 }
 
-async function diagnostics(page) {
+export async function diagnostics(page) {
   return page.evaluate((map) => {
     const visible = el => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
     const details = el => {
@@ -83,11 +83,11 @@ async function diagnostics(page) {
   }, selectors);
 }
 
-async function styles(page) {
+export async function styles(page) {
   return page.evaluate((map) => Object.fromEntries(Object.entries(map).map(([name, selector]) => {
     const el=document.querySelector(selector); if(!el)return [name,null]; const s=getComputedStyle(el);
     return [name,{display:s.display,position:s.position,width:s.width,maxWidth:s.maxWidth,height:s.height,minHeight:s.minHeight,gridTemplateColumns:s.gridTemplateColumns,gap:s.gap,margin:s.margin,padding:s.padding,direction:s.direction,textAlign:s.textAlign,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,background:s.background,border:s.border,borderRadius:s.borderRadius,boxShadow:s.boxShadow,overflow:s.overflow,transform:s.transform}];
-  })), map);
+  })), selectors);
 }
 
 async function dom(page) {
