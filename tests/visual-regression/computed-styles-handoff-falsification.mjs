@@ -37,7 +37,7 @@ try {
   assert.strictEqual(transfers[1], selectors, 'diagnostics() did not transfer the authoritative selector map.');
   assert.deepEqual(Object.keys(result), Object.keys(selectors), 'Browser callback did not receive the complete selector map.');
   assert.ok(Object.values(result).every(value => value === null), 'Null-element computed-style control was not deterministic.');
-  assert.equal(geometry.relationships.document_horizontal_overflow, 0, 'Geometry argument-transfer control was not deterministic.');
+  assert.equal(geometry.relationships.horizontal_overflow, null, 'Geometry argument-transfer control was not deterministic.');
 } finally {
   if (previousDocument === undefined) delete globalThis.document;
   else globalThis.document = previousDocument;
