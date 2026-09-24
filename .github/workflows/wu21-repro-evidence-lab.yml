@@ -296,6 +296,12 @@ jobs:
           node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
           GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
 
+      - name: Complete deferred P06 mutation qualification before integrated visual host
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
+
       - name: Establish pinned Hello Elementor integrated visual host
         shell: bash
         run: |
@@ -356,12 +362,6 @@ jobs:
         run: |
           set -euo pipefail
           node tests/visual-regression/inbox-visual-diagnostics.mjs
-
-      - name: Complete deferred P06 mutation qualification
-        shell: bash
-        run: |
-          set -euo pipefail
-          node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
 
       - name: Publish Inbox visual diagnostic summary
         if: always()
