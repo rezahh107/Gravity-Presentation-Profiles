@@ -297,14 +297,21 @@ jobs:
           set -euo pipefail
           curl -L --fail --retry 3 -o /tmp/elementor.zip "https://github.com/elementor/elementor/releases/download/$WU21_ELEMENTOR_VERSION/elementor-$WU21_ELEMENTOR_VERSION.zip"
           curl -L --fail --retry 3 -o /tmp/hello-elementor.tar.gz "https://github.com/elementor/hello-theme/archive/$WU21_HELLO_COMMIT.tar.gz"
-          echo "$WU21_ELEMENTOR_SHA256  /tmp/elementor.zip" | sha256sum -c -
-          echo "$WU21_HELLO_SHA256  /tmp/hello-elementor.tar.gz" | sha256sum -c -
+          export WU21_ELEMENTOR_ACTUAL_SHA256="$(sha256sum /tmp/elementor.zip | cut -d' ' -f1)"
+          export WU21_HELLO_ACTUAL_SHA256="$(sha256sum /tmp/hello-elementor.tar.gz | cut -d' ' -f1)"
+          test "$WU21_ELEMENTOR_ACTUAL_SHA256" = "$WU21_ELEMENTOR_SHA256"
+          test "$WU21_HELLO_ACTUAL_SHA256" = "$WU21_HELLO_SHA256"
           unzip -q /tmp/elementor.zip -d "$WU21_WP_PATH/wp-content/plugins"
           mkdir -p /tmp/hello-theme
           tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-theme --strip-components=1
           mv /tmp/hello-theme "$WU21_WP_PATH/wp-content/themes/hello-elementor"
-          grep -Eq '^Version:[[:space:]]*3\.35\.9$' "$WU21_WP_PATH/wp-content/plugins/elementor/elementor.php"
-          grep -Eq '^Version:[[:space:]]*3\.5\.1$' "$WU21_WP_PATH/wp-content/themes/hello-elementor/style.css"
+          WU21_EXPECTED_ELEMENTOR_VERSION="$WU21_ELEMENTOR_VERSION" WU21_EXPECTED_HELLO_VERSION="$WU21_HELLO_VERSION" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+          $elementor = get_file_data(WP_PLUGIN_DIR . "/elementor/elementor.php", ["version" => "Version"]);
+          $hello = wp_get_theme("hello-elementor");
+          if ($elementor["version"] !== getenv("WU21_EXPECTED_ELEMENTOR_VERSION") || $hello->get("Version") !== getenv("WU21_EXPECTED_HELLO_VERSION")) {
+              throw new RuntimeException("Pinned Elementor/Hello package identity mismatch.");
+          }
+          '
           php "$WU21_WP_CLI" plugin activate elementor --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-elementor-visual-host.php

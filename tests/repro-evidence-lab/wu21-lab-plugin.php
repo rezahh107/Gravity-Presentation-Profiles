@@ -181,3 +181,18 @@ final class GPP_WU21_Polling_Diagnostics {
 }
 
 add_action( 'plugins_loaded', array( 'GPP_WU21_Polling_Diagnostics', 'boot' ), 31 );
+
+/**
+ * Render an existing synthetic Inbox fixture through a real Elementor shortcode
+ * widget without copying its Gravity Flow behavior into the host fixture.
+ */
+function gpp_wu21_elementor_inbox_content( $attributes ) {
+    $attributes = shortcode_atts( array( 'page_id' => 0 ), $attributes, 'gpp_wu21_elementor_inbox' );
+    $page_id    = absint( $attributes['page_id'] );
+    $content    = $page_id ? get_post_field( 'post_content', $page_id ) : '';
+    if ( ! $content ) {
+        return '';
+    }
+    return do_shortcode( do_blocks( $content ) );
+}
+add_shortcode( 'gpp_wu21_elementor_inbox', 'gpp_wu21_elementor_inbox_content' );
