@@ -33,7 +33,7 @@ for (const scenario of manifest.scenarios) {
   const state=read(path.join(scenario.id,'scenario-state.json'));
   if (scenario.id==='shortcode-search-result' && !(state.observed_rows===1 && state.observed_cards===1 && state.unique_fixture_present===true)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: search_result postcondition evidence is invalid.');
   if (scenario.id==='shortcode-search-empty' && !(state.observed_rows===0 && state.observed_cards===0 && state.authentic_grid_surface_present===true && state.empty_state_kind==='NATIVE_GRID_ZERO_ROWS')) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: search_empty postcondition evidence is invalid.');
-  if (scenario.id==='shortcode-pagination' && !(state.initial_rows===20 && state.observed_rows===5 && state.native_next_control===true)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: pagination postcondition evidence is invalid.');
+  if (scenario.id==='shortcode-pagination' && !(state.page_before==='1' && state.total_pages>=2 && state.page_after==='2' && state.first_page_rows===20 && state.second_page_rows>=1 && state.second_page_rows<=20 && state.row_identity_changed===true && state.native_next_control===true)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: pagination postcondition evidence is invalid.');
   if (scenario.id==='shortcode-focus' && state.search_input_owns_focus!==true) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: focus postcondition evidence is invalid.');
 }
 console.log(`VISUAL_DIAGNOSTIC_ARTIFACT_PASS scenarios=${manifest.scenarios.length} status=${manifest.status}`);

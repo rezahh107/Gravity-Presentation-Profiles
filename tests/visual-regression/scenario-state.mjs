@@ -28,15 +28,33 @@ export async function applyScenarioAction(page, action, selectors) {
     const rows = page.locator(rowsSelector);
     const initialRows = await rows.count();
     if (initialRows !== 20) throw new Error(`pagination requires the native first page with 20 rows, got ${initialRows}.`);
+    const current = page.locator('[data-js="gflow-inbox"] [ref="lbCurrent"]');
+    const total = page.locator('[data-js="gflow-inbox"] [ref="lbTotal"]');
     const next = page.locator('[data-js="gflow-inbox"] [ref="btNext"]');
-    if (await next.count() !== 1) throw new Error('pagination next-page control is unavailable.');
+    if (await current.count() !== 1 || await total.count() !== 1 || await next.count() !== 1) throw new Error('pagination native controls are unavailable.');
+    const pageBefore = (await current.innerText()).trim();
+    const totalPages = (await total.innerText()).trim();
+    if (pageBefore !== '1' || Number(totalPages) < 2) throw new Error(`pagination requires native page 1 of at least 2, got ${pageBefore}/${totalPages}.`);
+    const firstPageIds = await rows.evaluateAll(elements => elements.map(element => element.getAttribute('row-id')).filter(Boolean));
+    if (firstPageIds.length !== initialRows) throw new Error(`pagination first page lost row identity: ${firstPageIds.length}/${initialRows}.`);
     const disabled = await next.evaluate(element => element.classList.contains('ag-disabled') || element.getAttribute('aria-disabled') === 'true');
     if (disabled) throw new Error('pagination next-page control is disabled.');
     await next.click();
-    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 5, rowsSelector, { timeout: 15000 });
+    await page.waitForFunction(
+      ({ currentSelector, rowSelector, previousIds }) => {
+        if (document.querySelector(currentSelector)?.textContent?.trim() !== '2') return false;
+        const ids=[...document.querySelectorAll(rowSelector)].map(element=>element.getAttribute('row-id')).filter(Boolean);
+        return ids.length>=1 && ids.length<=20 && ids.every(id=>!previousIds.includes(id));
+      },
+      { currentSelector:'[data-js="gflow-inbox"] [ref="lbCurrent"]',rowSelector:rowsSelector,previousIds:firstPageIds },
+      { timeout:15000 },
+    );
     const observedRows = await rows.count();
-    if (observedRows !== 5) throw new Error(`pagination did not reach the native second page, got ${observedRows} rows.`);
-    return { action, initial_rows:initialRows,observed_rows:observedRows,native_next_control:true };
+    const pageAfter = (await current.innerText()).trim();
+    const secondPageIds = await rows.evaluateAll(elements => elements.map(element => element.getAttribute('row-id')).filter(Boolean));
+    const overlap = secondPageIds.filter(id => firstPageIds.includes(id));
+    if (pageAfter!=='2' || observedRows<1 || observedRows>20 || secondPageIds.length!==observedRows || overlap.length) throw new Error(`pagination native transition invalid: page=${pageAfter}, rows=${observedRows}, ids=${secondPageIds.length}, overlap=${overlap.length}.`);
+    return { action,activation:'click',page_before:pageBefore,total_pages:Number(totalPages),page_after:pageAfter,first_page_rows:initialRows,second_page_rows:observedRows,row_identity_changed:true,first_page_row_ids:firstPageIds,second_page_row_ids:secondPageIds,native_next_control:true };
   }
   if (action === 'focus') {
     await search.focus();
