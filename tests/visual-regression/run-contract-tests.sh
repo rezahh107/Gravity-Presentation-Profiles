@@ -8,6 +8,10 @@ node tests/visual-regression/comparator-falsification.mjs
 node tests/visual-regression/computed-styles-handoff-falsification.mjs
 node tests/visual-regression/design-authority-contract.mjs
 node tests/visual-regression/integrated-host-design-falsification.mjs
+node tests/visual-regression/host-fixture-falsification.mjs
+node tests/visual-regression/design-convergence-falsification.mjs
+node tests/visual-regression/geometry-relations-falsification.mjs
+node tests/visual-regression/coverage-truth-falsification.mjs
 node tests/visual-regression/reference-identity-falsification.mjs
 node tests/visual-regression/scenario-state-falsification.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs

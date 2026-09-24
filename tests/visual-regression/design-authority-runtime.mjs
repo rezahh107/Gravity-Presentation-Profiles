@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
+import { evaluateDesignConvergence } from './design-convergence-policy.mjs';
 
 export const DESIGN_SURFACES = Object.freeze({
   'inbox-desktop': { label: 'A', device: 'desktop' },
@@ -54,17 +56,26 @@ export async function prepareDesignAuthority(page, scenario, repositoryRoot) {
 }
 
 export async function designFacts(page) {
-  return page.evaluate(() => {
+  const result = await page.evaluate(() => {
     const visible = element => element && getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().height > 0;
     const fact = element => { if (!element) return null; const r=element.getBoundingClientRect(),s=getComputedStyle(element); return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,padding:s.padding,gap:s.gap,direction:s.direction,fontSize:s.fontSize,lineHeight:s.lineHeight,border:s.border,borderRadius:s.borderRadius,boxShadow:s.boxShadow}; };
     const cards=[...document.querySelectorAll('#case-grid .case-card')].filter(visible);
     const surfaceElement=document.querySelector('#inbox-view'), surface=fact(surfaceElement), first=fact(cards[0]), second=fact(cards[1]), last=fact(cards.at(-1)), pager=fact(document.querySelector('#pagination'));
     const rows=[...new Set(cards.map(card=>Math.round(card.getBoundingClientRect().top)))];
-    return { anchors:{surface,title:fact(document.querySelector('#inbox-view h1')),helper:fact(document.querySelector('#inbox-view .page-heading p')),search:fact(document.querySelector('#case-search')),firstCard:first,secondCard:second,lastCard:last,pagination:pager,photo:fact(document.querySelector('#case-grid .avatar'))}, relationships:{first_card_width:first?.width??null,two_card_horizontal_gap:first&&second&&Math.abs(first.y-second.y)<3?Math.abs(second.x-first.right):null,last_card_to_pager_gap:last&&pager?pager.y-last.bottom:null,cards_per_visual_row:cards.length?Math.max(...rows.map(y=>cards.filter(card=>Math.abs(card.getBoundingClientRect().top-y)<3).length)):0,horizontal_overflow:surfaceElement?Math.max(0,surfaceElement.scrollWidth-surfaceElement.clientWidth):null}};
+    return { anchors:{surface,title:fact(document.querySelector('#inbox-view h1')),helper:fact(document.querySelector('#inbox-view .page-heading p')),search:fact(document.querySelector('#case-search')),firstCard:first,secondCard:second,lastCard:last,pagination:pager,photo:fact(document.querySelector('#case-grid .avatar'))}, relationships:{first_card_width:first?.width??null,two_card_horizontal_gap:null,last_card_to_pager_gap:last&&pager?pager.y-last.bottom:null,cards_per_visual_row:cards.length?Math.max(...rows.map(y=>cards.filter(card=>Math.abs(card.getBoundingClientRect().top-y)<3).length)):0,horizontal_overflow:surfaceElement?Math.max(0,surfaceElement.scrollWidth-surfaceElement.clientWidth):null}};
   });
+  result.relationships.two_card_horizontal_gap = physicalHorizontalGap(result.anchors.firstCard, result.anchors.secondCard);
+  result.relationships.title_font_size_px = cssPixelNumber(result.anchors.title?.fontSize);
+  result.relationships.title_line_height_px = cssPixelNumber(result.anchors.title?.lineHeight);
+  result.relationships.first_card_border_radius_px = cssPixelNumber(result.anchors.firstCard?.borderRadius);
+  result.relationships.first_card_padding = result.anchors.firstCard?.padding ?? null;
+  result.relationships.first_card_box_shadow = result.anchors.firstCard?.boxShadow ?? null;
+  return result;
 }
 
-export function compareDesignFacts(design, runtime) {
-  const fields=['first_card_width','two_card_horizontal_gap','last_card_to_pager_gap','cards_per_visual_row','horizontal_overflow'];
-  return { comparison:'GEOMETRY_STYLE_RELATIONSHIPS_NOT_CONTENT_EQUALITY', deltas:Object.fromEntries(fields.map(field=>[field,{design:design.relationships[field]??null,runtime:runtime.relationships[field]??null,delta:Number.isFinite(design.relationships[field])&&Number.isFinite(runtime.relationships[field])?runtime.relationships[field]-design.relationships[field]:null}])) };
+export function compareDesignFacts(design, runtime, policy, requiredRelations) {
+  const fields=Object.keys(policy?.relations||{});
+  const deltas=Object.fromEntries(fields.map(field=>[field,{design:design.relationships[field]??null,runtime:runtime.relationships[field]??null,delta:Number.isFinite(design.relationships[field])&&Number.isFinite(runtime.relationships[field])?runtime.relationships[field]-design.relationships[field]:null}]));
+  const evaluation=evaluateDesignConvergence(deltas,policy,requiredRelations);
+  return { comparison:'GEOMETRY_STYLE_RELATIONSHIPS_NOT_CONTENT_EQUALITY', policy_version:policy.schema_version, required_relations:[...requiredRelations], deltas, evaluation };
 }

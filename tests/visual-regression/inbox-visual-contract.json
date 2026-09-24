@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "mode": "PREVIEW_DIAGNOSTIC",
   "approved_visual_contract_activated": false,
   "comparator": {
@@ -33,22 +33,203 @@
       "sha256": "4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0",
       "classification": "OWNER_SUPPLIED_MODIFIED_PACKAGE"
     },
-    "srwf_host_companion_active": false
+    "srwf_host_companion_active": false,
+    "fixture": {
+      "path": "tests/visual-regression/fixtures/elementor-host-v1.json",
+      "sha256": "928253ec1f6b746027e0c4ba0845a7f7d3017fea7c418dafe1bb4856dd624d19",
+      "fixture_id": "gpp-srwf-inbox-forward-host-v1",
+      "classification": "REPOSITORY_VERSIONED_ELEMENTOR_HOST_FIXTURE",
+      "schema_version": "1.0.0",
+      "import_mode": "ELEMENTOR_EXPORT_RECONSTRUCTION"
+    }
   },
   "scenarios": [
-    { "id": "shortcode-desktop", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "design_authority_surface": "inbox-desktop", "design_authority_action": "default", "matrix": ["A","B","C","D","E","G","I","K","M"] },
-    { "id": "shortcode-mobile", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "design_authority_surface": "inbox-mobile", "design_authority_action": "default", "matrix": ["B","C","D","E","G","H","J","K","L","M"] },
-    { "id": "shortcode-search-result", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_result", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-result", "matrix": ["C","D","G"] },
-    { "id": "shortcode-search-empty", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "search_empty", "design_authority_surface": "inbox-desktop", "design_authority_action": "search-empty", "matrix": ["C","F","G"] },
-    { "id": "shortcode-pagination", "family": "INBOX_SHORTCODE", "viewport": { "width": 1440, "height": 1100 }, "action": "pagination", "design_authority_surface": "inbox-desktop", "design_authority_action": "pagination-next", "matrix": ["D","G","I"] },
-    { "id": "shortcode-focus", "family": "INBOX_SHORTCODE", "viewport": { "width": 414, "height": 1100 }, "action": "focus", "design_authority_surface": "inbox-mobile", "design_authority_action": "focus-search", "matrix": ["H","J","L"] }
+    {
+      "id": "shortcode-desktop",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "default",
+      "matrix": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "I",
+        "K",
+        "M"
+      ],
+      "design_relations": [
+        "first_card_width",
+        "two_card_horizontal_gap",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow"
+      ]
+    },
+    {
+      "id": "shortcode-mobile",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "default",
+      "matrix": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "H",
+        "K",
+        "L",
+        "M"
+      ],
+      "design_relations": [
+        "first_card_width",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow"
+      ]
+    },
+    {
+      "id": "shortcode-search-result",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "search_result",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "search-result",
+      "matrix": [
+        "C",
+        "D",
+        "G"
+      ],
+      "design_relations": [
+        "first_card_width",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow"
+      ]
+    },
+    {
+      "id": "shortcode-search-empty",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "search_empty",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "search-empty",
+      "matrix": [
+        "C",
+        "F",
+        "G"
+      ],
+      "design_relations": [
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px"
+      ]
+    },
+    {
+      "id": "shortcode-pagination",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "action": "pagination",
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "pagination-next",
+      "matrix": [
+        "D",
+        "G",
+        "I"
+      ],
+      "design_relations": [
+        "first_card_width",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow"
+      ]
+    },
+    {
+      "id": "shortcode-focus",
+      "family": "INBOX_SHORTCODE",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "action": "focus",
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "focus-search",
+      "matrix": [
+        "H",
+        "L"
+      ],
+      "design_relations": [
+        "first_card_width",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow"
+      ]
+    }
   ],
   "future_scenarios": {
-    "true_browser_zoom_200": { "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED", "note": "Must use genuine browser zoom; root-font scaling is not equivalent." },
-    "live_refresh": { "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE" },
-    "mixed_readiness": { "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE" },
-    "authentic_no_task": { "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE" },
-    "rtl": { "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE" }
+    "true_browser_zoom_200": {
+      "status": "ARCHITECTURE_SUPPORTED_NOT_EXECUTED",
+      "note": "Must use genuine browser zoom; root-font scaling is not equivalent.",
+      "matrix": "J"
+    },
+    "live_refresh": {
+      "status": "MEASURED_BY_WU21_FUNCTIONAL_SUITE"
+    },
+    "mixed_readiness": {
+      "status": "MEASURED_BY_WU17_FUNCTIONAL_SUITE"
+    },
+    "authentic_no_task": {
+      "status": "CAPTURE_ADAPTER_PENDING_HOST_FIXTURE"
+    },
+    "rtl": {
+      "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE"
+    }
   },
   "non_comparable_current_product_surfaces": {
     "authentic_block": {
@@ -56,6 +237,48 @@
       "reason": "Exact current production Block route renders native Gravity Flow + GPP Card Mode/styles but does not emit the GPP composed surface heading/helper/wrapper required by this heading-to-pagination visual contract.",
       "evidence_owner": "WU06_P06",
       "product_repair_in_this_pr": false
+    }
+  },
+  "design_comparison_policy": {
+    "schema_version": "1.0.0",
+    "relations": {
+      "first_card_width": {
+        "kind": "numeric_delta",
+        "tolerance": 2
+      },
+      "two_card_horizontal_gap": {
+        "kind": "numeric_delta",
+        "tolerance": 2
+      },
+      "last_card_to_pager_gap": {
+        "kind": "numeric_delta",
+        "tolerance": 8
+      },
+      "cards_per_visual_row": {
+        "kind": "discrete_exact"
+      },
+      "horizontal_overflow": {
+        "kind": "numeric_delta",
+        "tolerance": 1
+      },
+      "title_font_size_px": {
+        "kind": "numeric_delta",
+        "tolerance": 0.5
+      },
+      "title_line_height_px": {
+        "kind": "numeric_delta",
+        "tolerance": 0.5
+      },
+      "first_card_border_radius_px": {
+        "kind": "numeric_delta",
+        "tolerance": 0.5
+      },
+      "first_card_padding": {
+        "kind": "discrete_exact"
+      },
+      "first_card_box_shadow": {
+        "kind": "discrete_exact"
+      }
     }
   }
 }

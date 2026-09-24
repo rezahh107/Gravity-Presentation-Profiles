@@ -10,6 +10,7 @@ const covered = file => patterns.some(pattern => matches(file, pattern));
 for (const file of [
   'tests/visual-regression/inbox-visual-diagnostics.mjs',
   'tests/visual-regression/inbox-visual-contract.json',
+  'tests/visual-regression/fixtures/elementor-host-v1.json',
   'tests/visual-regression/references/manifest.json',
   'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html',
   'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html',

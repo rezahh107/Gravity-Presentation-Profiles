@@ -7,6 +7,8 @@ import { applyScenarioAction } from './scenario-state.mjs';
 import { assertDesignMapping, compareDesignFacts, designFacts, prepareDesignAuthority } from './design-authority-runtime.mjs';
 import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
 import { selectComparisonReference } from './reference-selection.mjs';
+import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
+import { projectScenarioStatus } from './design-convergence-policy.mjs';
 
 const repo = process.env.GITHUB_WORKSPACE || process.cwd();
 const out = path.join(process.env.WU21_ARTIFACT_DIR || '/tmp/wu21-artifacts', 'visual-regression-diagnostics');
@@ -60,11 +62,11 @@ async function waitReady(page) {
 }
 
 export async function diagnostics(page) {
-  return page.evaluate((map) => {
+  const result = await page.evaluate((map) => {
     const visible = el => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
     const details = el => {
       if (!el) return null; const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
-      return { x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,display:s.display,overflow:s.overflow,direction:s.direction,gap:s.gap,padding:s.padding };
+      return { x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,display:s.display,overflow:s.overflow,direction:s.direction,gap:s.gap,padding:s.padding,fontSize:s.fontSize,lineHeight:s.lineHeight,borderRadius:s.borderRadius,boxShadow:s.boxShadow };
     };
     const anchors = { document: details(document.documentElement) };
     for (const [name, selector] of Object.entries(map)) anchors[name] = details(document.querySelector(selector));
@@ -81,7 +83,7 @@ export async function diagnostics(page) {
       title_to_search_gap: anchors.title && anchors.searchHeader ? anchors.searchHeader.y-anchors.title.bottom : null,
       search_to_grid_gap: anchors.searchHeader && anchors.gridRoot ? anchors.gridRoot.y-anchors.searchHeader.bottom : null,
       first_card_width: first?.width ?? null,
-      two_card_horizontal_gap: first && second && Math.abs(first.top-second.top)<3 ? Math.abs(second.left-first.right) : null,
+      two_card_horizontal_gap: null,
       last_card_to_pager_gap: last && pager ? pager.top-last.bottom : null,
       visual_card_flow_height: visualHeight,
       native_grid_body_height: nativeHeight,
@@ -91,6 +93,13 @@ export async function diagnostics(page) {
       mobile_pager_overlap: Boolean(last && pager && pager.top < last.bottom),
     }};
   }, selectors);
+  result.relationships.two_card_horizontal_gap = physicalHorizontalGap(result.anchors.firstCard, result.anchors.secondCard);
+  result.relationships.title_font_size_px = cssPixelNumber(result.anchors.title?.fontSize);
+  result.relationships.title_line_height_px = cssPixelNumber(result.anchors.title?.lineHeight);
+  result.relationships.first_card_border_radius_px = cssPixelNumber(result.anchors.firstCard?.borderRadius);
+  result.relationships.first_card_padding = result.anchors.firstCard?.padding ?? null;
+  result.relationships.first_card_box_shadow = result.anchors.firstCard?.boxShadow ?? null;
+  return result;
 }
 
 export async function styles(page) {
@@ -139,25 +148,32 @@ try {
       await runStage('reference_capture',async()=>{if(referenceSelection.path){const source=path.join(repo,referenceSelection.path);if(!fs.existsSync(source))throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: configured reference missing: ${referenceSelection.path}`);fs.copyFileSync(source,reference);}else{await runtimeSurface.screenshot({path:reference,animations:'disabled'});await page.waitForTimeout(100);}});
       await runStage('actual_capture',()=>runtimeSurface.screenshot({path:actual,animations:'disabled'}));
       const geometry=await runStage('geometry_capture',()=>diagnostics(page));
-      const designDelta=await runStage('design_convergence_compare',async()=>compareDesignFacts(designGeometry,geometry));
+      const designDelta=await runStage('design_convergence_compare',async()=>compareDesignFacts(designGeometry,geometry,contract.design_comparison_policy,scenario.design_relations));
       const computed=await runStage('computed_styles_capture',()=>styles(page));
       const summary=await runStage('dom_summary_capture',()=>dom(page));
       const metrics=await runStage('png_compare',()=>comparePng(reference,actual,path.join(dir,'diff.png'),contract.comparator));
       await runStage('diagnostic_write',async()=>{writeJson(path.join(dir,'metrics.json'),{...metrics,reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,cross_commit_baseline:'NOT_ACTIVATED',design_authority_pixel_comparison:'NOT_PERFORMED_UNLIKE_DOM_AND_CONTENT'});writeJson(path.join(dir,'scenario-state.json'),scenarioState);writeJson(path.join(dir,'design-authority-state.json'),designState);writeJson(path.join(dir,'design-geometry.json'),designGeometry);writeJson(path.join(dir,'design-vs-runtime.json'),designDelta);writeJson(path.join(dir,'host-integration.json'),hostIntegration);writeJson(path.join(dir,'geometry.json'),geometry);writeJson(path.join(dir,'computed-styles.json'),computed);writeJson(path.join(dir,'dom-summary.json'),summary);writeJson(path.join(dir,'environment.json'),{repository_sha:repositorySha,base_reference_identity:referenceSelection.identity,capture_scope:contract.capture.scope,capture_selector:contract.capture.selector,design_authority:{classification:'OWNER_APPROVED_DESIGN_AUTHORITY',approval_status:'OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN',surface:scenario.design_authority_surface,action:scenario.design_authority_action,sha256:'666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81'},integrated_visual_host:integratedHost,workflow_run_id:process.env.GITHUB_RUN_ID||null,wordpress_version:hostIdentity.wordpress,php_version:hostIdentity.php,gravity_forms:{version:hostIdentity.gravity_forms,package_sha256:process.env.WU21_GF_SHA256||null},gravity_flow:{version:hostIdentity.gravity_flow,package_sha256:process.env.WU21_FLOW_SHA256||null},database_version:hostIdentity.database,theme:hostIdentity.theme,playwright_version:'1.55.0',chromium_version:browser.version(),viewport:scenario.viewport,device_scale_factor:1,capture_scenario:scenario.id,comparator:{name:'pixelmatch',...contract.comparator}});});
-      const status=metrics.comparator_result==='PASS'?'PASS':contract.mode==='APPROVED_VISUAL_CONTRACT'?'VISUAL_CONTRACT_FAIL':'VISUAL_REGRESSION_WARNING';
-      results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,reference_identity:referenceSelection.identity,design_authority_surface:scenario.design_authority_surface,design_authority_action:scenario.design_authority_action,design_authority_comparison:'EXECUTED_GEOMETRY_STYLE_RELATIONSHIPS',host_integration:'PASS',capture_stability:metrics.comparator_result,screenshot_diff_ratio:metrics.differing_pixel_ratio,scenario_state:scenarioState,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
+      const status=await runStage('status_projection',async()=>projectScenarioStatus({captureStability:metrics.comparator_result,designComparison:designDelta.evaluation,mode:contract.mode}));
+      results.push({id:scenario.id,family:scenario.family,status,matrix:scenario.matrix,reference_identity:referenceSelection.identity,design_authority_surface:scenario.design_authority_surface,design_authority_action:scenario.design_authority_action,design_authority_comparison:'EXECUTED_GEOMETRY_STYLE_RELATIONSHIPS',design_comparison_policy_version:designDelta.policy_version,design_comparison_status:designDelta.evaluation.status,design_warning_count:designDelta.evaluation.warning_count,design_relation_results:designDelta.evaluation.relations,host_integration:'PASS',capture_stability:metrics.comparator_result,screenshot_diff_ratio:metrics.differing_pixel_ratio,scenario_state:scenarioState,summary:{card_count:summary.visible_card_count,cards_per_visual_row:geometry.relationships.cards_per_visual_row,first_card_width:geometry.relationships.first_card_width,pagination_y:geometry.anchors.pagination?.y??null,last_card_to_pager_gap:geometry.relationships.last_card_to_pager_gap,visual_card_flow_height:geometry.relationships.visual_card_flow_height,native_grid_body_height:geometry.relationships.native_grid_body_height,visual_vs_native_height_delta:geometry.relationships.visual_vs_native_height_delta,horizontal_overflow:geometry.relationships.horizontal_overflow,mobile_pager_overlap:geometry.relationships.mobile_pager_overlap,semantic_anchor_counts:{surface:summary.surface_count,grid:summary.grid_count,search:summary.search_input_count,pager:summary.pager_count,manual_refresh:summary.manual_refresh_count}},geometry,dom:summary});
       writeJson(path.join(dir,'capture-state.json'),{scenario:scenario.id,active_stage:'complete',status:'PASS',history});
     } catch(error) {
       const failure={status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',scenario:scenario.id,failed_stage:activeStage,error:{name:error?.name||'Error',message:String(error?.message||error),stack:String(error?.stack||error)},completed_scenarios:results.map(result=>result.id),artifact_directory:dir};
       writeJson(path.join(dir,'infrastructure-failure.json'),failure);
-      writeJson(path.join(out,'manifest.json'),{mode:contract.mode,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',repository_sha:repositorySha,baseline_identity:'NO_CROSS_COMMIT_RUNTIME_BASELINE_ADMITTED',scenarios:[...results.map(({geometry,dom,...result})=>result),{id:scenario.id,family:scenario.family,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',failed_stage:activeStage}],warning_count:results.filter(result=>result.status!=='PASS').length,failure_count:0,infrastructure_failure_count:1,first_meaningful_divergence:null,evidence_ceiling:'Partial diagnostic evidence; capture pipeline did not complete.',infrastructure_failure:failure});
+      writeJson(path.join(out,'manifest.json'),{mode:contract.mode,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',repository_sha:repositorySha,baseline_identity:'NO_CROSS_COMMIT_RUNTIME_BASELINE_ADMITTED',scenarios:[...results.map(({geometry,dom,...result})=>result),{id:scenario.id,family:scenario.family,status:'VISUAL_TEST_INFRASTRUCTURE_FAILURE',failed_stage:activeStage}],warning_count:results.filter(result=>result.status==='VISUAL_REGRESSION_WARNING').length,failure_count:results.filter(result=>result.status==='VISUAL_CONTRACT_FAIL').length,infrastructure_failure_count:1,first_meaningful_divergence:null,evidence_ceiling:'Partial diagnostic evidence; capture pipeline did not complete.',infrastructure_failure:failure});
       console.error(`INBOX_VISUAL_DIAGNOSTIC_INFRASTRUCTURE_FAILURE=${JSON.stringify(failure)}`);
       throw error;
     } finally { if(page)await page.close().catch(()=>{}); }
   }
 } finally { await browser.close(); }
 const largest=results.reduce((a,b)=>a.screenshot_diff_ratio>b.screenshot_diff_ratio?a:b,results[0]);
-const manifest={mode:contract.mode,status:results.some(r=>r.status!=='PASS')?'VISUAL_REGRESSION_WARNING':'PASS',repository_sha:repositorySha,baseline_identity:'NO_CROSS_COMMIT_RUNTIME_BASELINE_ADMITTED',scenarios:results.map(({geometry,dom,...r})=>r),warning_count:results.filter(r=>r.status!=='PASS').length,failure_count:0,infrastructure_failure_count:0,largest_visual_delta:largest?{scenario:largest.id,ratio:largest.screenshot_diff_ratio}:null,largest_geometry_delta:null,first_meaningful_divergence:null,first_divergence_note:'Available when a reviewed per-scenario runtime baseline is configured; never inferred by comparing unlike viewports.',evidence_ceiling:'Deterministic WU21 runtime observation; not production equivalence or Owner visual approval.'};
+const designWarnings=results.flatMap(result=>Object.entries(result.design_relation_results||{}).filter(([,evidence])=>evidence.classification==='WARNING').map(([relation,evidence])=>({scenario:result.id,relation,...evidence})));
+const numericDesignWarnings=designWarnings.filter(item=>Number.isFinite(item.delta)).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+const largestGeometry=numericDesignWarnings[0]||null;
+const firstDesignWarning=designWarnings[0]||null;
+const warningCount=results.filter(result=>result.status==='VISUAL_REGRESSION_WARNING').length;
+const failureCount=results.filter(result=>result.status==='VISUAL_CONTRACT_FAIL').length;
+const manifestStatus=failureCount?'VISUAL_CONTRACT_FAIL':warningCount?'VISUAL_REGRESSION_WARNING':'PASS';
+const manifest={mode:contract.mode,status:manifestStatus,repository_sha:repositorySha,baseline_identity:'NO_CROSS_COMMIT_RUNTIME_BASELINE_ADMITTED',scenarios:results.map(({geometry,dom,...r})=>r),warning_count:warningCount,design_relation_warning_count:designWarnings.length,failure_count:failureCount,infrastructure_failure_count:0,largest_visual_delta:largest?{scenario:largest.id,ratio:largest.screenshot_diff_ratio}:null,largest_geometry_delta:largestGeometry?{scenario:largestGeometry.scenario,relation:largestGeometry.relation,design:largestGeometry.design,runtime:largestGeometry.runtime,delta:largestGeometry.delta,tolerance:largestGeometry.tolerance}:null,first_meaningful_divergence:firstDesignWarning?{scenario:firstDesignWarning.scenario,relation:firstDesignWarning.relation,design:firstDesignWarning.design,runtime:firstDesignWarning.runtime,delta:firstDesignWarning.delta,tolerance:firstDesignWarning.tolerance,classification:firstDesignWarning.classification}:null,first_divergence_note:firstDesignWarning?'First relation-level divergence outside the versioned design-comparison policy.':'No required relation exceeded the versioned design-comparison policy.',evidence_ceiling:'Deterministic WU21 runtime observation; not production equivalence or Owner visual approval.'};
 writeJson(path.join(out,'manifest.json'),manifest);
 console.log(`INBOX_VISUAL_DIAGNOSTIC_STATUS=${manifest.status}`);
 if (contract.mode==='APPROVED_VISUAL_CONTRACT' && results.some(r=>r.status==='VISUAL_CONTRACT_FAIL')) process.exitCode=1;

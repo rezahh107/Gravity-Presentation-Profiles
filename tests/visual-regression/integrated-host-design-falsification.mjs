@@ -11,6 +11,8 @@ assert.throws(()=>assertDesignMapping({...contract.scenarios[0],design_authority
 const hostContract=contract.host_runtime;
 const authenticHost={
   classification:'INTEGRATED_SRWF_VISUAL_HOST',
+  composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',
+  host_fixture:{...hostContract.fixture,expected_sha256:hostContract.fixture.sha256,actual_sha256:hostContract.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:101,frontend_block:102}},
   page_template:hostContract.page_template,
   elementor_recognized:true,
   srwf_host_companion_active:false,
@@ -27,7 +29,13 @@ const wrongTemplate=structuredClone(authenticHost);wrongTemplate.page_template='
 assert.throws(()=>assertIntegratedHostIdentity(wrongTemplate,hostContract),/page template/);
 const companion=structuredClone(authenticHost);companion.srwf_host_companion_active=true;
 assert.throws(()=>assertIntegratedHostIdentity(companion,hostContract),/SRWF-Host-Companion/);
-const delta=compareDesignFacts({relationships:{first_card_width:400,cards_per_visual_row:2,horizontal_overflow:0}},{relationships:{first_card_width:360,cards_per_visual_row:2,horizontal_overflow:8}});
+const delta=compareDesignFacts(
+  {relationships:{first_card_width:400,cards_per_visual_row:2,horizontal_overflow:0}},
+  {relationships:{first_card_width:360,cards_per_visual_row:2,horizontal_overflow:8}},
+  contract.design_comparison_policy,
+  ['first_card_width','cards_per_visual_row','horizontal_overflow'],
+);
 assert.equal(delta.deltas.first_card_width.delta,-40);
 assert.equal(delta.deltas.horizontal_overflow.delta,8);
+assert.equal(delta.evaluation.status,'WARNING');
 console.log('INTEGRATED_HOST_DESIGN_FALSIFICATION_PASS mapping_fail_closed=true swapped_surfaces_rejected=true geometry_mutation_detected=true host_identity_mismatch_rejected=true');
