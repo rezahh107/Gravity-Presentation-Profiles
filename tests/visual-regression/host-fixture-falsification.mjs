@@ -24,7 +24,7 @@ const packages={
  elementor:{version:h.elementor.version,expected_package_sha256:h.elementor.sha256,actual_package_sha256:h.elementor.sha256},
  elementor_pro:{version:h.elementor_pro.version,classification:h.elementor_pro.classification,expected_package_sha256:h.elementor_pro.sha256,actual_package_sha256:h.elementor_pro.sha256},
 };
-const synthetic={classification:'INTEGRATED_SRWF_VISUAL_HOST',page_template:h.page_template,elementor_recognized:true,srwf_host_companion_active:false,...packages};
+const synthetic={classification:'INTEGRATED_SRWF_VISUAL_HOST',page_template:h.page_template,elementor_recognized:true,srwf_host_companion_active:false,srwf_host_companion_registered:false,...packages};
 assert.throws(()=>assertIntegratedHostIdentity(synthetic,h),/bypassed the versioned Elementor fixture authority|fixture identity is unavailable/);
 const admitted={...synthetic,composition_authority:'VERSIONED_ELEMENTOR_HOST_FIXTURE',host_fixture:{...h.fixture,expected_sha256:h.fixture.sha256,actual_sha256:h.fixture.sha256,elementor_export_type:'page',elementor_document_type:'wp-page',page_bindings:{frontend_shortcode:1,frontend_block:2}}};
 assert.doesNotThrow(()=>assertIntegratedHostIdentity(admitted,h));
@@ -32,4 +32,6 @@ const wrongFixtureHash={...admitted,host_fixture:{...admitted.host_fixture,actua
 assert.throws(()=>assertIntegratedHostIdentity(wrongFixtureHash,h),/fixture SHA-256 mismatch/);
 const companion={...admitted,srwf_host_companion_active:true};
 assert.throws(()=>assertIntegratedHostIdentity(companion,h),/SRWF-Host-Companion/);
-console.log('HOST_FIXTURE_FALSIFICATION_PASS synthetic_bypass_rejected=true admitted_fixture=true fixture_hash_mismatch_rejected=true companion_rejected=true');
+const registeredCompanion={...admitted,srwf_host_companion_registered:true};
+assert.throws(()=>assertIntegratedHostIdentity(registeredCompanion,h),/SRWF-Host-Companion/);
+console.log('HOST_FIXTURE_FALSIFICATION_PASS synthetic_bypass_rejected=true admitted_fixture=true fixture_hash_mismatch_rejected=true companion_active_rejected=true companion_registered_rejected=true');

@@ -25,8 +25,9 @@ $fail = static function ( $message ) {
 if ( 'hello-elementor' !== get_option( 'stylesheet' ) || ! is_plugin_active( 'elementor/elementor.php' ) || ! is_plugin_active( 'elementor-pro/elementor-pro.php' ) ) {
 	$fail( 'pinned Hello Elementor + Elementor + Elementor Pro host is not active.' );
 }
-if ( is_plugin_active( 'srwf-host-companion/srwf-host-companion.php' ) ) {
-	$fail( 'SRWF-Host-Companion must remain retired in the forward visual runtime.' );
+$companion_file = WP_PLUGIN_DIR . '/srwf-host-companion/srwf-host-companion.php';
+if ( is_plugin_active( 'srwf-host-companion/srwf-host-companion.php' ) || is_file( $companion_file ) ) {
+	$fail( 'SRWF-Host-Companion must remain retired and unregistered in the forward visual runtime.' );
 }
 if ( count( $page_ids ) !== 2 ) {
 	$fail( 'Inbox host pages are unavailable.' );
@@ -149,6 +150,7 @@ $identity      = array(
 	'elementor_recognized'       => true,
 	'page_ids'                   => $page_ids,
 	'srwf_host_companion_active' => false,
+	'srwf_host_companion_registered' => false,
 	'persian_gravity'            => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),
 	'vazir_vazirmatn'            => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),
 	'gtb'                        => array( 'status' => 'NOT_ADMITTED_FOR_THIS_WU21_INBOX_FIXTURE' ),

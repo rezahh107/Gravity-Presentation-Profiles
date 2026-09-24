@@ -41,7 +41,8 @@
       "sha256": "4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0",
       "classification": "OWNER_SUPPLIED_MODIFIED_PACKAGE"
     },
-    "srwf_host_companion_active": false
+    "srwf_host_companion_active": false,
+    "srwf_host_companion_registered": false
   },
   "design_comparison_policy": {
     "schema_version": "1.0.0",

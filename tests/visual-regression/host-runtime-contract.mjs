@@ -5,7 +5,7 @@ export function assertIntegratedHostIdentity(host, contract) {
   if (host.composition_authority !== 'VERSIONED_ELEMENTOR_HOST_FIXTURE') fail('integrated host bypassed the versioned Elementor fixture authority.');
   if (host.page_template !== contract.page_template) fail('Elementor page template identity mismatch.');
   if (host.elementor_recognized !== true) fail('Elementor did not recognize the reconstructed host page.');
-  if (host.srwf_host_companion_active !== contract.srwf_host_companion_active) fail('SRWF-Host-Companion identity mismatch.');
+  if (host.srwf_host_companion_active !== contract.srwf_host_companion_active || host.srwf_host_companion_registered !== contract.srwf_host_companion_registered) fail('SRWF-Host-Companion active/registered identity mismatch.');
 
   const fixture = host.host_fixture;
   const expectedFixture = contract.fixture;

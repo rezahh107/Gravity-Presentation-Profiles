@@ -16,6 +16,7 @@ const authenticHost={
   page_template:hostContract.page_template,
   elementor_recognized:true,
   srwf_host_companion_active:false,
+  srwf_host_companion_registered:false,
   hello_elementor:{version:hostContract.hello_elementor.version,commit:hostContract.hello_elementor.commit,expected_package_sha256:hostContract.hello_elementor.sha256,actual_package_sha256:hostContract.hello_elementor.sha256},
   elementor:{version:hostContract.elementor.version,expected_package_sha256:hostContract.elementor.sha256,actual_package_sha256:hostContract.elementor.sha256},
   elementor_pro:{version:hostContract.elementor_pro.version,classification:hostContract.elementor_pro.classification,expected_package_sha256:hostContract.elementor_pro.sha256,actual_package_sha256:hostContract.elementor_pro.sha256},
@@ -29,6 +30,8 @@ const wrongTemplate=structuredClone(authenticHost);wrongTemplate.page_template='
 assert.throws(()=>assertIntegratedHostIdentity(wrongTemplate,hostContract),/page template/);
 const companion=structuredClone(authenticHost);companion.srwf_host_companion_active=true;
 assert.throws(()=>assertIntegratedHostIdentity(companion,hostContract),/SRWF-Host-Companion/);
+const registeredCompanion=structuredClone(authenticHost);registeredCompanion.srwf_host_companion_registered=true;
+assert.throws(()=>assertIntegratedHostIdentity(registeredCompanion,hostContract),/SRWF-Host-Companion/);
 const delta=compareDesignFacts(
   {relationships:{first_card_width:400,cards_per_visual_row:2,horizontal_overflow:0}},
   {relationships:{first_card_width:360,cards_per_visual_row:2,horizontal_overflow:8}},
