@@ -6,10 +6,11 @@ gpp_reject_google_drive_ci_package_sources() {
   local matches
   matches="$(
     grep -RInE \
-      --exclude='validate-ci-package-sources.sh' \
       --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.php' --include='*.mjs' --include='*.js' \
       'drive\.usercontent\.google\.com|drive\.google\.com|10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q|1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf' \
-      "$root/.github/workflows" "$root/scripts" 2>/dev/null || true
+      "$root/.github/workflows" "$root/scripts" 2>/dev/null \
+      | grep -vF "$root/scripts/validate-ci-package-sources.sh:" \
+      || true
   )"
   if [[ -n "$matches" ]]; then
     echo "Google Drive package acquisition remains in CI/runtime-owned sources:" >&2
