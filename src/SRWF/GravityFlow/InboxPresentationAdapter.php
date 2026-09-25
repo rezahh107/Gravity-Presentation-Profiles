@@ -21,6 +21,7 @@ final class InboxPresentationAdapter {
     const STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox';
     const NATIVE_STYLE_HANDLE = 'gpp-srwf-gravity-flow-inbox-native';
     const NATIVE_BLOCK = 'gravityflow/inbox';
+    const CARD_MODE_ROW_BUFFER = 80;
 
     private static $model_loaded = false;
     private static $model = null;
@@ -39,6 +40,11 @@ final class InboxPresentationAdapter {
         add_filter( 'gravityflow_inbox_field_value', array( __CLASS__, 'filterValue' ), 100, 4 );
         add_filter( 'gravityflow_shortcode_inbox', array( __CLASS__, 'filterShortcodeInbox' ), 20, 3 );
         add_filter( 'render_block', array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
+
+        // Gravity Flow 3.1.0 builds native Inbox grid_options on this shared
+        // config seam at priority 10. Adjust only already-admitted native Inbox
+        // grids after the host has built them and before AG Grid construction.
+        add_filter( 'gravityflow_js_config_shared', array( __CLASS__, 'filterSharedJsConfig' ), 99, 1 );
 
         // Styles must enter the normal WordPress head lifecycle so the admitted
         // PR66 host-width cascade remains deterministic. Reachability is resolved
@@ -101,6 +107,47 @@ final class InboxPresentationAdapter {
         }
 
         return self::renderCard( $model, $entry );
+    }
+
+    /**
+     * Keep native AG Grid materialization aligned with the admitted intrinsic
+     * Card Mode flow without taking ownership of grid state or lifecycle.
+     */
+    public static function filterSharedJsConfig( $config ) {
+        if ( ! is_array( $config ) || ! self::currentRequestReachesInbox() || null === self::model() ) {
+            return $config;
+        }
+        if ( empty( $config['grids'] ) || ! is_array( $config['grids'] ) ) {
+            return $config;
+        }
+
+        foreach ( $config['grids'] as $grid_id => $grid_config ) {
+            if ( ! self::isNativeInboxGridConfig( $grid_config ) ) {
+                continue;
+            }
+            $config['grids'][ $grid_id ]['grid_options']['rowBuffer'] = self::CARD_MODE_ROW_BUFFER;
+        }
+
+        return $config;
+    }
+
+    private static function isNativeInboxGridConfig( $grid_config ) {
+        if ( ! is_array( $grid_config ) || ! isset( $grid_config['grid_options'] ) || ! is_array( $grid_config['grid_options'] ) ) {
+            return false;
+        }
+
+        $options = $grid_config['grid_options'];
+        foreach ( array( 'columnDefs', 'rowData', 'pagination', 'paginationPageSize', 'searchArgs' ) as $required_key ) {
+            if ( ! array_key_exists( $required_key, $options ) ) {
+                return false;
+            }
+        }
+
+        return is_array( $options['columnDefs'] )
+            && is_array( $options['rowData'] )
+            && true === $options['pagination']
+            && is_int( $options['paginationPageSize'] )
+            && is_array( $options['searchArgs'] );
     }
 
     /**
@@ -497,7 +544,6 @@ final class InboxPresentationAdapter {
         $created = self::slotValue( $model, $entry, 'entry.created_at' );
         $school = self::slotPresentation( $model, $entry, 'school.name' );
         $due = self::slotValue( $model, $entry, 'workflow.due_at' );
-
         $name_display = self::presentText( $name );
         $national_display = null === $national_id['display_text'] ? null : PersianDateFormatter::persianDigits( $national_id['display_text'] );
         $created_display = null === $created ? null : PersianDateFormatter::formatDateTime( $created );
