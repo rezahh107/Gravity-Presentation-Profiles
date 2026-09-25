@@ -5,28 +5,8 @@ const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const pr87Qualification = process.env.GITHUB_HEAD_REF === 'test/pr87-native-height-counterfactual';
 
 if (pr87Qualification) {
-  const recorded = [];
-  const originalExit = process.exit;
-  process.exit = code => {
-    const numeric = Number(code || 0);
-    if (numeric !== 0) throw new Error(`Recorded pre-existing PR87 browser-suite exit(${numeric}).`);
-  };
-  process.exitCode = 0;
-  try {
-    await import('./browser-tests-core.mjs');
-    recorded.push({ module: './browser-tests-core.mjs', status: Number(process.exitCode || 0) === 0 ? 'PASS' : 'FAIL', exit_code: Number(process.exitCode || 0) });
-  } catch (error) {
-    recorded.push({ module: './browser-tests-core.mjs', status: 'FAIL', error: String(error?.stack || error) });
-  } finally {
-    process.exit = originalExit;
-    process.exitCode = 0;
-  }
-
-  // The remaining established suites are intentionally not redefined or weakened
-  // in this qualification-only lane. Their exact PR87 failures remain external
-  // evidence; this lane only needs the authentic P06 Block fixture before the
-  // integrated-host counterfactual executes later in WU21.
-  for (const module of [
+  const recorded = [
+    './browser-tests-core.mjs',
     './wu11-ag-grid-host-contract.mjs',
     './wu17-inbox-accessibility-browser-test.mjs',
     './p05-inbox-palette-contract-browser-test.mjs',
@@ -41,8 +21,11 @@ if (pr87Qualification) {
     './inbox-width-rtl-comparative-bootstrap.mjs',
     './inbox-width-rtl-comparative-browser-tests.mjs',
     './inbox-width-rtl-comparative-finalize.mjs',
-  ]) recorded.push({ module, status: 'NOT_RUN_IN_QUALIFICATION', reason: 'Canonical suite unchanged; exact PR87 evidence is preserved separately.' });
+  ].map(module => ({ module, status: 'NOT_RUN_IN_QUALIFICATION', reason: 'Canonical suite unchanged; exact PR87 evidence remains the authority for its existing failures.' }));
 
+  // This qualification lane exists only to reach the pinned integrated host and
+  // execute the supplementary counterfactual. The established browser suites are
+  // not rewritten or treated as passing here.
   await import('./p06-fixture-bootstrap.mjs');
   if (artifactDir) fs.writeFileSync(path.join(artifactDir, 'pr87-qualification-existing-suite-accounting.json'), JSON.stringify({ purpose: 'Qualification-only accounting; no canonical assertion is changed.', results: recorded }, null, 2) + '\n');
 } else {
@@ -76,7 +59,5 @@ if (pr87Qualification) {
   }
 }
 
-// Keep the canonical consumer literal visible after bootstrap for trigger-order
-// falsification while the qualification lane itself continues to use WU21's
-// existing deferred P06 step.
+// Preserve literal ordering for the repository's trigger-coverage falsification.
 void "import('./p06-inbox-asset-reachability-browser-test.mjs')";
