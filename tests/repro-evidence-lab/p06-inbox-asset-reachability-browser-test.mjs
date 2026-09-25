@@ -151,6 +151,8 @@ try {
   await waitForNativeInbox(page);
   results.positive_controls.frontend_block = await inboxAssetState(page);
   assertStylesPresent(results.positive_controls.frontend_block, 'authentic frontend block Inbox');
+  assert.equal(results.positive_controls.frontend_block.gpp_surface_count, 1, 'Authentic frontend block Inbox lost the admitted current-post GPP surface composition.');
+  assert.equal(results.positive_controls.frontend_block.native_wrapper_count, 1, 'Authentic frontend block composition must retain exactly one native Gravity Flow Inbox wrapper.');
   assert.ok(results.positive_controls.frontend_block.card_count > 0, 'Authentic frontend block Inbox lost Card Mode content.');
 
   await page.goto(p06.unrelated_page.url, { waitUntil: 'networkidle' });
