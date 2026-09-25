@@ -232,9 +232,10 @@ try {
       assertGeometry(await measure(page,`${prefix}/search-cleared`),20,columns);
       await applyScenarioAction(page,'search_empty',selectors); await settle(page,0);
       const empty=await measure(page,`${prefix}/empty`);
-      assert.equal(empty.card_count,0); assert.equal(empty.grid_count,1); assert.equal(empty.replacement_grid_count,0); assert.equal(empty.pager_count,1); assert.equal(empty.empty_visible,true);
+      assert.equal(empty.card_count,0); assert.equal(empty.row_count,0); assert.equal(empty.grid_count,1); assert.equal(empty.replacement_grid_count,0); assert.equal(empty.pager_count,1);
+      assert.equal(empty.empty_visible,false,`${prefix}: AG Grid 25.2.0 keeps the no-row-data overlay hidden for quick-filtered zero rows.`);
       assert.equal(empty.horizontal_overflow,0); assert.equal(empty.document_horizontal_overflow,0);
-      assert.equal(empty.chain['ag-center-cols-clipper'].minHeight,'500px','Native empty-state minimum must resume.');
+      assert.ok(Math.abs(empty.body_container_delta)<1, `${prefix}: filtered empty grid body must follow its native container: ${empty.body_container_delta}`);
       await search.fill(''); await search.dispatchEvent('keyup'); await settle(page,20);
       assertGeometry(await measure(page,`${prefix}/empty-cleared`),20,columns);
 
