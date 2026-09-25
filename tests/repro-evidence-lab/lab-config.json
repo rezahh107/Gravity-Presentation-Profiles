@@ -33,19 +33,21 @@
   "plugins": {
     "gravity_forms": {
       "version": "3.1.1.1",
-      "drive_file_id": "10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q",
       "file_name": "gravityforms-3.1.1.1-owner-supplied-source-package.zip",
       "size_bytes": 5300290,
       "sha256": "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b",
-      "acquisition": "GOOGLE_DRIVE_PUBLIC_LINK_BY_FILE_ID"
+      "acquisition": "REPOSITORY_TRACKED_FIXTURE",
+      "manifest_path": "tests/fixtures/wu21-packages/manifest.json",
+      "manifest_id": "gravityforms"
     },
     "gravity_flow": {
       "version": "3.1.0",
-      "drive_file_id": "1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf",
       "file_name": "gravityflow-3.1.0-owner-supplied-source-package.zip",
       "size_bytes": 2603034,
       "sha256": "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404",
-      "acquisition": "GOOGLE_DRIVE_PUBLIC_LINK_BY_FILE_ID"
+      "acquisition": "REPOSITORY_TRACKED_FIXTURE",
+      "manifest_path": "tests/fixtures/wu21-packages/manifest.json",
+      "manifest_id": "gravityflow"
     }
   },
   "browser": {

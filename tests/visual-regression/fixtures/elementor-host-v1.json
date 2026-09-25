@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "fixture_id": "gpp-srwf-inbox-forward-host-v1",
+  "classification": "REPOSITORY_VERSIONED_ELEMENTOR_HOST_FIXTURE",
+  "elementor_export": {
+    "version": "0.4",
+    "title": "GPP SRWF Inbox Forward Host",
+    "type": "page",
+    "document_type": "wp-page",
+    "page_settings": {
+      "template": "elementor_header_footer",
+      "hide_title": "yes"
+    },
+    "content": [
+      {
+        "id": "7a4c91e2",
+        "elType": "container",
+        "settings": {
+          "content_width": "full"
+        },
+        "elements": [
+          {
+            "id": "5db3e8f1",
+            "elType": "widget",
+            "widgetType": "shortcode",
+            "settings": {
+              "shortcode": "{{GPP_INBOX_MOUNT_SHORTCODE}}"
+            },
+            "elements": []
+          }
+        ]
+      }
+    ]
+  },
+  "site_settings": {
+    "active_kit_page_settings": {}
+  },
+  "mount": {
+    "token": "{{GPP_INBOX_MOUNT_SHORTCODE}}",
+    "widget_type": "shortcode"
+  }
+}

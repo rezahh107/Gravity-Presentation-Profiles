@@ -88,15 +88,13 @@ jobs:
       - name: Run GPP core tests
         run: php tests/run.php
 
-      - name: Reject committed release archives
+      - name: Validate repository CI package sources
         shell: bash
-        run: |
-          set -euo pipefail
-          if git ls-files '*.zip' | grep -q .; then
-            echo "Committed ZIP archives are not allowed in the source repository." >&2
-            git ls-files '*.zip'
-            exit 1
-          fi
+        run: bash scripts/validate-ci-package-sources.sh .
+
+      - name: Reject non-fixture committed archives
+        shell: bash
+        run: bash scripts/validate-committed-archives.sh
 
   exact-head-guardrails:
     name: Exact-Head validation
@@ -179,15 +177,13 @@ jobs:
       - name: Run GPP core tests
         run: php tests/run.php
 
-      - name: Reject committed release archives
+      - name: Validate repository CI package sources
         shell: bash
-        run: |
-          set -euo pipefail
-          if git ls-files '*.zip' | grep -q .; then
-            echo "Committed ZIP archives are not allowed in the source repository." >&2
-            git ls-files '*.zip'
-            exit 1
-          fi
+        run: bash scripts/validate-ci-package-sources.sh .
+
+      - name: Reject non-fixture committed archives
+        shell: bash
+        run: bash scripts/validate-committed-archives.sh
 
   db-advisory-lock-contract:
     name: DB advisory lock (${{ matrix.database }})

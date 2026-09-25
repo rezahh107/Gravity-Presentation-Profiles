@@ -10,6 +10,8 @@ DB_PASS="${GPP_RELEASE_DB_PASS:-gpp-release-root}"
 DB_HOST="${GPP_RELEASE_DB_HOST:-127.0.0.1:3306}"
 BASE_URL="${GPP_RELEASE_BASE_URL-http://127.0.0.1:8090}"
 LAB_CONFIG="$ROOT/tests/repro-evidence-lab/lab-config.json"
+FIXTURE_ROOT="$ROOT/tests/fixtures/wu21-packages"
+PACKAGE_MANIFEST="$FIXTURE_ROOT/manifest.json"
 
 source "$ROOT/scripts/release/release-lib.sh"
 SMOKE_ENDPOINT="$(release_parse_smoke_endpoint "$BASE_URL")"
@@ -17,23 +19,30 @@ IFS=$'\t' read -r SERVER_HOST SERVER_PORT <<<"$SMOKE_ENDPOINT"
 
 [[ -f "$ZIP" ]] || { echo "Missing release ZIP: $ZIP" >&2; exit 1; }
 [[ -f "$LAB_CONFIG" ]] || { echo "Missing pinned runtime config: $LAB_CONFIG" >&2; exit 1; }
+[[ -f "$PACKAGE_MANIFEST" ]] || { echo "Missing repository package manifest: $PACKAGE_MANIFEST" >&2; exit 1; }
 
 json_value() {
     local expression="$1"
     php -r '$d=json_decode(file_get_contents($argv[1]),true); $v=$d; foreach(explode(".",$argv[2]) as $k){$v=$v[$k]??null;} if($v===null){exit(2);} echo is_scalar($v)?$v:json_encode($v);' "$LAB_CONFIG" "$expression"
 }
 
+manifest_value() {
+    local package_id="$1"
+    local key="$2"
+    php -r '$d=json_decode(file_get_contents($argv[1]),true); if(!is_array($d["packages"]??null)) exit(2); foreach($d["packages"] as $p){if(($p["id"]??null)===$argv[2]){$v=$p[$argv[3]]??null;if($v===null)exit(3);echo is_scalar($v)?$v:json_encode($v);exit(0);}}exit(4);' "$PACKAGE_MANIFEST" "$package_id" "$key"
+}
+
 WP_VERSION="$(json_value wordpress.version)"
 WPCLI_URL="$(json_value wp_cli.url)"
 WPCLI_SHA="$(json_value wp_cli.sha256)"
-GF_ID="$(json_value plugins.gravity_forms.drive_file_id)"
-GF_HASH="$(json_value plugins.gravity_forms.sha256)"
-GF_SIZE="$(json_value plugins.gravity_forms.size_bytes)"
-GF_VERSION="$(json_value plugins.gravity_forms.version)"
-FLOW_ID="$(json_value plugins.gravity_flow.drive_file_id)"
-FLOW_HASH="$(json_value plugins.gravity_flow.sha256)"
-FLOW_SIZE="$(json_value plugins.gravity_flow.size_bytes)"
-FLOW_VERSION="$(json_value plugins.gravity_flow.version)"
+GF_FILENAME="$(manifest_value gravityforms filename)"
+GF_HASH="$(manifest_value gravityforms sha256)"
+GF_SIZE="$(manifest_value gravityforms size_bytes)"
+GF_VERSION="$(manifest_value gravityforms version)"
+FLOW_FILENAME="$(manifest_value gravityflow filename)"
+FLOW_HASH="$(manifest_value gravityflow sha256)"
+FLOW_SIZE="$(manifest_value gravityflow size_bytes)"
+FLOW_VERSION="$(manifest_value gravityflow version)"
 
 WORK="$(mktemp -d)"
 SERVER_PID=""
@@ -46,8 +55,8 @@ cleanup() {
 }
 trap cleanup EXIT
 WPCLI="$WORK/wp-cli.phar"
-GF_ZIP="$WORK/gravityforms.zip"
-FLOW_ZIP="$WORK/gravityflow.zip"
+GF_ZIP="$WORK/$GF_FILENAME"
+FLOW_ZIP="$WORK/$FLOW_FILENAME"
 
 curl -L --fail --retry 3 -o "$WPCLI" "$WPCLI_URL"
 echo "$WPCLI_SHA  $WPCLI" | sha256sum -c -
@@ -57,8 +66,9 @@ php "$WPCLI" core download --path="$WP_PATH" --version="$WP_VERSION" --force
 php "$WPCLI" config create --path="$WP_PATH" --dbname="$DB_NAME" --dbuser="$DB_USER" --dbpass="$DB_PASS" --dbhost="$DB_HOST" --skip-check
 php "$WPCLI" core install --path="$WP_PATH" --url="$BASE_URL" --title='GPP Release ZIP Smoke' --admin_user=release_admin --admin_password='gpp-release-smoke-2026' --admin_email='release@example.invalid' --skip-email
 
-curl -L --fail --retry 4 -o "$GF_ZIP" "https://drive.usercontent.google.com/download?id=$GF_ID&export=download&confirm=t"
-curl -L --fail --retry 4 -o "$FLOW_ZIP" "https://drive.usercontent.google.com/download?id=$FLOW_ID&export=download&confirm=t"
+php "$ROOT/tests/repro-evidence-lab/verify-wu21-package-fixtures.php" "$FIXTURE_ROOT"
+cp "$FIXTURE_ROOT/$GF_FILENAME" "$GF_ZIP"
+cp "$FIXTURE_ROOT/$FLOW_FILENAME" "$FLOW_ZIP"
 [[ "$(stat -c '%s' "$GF_ZIP")" == "$GF_SIZE" ]]
 [[ "$(stat -c '%s' "$FLOW_ZIP")" == "$FLOW_SIZE" ]]
 echo "$GF_HASH  $GF_ZIP" | sha256sum -c -

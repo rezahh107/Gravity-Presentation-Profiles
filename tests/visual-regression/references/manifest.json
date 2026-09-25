@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "references": [
+    {
+      "id": "owner-combined-final-html",
+      "classification": "OWNER_APPROVED_DESIGN_AUTHORITY",
+      "surface": "gravity_flow.inbox",
+      "scenario": "inbox-design-convergence",
+      "source": "Google Drive title PersianGravity-Visual-Reference-Final.html; already materialized by WU21",
+      "source_sha256": "666704ac25b019ae59406974a223d10cace3f90e96f9d55312730ae93af09c81",
+      "repository_path": "tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html",
+      "comparison": "GEOMETRY_STYLE_CONVERGENCE_AUTHORITY_NOT_FULL_PAGE_PIXEL_CONTRACT",
+      "approval_status": "OWNER_APPROVED_DESIGN_NOT_RUNTIME_GOLDEN",
+      "inbox_surfaces": {
+        "A": "inbox-desktop",
+        "B": "inbox-mobile"
+      },
+      "excluded_surfaces": ["detail-desktop", "detail-mobile", "print-front", "print-back"]
+    },
+    {
+      "id": "owner-vnext-html",
+      "classification": "DESIGN_REFERENCE_ONLY",
+      "surface": "entry-detail-design-reference",
+      "scenario": "not-inbox-comparable",
+      "source": "Google Drive title PersianGravity-Visual-Reference-Final-vNext.html; already materialized by WU21",
+      "source_sha256": "1934967b81d82ee77c60ffd547dde6fa7c8a310dbde94556686bd3d515d62a69",
+      "repository_path": "tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html",
+      "comparison": "OUT_OF_INBOX_SCOPE",
+      "approval_status": "NOT_APPROVED_AS_RUNTIME_GOLDEN"
+    }
+  ],
+  "preview_runtime_baselines": [],
+  "owner_approved_goldens": []
+}

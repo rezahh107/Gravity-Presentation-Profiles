@@ -33,7 +33,13 @@ await import('./inbox-width-rtl-comparative-bootstrap.mjs');
 await import('./inbox-width-rtl-comparative-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-finalize.mjs');
 
+// Establish the one authoritative, idempotent P06 fixture before the first
+// late-runtime consumer. The later P06 qualification reuses this same state.
+await import('./p06-fixture-bootstrap.mjs');
+
 // P06 exercises deliberate lifecycle mutation for its inactive-profile negative
 // control. Keep it after the established browser regressions so the new
 // qualification cannot alter the state observed by pre-existing suites.
-await import('./p06-inbox-asset-reachability-browser-test.mjs');
+if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
+  await import('./p06-inbox-asset-reachability-browser-test.mjs');
+}

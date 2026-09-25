@@ -13,6 +13,46 @@ if ( ! $artifact_dir || ! is_array( $manifest ) || empty( $manifest['operator'][
     throw new RuntimeException( 'P06 runtime qualification requires the admitted WU21 fixtures.' );
 }
 
+/*
+ * This file is the single authoritative P06 fixture producer. Consumers may
+ * execute it as an ensure boundary; a valid existing fixture is reused rather
+ * than creating a second set of pages.
+ */
+$existing_fixture = get_option( 'gpp_p06_fixture_manifest' );
+if ( is_array( $existing_fixture ) && '1.1.0' === ( $existing_fixture['schema_version'] ?? null ) ) {
+    $required_pages = array( 'authentic_block_page', 'commented_shortcode_page', 'cdata_shortcode_page', 'lookalike_page', 'unrelated_page' );
+    $valid_existing = InboxPresentationAdapter::NATIVE_BLOCK === ( $existing_fixture['inbox_block']['block_name'] ?? null );
+    foreach ( $required_pages as $required_page ) {
+        $page_id = $existing_fixture[ $required_page ]['page_id'] ?? 0;
+        $page = $page_id ? get_post( (int) $page_id ) : null;
+        $url = $page_id ? get_permalink( (int) $page_id ) : false;
+        if ( ! $page || 'page' !== $page->post_type || ! is_string( $url ) || $url !== ( $existing_fixture[ $required_page ]['url'] ?? null ) ) {
+            $valid_existing = false;
+            break;
+        }
+    }
+    if ( $valid_existing ) {
+        file_put_contents(
+            trailingslashit( $artifact_dir ) . 'p06-fixture-initialization.json',
+            wp_json_encode(
+                array(
+                    'status' => 'PASS',
+                    'fixture_state' => 'REUSED',
+                    'schema_version' => $existing_fixture['schema_version'],
+                    'fixture_sha256' => hash( 'sha256', wp_json_encode( $existing_fixture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ),
+                ),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+            ) . "\n"
+        );
+        echo 'P06_ASSET_REACHABILITY_RUNTIME_PASS fixture=REUSED' . PHP_EOL;
+        return;
+    }
+    throw new RuntimeException( 'Existing P06 fixture manifest is invalid; refusing to create divergent fixture authority.' );
+}
+if ( false !== $existing_fixture ) {
+    throw new RuntimeException( 'Existing P06 fixture manifest has an unsupported shape; refusing to replace it.' );
+}
+
 wp_set_current_user( (int) $manifest['operator']['id'] );
 
 function p06_assert( $condition, $message ) {
@@ -225,6 +265,19 @@ $fixture = array(
     'unrelated_page' => $unrelated_page,
 );
 update_option( 'gpp_p06_fixture_manifest', $fixture, false );
+$fixture_sha256 = hash( 'sha256', wp_json_encode( $fixture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+file_put_contents(
+    trailingslashit( $artifact_dir ) . 'p06-fixture-initialization.json',
+    wp_json_encode(
+        array(
+            'status' => 'PASS',
+            'fixture_state' => 'INITIALIZED',
+            'schema_version' => $fixture['schema_version'],
+            'fixture_sha256' => $fixture_sha256,
+        ),
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+    ) . "\n"
+);
 file_put_contents(
     trailingslashit( $artifact_dir ) . 'p06-runtime-results.json',
     wp_json_encode(
