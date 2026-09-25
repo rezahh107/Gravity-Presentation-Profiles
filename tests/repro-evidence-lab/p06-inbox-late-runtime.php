@@ -54,6 +54,9 @@ $output = $render();
 if ( false === strpos( $output, 'data-js="gflow-inbox"' ) ) {
     throw new RuntimeException( 'Authentic late ' . $mode . ' render did not produce the native Inbox.' );
 }
+if ( 'block' === $mode && false !== strpos( $output, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
+    throw new RuntimeException( 'Direct/programmatic Inbox Block render outside current queried post content gained GPP composition.' );
+}
 foreach ( $handles as $handle ) {
     if ( 1 !== substr_count( $output, $handle . '-css' ) || ! wp_style_is( $handle, 'done' ) ) {
         throw new RuntimeException(
@@ -87,6 +90,9 @@ foreach ( $handles as $handle ) {
     if ( false !== strpos( $second, $handle . '-css' ) ) {
         throw new RuntimeException( 'Second late ' . $mode . ' render duplicated a stylesheet: ' . $handle );
     }
+}
+if ( 'block' === $mode && false !== strpos( $second, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
+    throw new RuntimeException( 'Repeated direct/programmatic Inbox Block render outside current queried post content gained GPP composition.' );
 }
 
 echo 'P06_LATE_INBOX_RUNTIME_PASS=' . $mode . PHP_EOL;
