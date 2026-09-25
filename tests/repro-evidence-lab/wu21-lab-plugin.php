@@ -184,15 +184,29 @@ add_action( 'plugins_loaded', array( 'GPP_WU21_Polling_Diagnostics', 'boot' ), 3
 
 /**
  * Render an existing synthetic Inbox fixture through a real Elementor shortcode
- * widget without copying its Gravity Flow behavior into the host fixture.
+ * widget by re-entering the same queried page's normal WordPress content pipeline.
+ * Elementor removes its own the_content callback while rendering elements, so
+ * this exercises native block/shortcode processing without an out-of-content
+ * do_blocks() admission or builder recursion.
  */
 function gpp_wu21_elementor_inbox_content( $attributes ) {
     $attributes = shortcode_atts( array( 'page_id' => 0 ), $attributes, 'gpp_wu21_elementor_inbox' );
     $page_id    = absint( $attributes['page_id'] );
-    $content    = $page_id ? get_post_field( 'post_content', $page_id ) : '';
+
+    if (
+        ! is_singular()
+        || $page_id <= 0
+        || $page_id !== (int) get_queried_object_id()
+        || $page_id !== (int) get_the_ID()
+    ) {
+        return '';
+    }
+
+    $content = get_post_field( 'post_content', $page_id );
     if ( ! $content ) {
         return '';
     }
-    return do_shortcode( do_blocks( $content ) );
+
+    return apply_filters( 'the_content', $content );
 }
 add_shortcode( 'gpp_wu21_elementor_inbox', 'gpp_wu21_elementor_inbox_content' );
