@@ -484,6 +484,77 @@
         "H",
         "L"
       ]
+    },
+    {
+      "id": "block-desktop",
+      "family": "INBOX_AUTHENTIC_BLOCK",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-desktop",
+      "design_authority_action": "default",
+      "design_relations": [
+        "first_card_width",
+        "two_card_horizontal_gap",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow",
+        "title_font_family_primary",
+        "title_font_weight",
+        "search_font_family_primary",
+        "search_font_weight"
+      ],
+      "matrix": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "I",
+        "K"
+      ]
+    },
+    {
+      "id": "block-mobile",
+      "family": "INBOX_AUTHENTIC_BLOCK",
+      "viewport": {
+        "width": 414,
+        "height": 1100
+      },
+      "design_authority_surface": "inbox-mobile",
+      "design_authority_action": "default",
+      "design_relations": [
+        "first_card_width",
+        "last_card_to_pager_gap",
+        "cards_per_visual_row",
+        "horizontal_overflow",
+        "title_font_size_px",
+        "title_line_height_px",
+        "first_card_border_radius_px",
+        "first_card_padding",
+        "first_card_box_shadow",
+        "title_font_family_primary",
+        "title_font_weight",
+        "search_font_family_primary",
+        "search_font_weight"
+      ],
+      "matrix": [
+        "B",
+        "C",
+        "D",
+        "E",
+        "G",
+        "H",
+        "K",
+        "L"
+      ]
     }
   ],
   "future_scenarios": {
@@ -512,14 +583,6 @@
       "browser_test": "tests/repro-evidence-lab/manual-inbox-refresh-browser-test.mjs",
       "production_asset": "assets/js/gravity-flow-inbox-manual-refresh.js",
       "note": "Manual Refresh is real WU21 functional/browser evidence. No action-specific design-convergence visual scenario is admitted, so Matrix M must not appear in executed visual scenario matrices."
-    }
-  },
-  "non_comparable_current_product_surfaces": {
-    "authentic_block": {
-      "status": "NOT_PROVEN_PRODUCT_COMPOSITION_GAP",
-      "reason": "Exact current production Block route renders native Gravity Flow + GPP Card Mode/styles but does not emit the GPP composed surface heading/helper/wrapper required by this heading-to-pagination visual contract.",
-      "evidence_owner": "WU06_P06",
-      "product_repair_in_this_pr": false
     }
   }
 }
