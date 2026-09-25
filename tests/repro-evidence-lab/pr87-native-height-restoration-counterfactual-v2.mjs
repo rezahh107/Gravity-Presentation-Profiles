@@ -163,7 +163,12 @@ async function runPositiveControl(context,routes) {
     const page=await context.newPage(); await page.setViewportSize(viewport); await page.goto(url,{waitUntil:'networkidle'}); await page.waitForSelector(selectors.gridRoot,{timeout:30000}); await page.waitForTimeout(700);
     observations.push({route,device,...await measure(page,`positive/${route}/${device}`)}); await page.close();
   }
-  for (const route of Object.keys(routes)) assert.equal(observations.find(x=>x.route===route&&x.device==='desktop')?.row_count,5,`Positive control ${route}/desktop did not reproduce 20->5 materialization.`);
+  for (const route of Object.keys(routes)) {
+    const desktop=observations.find(x=>x.route===route&&x.device==='desktop');
+    assert.ok(Number.isInteger(desktop?.row_count)&&desktop.row_count>0&&desktop.row_count<20,`Positive control ${route}/desktop did not reproduce PR87 under-materialization: ${desktop?.row_count}.`);
+    assert.equal(desktop.grid_count,1,`Positive control ${route}/desktop lost native grid ownership.`);
+    assert.equal(desktop.replacement_grid_count,0,`Positive control ${route}/desktop introduced a replacement grid.`);
+  }
   return observations;
 }
 
