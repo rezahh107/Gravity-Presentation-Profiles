@@ -7,6 +7,8 @@ use GravityPresentationProfiles\Autoloader;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 
+Autoloader::register();
+
 $GLOBALS['gpp_block_filters'] = array();
 $GLOBALS['gpp_filter_stack'] = array();
 $GLOBALS['gpp_block_is_admin'] = false;
@@ -122,8 +124,6 @@ function gpp_test_do_blocks( $content ) {
 
     return $rendered;
 }
-
-Autoloader::register();
 
 $adapter = new ReflectionClass( InboxPresentationAdapter::class );
 $model_loaded = $adapter->getProperty( 'model_loaded' );
