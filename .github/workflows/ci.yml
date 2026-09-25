@@ -62,7 +62,6 @@ jobs:
           git push origin "HEAD:$TARGET_BRANCH"
 
   repository-guardrails:
-  repository-guardrails:
     name: Merge-result / push validation
     runs-on: ubuntu-latest
     steps:
