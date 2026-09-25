@@ -3,6 +3,18 @@ import path from 'node:path';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 
+// Qualification-only hook: once the authentic integrated WU21 host exists,
+// capture the exact pinned Gravity Flow grid-sizing seam inventory, then execute
+// the supplementary PR87 native-height counterfactual before the pre-existing
+// visual diagnostics reach the already-known 20->5 failure. The hook is inert
+// on canonical branches because the qualification harness does not exist there,
+// and it is inert during contract tests before host setup.
+const qualificationHarness = path.join(process.env.GITHUB_WORKSPACE || '.', 'tests/repro-evidence-lab/pr87-native-height-restoration-counterfactual-v3.mjs');
+const integratedHostManifest = path.join(process.env.WU21_ARTIFACT_DIR || '/tmp/wu21-artifacts', 'integrated-visual-host.json');
+if (fs.existsSync(qualificationHarness) && fs.existsSync(integratedHostManifest)) {
+  await import('../repro-evidence-lab/pr87-native-height-restoration-counterfactual-v3.mjs');
+}
+
 export function comparePng(referencePath, actualPath, diffPath, config) {
   if (!fs.existsSync(referencePath)) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: required reference missing: ${referencePath}`);
   if (!fs.existsSync(actualPath)) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: actual capture missing: ${actualPath}`);
