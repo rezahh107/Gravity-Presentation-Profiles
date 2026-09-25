@@ -7,9 +7,56 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  seed-wu21-package-fixtures:
+    name: One-time WU21 package fixture migration
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR Head for package migration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize exact package fixtures
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          root="tests/fixtures/wu21-packages"
+          required=(
+            "$root/gravityforms-3.1.1.1-owner-supplied-source-package.zip"
+            "$root/gravityflow-3.1.0-owner-supplied-source-package.zip"
+            "$root/elementor-4.3.1-owner-supplied-source-package.zip"
+            "$root/elementor-pro-4.3.0-owner-supplied-modified-package.zip"
+          )
+          complete=1
+          for file in "${required[@]}"; do
+            [[ -f "$file" ]] || complete=0
+          done
+          if [[ "$complete" = 1 ]]; then
+            php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$root"
+            echo "WU21 package fixtures already tracked and verified."
+            exit 0
+          fi
+
+          curl -L --fail --retry 4 -o "${required[0]}" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "${required[1]}" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "${required[2]}" "https://drive.usercontent.google.com/download?id=1tyRkQ4a_E_wz2cL2KcNPMr2Q5P5yX7UR&export=download&confirm=t"
+          curl -L --fail --retry 4 -o "${required[3]}" "https://drive.usercontent.google.com/download?id=1nSNzFyZJd1aMrManYhmXOxSzRgivjMwg&export=download&confirm=t"
+
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$root"
+          git add -f "${required[@]}"
+          git diff --cached --quiet && { echo "Package fixtures were not staged." >&2; exit 1; }
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: track exact WU21 package fixture bytes'
+          git push origin "HEAD:$TARGET_BRANCH"
+
+  repository-guardrails:
   repository-guardrails:
     name: Merge-result / push validation
     runs-on: ubuntu-latest
