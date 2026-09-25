@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
-const pr87Qualification = process.env.GITHUB_HEAD_REF === 'test/pr87-native-height-counterfactual';
+const qualificationHarness = path.join(process.env.GITHUB_WORKSPACE || '.', 'tests/repro-evidence-lab/pr87-native-height-restoration-counterfactual-v2.mjs');
+const pr87Qualification = process.env.GITHUB_HEAD_REF === 'test/pr87-native-height-counterfactual' || fs.existsSync(qualificationHarness);
 
 if (pr87Qualification) {
   const recorded = [
