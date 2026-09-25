@@ -45,6 +45,7 @@ $cases = array(
     'inbox-settings-contract.php',
     'inbox-field-presentation.php',
     'inbox-asset-reachability.php',
+    'inbox-block-full-width-composition.php',
     'inbox-asset-versioning.php',
     'inbox-host-width-ownership.php',
     'entry-detail-presentation-model.php',
