@@ -13,6 +13,8 @@ on:
       - 'src/**'
       - 'assets/css/srwf-gravity-flow-inbox.css'
       - 'assets/css/srwf-gravity-flow-inbox-native.css'
+      - 'assets/js/gravity-flow-inbox-manual-refresh.js'
+      - 'tests/fixtures/wu21-packages/**'
       - 'tests/fixtures/wu09-visual-package.json'
       - 'gravity-presentation-profiles.php'
   workflow_dispatch:
@@ -42,6 +44,7 @@ jobs:
       WU21_WP_PATH: /tmp/wu21-wordpress
       WU21_ARTIFACT_DIR: /tmp/wu21-artifacts
       WU21_PACKAGE_DIR: /tmp/wu21-packages
+      WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
       WU21_GF_ZIP: /tmp/wu21-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
       WU21_FLOW_ZIP: /tmp/wu21-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
       WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
@@ -114,10 +117,7 @@ jobs:
           bash tests/visual-governance-guardrail.sh
           find gravity-presentation-profiles.php src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           php tests/run.php
-          if git ls-files '*.zip' | grep -q .; then
-            echo "Committed ZIP archives are forbidden." >&2
-            exit 1
-          fi
+          bash scripts/validate-committed-archives.sh
 
       - name: Install exact WP-CLI and WordPress
         shell: bash
@@ -203,12 +203,14 @@ jobs:
           echo wp_json_encode($urls, JSON_UNESCAPED_SLASHES) . PHP_EOL;
           '
 
-      - name: Fetch and byte-verify approved Gravity packages
+      - name: Verify and install repository-owned Gravity packages
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 4 -o "$WU21_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
+          fixture_root="$GITHUB_WORKSPACE/$WU21_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU21_GF_ZIP"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU21_FLOW_ZIP"
           test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
           test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
           echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
@@ -330,8 +332,10 @@ jobs:
           ];
           for(const [name,actual,expected] of checks) if(actual!==expected) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${name} workflow/contract identity mismatch.`);
           NODE
-          curl -L --fail --retry 4 -o /tmp/elementor.zip "https://drive.usercontent.google.com/download?id=1tyRkQ4a_E_wz2cL2KcNPMr2Q5P5yX7UR&export=download&confirm=t"
-          curl -L --fail --retry 4 -o /tmp/elementor-pro.zip "https://drive.usercontent.google.com/download?id=1nSNzFyZJd1aMrManYhmXOxSzRgivjMwg&export=download&confirm=t"
+          fixture_root="$GITHUB_WORKSPACE/$WU21_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/elementor-4.3.1-owner-supplied-source-package.zip" /tmp/elementor.zip
+          cp "$fixture_root/elementor-pro-4.3.0-owner-supplied-modified-package.zip" /tmp/elementor-pro.zip
           curl -L --fail --retry 3 -o /tmp/hello-elementor.tar.gz "https://github.com/elementor/hello-theme/archive/$WU21_HELLO_COMMIT.tar.gz"
           export WU21_ELEMENTOR_ACTUAL_SHA256="$(sha256sum /tmp/elementor.zip | cut -d' ' -f1)"
           export WU21_ELEMENTOR_PRO_ACTUAL_SHA256="$(sha256sum /tmp/elementor-pro.zip | cut -d' ' -f1)"
