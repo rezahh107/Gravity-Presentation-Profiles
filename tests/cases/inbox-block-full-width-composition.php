@@ -223,7 +223,7 @@ gpp_assert_same( 0, substr_count( $multi, 'gpp-custom-inbox-app' ), 'Multiple co
 
 preg_match_all( '/\sid="([^"]+)"/', $multi, $id_matches );
 gpp_assert_same( count( $id_matches[1] ), count( array_unique( $id_matches[1] ) ), 'Multiple composed Inbox instances must not produce duplicate document IDs.' );
-preg_match_all( '/<section[^>]*aria-labelledby="([^"]+)"[^>]*>.*?<h1[^>]*id="([^"]+)"/sU', $multi, $surface_matches, PREG_SET_ORDER );
+preg_match_all( '/<section[^>]*aria-labelledby="([^"]+)"[^>]*>.*?<h1[^>]*id="([^"]+)"/s', $multi, $surface_matches, PREG_SET_ORDER );
 gpp_assert_same( 2, count( $surface_matches ), 'Each composed Inbox surface must expose a heading relationship.' );
 foreach ( $surface_matches as $surface_match ) {
     gpp_assert_same( $surface_match[1], $surface_match[2], 'Each aria-labelledby must reference the heading belonging to its own surface.' );
