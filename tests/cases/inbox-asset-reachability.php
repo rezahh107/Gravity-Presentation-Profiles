@@ -197,7 +197,74 @@ gpp_assert_same( 'admin_enqueue_scripts', $GLOBALS['gpp_actions'][0][0], 'Admin 
 gpp_assert_same( 'wp_enqueue_scripts', $GLOBALS['gpp_actions'][1][0], 'Frontend Inbox delivery must be decided before head styles print.' );
 gpp_assert_same( array( InboxPresentationAdapter::class, 'enqueueStyles' ), $GLOBALS['gpp_actions'][0][1], 'Admin enqueue must use the reachability-qualified asset method.' );
 gpp_assert_same( array( InboxPresentationAdapter::class, 'enqueueStyles' ), $GLOBALS['gpp_actions'][1][1], 'Frontend enqueue must use the reachability-qualified asset method.' );
-gpp_assert_same( 4, count( $GLOBALS['gpp_filters'] ), 'Inbox presentation must preserve native data, shortcode, and block seams.' );
+gpp_assert_same( 5, count( $GLOBALS['gpp_filters'] ), 'Inbox presentation must preserve native data/render seams and add only the admitted shared-config seam.' );
+$shared_config_filters = array_values(
+    array_filter(
+        $GLOBALS['gpp_filters'],
+        static function ( $filter ) {
+            return 'gravityflow_js_config_shared' === $filter[0];
+        }
+    )
+);
+gpp_assert_same( 1, count( $shared_config_filters ), 'Exactly one GPP shared-config filter must be registered.' );
+gpp_assert_same( array( InboxPresentationAdapter::class, 'filterSharedJsConfig' ), $shared_config_filters[0][1], 'Shared config must stay owned by the Inbox presentation adapter.' );
+gpp_assert_same( 99, $shared_config_filters[0][2], 'GPP must run after Gravity Flow constructs native Inbox grid config.' );
+gpp_assert_same( 1, $shared_config_filters[0][3], 'Shared config seam accepts only the native config payload.' );
+
+$native_grid_options = array(
+    'columnDefs' => array( array( 'field' => InboxPresentationAdapter::CARD_COLUMN ) ),
+    'rowData' => array( array( 'id' => 1 ) ),
+    'pagination' => true,
+    'paginationPageSize' => 20,
+    'searchArgs' => array( 'page' => 'inbox' ),
+    'suppressCellSelection' => true,
+);
+$secondary_grid_options = $native_grid_options;
+$secondary_grid_options['rowData'] = array( array( 'id' => 2 ) );
+$secondary_grid_options['paginationPageSize'] = 5;
+$unrelated_grid_options = array(
+    'columnDefs' => array(),
+    'rowData' => array(),
+    'pagination' => true,
+    'paginationPageSize' => 20,
+    'rowBuffer' => 11,
+);
+$shared_config = array(
+    'site_url' => 'https://example.invalid',
+    'grids' => array(
+        'inbox_default' => array( 'grid_options' => $native_grid_options, 'fetch_enabled' => true ),
+        'inbox_secondary' => array( 'grid_options' => $secondary_grid_options, 'fetch_enabled' => false ),
+        'unrelated_shape' => array( 'grid_options' => $unrelated_grid_options, 'sentinel' => 'keep' ),
+    ),
+    'unrelated_config' => array( 'rowBuffer' => 7 ),
+);
+
+$set_active_profile( true );
+$reset_request( '[gravityflow page="inbox"]' );
+$filtered_config = InboxPresentationAdapter::filterSharedJsConfig( $shared_config );
+gpp_assert_same( InboxPresentationAdapter::CARD_MODE_ROW_BUFFER, $filtered_config['grids']['inbox_default']['grid_options']['rowBuffer'], 'Admitted native Inbox grid must receive the proven rowBuffer.' );
+gpp_assert_same( InboxPresentationAdapter::CARD_MODE_ROW_BUFFER, $filtered_config['grids']['inbox_secondary']['grid_options']['rowBuffer'], 'Every native Inbox grid in the admitted shared payload must receive the same proven rowBuffer.' );
+$expected_primary = $native_grid_options;
+$expected_primary['rowBuffer'] = InboxPresentationAdapter::CARD_MODE_ROW_BUFFER;
+$expected_secondary = $secondary_grid_options;
+$expected_secondary['rowBuffer'] = InboxPresentationAdapter::CARD_MODE_ROW_BUFFER;
+gpp_assert_same( $expected_primary, $filtered_config['grids']['inbox_default']['grid_options'], 'Applying rowBuffer must preserve all existing native grid options.' );
+gpp_assert_same( $expected_secondary, $filtered_config['grids']['inbox_secondary']['grid_options'], 'Applying rowBuffer must preserve secondary native grid options.' );
+gpp_assert_same( $shared_config['grids']['unrelated_shape'], $filtered_config['grids']['unrelated_shape'], 'A non-Inbox-shaped grid entry must remain unchanged.' );
+gpp_assert_same( $shared_config['unrelated_config'], $filtered_config['unrelated_config'], 'Unrelated shared configuration must remain unchanged.' );
+
+$set_active_profile( false );
+$reset_request( '[gravityflow page="inbox"]' );
+gpp_assert_same( $shared_config, InboxPresentationAdapter::filterSharedJsConfig( $shared_config ), 'Inactive Inbox presentation must leave native shared config untouched.' );
+
+$set_active_profile( true );
+$reset_request( '<p>Unrelated page.</p>' );
+gpp_assert_same( $shared_config, InboxPresentationAdapter::filterSharedJsConfig( $shared_config ), 'Active profile on a non-Inbox request must not change Gravity Flow config.' );
+
+$reset_request( '[gravityflow page="inbox"]' );
+$malformed_grids = array( 'grids' => 'not-an-array', 'sentinel' => true );
+gpp_assert_same( $malformed_grids, InboxPresentationAdapter::filterSharedJsConfig( $malformed_grids ), 'Malformed grid config must fail closed without false repair state.' );
+gpp_assert_same( 'not-an-array', InboxPresentationAdapter::filterSharedJsConfig( 'not-an-array' ), 'Malformed shared payload must pass through unchanged.' );
 
 $set_active_profile( true );
 $reset_request();
