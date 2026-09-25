@@ -11,7 +11,8 @@ const baseline = '3471aa4de03321d74a84c46ebef4cc07af5159a4';
 const stylesheet = 'assets/css/srwf-gravity-flow-inbox.css';
 const historicalCss = execFileSync('git', ['show', `${baseline}:${stylesheet}`], { encoding: 'utf8' });
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
-const wp = code => execFileSync('php', [process.env.WU21_WP_CLI, `--path=${process.env.WU21_WP_PATH}`, 'eval', code], { encoding: 'utf8' }).trim();
+const wpPath = process.env.WU21_WP_PATH;
+const wp = code => execFileSync('php', [process.env.WU21_WP_CLI, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8' }).trim();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json')));
 const p06 = JSON.parse(wp('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"));'));
 const baseUrl = process.env.WU21_BASE_URL;
@@ -23,9 +24,12 @@ const selectors = {
   searchInput: `${scope} [data-js="gflow-inbox-search"]`,
 };
 const rows = `${selectors.centerRows} > .ag-row`;
+const routes = { shortcode: fixture.frontend_inbox_url, block: p06.authentic_block_page.url };
+const devices = { desktop: { width:1440, height:1000 }, mobile: { width:390, height:844 } };
 const report = {
   repository_sha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   baseline, authority: 'Pinned WU21 Gravity Flow 3.1.0 / AG Grid 25.2.0; integrated Hello/Elementor host',
+  selected_method: 'gravityflow_js_config_shared -> native Inbox grid_options.rowBuffer=80',
   text_scale_limit: 'Root font 200% is a text/reflow probe, not true browser 200% zoom.',
   measurements: [], status: 'RUNNING',
 };
@@ -33,6 +37,36 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: 'en-US', timezoneId: 'UTC', reducedMotion: 'reduce' });
 await context.addCookies(cookies.map(cookie => ({ ...cookie, url: baseUrl })));
 
+const rowBufferControlPath = path.join(wpPath, 'wp-content', 'mu-plugins', 'gpp-pr87-row-buffer-negative-control.php');
+const targetPageIds = [fixture.frontend_inbox_page_id, p06.authentic_block_page.page_id];
+const rowBufferControlSource = `<?php
+/* Test-only negative control: remove the production rowBuffer after GPP applies it. */
+add_filter( 'gravityflow_js_config_shared', function ( $config ) {
+    if ( ! is_page( ${JSON.stringify(targetPageIds)} ) || empty( $config['grids'] ) || ! is_array( $config['grids'] ) ) {
+        return $config;
+    }
+    foreach ( $config['grids'] as &$grid ) {
+        if ( isset( $grid['grid_options'] ) && is_array( $grid['grid_options'] ) ) {
+            unset( $grid['grid_options']['rowBuffer'] );
+        }
+    }
+    unset( $grid );
+    return $config;
+}, 1000, 1 );
+`;
+
+function installRowBufferNegativeControl() {
+  fs.mkdirSync(path.dirname(rowBufferControlPath), { recursive: true });
+  fs.writeFileSync(rowBufferControlPath, rowBufferControlSource);
+}
+function removeRowBufferNegativeControl() {
+  if (fs.existsSync(rowBufferControlPath)) fs.unlinkSync(rowBufferControlPath);
+}
+async function settleLoaded(page) {
+  await page.waitForSelector(selectors.gridRoot, { timeout: 30000 });
+  await page.evaluate(async () => { await document.fonts.ready; });
+  await page.waitForTimeout(700);
+}
 async function settle(page, count) {
   await page.waitForFunction(({ rows, count }) => document.querySelectorAll(rows).length === count, { rows, count }, { timeout: 15000 });
   await page.evaluate(async () => { await document.fonts.ready; });
@@ -64,25 +98,44 @@ async function measure(page, label) {
       content_padding:container.paddingTop+container.paddingBottom,
       body_container_delta:body.height-container.height,
       horizontal_overflow:Math.max(0,widthOwner.scrollWidth-widthOwner.clientWidth),
+      document_horizontal_overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),
       inbox_width:inbox.getBoundingClientRect().width,
+      host_width:widthOwner.getBoundingClientRect().width,
       grid_count:document.querySelectorAll(selectors.gridRoot).length,
+      replacement_grid_count:document.querySelectorAll('[data-gpp-replacement-inbox], .gpp-custom-inbox-app').length,
       pager_count:inbox.querySelectorAll('.ag-paging-panel').length,
       manual_refresh_count:document.querySelectorAll('[data-gpp-inbox-manual-refresh]').length,
       empty_visible:!!inbox.querySelector('.ag-overlay-no-rows-center')?.getBoundingClientRect().height,
+      row_buffer_80_present:[...document.scripts].some(script => (script.textContent||'').includes('"rowBuffer":80')),
     };
   }, { scope, selectors });
   report.measurements.push({ label, ...result });
   return result;
 }
+function assertNear(actual, expected, message) {
+  assert.equal(typeof actual, 'number', `${message}: actual is not numeric`);
+  assert.equal(typeof expected, 'number', `${message}: expected is not numeric`);
+  assert.ok(Math.abs(actual-expected)<1, `${message}: ${actual} vs ${expected}`);
+}
 function assertGeometry(m, count, columns) {
   assert.equal(m.row_count, count); assert.equal(m.card_count, count);
-  assert.equal(m.grid_count, 1); assert.equal(m.pager_count, 1);
+  assert.equal(m.grid_count, 1); assert.equal(m.replacement_grid_count, 0); assert.equal(m.pager_count, 1);
   assert.equal(m.cards_per_row, Math.min(count, columns));
-  assert.equal(m.horizontal_overflow, 0);
+  assert.equal(m.horizontal_overflow, 0); assert.equal(m.document_horizontal_overflow, 0);
   assert.ok(Math.abs(m.body_container_delta)<1, `body must follow actual card container: ${m.body_container_delta}`);
   assert.ok(Math.abs(m.visual_vs_native_height_delta-m.content_padding)<1, `native/visual delta exceeds actual container padding: ${m.visual_vs_native_height_delta}`);
   // Existing native pager spacing is preserved. Reject overlap or a stale row-height gap.
   assert.ok(m.last_card_to_pager_gap>=0 && m.last_card_to_pager_gap<=64, `pager gap: ${m.last_card_to_pager_gap}`);
+}
+function assertFallbackEquivalent(control, candidate, label) {
+  for (const key of ['row_count','card_count','grid_count','replacement_grid_count','pager_count']) {
+    assert.equal(candidate[key], control[key], `${label}: fallback structural mismatch for ${key}`);
+  }
+  for (const boxName of ['ag-center-cols-container','ag-center-cols-clipper','ag-body-viewport']) {
+    for (const key of ['height','width']) {
+      assertNear(candidate.chain[boxName][key], control.chain[boxName][key], `${label}: fallback ${boxName}.${key}`);
+    }
+  }
 }
 async function fallback(page) {
   // Explicit client-side falsification of the existing server readiness marker.
@@ -90,12 +143,44 @@ async function fallback(page) {
   await page.locator(`${scope} .gpp-inbox-card__readiness--ready`).first().evaluate(el => {
     el.classList.replace('gpp-inbox-card__readiness--ready','gpp-inbox-card__readiness--unready');
   });
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(650);
 }
+
+const rowBufferOffControls = new Map();
 try {
-  for (const [route,url] of Object.entries({shortcode:fixture.frontend_inbox_url, block:p06.authentic_block_page.url})) {
-    for (const [device,viewport] of Object.entries({desktop:{width:1440,height:1000},mobile:{width:390,height:844}})) {
+  // Method-specific negative control: current PR87 CSS remains active while a
+  // test-only later filter removes only rowBuffer. Desktop must reproduce the
+  // known under-materialization before the production candidate is measured.
+  installRowBufferNegativeControl();
+  for (const [route,url] of Object.entries(routes)) {
+    for (const [device,viewport] of Object.entries(devices)) {
       const prefix = `${route}/${device}`;
+      const control = await context.newPage(); await control.setViewportSize(viewport);
+      await control.goto(url,{waitUntil:'networkidle'}); await settleLoaded(control);
+      const cardMode = await measure(control,`${prefix}/row-buffer-off`);
+      assert.equal(cardMode.row_buffer_80_present,false,`${prefix}: rowBuffer negative control did not remove selected config.`);
+      assert.equal(cardMode.grid_count,1); assert.equal(cardMode.replacement_grid_count,0); assert.equal(cardMode.pager_count,1);
+      if (device==='desktop') {
+        assert.ok(cardMode.row_count>0 && cardMode.row_count<20,`${prefix}: rowBuffer-off control did not reproduce desktop under-materialization: ${cardMode.row_count}.`);
+      } else {
+        assert.equal(cardMode.row_count,20,`${prefix}: mobile rowBuffer-off control no longer matches qualified 20-row state.`);
+      }
+      await fallback(control);
+      const nativeFallback = await measure(control,`${prefix}/row-buffer-off-fallback`);
+      assert.equal(nativeFallback.row_count,20,`${prefix}: native fallback must materialize the full native page without rowBuffer.`);
+      assert.equal(nativeFallback.card_count,0,`${prefix}: native fallback must yield Card Mode presentation.`);
+      rowBufferOffControls.set(prefix,{cardMode,nativeFallback});
+      await control.close();
+    }
+  }
+  removeRowBufferNegativeControl();
+
+  for (const [route,url] of Object.entries(routes)) {
+    for (const [device,viewport] of Object.entries(devices)) {
+      const prefix = `${route}/${device}`;
+      const selectedControl = rowBufferOffControls.get(prefix);
+      assert.ok(selectedControl,`${prefix}: selected-method negative control missing.`);
+
       const control = await context.newPage(); await control.setViewportSize(viewport);
       await control.route('**/srwf-gravity-flow-inbox.css*', route => route.fulfill({ status:200, contentType:'text/css', body:historicalCss }));
       await control.goto(url,{waitUntil:'networkidle'}); await settle(control,20);
@@ -108,7 +193,10 @@ try {
       await page.goto(url,{waitUntil:'networkidle'}); await settle(page,20);
       const columns=device==='desktop'?2:1;
       const after=await measure(page,`${prefix}/after`); assertGeometry(after,20,columns);
-      assert.equal(after.inbox_width,before.inbox_width,'Vertical repair must preserve host composition width.');
+      assert.equal(after.row_buffer_80_present,true,`${prefix}: production rowBuffer=80 is absent from native shared grid config.`);
+      assertNear(after.inbox_width,selectedControl.cardMode.inbox_width,`${prefix}: selected method changed Inbox width`);
+      assertNear(after.host_width,selectedControl.cardMode.host_width,`${prefix}: selected method changed host width`);
+      assertNear(after.inbox_width,before.inbox_width,`${prefix}: vertical repair changed historical host composition width`);
       assert.equal(after.chain['ag-center-cols-clipper'].inline,before.chain['ag-center-cols-clipper'].inline,'Do not replace native inline sizing state.');
 
       await applyScenarioAction(page,'pagination',selectors); await settle(page,5);
@@ -122,7 +210,8 @@ try {
       assertGeometry(await measure(page,`${prefix}/search-cleared`),20,columns);
       await applyScenarioAction(page,'search_empty',selectors); await settle(page,0);
       const empty=await measure(page,`${prefix}/empty`);
-      assert.equal(empty.card_count,0); assert.equal(empty.grid_count,1); assert.equal(empty.pager_count,1); assert.equal(empty.empty_visible,true);
+      assert.equal(empty.card_count,0); assert.equal(empty.grid_count,1); assert.equal(empty.replacement_grid_count,0); assert.equal(empty.pager_count,1); assert.equal(empty.empty_visible,true);
+      assert.equal(empty.horizontal_overflow,0); assert.equal(empty.document_horizontal_overflow,0);
       assert.equal(empty.chain['ag-center-cols-clipper'].minHeight,'500px','Native empty-state minimum must resume.');
       await search.fill(''); await search.dispatchEvent('keyup'); await settle(page,20);
       assertGeometry(await measure(page,`${prefix}/empty-cleared`),20,columns);
@@ -130,6 +219,7 @@ try {
       await fallback(page); const nativeAfter=await measure(page,`${prefix}/after-mixed`);
       assert.equal(nativeAfter.card_count,0);
       for (const key of ['computedHeight','minHeight','inline']) assert.equal(nativeAfter.chain['ag-center-cols-clipper'][key],nativeBefore.chain['ag-center-cols-clipper'][key],`Native fallback retained sizing residue: ${key}`);
+      assertFallbackEquivalent(selectedControl.nativeFallback,nativeAfter,`${prefix}`);
       await page.locator(`${scope} .gpp-inbox-card__readiness--unready`).evaluate(el => el.classList.replace('gpp-inbox-card__readiness--unready','gpp-inbox-card__readiness--ready'));
       await settle(page,20); assertGeometry(await measure(page,`${prefix}/ready-restored`),20,columns);
 
@@ -148,6 +238,7 @@ try {
 } catch(error) {
   report.status='FAIL'; report.error=String(error.stack||error); throw error;
 } finally {
+  removeRowBufferNegativeControl();
   fs.writeFileSync(path.join(artifactDir,'inbox-card-geometry.json'),JSON.stringify(report,null,2)+'\n');
   await browser.close();
   console.log(`INBOX_CARD_GEOMETRY=${report.status}`);
