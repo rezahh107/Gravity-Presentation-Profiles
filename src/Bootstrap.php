@@ -11,6 +11,7 @@ use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
@@ -64,6 +65,7 @@ final class Bootstrap {
         // registered only after Gravity Forms has loaded successfully.
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
+        InboxBlockCompositionBridge::register();
         EntryDetailPresentationAdapter::register();
         EntryDetailFullWidthPresentationAdapter::register();
         EntryDetailTimelineSemanticPresentation::register();
