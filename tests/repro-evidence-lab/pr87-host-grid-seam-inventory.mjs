@@ -78,6 +78,7 @@ function walk(dir) {
     scannedFiles += 1;
 
     if (file === 'includes/inbox/class-inbox-service-provider.php') {
+      captureLines(file, text, 1, 219, 'service provider bootstrap, script data, and pre-grid hooks');
       captureLines(file, text, 220, 270, 'grid configuration construction');
       captureLines(file, text, 280, 310, 'post-configuration Inbox argument filtering');
     }
@@ -130,7 +131,7 @@ const appGridWindows = termWindows.filter(item => item.term === 'gridOptions' &&
 const hookWindows = termWindows.filter(item => ['applyFilters', 'gform.applyFilters', 'wp.hooks', 'addFilter', 'CustomEvent', 'dispatchEvent'].includes(item.term) && (item.file.includes('common-inbox.') || item.file.includes('class-inbox-service-provider.php')));
 const virtualizationWindows = termWindows.filter(item => ['suppressRowVirtualisation', 'suppressRowVirtualization', 'domLayout'].includes(item.term));
 const report = {
-  schema_version: '2.0.0',
+  schema_version: '2.1.0',
   source_identity: {
     runtime_version: '3.1.0',
     package_sha256: 'ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404',
