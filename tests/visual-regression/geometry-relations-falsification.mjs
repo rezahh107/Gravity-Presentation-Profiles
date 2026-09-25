@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { physicalHorizontalGap } from './geometry-relations.mjs';
 
+// Baseline qualification trigger for authentic Inbox Block parity; no runtime semantics changed.
 const left = { left: 100, right: 200, top: 20, width: 100 };
 const right = { left: 218, right: 318, top: 20, width: 100 };
 assert.equal(physicalHorizontalGap(left, right), 18);
