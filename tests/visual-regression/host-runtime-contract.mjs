@@ -10,7 +10,7 @@ function runPr87QualificationCounterfactualIfReady() {
   if (!artifactDir || !repo) return;
   const integratedHost = path.join(artifactDir, 'integrated-visual-host.json');
   const output = path.join(artifactDir, 'pr87-native-height-restoration-counterfactual-v2.json');
-  const harness = path.join(repo, 'tests/repro-evidence-lab/pr87-native-height-restoration-counterfactual-v2.mjs');
+  const harness = path.join(repo, 'tests/repro-evidence-lab/pr87-native-height-restoration-counterfactual-v3.mjs');
   if (!fs.existsSync(integratedHost) || fs.existsSync(output)) return;
   if (!fs.existsSync(harness)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: PR87 qualification harness is missing.');
   const cp = spawnSync(process.execPath, [harness], { cwd: repo, env: process.env, stdio: 'inherit' });
