@@ -1,4 +1,23 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { assertVazirAuthorityIdentity } from './font-runtime-contract.mjs';
+
+function runPr87QualificationCounterfactualIfReady() {
+  if (process.env.GITHUB_HEAD_REF !== 'test/pr87-native-height-counterfactual') return;
+  const artifactDir = process.env.WU21_ARTIFACT_DIR;
+  const repo = process.env.GITHUB_WORKSPACE;
+  if (!artifactDir || !repo) return;
+  const integratedHost = path.join(artifactDir, 'integrated-visual-host.json');
+  const output = path.join(artifactDir, 'pr87-native-height-restoration-counterfactual-v2.json');
+  const harness = path.join(repo, 'tests/repro-evidence-lab/pr87-native-height-restoration-counterfactual-v2.mjs');
+  if (!fs.existsSync(integratedHost) || fs.existsSync(output)) return;
+  if (!fs.existsSync(harness)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: PR87 qualification harness is missing.');
+  const cp = spawnSync(process.execPath, [harness], { cwd: repo, env: process.env, stdio: 'inherit' });
+  if (cp.status !== 0) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: PR87 qualification counterfactual exited ${cp.status}.`);
+  if (!fs.existsSync(output)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: PR87 qualification counterfactual produced no evidence.');
+}
+
 export function assertIntegratedHostIdentity(host, contract) {
   const fail = message => { throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${message}`); };
   if (!host || !contract) fail('integrated host identity contract is unavailable.');
@@ -29,5 +48,6 @@ export function assertIntegratedHostIdentity(host, contract) {
   assertPackage('Elementor', host.elementor, contract.elementor);
   assertPackage('Elementor Pro', host.elementor_pro, contract.elementor_pro, { classification: contract.elementor_pro.classification });
   assertVazirAuthorityIdentity(host.vazir_font, contract.vazir_font);
+  runPr87QualificationCounterfactualIfReady();
   return true;
 }
