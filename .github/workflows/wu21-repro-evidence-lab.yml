@@ -18,94 +18,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  seed-repository-package-fixtures:
-    name: One-time WU21 package fixture migration
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout exact PR branch for one-time package migration
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Seed exact repository package fixtures when absent
-        shell: bash
-        env:
-          TARGET_BRANCH: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          root="tests/fixtures/wu21-packages"
-          manifest="$root/manifest.json"
-          if [[ -f "$manifest" ]]; then
-            echo "WU21 package fixtures already exist; migration is a no-op."
-            exit 0
-          fi
-
-          mkdir -p "$root"
-          curl -L --fail --retry 4 -o "$root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$root/gravityflow-3.1.0-owner-supplied-source-package.zip" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$root/elementor-4.3.1-owner-supplied-source-package.zip" "https://drive.usercontent.google.com/download?id=1tyRkQ4a_E_wz2cL2KcNPMr2Q5P5yX7UR&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$root/elementor-pro-4.3.0-owner-supplied-modified-package.zip" "https://drive.usercontent.google.com/download?id=1nSNzFyZJd1aMrManYhmXOxSzRgivjMwg&export=download&confirm=t"
-
-          test "$(stat -c '%s' "$root/gravityforms-3.1.1.1-owner-supplied-source-package.zip")" = "5300290"
-          test "$(stat -c '%s' "$root/gravityflow-3.1.0-owner-supplied-source-package.zip")" = "2603034"
-          test "$(stat -c '%s' "$root/elementor-4.3.1-owner-supplied-source-package.zip")" = "23188841"
-          test "$(stat -c '%s' "$root/elementor-pro-4.3.0-owner-supplied-modified-package.zip")" = "3446055"
-          echo "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b  $root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" | sha256sum -c -
-          echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  $root/gravityflow-3.1.0-owner-supplied-source-package.zip" | sha256sum -c -
-          echo "9e947ce507a6c76d22ec7c710da96b65ecc7da18703dc662a6940f5443491c8d  $root/elementor-4.3.1-owner-supplied-source-package.zip" | sha256sum -c -
-          echo "4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0  $root/elementor-pro-4.3.0-owner-supplied-modified-package.zip" | sha256sum -c -
-
-          cat > "$manifest" <<'JSON'
-          {
-            "schema_version": "1.0.0",
-            "packages": [
-              {
-                "id": "gravityforms",
-                "version": "3.1.1.1",
-                "filename": "gravityforms-3.1.1.1-owner-supplied-source-package.zip",
-                "classification": "OWNER_SUPPLIED_SOURCE_PACKAGE",
-                "size_bytes": 5300290,
-                "sha256": "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b"
-              },
-              {
-                "id": "gravityflow",
-                "version": "3.1.0",
-                "filename": "gravityflow-3.1.0-owner-supplied-source-package.zip",
-                "classification": "OWNER_SUPPLIED_SOURCE_PACKAGE",
-                "size_bytes": 2603034,
-                "sha256": "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404"
-              },
-              {
-                "id": "elementor",
-                "version": "4.3.1",
-                "filename": "elementor-4.3.1-owner-supplied-source-package.zip",
-                "classification": "OWNER_SUPPLIED_SOURCE_PACKAGE",
-                "size_bytes": 23188841,
-                "sha256": "9e947ce507a6c76d22ec7c710da96b65ecc7da18703dc662a6940f5443491c8d"
-              },
-              {
-                "id": "elementor-pro",
-                "version": "4.3.0",
-                "filename": "elementor-pro-4.3.0-owner-supplied-modified-package.zip",
-                "classification": "OWNER_SUPPLIED_MODIFIED_PACKAGE",
-                "size_bytes": 3446055,
-                "sha256": "4745d1688b8533aed8d4bfadbfa03f5ab007bbdfc6cfe705a01a48fbdf82bbe0"
-              }
-            ]
-          }
-          JSON
-
-          git add "$root"
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: seed exact WU21 package fixtures'
-          git push origin "HEAD:$TARGET_BRANCH"
-
-  evidence-lab:
   evidence-lab:
     name: WU21 exact-Head reproducible simulation
     runs-on: ubuntu-24.04
