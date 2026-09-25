@@ -6,4 +6,4 @@
 await import('./pr87-host-grid-seam-inventory.mjs');
 await import('./pr87-row-buffer-source-probe.mjs');
 await import('./pr87-native-height-restoration-counterfactual-v2.mjs');
-await import('./pr87-row-buffer-counterfactual.mjs');
+await import('./pr87-row-buffer-sweep-and-run.mjs');
