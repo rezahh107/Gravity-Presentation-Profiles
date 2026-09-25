@@ -71,10 +71,10 @@ $set_profile = static function ( $active ) use ( $model_loaded, $model, $surface
 };
 
 InboxBlockCompositionBridge::register();
-gpp_assert_same( 1, count( $GLOBALS['gpp_block_filters'] ), 'Block composition bridge must register exactly one render_block filter.' );
-gpp_assert_same( 'render_block', $GLOBALS['gpp_block_filters'][0][0], 'Block composition bridge must stay on WordPress render_block.' );
+gpp_assert_same( 1, count( $GLOBALS['gpp_block_filters'] ), 'Block composition bridge must register exactly one block-specific render filter.' );
+gpp_assert_same( 'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK, $GLOBALS['gpp_block_filters'][0][0], 'Block composition bridge must stay on the exact native Inbox block render hook.' );
 gpp_assert_same( array( InboxBlockCompositionBridge::class, 'filterFrontendBlock' ), $GLOBALS['gpp_block_filters'][0][1], 'Registered callback changed unexpectedly.' );
-gpp_assert_same( 30, $GLOBALS['gpp_block_filters'][0][2], 'Block composition must run after the Inbox reachability hook.' );
+gpp_assert_same( 20, $GLOBALS['gpp_block_filters'][0][2], 'Block composition should use the normal presentation priority on its exact block hook.' );
 gpp_assert_same( 2, $GLOBALS['gpp_block_filters'][0][3], 'Block composition needs both rendered content and block identity.' );
 
 $native = '<div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div>';
@@ -97,6 +97,10 @@ gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $nat
 
 $GLOBALS['gpp_block_queried_object'] = (object) array( 'post_content' => '<!-- wp:gravityflow/inbox /-->' );
 gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $native, array( 'blockName' => 'core/html' ) ), 'Unrelated blocks must remain untouched.' );
+
+$GLOBALS['gpp_block_is_admin'] = true;
+gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $native, $block ), 'Admin/editor block rendering must remain native and unwrapped.' );
+$GLOBALS['gpp_block_is_admin'] = false;
 
 $set_profile( false );
 gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $native, $block ), 'Inactive Inbox presentation must preserve the native authentic block output.' );
