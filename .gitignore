@@ -32,3 +32,10 @@ composer.lock
 
 # Generated release archives
 *.zip
+
+# Explicit repository-owned WU21 runtime package fixtures.
+!tests/fixtures/wu21-packages/
+!tests/fixtures/wu21-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+!tests/fixtures/wu21-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+!tests/fixtures/wu21-packages/elementor-4.3.1-owner-supplied-source-package.zip
+!tests/fixtures/wu21-packages/elementor-pro-4.3.0-owner-supplied-modified-package.zip
