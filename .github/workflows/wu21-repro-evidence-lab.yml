@@ -441,6 +441,9 @@ jobs:
           set -euo pipefail
           node tests/visual-regression/inbox-visual-diagnostics.mjs
 
+      - name: Verify Card Mode vertical geometry and native lifecycle
+        run: node tests/repro-evidence-lab/inbox-card-geometry-browser-tests.mjs
+
       - name: Publish Inbox visual diagnostic summary
         if: always()
         shell: bash
@@ -490,6 +493,7 @@ jobs:
             /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
             /tmp/wu21-artifacts/design-authority-runtime/fonts
             /tmp/wu21-artifacts/visual-regression-diagnostics
+            /tmp/wu21-artifacts/inbox-card-geometry.json
             /tmp/wu21-artifacts/evidence-digest.txt
           if-no-files-found: error
           retention-days: 30

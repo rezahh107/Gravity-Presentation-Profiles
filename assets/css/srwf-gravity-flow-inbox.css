@@ -102,6 +102,19 @@
  * media crops, borders and radii deliberately remain pixel-based.
  */
 @supports selector(:has(*)) {
+    /*
+     * AG Grid 25.2.0 writes the summed native row height to both the center
+     * container and its clipper. Card Mode already puts rows in normal grid
+     * flow; release the matching clipper constraint as well, so that flow is
+     * the single rendered height authority. Gravity Flow's 500px clipper
+     * minimum must also yield for short result sets. Native inline dimensions
+     * remain intact and resume immediately when the readiness gate closes.
+     */
+    .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-clipper {
+        height: auto !important;
+        min-height: 0 !important;
+    }
+
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root-wrapper,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-root,
     .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-body-viewport,
