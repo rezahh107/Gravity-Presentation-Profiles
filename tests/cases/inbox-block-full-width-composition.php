@@ -14,7 +14,6 @@ $GLOBALS['gpp_filter_stack'] = array();
 $GLOBALS['gpp_block_is_admin'] = false;
 $GLOBALS['gpp_block_is_singular'] = true;
 $GLOBALS['gpp_block_registered'] = true;
-$GLOBALS['gpp_block_instance_post_id'] = null;
 $GLOBALS['gpp_block_queried_object'] = (object) array( 'ID' => 42, 'post_content' => '' );
 $GLOBALS['post'] = (object) array( 'ID' => 42 );
 $GLOBALS['gpp_native_inbox'] = '<div class="gflow-inbox gflow-grid gflow-common"><div data-js="gflow-inbox"></div></div>';
@@ -110,15 +109,10 @@ function gpp_test_do_blocks( $content ) {
 
     $rendered = '';
     for ( $index = 0; $index < $count; $index++ ) {
-        $post_id = null !== $GLOBALS['gpp_block_instance_post_id']
-            ? (int) $GLOBALS['gpp_block_instance_post_id']
-            : (int) $GLOBALS['post']->ID;
-        $instance = (object) array( 'context' => array( 'postId' => $post_id ) );
         $rendered .= gpp_apply_test_filters(
             'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK,
             $GLOBALS['gpp_native_inbox'],
-            $GLOBALS['gpp_native_block'],
-            $instance
+            $GLOBALS['gpp_native_block']
         );
     }
 
@@ -144,7 +138,6 @@ $set_page = static function ( $content, $queried_id = 42, $current_id = 42 ) {
         'post_content' => $content,
     );
     $GLOBALS['post'] = (object) array( 'ID' => $current_id );
-    $GLOBALS['gpp_block_instance_post_id'] = null;
 };
 
 InboxBlockCompositionBridge::register();
@@ -159,7 +152,7 @@ $block_hook = 'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK;
 gpp_assert_same( 1, count( $registered[ $block_hook ] ?? array() ), 'Block composition bridge must register exactly one block-specific render filter.' );
 gpp_assert_same( array( InboxBlockCompositionBridge::class, 'filterFrontendBlock' ), $registered[ $block_hook ][0][1], 'Registered Block callback changed unexpectedly.' );
 gpp_assert_same( 20, $registered[ $block_hook ][0][2], 'Block composition should use the normal presentation priority on its exact Block hook.' );
-gpp_assert_same( 3, $registered[ $block_hook ][0][3], 'Block composition requires rendered content, block identity and WP_Block context.' );
+gpp_assert_same( 2, $registered[ $block_hook ][0][3], 'Block composition must depend only on rendered content and exact Block identity after current-post content provenance is established.' );
 
 // Simulate WordPress core do_blocks on the_content priority 9. This makes the
 // positive path exercise the same lifecycle boundary that the bridge enforces.
@@ -189,8 +182,7 @@ gpp_assert_true( false !== strpos( $shortcode, 'aria-labelledby="gpp-inbox-title
 
 // Out-of-content same-request negative: the queried page contains the Block,
 // but a separate same-type render outside the_content must stay native.
-$instance = (object) array( 'context' => array( 'postId' => 42 ) );
-$out_of_content = gpp_apply_test_filters( $block_hook, $native, $block, $instance );
+$out_of_content = gpp_apply_test_filters( $block_hook, $native, $block );
 gpp_assert_same( $native, $out_of_content, 'Same-request direct/programmatic Block render outside current content must remain native.' );
 gpp_assert_same( 0, substr_count( $out_of_content, 'data-gpp-inbox-surface=' ), 'Out-of-content Block render gained GPP composition.' );
 
@@ -204,13 +196,6 @@ gpp_assert_same( 0, substr_count( $secondary, 'data-gpp-inbox-surface=' ), 'Seco
 $set_page( $marker, 42, 99 );
 $mismatched_post = gpp_apply_test_filters( 'the_content', $marker );
 gpp_assert_same( $native, $mismatched_post, 'Current post identity mismatch must leave Inbox Block native.' );
-
-// WP_Block context must independently bind the rendered block to the query.
-$set_page( $marker );
-$GLOBALS['gpp_block_instance_post_id'] = 99;
-$mismatched_context = gpp_apply_test_filters( 'the_content', $marker );
-gpp_assert_same( $native, $mismatched_context, 'Mismatched WP_Block postId context must fail closed.' );
-$GLOBALS['gpp_block_instance_post_id'] = null;
 
 // Multiple legitimate Block instances must produce unique document IDs and
 // each aria-labelledby must point at the heading inside its own surface.
@@ -235,7 +220,7 @@ gpp_assert_same( count( $mixed_id_matches[1] ), count( array_unique( $mixed_id_m
 
 // Re-filtering already-composed output outside the admitted content boundary
 // must not nest wrappers or rewrite it.
-$recomposed = gpp_apply_test_filters( $block_hook, $composed, $block, $instance );
+$recomposed = gpp_apply_test_filters( $block_hook, $composed, $block );
 gpp_assert_same( $composed, $recomposed, 'Repeated filtering of composed output must remain idempotent.' );
 gpp_assert_same( 1, substr_count( $recomposed, 'data-gpp-inbox-surface="gravity_flow.inbox"' ), 'Repeated filtering must not nest GPP Inbox surfaces.' );
 
@@ -243,7 +228,7 @@ gpp_assert_same( 1, substr_count( $recomposed, 'data-gpp-inbox-surface="gravity_
 $set_page( '<p>No Inbox Block.</p>' );
 gpp_assert_same( '<p>No Inbox Block.</p>', gpp_apply_test_filters( 'the_content', '<p>No Inbox Block.</p>' ), 'Page without an admitted Inbox Block must remain unchanged.' );
 
-gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $native, array( 'blockName' => 'core/html' ), $instance ), 'Unrelated blocks must remain untouched.' );
+gpp_assert_same( $native, InboxBlockCompositionBridge::filterFrontendBlock( $native, array( 'blockName' => 'core/html' ) ), 'Unrelated blocks must remain untouched.' );
 
 $set_page( $marker );
 $GLOBALS['gpp_block_is_admin'] = true;
