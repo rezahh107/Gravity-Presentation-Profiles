@@ -3,9 +3,11 @@ import fs from 'node:fs';
 
 const workflow = fs.readFileSync('.github/workflows/wu21-repro-evidence-lab.yml', 'utf8');
 const pullRequestBlock = workflow.match(/pull_request:\n([\s\S]*?)\n  workflow_dispatch:/)?.[1] || '';
-const patterns = [...pullRequestBlock.matchAll(/^\s+- '([^']+)'$/gm)].map(match => match[1]);
+const parsePatterns = text => [...text.matchAll(/^\s+- '([^']+)'$/gm)].map(match => match[1]);
+const patterns = parsePatterns(pullRequestBlock);
 const matches = (file, pattern) => pattern.endsWith('/**') ? file.startsWith(pattern.slice(0, -3)) : file === pattern;
-const covered = file => patterns.some(pattern => matches(file, pattern));
+const coveredBy = (file, ownedPatterns) => ownedPatterns.some(pattern => matches(file, pattern));
+const covered = file => coveredBy(file, patterns);
 
 for (const file of [
   'tests/visual-regression/inbox-visual-diagnostics.mjs',
@@ -16,11 +18,17 @@ for (const file of [
   'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html',
   'tests/repro-evidence-lab/browser-tests.mjs',
   'assets/css/srwf-gravity-flow-inbox.css',
+  'assets/js/gravity-flow-inbox-manual-refresh.js',
+  'tests/fixtures/wu21-packages/manifest.json',
   'gravity-presentation-profiles.php',
 ]) assert.equal(covered(file), true, `WU21 trigger does not cover owned path: ${file}`);
 
 assert.equal(covered('docs/unrelated-note.md'), false, 'Unrelated documentation unexpectedly triggers WU21.');
+const manualRefreshAsset = 'assets/js/gravity-flow-inbox-manual-refresh.js';
+const withoutManualRefresh = patterns.filter(pattern => pattern !== manualRefreshAsset);
+assert.equal(coveredBy(manualRefreshAsset, withoutManualRefresh), false, 'Removing the explicit Manual Refresh production path must break WU21 trigger coverage.');
 const browserEntry = fs.readFileSync('tests/repro-evidence-lab/browser-tests.mjs', 'utf8');
+assert.match(browserEntry,/manual-inbox-refresh-browser-test\.mjs/, 'WU21 browser entry must execute the real Manual Refresh browser qualification.');
 const visualWorkflowAt = workflow.indexOf('node tests/visual-regression/inbox-visual-diagnostics.mjs');
 const deferredP06At = workflow.indexOf('node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs');
 const bootstrapAt = browserEntry.indexOf("import('./p06-fixture-bootstrap.mjs')");
