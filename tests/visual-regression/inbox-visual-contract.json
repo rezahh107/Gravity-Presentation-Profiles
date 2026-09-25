@@ -298,8 +298,7 @@
         "E",
         "G",
         "I",
-        "K",
-        "M"
+        "K"
       ]
     },
     {
@@ -334,8 +333,7 @@
         "G",
         "H",
         "K",
-        "L",
-        "M"
+        "L"
       ]
     },
     {
@@ -505,6 +503,15 @@
     },
     "rtl": {
       "status": "MEASURED_BY_WU17_COMPARATIVE_SUITE"
+    },
+    "manual_refresh": {
+      "status": "MEASURED_BY_WU21_FUNCTIONAL_BROWSER_SUITE",
+      "matrix": "M",
+      "visual_design_convergence": "NOT_EXECUTED",
+      "evidence_id": "WU21-BROWSER-007",
+      "browser_test": "tests/repro-evidence-lab/manual-inbox-refresh-browser-test.mjs",
+      "production_asset": "assets/js/gravity-flow-inbox-manual-refresh.js",
+      "note": "Manual Refresh is real WU21 functional/browser evidence. No action-specific design-convergence visual scenario is admitted, so Matrix M must not appear in executed visual scenario matrices."
     }
   },
   "non_comparable_current_product_surfaces": {
