@@ -15,6 +15,18 @@ const wpPath = process.env.WU21_WP_PATH;
 const wp = code => execFileSync('php', [process.env.WU21_WP_CLI, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8' }).trim();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json')));
 const p06 = JSON.parse(wp('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"));'));
+const humanDisplayFixturePath = path.join(artifactDir, 'pr32-human-display-fixture.json');
+assert.equal(fs.existsSync(humanDisplayFixturePath), true, 'Integrated geometry requires the already-qualified PR32 human-display fixture evidence.');
+const humanDisplayFixture = JSON.parse(fs.readFileSync(humanDisplayFixturePath, 'utf8'));
+const pageSize = 20;
+const baseTaskCount = Array.isArray(fixture.entry_records) ? fixture.entry_records.length : 0;
+assert.equal(baseTaskCount, 25, 'The pristine WU21 fixture must remain the 25-task contract proven by the earlier native browser suite.');
+assert.ok(Number.isInteger(humanDisplayFixture.entry_id) && humanDisplayFixture.entry_id > 0, 'PR32 human-display fixture entry identity is unavailable.');
+const integratedTaskCount = Number(wp(`$m=get_option('gpp_wu21_fixture_manifest'); $u=(int)$m['operator']['id']; $t=0; Gravity_Flow_API::get_inbox_entries(array('filter_key'=>'workflow_user_id_'.$u,'user_id'=>$u,'paging'=>array('page_size'=>100)),$t); echo (int)$t;`));
+const expectedIntegratedTaskCount = baseTaskCount + 1;
+assert.equal(integratedTaskCount, expectedIntegratedTaskCount, 'Integrated Inbox assignment contains an unexpected task leak or missing PR32 fixture.');
+const expectedSecondPageRows = Math.min(pageSize, Math.max(0, integratedTaskCount - pageSize));
+assert.equal(expectedSecondPageRows, 6, 'Integrated pagination state must be 25 base tasks plus the one qualified PR32 task.');
 const baseUrl = process.env.WU21_BASE_URL;
 const cookies = JSON.parse(wp(`$u=get_user_by('login','bootstrap_admin'); $e=time()+900; echo wp_json_encode(array(array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'auth')),array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in'))));`));
 const scope = '.gflow-inbox.gflow-grid.gflow-common';
@@ -30,6 +42,14 @@ const report = {
   repository_sha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   baseline, authority: 'Pinned WU21 Gravity Flow 3.1.0 / AG Grid 25.2.0; integrated Hello/Elementor host',
   selected_method: 'gravityflow_js_config_shared -> native Inbox grid_options.rowBuffer=80',
+  fixture_state: {
+    pristine_task_count: baseTaskCount,
+    pr32_human_display_entry_id: humanDisplayFixture.entry_id,
+    integrated_task_count: integratedTaskCount,
+    page_size: pageSize,
+    expected_integrated_second_page_rows: expectedSecondPageRows,
+    pristine_20_to_5_evidence: 'WU21 real native Inbox browser tests run earlier on the same exact Head',
+  },
   text_scale_limit: 'Root font 200% is a text/reflow probe, not true browser 200% zoom.',
   measurements: [], status: 'RUNNING',
 };
@@ -199,8 +219,10 @@ try {
       assertNear(after.inbox_width,before.inbox_width,`${prefix}: vertical repair changed historical host composition width`);
       assert.equal(after.chain['ag-center-cols-clipper'].inline,before.chain['ag-center-cols-clipper'].inline,'Do not replace native inline sizing state.');
 
-      await applyScenarioAction(page,'pagination',selectors); await settle(page,5);
-      assertGeometry(await measure(page,`${prefix}/page-2`),5,columns);
+      const pagination = await applyScenarioAction(page,'pagination',selectors);
+      assert.equal(pagination.second_page_rows, expectedSecondPageRows, `${prefix}: integrated native pagination did not expose the exact remaining task count.`);
+      await settle(page,expectedSecondPageRows);
+      assertGeometry(await measure(page,`${prefix}/page-2`),expectedSecondPageRows,columns);
       await page.locator(`${scope} [ref="btPrevious"]`).click(); await settle(page,20);
       assertGeometry(await measure(page,`${prefix}/page-1-return`),20,columns);
       await applyScenarioAction(page,'search_result',selectors); await settle(page,1);
