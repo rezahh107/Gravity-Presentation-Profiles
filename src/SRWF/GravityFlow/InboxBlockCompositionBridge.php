@@ -16,8 +16,10 @@ final class InboxBlockCompositionBridge {
             return;
         }
 
-        // Run after InboxPresentationAdapter's render_block reachability hook.
-        add_filter( 'render_block', array( __CLASS__, 'filterFrontendBlock' ), 30, 2 );
+        // WordPress applies the block-specific render filter after the generic
+        // render_block filter used by InboxPresentationAdapter for reachability.
+        // Scope composition to the one authentic Gravity Flow Inbox block type.
+        add_filter( 'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK, array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
     }
 
     public static function filterFrontendBlock( $block_content, $block ) {
