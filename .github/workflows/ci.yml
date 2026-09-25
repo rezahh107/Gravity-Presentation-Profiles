@@ -88,6 +88,14 @@ jobs:
       - name: Run GPP core tests
         run: php tests/run.php
 
+      - name: Validate repository CI package sources
+        shell: bash
+        run: bash scripts/validate-ci-package-sources.sh .
+
+      - name: Validate repository CI package sources
+        shell: bash
+        run: bash scripts/validate-ci-package-sources.sh .
+
       - name: Reject non-fixture committed archives
         shell: bash
         run: bash scripts/validate-committed-archives.sh

@@ -18,6 +18,7 @@ node tests/visual-regression/reference-identity-falsification.mjs
 node tests/visual-regression/scenario-state-falsification.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs
 node tests/visual-regression/wu21-package-source-falsification.mjs
+bash tests/visual-regression/repository-package-source-falsification.sh
 bash tests/visual-regression/archive-policy-falsification.sh
 after="$(sha256sum tests/visual-regression/references/manifest.json tests/visual-regression/inbox-visual-contract.json)"
 test "$before" = "$after"

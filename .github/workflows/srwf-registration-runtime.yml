@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/srwf-registration-runtime.yml'
+      - 'tests/fixtures/wu21-packages/**'
       - 'gravity-presentation-profiles.php'
       - 'src/**'
       - 'profiles/srwf/registration/**'
@@ -37,6 +38,7 @@ jobs:
       SRWF_WP_PATH: /tmp/srwf-wordpress
       SRWF_ARTIFACT_DIR: /tmp/srwf-artifacts
       SRWF_PACKAGE_DIR: /tmp/srwf-packages
+      SRWF_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
       SRWF_GF_ZIP: /tmp/srwf-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
       SRWF_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
       SRWF_GF_SIZE: '5300290'
@@ -125,11 +127,13 @@ jobs:
 
           test "$(php "$SRWF_WP_CLI" core version --path="$SRWF_WP_PATH")" = "6.8.3"
 
-      - name: Fetch and verify authentic runtime products
+      - name: Verify repository-owned Gravity package and authentic runtime products
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 4 -o "$SRWF_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
+          fixture_root="$GITHUB_WORKSPACE/$SRWF_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$SRWF_GF_ZIP"
           test "$(stat -c '%s' "$SRWF_GF_ZIP")" = "$SRWF_GF_SIZE"
           echo "$SRWF_GF_SHA256  $SRWF_GF_ZIP" | sha256sum -c -
           unzip -q "$SRWF_GF_ZIP" -d "$SRWF_WP_PATH/wp-content/plugins"

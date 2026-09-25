@@ -10,6 +10,7 @@ on:
       - 'composer.json'
       - 'release/**'
       - 'scripts/release/**'
+      - 'tests/fixtures/wu21-packages/**'
       - 'tests/release/**'
       - 'docs/architecture/AUTOMATED_RELEASE_SYSTEM_V1.md'
       - 'docs/release/**'

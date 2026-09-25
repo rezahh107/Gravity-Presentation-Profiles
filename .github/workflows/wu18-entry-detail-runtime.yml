@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/wu18-entry-detail-runtime.yml'
+      - 'tests/fixtures/wu21-packages/**'
       - 'src/**'
       - 'assets/**'
       - 'tests/cases/entry-detail-presentation-model.php'
@@ -44,6 +45,7 @@ jobs:
       WU21_WP_PATH: /tmp/wu18-wordpress
       WU21_ARTIFACT_DIR: /tmp/wu18-artifacts
       WU21_PACKAGE_DIR: /tmp/wu18-packages
+      WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
       WU21_GF_ZIP: /tmp/wu18-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
       WU21_FLOW_ZIP: /tmp/wu18-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
       WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
@@ -104,12 +106,14 @@ jobs:
           stylesheet="$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")"
           test -d "$WU21_WP_PATH/wp-content/themes/$template"
           test -d "$WU21_WP_PATH/wp-content/themes/$stylesheet"
-      - name: Fetch and byte-verify owner-supplied Gravity packages
+      - name: Verify and install repository-owned Gravity packages
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 4 -o "$WU21_GF_ZIP" "https://drive.usercontent.google.com/download?id=10pDROZVyqELKzSzIiJrOyEWKjxS8r22Q&export=download&confirm=t"
-          curl -L --fail --retry 4 -o "$WU21_FLOW_ZIP" "https://drive.usercontent.google.com/download?id=1Y90nvrxEEfVZqpmxXkQvwJfw4pvKCoPf&export=download&confirm=t"
+          fixture_root="$GITHUB_WORKSPACE/$WU21_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU21_GF_ZIP"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU21_FLOW_ZIP"
           test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
           test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
           echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
