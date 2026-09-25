@@ -30,7 +30,7 @@ final class InboxBlockCompositionBridge {
         // WordPress applies the block-specific render filter after the generic
         // render_block filter used by InboxPresentationAdapter for reachability.
         // Scope composition to the one authentic Gravity Flow Inbox block type.
-        add_filter( 'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK, array( __CLASS__, 'filterFrontendBlock' ), 20, 3 );
+        add_filter( 'render_block_' . InboxPresentationAdapter::NATIVE_BLOCK, array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
     }
 
     public static function enterCurrentPostContentScope( $content ) {
@@ -45,14 +45,14 @@ final class InboxBlockCompositionBridge {
         return $content;
     }
 
-    public static function filterFrontendBlock( $block_content, $block, $instance = null ) {
+    public static function filterFrontendBlock( $block_content, $block ) {
         if ( ! is_string( $block_content ) || ! is_array( $block ) ) {
             return $block_content;
         }
         if ( InboxPresentationAdapter::NATIVE_BLOCK !== ( isset( $block['blockName'] ) ? $block['blockName'] : null ) ) {
             return $block_content;
         }
-        if ( ! self::currentContentScopeOwnsBlock( $instance ) || ! self::nativeInboxBlockRegistered() ) {
+        if ( ! self::currentContentScopeOwnsBlock() || ! self::nativeInboxBlockRegistered() ) {
             return $block_content;
         }
 
@@ -94,24 +94,13 @@ final class InboxBlockCompositionBridge {
             && has_block( InboxPresentationAdapter::NATIVE_BLOCK, $content );
     }
 
-    private static function currentContentScopeOwnsBlock( $instance ) {
+    private static function currentContentScopeOwnsBlock() {
         if ( ! function_exists( 'doing_filter' ) || ! doing_filter( 'the_content' ) || empty( self::$content_scope_stack ) ) {
             return false;
         }
 
         $scope_index = count( self::$content_scope_stack ) - 1;
-        if ( true !== self::$content_scope_stack[ $scope_index ] ) {
-            return false;
-        }
-
-        $queried = function_exists( 'get_queried_object' ) ? get_queried_object() : null;
-        if ( ! is_object( $queried ) || ! isset( $queried->ID ) || ! is_object( $instance ) || ! isset( $instance->context ) || ! is_array( $instance->context ) ) {
-            return false;
-        }
-
-        return isset( $instance->context['postId'] )
-            && (int) $queried->ID > 0
-            && (int) $queried->ID === (int) $instance->context['postId'];
+        return true === self::$content_scope_stack[ $scope_index ];
     }
 
     private static function nativeInboxBlockRegistered() {
