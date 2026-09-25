@@ -1,3 +1,5 @@
+await import('./pr87-native-height-restoration-counterfactual.mjs');
+
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
