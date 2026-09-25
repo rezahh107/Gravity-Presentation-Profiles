@@ -4,5 +4,15 @@ const contract=JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json'
 const zoom=contract.future_scenarios?.true_browser_zoom_200;
 assert.match(zoom?.status||'',/NOT_EXECUTED/);
 assert.equal(zoom?.matrix,'J');
-for(const scenario of contract.scenarios) assert.equal(scenario.matrix.includes('J'),false,`${scenario.id} falsely reports J as executed coverage.`);
-console.log('COVERAGE_TRUTH_FALSIFICATION_PASS true_zoom_deferred=true matrix_J_not_executed=true');
+for(const scenario of contract.scenarios) {
+  assert.equal(scenario.matrix.includes('J'),false,`${scenario.id} falsely reports J as executed coverage.`);
+  assert.equal(scenario.matrix.includes('M'),false,`${scenario.id} falsely reports Manual Refresh M as executed visual coverage.`);
+}
+const manual=contract.future_scenarios?.manual_refresh;
+assert.equal(manual?.matrix,'M');
+assert.equal(manual?.status,'MEASURED_BY_WU21_FUNCTIONAL_BROWSER_SUITE');
+assert.equal(manual?.visual_design_convergence,'NOT_EXECUTED');
+assert.equal(manual?.evidence_id,'WU21-BROWSER-007');
+assert.equal(manual?.production_asset,'assets/js/gravity-flow-inbox-manual-refresh.js');
+assert.equal(manual?.browser_test,'tests/repro-evidence-lab/manual-inbox-refresh-browser-test.mjs');
+console.log('COVERAGE_TRUTH_FALSIFICATION_PASS true_zoom_deferred=true matrix_J_not_executed=true manual_refresh_functional_only=true matrix_M_not_executed_visual=true');
