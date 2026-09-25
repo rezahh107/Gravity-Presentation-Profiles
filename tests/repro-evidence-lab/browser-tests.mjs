@@ -64,15 +64,12 @@ try {
   await run('./inbox-width-rtl-comparative-browser-tests.mjs');
   await run('./inbox-width-rtl-comparative-finalize.mjs');
 
-  // Establish the one authoritative, idempotent P06 fixture before the first
-  // late-runtime consumer. The later P06 qualification reuses this same state.
-  await run('./p06-fixture-bootstrap.mjs');
+  // Preserve the authoritative P06 bootstrap/qualification ordering contract
+  // verbatim. Only earlier, already-known PR87 failures are qualification-deferred.
+  await import('./p06-fixture-bootstrap.mjs');
 
-  // P06 exercises deliberate lifecycle mutation for its inactive-profile negative
-  // control. Keep it after the established browser regressions so the new
-  // qualification cannot alter the state observed by pre-existing suites.
   if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
-    await run('./p06-inbox-asset-reachability-browser-test.mjs');
+    await import('./p06-inbox-asset-reachability-browser-test.mjs');
   }
 } finally {
   if (pr87Qualification) {
