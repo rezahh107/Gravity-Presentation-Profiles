@@ -45,9 +45,14 @@ gpp_require_fixture_consumer() {
     grep -Fq -- "- 'tests/fixtures/wu21-packages/**'" "$file" || { echo "$rel does not trigger on package-fixture changes." >&2; return 1; }
   fi
 
-  grep -Fq 'gravityforms-3.1.1.1-owner-supplied-source-package.zip' "$file" || { echo "$rel does not consume the admitted Gravity Forms fixture." >&2; return 1; }
-  if [[ "$mode" == "gf-flow" ]]; then
-    grep -Fq 'gravityflow-3.1.0-owner-supplied-source-package.zip' "$file" || { echo "$rel does not consume the admitted Gravity Flow fixture." >&2; return 1; }
+  if [[ "$mode" == "manifest-gf-flow" ]]; then
+    grep -Fq 'manifest_value gravityforms filename' "$file" || { echo "$rel does not resolve Gravity Forms from the repository manifest." >&2; return 1; }
+    grep -Fq 'manifest_value gravityflow filename' "$file" || { echo "$rel does not resolve Gravity Flow from the repository manifest." >&2; return 1; }
+  else
+    grep -Fq 'gravityforms-3.1.1.1-owner-supplied-source-package.zip' "$file" || { echo "$rel does not consume the admitted Gravity Forms fixture." >&2; return 1; }
+    if [[ "$mode" == "gf-flow" ]]; then
+      grep -Fq 'gravityflow-3.1.0-owner-supplied-source-package.zip' "$file" || { echo "$rel does not consume the admitted Gravity Flow fixture." >&2; return 1; }
+    fi
   fi
   grep -Fq 'sha256sum -c -' "$file" || { echo "$rel does not preserve SHA-256 verification." >&2; return 1; }
   grep -Fq "stat -c '%s'" "$file" || { echo "$rel does not preserve exact-size verification." >&2; return 1; }
@@ -63,7 +68,7 @@ gpp_validate_ci_package_sources() {
   gpp_require_fixture_consumer "$root" '.github/workflows/wu19-a4-print-runtime.yml' 'gf-flow'
   gpp_require_fixture_consumer "$root" '.github/workflows/srwf-registration-runtime.yml' 'gf-only'
   gpp_require_fixture_consumer "$root" '.github/workflows/wu21-repro-evidence-lab.yml' 'gf-flow'
-  gpp_require_fixture_consumer "$root" 'scripts/release/smoke-zip.sh' 'gf-flow'
+  gpp_require_fixture_consumer "$root" 'scripts/release/smoke-zip.sh' 'manifest-gf-flow'
 
   grep -Fq -- "- 'tests/fixtures/wu21-packages/**'" "$root/.github/workflows/release.yml" || {
     echo ".github/workflows/release.yml does not trigger release smoke on package-fixture changes." >&2
