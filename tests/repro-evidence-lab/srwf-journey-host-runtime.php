@@ -118,14 +118,42 @@ function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $
         )
     );
 
-    $review = $api->get_step( (int) $review_id );
-    $correction = $api->get_step( (int) $correction_id );
+    // Gravity Flow step objects cache feed metadata for the request. Re-resolve
+    // through a fresh API instance before accepting the configured state as proof.
+    $fresh_api = new Gravity_Flow_API( $form_id );
+    $review = $fresh_api->get_step( (int) $review_id );
+    $correction = $fresh_api->get_step( (int) $correction_id );
     if ( ! $review || ! $correction ) {
-        throw new RuntimeException( 'Unable to re-resolve configured workflow steps.' );
+        throw new RuntimeException( 'Unable to fresh-resolve configured workflow steps.' );
     }
+    $review_meta = $review->get_feed_meta();
+    $correction_meta = $correction->get_feed_meta();
 
-    if ( ! (bool) $review->confirmation_prompt || ! (bool) $review->revertEnable || (string) $review->revertValue !== (string) $correction_id ) {
-        throw new RuntimeException( 'Host-effective Approval confirmation/Revert settings did not persist.' );
+    if (
+        '1' !== (string) rgar( $review_meta, 'confirmation_prompt' )
+        || '1' !== (string) rgar( $review_meta, 'revertEnable' )
+        || (string) rgar( $review_meta, 'revertValue' ) !== (string) $correction_id
+        || 'complete' !== (string) rgar( $review_meta, 'destination_approved' )
+        || 'complete' !== (string) rgar( $review_meta, 'destination_rejected' )
+        || (string) rgar( $correction_meta, 'destination_complete' ) !== (string) $review_id
+    ) {
+        throw new RuntimeException(
+            'Host-effective journey settings did not persist: ' . wp_json_encode(
+                array(
+                    'review' => array(
+                        'confirmation_prompt' => rgar( $review_meta, 'confirmation_prompt' ),
+                        'revertEnable' => rgar( $review_meta, 'revertEnable' ),
+                        'revertValue' => rgar( $review_meta, 'revertValue' ),
+                        'destination_approved' => rgar( $review_meta, 'destination_approved' ),
+                        'destination_rejected' => rgar( $review_meta, 'destination_rejected' ),
+                    ),
+                    'correction' => array(
+                        'destination_complete' => rgar( $correction_meta, 'destination_complete' ),
+                    ),
+                ),
+                JSON_UNESCAPED_SLASHES
+            )
+        );
     }
 
     return array(
@@ -133,8 +161,8 @@ function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $
         'correction_id' => (int) $correction_id,
         'review_status_config' => $review->get_status_config(),
         'correction_status_config' => $correction->get_status_config(),
-        'review_feed_meta' => $review->get_feed_meta(),
-        'correction_feed_meta' => $correction->get_feed_meta(),
+        'review_feed_meta' => $review_meta,
+        'correction_feed_meta' => $correction_meta,
     );
 }
 
