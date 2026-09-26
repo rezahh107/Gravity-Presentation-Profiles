@@ -9,10 +9,14 @@ export const MATRIX_J_QUALIFICATION_ID = 'GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1';
 
 if (process.env.WU21_ARTIFACT_DIR && process.env.WU21_WP_PATH && process.env.WU21_WP_CLI) {
   const root=path.join(process.env.WU21_ARTIFACT_DIR,'visual-regression-diagnostics');
-  const emptyPath=path.join(root,'empty-state-seam.json');
-  const matrixPath=path.join(root,'matrix-j-browser-zoom.json');
-  if(!fs.existsSync(emptyPath)) await import('../repro-evidence-lab/inbox-empty-state-seam-qualification.mjs');
-  if(!fs.existsSync(matrixPath)) await import('./matrix-j-browser-zoom.mjs');
+  const integratedHost=path.join(process.env.WU21_ARTIFACT_DIR,'integrated-visual-host.json');
+  const fixtureManifest=path.join(process.env.WU21_ARTIFACT_DIR,'fixture-manifest.json');
+  if(fs.existsSync(integratedHost)&&fs.existsSync(fixtureManifest)){
+    const emptyPath=path.join(root,'empty-state-seam.json');
+    const matrixPath=path.join(root,'matrix-j-browser-zoom.json');
+    if(!fs.existsSync(emptyPath)) await import('../repro-evidence-lab/inbox-empty-state-seam-qualification.mjs');
+    if(!fs.existsSync(matrixPath)) await import('./matrix-j-browser-zoom.mjs');
+  }
 }
 
 export function buildDesignEvidenceContext(scenario, emptyStateQualification = null) {
