@@ -75,6 +75,9 @@ jobs:
           set -euo pipefail
           composer validate --no-check-publish
           php -l tests/repro-evidence-lab/wu18-srwf-journey-source-probe.php
+          php -l tests/repro-evidence-lab/wu18-srwf-journey-setup.php
+          php -l tests/repro-evidence-lab/wu18-srwf-journey-runtime.php
+          node --check tests/repro-evidence-lab/wu18-srwf-journey-browser.mjs
           bash scripts/validate-committed-archives.sh
 
       - name: Install exact WordPress runtime
@@ -109,7 +112,7 @@ jobs:
           grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
           grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
 
-      - name: Activate exact plugins and capture source capability evidence
+      - name: Activate exact plugins and capture source/runtime evidence
         shell: bash
         run: |
           set -euo pipefail
@@ -117,6 +120,42 @@ jobs:
           php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-srwf-journey-source-probe.php
           test -s "$WU21_ARTIFACT_DIR/wu18-srwf-journey-source-probe.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-srwf-journey-setup.php
+          test -s "$WU21_ARTIFACT_DIR/wu18-srwf-journey-fixture.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-srwf-journey-runtime.php
+          test -s "$WU21_ARTIFACT_DIR/wu18-srwf-journey-runtime.json"
+
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install exact Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1);"
+
+      - name: Execute authentic browser qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/srwf-journey-wp-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null
+          node tests/repro-evidence-lab/wu18-srwf-journey-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/wu18-srwf-journey-browser.json"
+          kill "$server_pid" >/dev/null 2>&1 || true
+          wait "$server_pid" 2>/dev/null || true
+          trap - EXIT
 
       - name: Upload qualification evidence
         if: always()
@@ -125,5 +164,9 @@ jobs:
           name: srwf-operator-journey-host-qualification-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             /tmp/srwf-journey-artifacts/wu18-srwf-journey-source-probe.json
+            /tmp/srwf-journey-artifacts/wu18-srwf-journey-fixture.json
+            /tmp/srwf-journey-artifacts/wu18-srwf-journey-runtime.json
+            /tmp/srwf-journey-artifacts/wu18-srwf-journey-browser.json
+            /tmp/srwf-journey-wp-server.log
           if-no-files-found: warn
           retention-days: 30
