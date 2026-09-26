@@ -185,7 +185,7 @@ export async function runPriFnd001MobileFocusClearance(page, inboxUrl, artifactD
     }
 
     const screenshot = path.join(artifactDir, `pri-fnd-001-mobile-${width}.png`);
-    await page.screenshot({ path, fullPage: false });
+    await page.screenshot({ path: screenshot, fullPage: false });
 
     await page.locator(`${scope} [data-js="inbox-clear-filters"]`).click();
     await page.waitForFunction(scopeSelector => {
