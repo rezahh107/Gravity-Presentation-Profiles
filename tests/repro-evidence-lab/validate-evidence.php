@@ -1,6 +1,7 @@
 <?php
 $repo = dirname( __DIR__, 2 );
 $dir = getenv( 'WU21_ARTIFACT_DIR' );
+require_once __DIR__ . '/visual-diagnostics-manifest.php';
 function rjson( $p ) { $d = json_decode( file_get_contents( $p ), true ); if ( ! is_array( $d ) ) throw new RuntimeException( 'Invalid JSON ' . $p ); return $d; }
 function canon( $v ) { if ( ! is_array( $v ) ) return $v; $list=array_keys($v)===range(0,count($v)-1); if($list)return array_map('canon',$v); ksort($v,SORT_STRING); foreach($v as $k=>$x)$v[$k]=canon($x); return $v; }
 function cj( $v ) { return json_encode( canon( $v ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); }
@@ -43,6 +44,15 @@ foreach ( $e['mechanics'] as $name => $m ) req( 'PROVEN_IN_REPRODUCIBLE_SIMULATI
 for ( $i=1; $i<=10; $i++ ) { $id=sprintf('AC-WU21-%03d',$i); req( 'PASS' === $e['acceptance_criteria'][$id]['status'], 'Acceptance criterion not PASS: ' . $id ); }
 req( 'UNBOUND' === $e['target_production_facts']['form_ids'], 'Production form IDs must remain UNBOUND' );
 req( 'NOT_PROVEN' === $e['target_production_facts']['plugin_license_configuration'], 'Production plugin/license config must remain NOT_PROVEN' );
+
+$bound_visual = isset( $e['visual_regression_diagnostics'] ) && is_array( $e['visual_regression_diagnostics'] ) ? $e['visual_regression_diagnostics'] : null;
+$actual_visual = wu21_assert_visual_diagnostics_manifest( $dir, $bound_visual );
+req( 'RECURSIVE_MACHINE_READABLE_JSON_JSONL_V1' === ( $actual_visual['inclusion_policy'] ?? null ), 'Visual diagnostics inclusion policy mismatch' );
+req( array( '.json', '.jsonl' ) === ( $actual_visual['included_extensions'] ?? null ), 'Visual diagnostics included extensions mismatch' );
+foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json', 'manifest.json' ) as $required_visual ) {
+    $paths = array_map( function ( $file ) { return $file['path'] ?? null; }, $actual_visual['files'] ?? array() );
+    req( in_array( $required_visual, $paths, true ), 'Required visual diagnostic is unbound: ' . $required_visual );
+}
 
 $c = isset( $e['comparative_repair_qualification'] ) && is_array( $e['comparative_repair_qualification'] ) ? $e['comparative_repair_qualification'] : array();
 req( 'gpp.comparative_repair_qualification.v1' === ( $c['schema'] ?? null ), 'Comparative schema mismatch' );
