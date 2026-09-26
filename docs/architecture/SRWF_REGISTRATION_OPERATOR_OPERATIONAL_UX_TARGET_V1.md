@@ -12,18 +12,24 @@ surfaces:
   - srwf.daily_management_report_presentation
 owner_scope_start: after successful Plato authentication
 owner_scope_end: operator daily-work completion and return/continuation guidance
+authority_notes:
+  approve_reject_confirmation_owner: Gravity Flow
+  gpp_role: admitted presentation around host-owned workflow state only
+  exact_visual_tokens_owner: applicable admitted visual authority and existing GPP token authority
 preserves:
   - Gravity Forms data and validation ownership
-  - Gravity Flow workflow, assignment, authorization, actions and transitions
+  - Gravity Flow workflow, assignment, authorization, actions, transitions and confirmation behavior
   - Plato login/logout ownership
   - SRWF business-rule ownership
   - GNM notification-delivery ownership
 out_of_scope:
   - replacing Gravity Flow workflow or Inbox
   - custom login/logout UX
+  - GPP-owned Approve/Reject confirmation behavior
   - automatic next-case routing
   - GPP-owned daily-report counting/business semantics
   - GPP-owned SMS delivery
+  - defining exact visual-token values in this architecture document
 ```
 
 ## 1. Purpose
@@ -43,7 +49,7 @@ Where am I?
 → What should I do next?
 ```
 
-Visual quality is part of comprehension, not decoration only. Labels, iconography, color, hierarchy, state feedback and navigation must work together so the operator does not have to infer workflow semantics from technical behavior.
+Visual quality is part of comprehension, not decoration only. Labels, iconography, color roles, hierarchy, state feedback and navigation must work together so the operator does not have to infer workflow semantics from technical behavior.
 
 ## 2. Ownership boundary
 
@@ -69,10 +75,13 @@ GPP must not replace or redesign these surfaces for this target.
 - Inbox membership and assignment;
 - Entry Detail permission;
 - Approval / Reject / Revert behavior;
+- Approve/Reject confirmation behavior and confirmation lifecycle;
 - User Input behavior;
 - workflow state and transitions;
 - nonces, authorization and validation;
 - workflow destinations and native operational truth.
+
+GPP must not intercept Approve/Reject merely to create a parallel confirmation lifecycle, and it must not manufacture substitute confirmation behavior when Gravity Flow does not provide it.
 
 ### SRWF owns
 
@@ -91,11 +100,13 @@ GPP must not replace or redesign these surfaces for this target.
 
 - the coherent presentation of the operator journey on admitted SRWF Gravity Flow surfaces;
 - page orientation and contextual guidance;
-- visual/semantic presentation of native actions;
-- optional confirmation presentation where Owner-authorized;
+- visual/semantic presentation of native actions and host-owned states;
+- visual integration/presentation of a Gravity Flow-native confirmation state only when that native state is actually emitted and admitted;
 - authoritative-result feedback presentation;
 - return navigation presentation;
 - presentation of SRWF-provided daily-report state/actions inside the admitted Inbox experience, without taking ownership of the report's business truth or delivery.
+
+This document defines the operational journey and semantic intent. It does **not** duplicate Gravity Flow action/confirmation authority and does **not** define exact visual-token values.
 
 ## 3. Complete target journey
 
@@ -181,42 +192,22 @@ Terms such as `Entry`, `Approval Step`, `Revert`, `User Input Step`, internal ID
 
 Each material action should make its consequence understandable before execution, without duplicating technical implementation detail.
 
-## 7. Approve / Reject confirmation policy
+## 7. Approve / Reject confirmation authority
 
-GPP should provide one Owner-facing/admin setting for the admitted SRWF review experience:
+Approve/Reject confirmation behavior is **fully owned by Gravity Flow**.
 
-**Confirmation before recording case decision**
+Locked boundary:
 
-Target behavior:
+- Gravity Flow decides whether and how native Approve/Reject confirmation is configured/emitted;
+- Gravity Flow remains authoritative for authorization, nonce, validation, action availability, workflow mutation, result truth and the confirmation lifecycle;
+- GPP may visually integrate/present the native confirmation state only when Gravity Flow actually emits that state on an admitted surface;
+- GPP must not intercept Approve/Reject to create a custom or parallel confirmation lifecycle;
+- GPP must not manufacture a fallback confirmation when Gravity Flow does not provide one;
+- GPP must not expose a separate GPP/admin setting that enables or disables Approve/Reject confirmation.
 
-- default: **enabled**;
-- scope: Approve and Reject;
-- the setting may be turned on/off by an authorized administrator;
-- Request Correction / Revert is not included by default because it continues the same operator's correction journey rather than finalizing the review decision;
-- disabling confirmation removes only the confirmation step;
-- disabling confirmation must not weaken Gravity Flow authorization, nonces, validation, workflow truth, result detection, error handling or result feedback.
+Where Gravity Flow emits confirmation, operator-facing presentation should keep the action and consequence understandable and must not obscure the host-owned meaning. Exact copy and behavior remain constrained by the native Gravity Flow capability actually available in the supported runtime.
 
-Confirmation copy must name the action and consequence. A bare `آیا مطمئن هستید؟` is insufficient.
-
-Conceptual examples:
-
-### Approve confirmation
-
-**تأیید این پرونده؟**  
-با ادامه، نتیجه تأیید در گردش کار ثبت می‌شود.
-
-Primary: **تأیید و ثبت**  
-Secondary: **انصراف**
-
-### Reject confirmation
-
-**رد این پرونده؟**  
-با ادامه، نتیجه رد در گردش کار ثبت می‌شود.
-
-Primary: **رد و ثبت**  
-Secondary: **انصراف**
-
-The implementation must avoid double-confirmation if Gravity Flow already provides an active native confirmation for the same action. Exact host seam and coexistence behavior require runtime verification before implementation closure.
+Request Correction / Revert remains a separate native workflow transition governed by Gravity Flow and the correction topology in this target.
 
 ## 8. Correction path
 
@@ -240,7 +231,7 @@ The correction surface should clearly orient the operator that:
 - the operator should correct only the fields allowed by Gravity Flow configuration;
 - completing the correction returns the case to Review according to the configured native route.
 
-The target does not require an additional confirmation before entering correction.
+The target does not require GPP to add a confirmation before entering correction.
 
 Unsaved-change/leave-page protection is **not assumed** by this document. It may be added only if a supported and verified host-safe implementation is demonstrated.
 
@@ -275,7 +266,7 @@ Normal successful case outcomes should use a semantic **result dialog**, not an 
 
 ### Approved
 
-Icon family: `circle-check`
+Icon family direction: `circle-check` or equivalent positive-completion semantics.
 
 **پرونده تأیید شد**  
 نتیجه بررسی با موفقیت ثبت شد.
@@ -284,7 +275,7 @@ Primary continuation: **بازگشت به کارهای من**
 
 ### Rejected
 
-Icon family: contextual rejection such as `file-x`, not a generic system-error glyph.
+Icon family direction: contextual rejection such as `file-x`, not a generic system-error glyph.
 
 **پرونده رد شد**  
 نتیجه رد با موفقیت ثبت شد.
@@ -293,13 +284,13 @@ Primary continuation: **بازگشت به کارهای من**
 
 ### Correction
 
-Icon family: `file-pen` / correction semantics.
+Icon family direction: `file-pen` or equivalent correction semantics.
 
 The correction result/guidance must describe the real native transition and next valid action. Do not claim a destination that runtime evidence does not establish.
 
 ### Technical failure
 
-Icon family: `triangle-alert`.
+Icon family direction: `triangle-alert` or equivalent technical-error semantics.
 
 **نتیجه ثبت نشد**  
 Plain-language consequence + valid retry/next-step guidance based on real runtime capability.
@@ -312,14 +303,14 @@ If the system cannot prove success or failure, do not fabricate either state. Pr
 
 ## 11. Dialog accessibility and continuation
 
-Result/confirmation dialogs must preserve usable keyboard and assistive-technology behavior.
+Result dialogs, and any Gravity Flow-native confirmation UI that is actually emitted and visually integrated, must preserve usable keyboard and assistive-technology behavior.
 
 At minimum, implementation/acceptance must verify where applicable:
 
 - meaningful accessible name/title;
-- focus moves into the opened modal;
+- focus moves into an opened modal where the host pattern is modal;
 - keyboard traversal remains usable within the modal;
-- Escape/cancel behavior matches the dialog type and does not trigger the material action;
+- Escape/cancel behavior matches the actual dialog type and does not trigger an unintended material action;
 - focus after closure moves to a logical continuation point;
 - color is not the sole carrier of meaning;
 - icons are decorative when redundant with visible text, or otherwise receive correct semantics;
@@ -329,27 +320,33 @@ For a completed Approve/Reject action, the logical continuation is the **return 
 
 If a result dialog is dismissed, the page must not leave the operator unable to determine whether the operation completed. The result/continuation state must remain truthfully understandable through the resulting page/runtime state.
 
+GPP presentation must not alter the native confirmation lifecycle merely to obtain a desired modal interaction.
+
 ## 12. Semantic visual language
 
-Owner-approved target operational palette:
+This section defines **semantic visual direction only**. It is not an exact-token authority and it does not create a second token SSOT.
 
-| Meaning | Target base color | Icon family |
-|---|---:|---|
-| navigation / primary continuation | `#1D4ED8` | arrow/navigation |
-| approved / positive completion | `#15803D` | `circle-check` |
-| rejected business decision | `#BE123C` | `file-x` |
-| correction / revision | `#B45309` | `file-pen` |
-| technical/system error | `#B91C1C` | `triangle-alert` |
-| primary text | `#0F172A` | — |
-| secondary text | `#475569` | — |
-| page background | `#F8FAFC` | — |
-| surface | `#FFFFFF` | — |
-| border | `#E2E8F0` | — |
-| keyboard focus | `#2563EB` | — |
+| Meaning | Semantic direction | Icon family direction |
+|---|---|---|
+| navigation / primary continuation | primary/navigation emphasis, typically blue-family | arrow/navigation |
+| approved / positive completion | positive/success emphasis, typically green-family | `circle-check` |
+| rejected business decision | distinct rejection emphasis, typically rose/red-family but not technical-error semantics | `file-x` |
+| correction / revision | correction/attention emphasis, typically amber-family | `file-pen` |
+| technical/system error | technical failure/danger emphasis, visually distinct from normal Reject | `triangle-alert` |
+| primary text | high-emphasis readable text role | — |
+| secondary text | supporting-text role | — |
+| page background | neutral page role | — |
+| surface | neutral raised/content surface role | — |
+| border | neutral separation role | — |
+| keyboard focus | clearly visible focus-indicator role | — |
 
-These values define the current target semantic direction for this operational experience. Implementation must still verify actual contrast in the final rendered state, including text size, background, hover, disabled and focus states.
+Exact colors, contrast tokens, spacing/radius/shadow values and other presentation tokens remain controlled by the applicable admitted visual authority and existing GPP token authority. For Entry Detail, the current authority chain includes `docs/visual/ENTRY_DETAIL_VNEXT_AUTHORITY_MIGRATION_V1.md`, which identifies the admitted Entry Detail visual authority and preserves the architecture/visual boundary.
 
-Semantic meaning must not depend on color alone. Shape/icon + title/text + color should reinforce the same meaning.
+This document must not silently supersede that visual authority, older still-valid Inbox/Print authority, or existing implementation tokens.
+
+Implementation must verify actual contrast and state presentation in the final rendered runtime, including text size, background, hover, disabled and focus states.
+
+Semantic meaning must not depend on color alone. Shape/icon + title/text + color role should reinforce the same meaning.
 
 ## 13. End-of-day report integration target
 
@@ -382,7 +379,7 @@ Important locks:
 - previous report versions/history must not be silently rewritten as if the first send never occurred;
 - actual counting/classification rules are **not defined by GPP** and must come from SRWF authority;
 - actual SMS/provider delivery truth is **not defined by GPP** and must come from GNM authority;
-- because report send causes a real external message, a deliberate preview/confirmation step remains required independent of the Approve/Reject confirmation toggle.
+- because report send causes a real external message, a deliberate preview/explicit-send confirmation step remains required as its own report-send safeguard; it is independent of Gravity Flow-owned case-decision confirmation behavior.
 
 No automatic scheduled send is admitted by this GPP target.
 
@@ -425,11 +422,14 @@ GPP must not reimplement:
 
 - Approval processing;
 - Reject processing;
+- Approve/Reject confirmation behavior or confirmation lifecycle;
 - Revert/User Input workflow;
 - Inbox assignment/query truth;
 - authorization;
 - daily-report business computation;
 - SMS delivery.
+
+An unresolved host capability or confirmation behavior remains an implementation/runtime proof obligation. It must not be converted into a GPP-owned fallback.
 
 ## 17. Acceptance requirements
 
@@ -446,10 +446,10 @@ Acceptance must prove the operational journey on authentic supported runtime sur
 
 ### Approve / Reject
 
-- confirmation-enabled path works;
-- confirmation-disabled path works;
-- no double-confirmation with native host behavior;
-- cancel performs no workflow mutation;
+- native Gravity Flow confirmation behavior is verified where it is configured/emitted;
+- GPP introduces no duplicate/custom confirmation and does not manufacture confirmation when the host does not provide it;
+- GPP presentation does not alter Gravity Flow authorization, nonces, validation, action availability or workflow mutation;
+- native cancel/no-confirm behavior, where provided by Gravity Flow, performs no unintended workflow mutation;
 - success dialog appears only after authoritative success;
 - rejected business result is not styled/announced as technical error;
 - system failure does not masquerade as business Reject.
@@ -464,7 +464,7 @@ Acceptance must prove the operational journey on authentic supported runtime sur
 ### Accessibility / responsive
 
 - keyboard/focus behavior is usable;
-- semantic names and dialog relationships are correct;
+- semantic names and dialog relationships are correct where applicable;
 - approved/rejected/correction/error meaning is not color-only;
 - desktop and mobile presentation remain understandable and usable;
 - RTL presentation is correct for Persian operator UI and any LTR technical fragments remain isolated where needed.
@@ -474,7 +474,7 @@ Acceptance must prove the operational journey on authentic supported runtime sur
 When SRWF/GNM integration exists, prove separately that:
 
 - Inbox presentation reflects authoritative SRWF daily-report state;
-- preview/confirm does not itself fabricate send success;
+- preview/explicit-send confirmation does not itself fabricate send success;
 - actual success/failure/unknown delivery state comes from the owning integration;
 - post-report qualifying activity can surface amendment-needed state without blocking normal case work.
 
@@ -482,17 +482,19 @@ When SRWF/GNM integration exists, prove separately that:
 
 This document records the **Owner-approved destination**.
 
-It does not claim that the destination is already implemented.
+It does not claim that the destination is already implemented or runtime-qualified.
 
 Current known implementation contains substantial Inbox and Entry Detail presentation work, but the complete operational journey described here still requires implementation/runtime qualification.
 
-In particular, the exact Gravity Flow seams for:
+In particular, the exact Gravity Flow/native seams for:
 
-- configurable confirmation coexistence;
+- presenting host-owned confirmation behavior where configured without duplication or interception;
 - authoritative post-action result capture/presentation;
 - production-safe return navigation behavior;
 
 must be verified against the supported runtime before implementation is declared closed.
+
+No missing host confirmation capability may be treated as permission for GPP to create a substitute confirmation lifecycle.
 
 ## 19. Relationship to existing authority
 
@@ -500,11 +502,12 @@ This document is narrower than and subordinate to `MOTHER_ARCHITECTURE.md` on ge
 
 It complements:
 
-- `ENTRY_DETAIL_REVIEW_CORRECTION_TARGET_V1.md` for Review/Correction architecture;
+- `ENTRY_DETAIL_REVIEW_CORRECTION_TARGET_V1.md` for Review/Correction architecture and Gravity Flow ownership of native workflow/action/confirmation behavior;
+- `docs/visual/ENTRY_DETAIL_VNEXT_AUTHORITY_MIGRATION_V1.md` and the applicable admitted visual authority for exact Entry Detail visual language/tokens;
 - admitted Inbox visual/runtime contracts and diagnostics;
 - SRWF business authority for registration/report semantics;
 - GNM authority for delivery semantics.
 
 Where an older GPP visual reference illustrates a Back-to-Inbox or semantic action pattern without making it a runtime requirement, this document makes the **operational journey requirement** explicit for the forward target.
 
-It does not rewrite historical evidence or claim prior implementation already satisfied this target.
+It does not rewrite historical evidence, create a second exact-token authority, or claim prior implementation already satisfied this target.
