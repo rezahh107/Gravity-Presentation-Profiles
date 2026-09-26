@@ -97,20 +97,20 @@ Only the following are new PR #93 journey designs:
 
 Where wording is not already authoritative, these remain candidate copy for Owner review:
 
-- Approve confirmation: `پرونده تأیید شود؟`
-- Reject confirmation: `پرونده رد شود؟`
+- Approve confirmation: `تأیید این پرونده؟`
+- Reject confirmation: `رد این پرونده؟`
 - Approved: `پرونده تأیید شد`
 - Rejected: `پرونده رد شد`
-- Correction: `پرونده برای اصلاح باز شد`
+- Correction: `پرونده برای اصلاح بازگردانده شد`
 - Technical Error: `در ثبت نتیجه مشکلی رخ داد`
-- Unknown: `نتیجه هنوز مشخص نیست`
+- Unknown: `نتیجه نهایی هنوز مشخص نیست`
 
 These strings do not create business rules or runtime truth.
 
 ## Unresolved host-dependent items
 
 - Exact native Approve/Reject confirmation markup, wording, button order, initial focus, focus trap, Escape/cancel semantics and focus restoration remain unproven and must be reconciled with the real Gravity Flow seam.
-- `ادامه به اصلاح پرونده` remains a candidate continuation and may be admitted only if the native correction topology exposes a supported continuation/destination.
+- Any direct continuation into correction remains a candidate only and may be admitted only if the native correction topology exposes a supported continuation/destination.
 - Exact User Input fields, editability, validation, submit behavior and post-submit route remain Gravity Forms / Gravity Flow owned.
 - Production `بازگشت به کارهای من` must later use a qualified supported/native navigation seam and land on canonical Inbox page 1.
 - Approved / Rejected / Correction / Technical Error / Unknown may render only from authoritative runtime evidence; a click is never sufficient proof.
