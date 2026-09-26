@@ -6,7 +6,9 @@ const contract=JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json'
 const policy=contract.design_comparison_policy;
 const seed=scenario=>Object.fromEntries(scenario.design_relations.map(name=>{
   const rule=policy.relations[name];
-  return [name,rule.kind==='numeric_delta'?{design:10,runtime:10,delta:0}:{design:'SAME',runtime:'SAME',delta:null}];
+  const evidence=rule.kind==='numeric_delta'?{design:10,runtime:10,delta:0}:{design:'SAME',runtime:'SAME',delta:null};
+  if(rule.minimum_observations_each!==undefined) evidence.observations={design:2,runtime:2};
+  return [name,evidence];
 }));
 const mutations={
   focus:'search_focus_outline',
@@ -34,4 +36,4 @@ assert.equal(invalid.status,'INVALID_EVIDENCE');
 assert.throws(()=>projectScenarioStatus({captureStability:'PASS',designComparison:invalid,mode:'PREVIEW_DIAGNOSTIC'}),/required design comparison evidence is invalid/);
 const uncovered={...focus,design_relations:focus.design_relations.filter(name=>name!==policy.action_requirements.focus[0])};
 assert.throws(()=>assertActionVisualCoverage(policy,uncovered),/action-specific visual relation/);
-console.log('STATE_VISUAL_FALSIFICATION_PASS focus_mutation_warns=true pagination_mutation_warns=true empty_mutation_warns=true search_result_mutation_warns=true missing_state_evidence_fails=true within_policy_pass=true same_run_stability_remains_distinct=true');
+console.log('STATE_VISUAL_FALSIFICATION_PASS focus_mutation_warns=true pagination_mutation_warns=true empty_mutation_warns=true search_result_mutation_warns=true missing_state_evidence_fails=true within_policy_pass=true same_run_stability_remains_distinct=true cardinality_explicit=true');

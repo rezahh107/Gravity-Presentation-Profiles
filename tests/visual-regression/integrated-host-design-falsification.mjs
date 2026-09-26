@@ -35,12 +35,12 @@ assert.throws(()=>assertIntegratedHostIdentity(companion,hostContract),/SRWF-Hos
 const registeredCompanion=structuredClone(authenticHost);registeredCompanion.srwf_host_companion_registered=true;
 assert.throws(()=>assertIntegratedHostIdentity(registeredCompanion,hostContract),/SRWF-Host-Companion/);
 const delta=compareDesignFacts(
-  {relationships:{first_card_width:400,cards_per_visual_row:2,horizontal_overflow:0}},
-  {relationships:{first_card_width:360,cards_per_visual_row:2,horizontal_overflow:8}},
+  {relationships:{visible_card_count:2,first_card_width:400,cards_per_visual_row:2,horizontal_overflow:0}},
+  {relationships:{visible_card_count:2,first_card_width:360,cards_per_visual_row:2,horizontal_overflow:8}},
   contract.design_comparison_policy,
   ['first_card_width','cards_per_visual_row','horizontal_overflow'],
 );
 assert.equal(delta.deltas.first_card_width.delta,-40);
 assert.equal(delta.deltas.horizontal_overflow.delta,8);
 assert.equal(delta.evaluation.status,'WARNING');
-console.log('INTEGRATED_HOST_DESIGN_FALSIFICATION_PASS mapping_fail_closed=true swapped_surfaces_rejected=true geometry_mutation_detected=true host_identity_mismatch_rejected=true');
+console.log('INTEGRATED_HOST_DESIGN_FALSIFICATION_PASS mapping_fail_closed=true swapped_surfaces_rejected=true geometry_mutation_detected=true host_identity_mismatch_rejected=true cardinality_explicit=true');
