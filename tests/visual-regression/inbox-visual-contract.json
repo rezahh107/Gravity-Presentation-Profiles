@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "mode": "PREVIEW_DIAGNOSTIC",
   "approved_visual_contract_activated": false,
   "comparator": {
@@ -80,7 +80,7 @@
     }
   },
   "design_comparison_policy": {
-    "schema_version": "1.1.0",
+    "schema_version": "1.2.0",
     "relations": {
       "first_card_width": {
         "kind": "numeric_delta",
@@ -95,7 +95,8 @@
         "tolerance": 8
       },
       "cards_per_visual_row": {
-        "kind": "discrete_exact"
+        "kind": "discrete_exact",
+        "minimum_observations_each": 2
       },
       "horizontal_overflow": {
         "kind": "numeric_delta",
@@ -403,6 +404,48 @@
         "empty_title_font_weight",
         "empty_body_color"
       ],
+      "relation_dispositions": {
+        "empty_state_visible": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_state_border": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_state_background_color": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_state_border_radius": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_state_padding": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_title_font_size": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_title_font_weight": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        },
+        "empty_body_color": {
+          "classification": "NATIVE_HOST_LIMITATION",
+          "qualification_id": "GPP-INBOX-EMPTY-STATE-SEAM-V1",
+          "reason": "Pinned Gravity Flow 3.1.0 quick-filter zero-row runtime exposes no supported native no-result presentation node."
+        }
+      },
       "matrix": [
         "C",
         "F",
