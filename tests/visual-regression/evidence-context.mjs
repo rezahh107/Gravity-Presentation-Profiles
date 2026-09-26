@@ -35,11 +35,29 @@ export function buildDesignEvidenceContext(scenario, emptyStateQualification = n
     if (!emptyStateQualification || emptyStateQualification.qualification_id !== EMPTY_STATE_QUALIFICATION_ID) {
       infra(`required empty-state seam qualification is unavailable for ${scenario.id}/${relation}.`);
     }
-    if (emptyStateQualification.status !== 'PROVEN' || emptyStateQualification.conclusion !== EMPTY_STATE_LIMITATION_OUTCOME) {
+    if (emptyStateQualification.status !== 'PROVEN' || emptyStateQualification.classification !== 'NATIVE_HOST_LIMITATION' || emptyStateQualification.conclusion !== EMPTY_STATE_LIMITATION_OUTCOME) {
       infra(`empty-state seam qualification does not support native-host limitation for ${scenario.id}/${relation}.`);
     }
+    const config = emptyStateQualification.supported_integration_config;
+    if (config?.timing !== 'AFTER_GRAVITY_FLOW_NATIVE_CONFIG__BEFORE_GPP_PRESENTATION_ADJUSTMENT'
+        || config?.capture_hook !== 'gravityflow_js_config_shared'
+        || config?.capture_priority !== 11
+        || config?.gpp_presentation_filter_priority !== 99
+        || !Array.isArray(config?.configured_no_result_overlay_option_keys)
+        || config.configured_no_result_overlay_option_keys.length !== 0
+        || !config?.routes?.shortcode?.length
+        || !config?.routes?.block?.length) {
+      infra(`empty-state supported-integration config evidence is incomplete for ${scenario.id}/${relation}.`);
+    }
+    const interpretation=emptyStateQualification.interpretation;
+    if (interpretation?.bundle_symbol_occurrence_is_not_configuration_proof !== true
+        || interpretation?.gravity_flow_inbox_native_config_exposes_no_result_overlay_option !== false
+        || interpretation?.supported_existing_no_result_presentation_node_exposed !== false
+        || interpretation?.synthetic_empty_state_forbidden !== true) {
+      infra(`empty-state seam interpretation is incomplete for ${scenario.id}/${relation}.`);
+    }
     const routes = emptyStateQualification.runtime_observations?.routes;
-    if (!Array.isArray(routes) || routes.length < 2 || routes.some(route => route.zero_rows !== true || route.native_grid_count !== 1 || route.no_rows_center_state !== 'ABSENT')) {
+    if (!Array.isArray(routes) || routes.length < 2 || routes.some(route => route.zero_rows !== true || route.native_grid_count !== 1 || route.native_pager_count !== 1 || route.native_search_count !== 1 || route.replacement_grid_count !== 0 || route.no_rows_center_state !== 'ABSENT' || route.visible_meaningful_overlay_nodes !== 0)) {
       infra(`empty-state seam runtime evidence is incomplete for ${scenario.id}/${relation}.`);
     }
     context.relation_dispositions[relation] = {
