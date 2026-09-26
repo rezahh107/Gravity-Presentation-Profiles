@@ -47,8 +47,8 @@ req( 'NOT_PROVEN' === $e['target_production_facts']['plugin_license_configuratio
 
 $bound_visual = isset( $e['visual_regression_diagnostics'] ) && is_array( $e['visual_regression_diagnostics'] ) ? $e['visual_regression_diagnostics'] : null;
 $actual_visual = wu21_assert_visual_diagnostics_manifest( $dir, $bound_visual );
-req( 'RECURSIVE_MACHINE_READABLE_JSON_JSONL_V1' === ( $actual_visual['inclusion_policy'] ?? null ), 'Visual diagnostics inclusion policy mismatch' );
-req( array( '.json', '.jsonl' ) === ( $actual_visual['included_extensions'] ?? null ), 'Visual diagnostics included extensions mismatch' );
+req( 'RECURSIVE_EVIDENCE_JSON_JSONL_PNG_V1' === ( $actual_visual['inclusion_policy'] ?? null ), 'Visual diagnostics inclusion policy mismatch' );
+req( array( '.json', '.jsonl', '.png' ) === ( $actual_visual['included_extensions'] ?? null ), 'Visual diagnostics included extensions mismatch' );
 foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json', 'manifest.json' ) as $required_visual ) {
     $paths = array_map( function ( $file ) { return $file['path'] ?? null; }, $actual_visual['files'] ?? array() );
     req( in_array( $required_visual, $paths, true ), 'Required visual diagnostic is unbound: ' . $required_visual );

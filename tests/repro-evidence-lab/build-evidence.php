@@ -125,7 +125,7 @@ $evidence = array(
         'workflow:.github/workflows/wu21-repro-evidence-lab.yml',
         'fixture:synthetic-non-pii',
         'comparative:pr4-inbox-width-rtl-comparative.json',
-        'visual-diagnostics:recursive-json-jsonl-sha256-manifest',
+        'visual-diagnostics:recursive-json-jsonl-png-sha256-manifest',
         'gravity-flow-package-sha256:' . $config['plugins']['gravity_flow']['sha256'],
         'gravity-forms-package-sha256:' . $config['plugins']['gravity_forms']['sha256']
     ),

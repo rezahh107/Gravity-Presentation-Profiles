@@ -3,8 +3,8 @@ function wu21_visual_diagnostics_policy() {
     return array(
         'schema_version' => '1.0.0',
         'root' => 'visual-regression-diagnostics',
-        'inclusion_policy' => 'RECURSIVE_MACHINE_READABLE_JSON_JSONL_V1',
-        'included_extensions' => array( '.json', '.jsonl' ),
+        'inclusion_policy' => 'RECURSIVE_EVIDENCE_JSON_JSONL_PNG_V1',
+        'included_extensions' => array( '.json', '.jsonl', '.png' ),
         'required_paths' => array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json', 'manifest.json' ),
     );
 }
