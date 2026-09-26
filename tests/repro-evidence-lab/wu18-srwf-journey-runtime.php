@@ -4,6 +4,9 @@ if ( ! defined( 'ABSPATH' ) ) exit( 1 );
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_srwf_journey_qualification_manifest' );
 if ( ! is_string( $artifact_dir ) || ! is_array( $manifest ) ) throw new RuntimeException( 'Journey fixture unavailable.' );
+if ( ! class_exists( 'Gravity_Flow_Entry_Detail' ) ) {
+    require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+}
 
 function srwfq_assert( $cond, $message ) { if ( ! $cond ) throw new RuntimeException( $message ); }
 function srwfq_snapshot( $form_id, $entry_id ) {
