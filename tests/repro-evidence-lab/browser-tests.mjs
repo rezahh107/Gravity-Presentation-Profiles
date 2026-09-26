@@ -4,6 +4,7 @@ import path from 'node:path';
 await import('./browser-tests-core.mjs');
 await import('./wu11-ag-grid-host-contract.mjs');
 await import('./wu17-inbox-accessibility-browser-test.mjs');
+// PRI-FND-001 is an exact-runtime geometry gate: native filter state + keyboard focus.
 await import('./pri-fnd-001-inbox-focus-clearance-browser-test.mjs');
 await import('./p05-inbox-palette-contract-browser-test.mjs');
 await import('./pr33-visual-fidelity-browser-tests.mjs');
