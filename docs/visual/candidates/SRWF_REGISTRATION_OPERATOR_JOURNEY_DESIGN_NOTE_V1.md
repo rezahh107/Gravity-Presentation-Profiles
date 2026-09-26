@@ -7,82 +7,131 @@ artifact: docs/visual/candidates/SRWF_REGISTRATION_OPERATOR_JOURNEY_CANDIDATE_V1
 scope: DESIGN_ONLY
 production_impact: NONE
 baseline: e24759ccdb00b36976389cf36ad49f2822dfa226
+reviewed_pr_head_before_revision: 521c5a9297673d4d0f9c3deb6078c0b9e678ed8a
+revision_rule: EXISTING_APPROVED_DESIGN_PLUS_NEW_PR93_JOURNEY_STATES
 ```
 
-## Design basis
+## Owner lock applied
 
-This candidate extends, rather than replaces, the existing SRWF/GPP visual language. Inbox retains its current operational-home composition and card language. Entry Detail follows the admitted vNext visual authority: neutral page canvas, white dossier surface, 14px-class radii, restrained shadow, `#172033` primary text, `#475467` supporting text, `#1D4ED8` primary action, 44px minimum action targets, visible focus rings, and a separate host-owned workflow/action region.
+This revision does **not** redesign the existing Inbox or Entry Detail surfaces. The candidate now treats those surfaces as fixed visual authority and adds only journey states that do not already exist there.
 
-The artifact is intentionally static. Any apparent action, confirmation, result, navigation, correction transition, or form submission is a visual/UX state only.
+The static HTML is review evidence only. Apparent controls do not create runtime behavior, workflow truth, confirmation ownership, correction logic, navigation behavior, or submission behavior.
+
+## Preserved existing Inbox design
+
+The Inbox specimen is restored to the approved/current visual foundation rather than the PR #94 replacement toolbar interpretation. Preserved elements include:
+
+- `کارهای من` page identity and existing helper copy;
+- labelled `جستجوی پرونده` field and its search treatment;
+- text-labelled `فیلترها` and `مرتب‌سازی` controls;
+- the owner-locked `به‌روزرسانی کارهای من` recovery control as a text-labelled control;
+- existing two-column desktop case-card composition and mobile single-column behavior;
+- existing card identity, national-ID line, stage/date metadata and `باز کردن پرونده` action treatment;
+- existing pagination language and geometry;
+- existing typography, spacing, borders, radii, shadows and neutral canvas.
+
+The **only** new Inbox element is a visually subordinate, dashed/inactive structural region for a possible future end-of-day report module. It has no active counts, send behavior, SMS semantics, schedule, amendment logic or delivery truth.
+
+## Preserved existing Entry Detail design
+
+The Review specimen now follows the existing Entry Detail vNext hierarchy and semantic grouping rather than the earlier PR #94 two-column reinterpretation. Preserved elements include:
+
+1. page-level breadcrumb/navigation position;
+2. compact student identity header;
+3. current-task panel;
+4. `مقطع و گروه تحصیلی`;
+5. `مشخصات داوطلب`;
+6. `راه‌های ارتباطی پشتیبان با داوطلب`;
+7. `اطلاعات مدرسه`;
+8. `مدارک ارائه‌شده`;
+9. `اطلاعات ثبت‌نام و وضعیت مالی`;
+10. `روند بررسی پرونده`;
+11. existing vNext read-only grouped-field visual grammar;
+12. the existing ownership boundary that keeps native Gravity Flow workflow/action presentation separate from the GPP dossier.
+
+The Review page has exactly one canonical `بازگشت به کارهای من` control, at the page-level/top navigation position.
+
+## Additive new UI
+
+Only the following are new PR #93 journey designs:
+
+- future end-of-day report **structural placeholder** in Inbox;
+- Approve confirmation presentation candidate;
+- Reject confirmation presentation candidate;
+- Approved result presentation;
+- Rejected result presentation;
+- Correction-requested result presentation;
+- operator-orientation copy around native Correction / User Input;
+- Technical Error presentation;
+- Unknown-result fail-safe presentation;
+- compact case-context strip on result states;
+- responsive/mobile presentation of those new states.
 
 ## State model
 
-| State | Operator sees | Expected operator action | State truth owner | Design status | Later verification |
+| State | Operator sees | Expected operator action | Truth owner | Design status | Later verification |
 |---|---|---|---|---|---|
-| My Tasks / Inbox | Page identity, guidance, search/refresh area, case cards, future report region | Open one case | Gravity Flow Inbox membership/assignment | Existing visual foundation + design extension | Visual Regression + Runtime/Interaction |
-| Entry Detail / Review | Case identity, readable dossier, separate action area, return path | Review then choose an available native action | Gravity Forms data + Gravity Flow action availability | Existing vNext visual foundation + design extension | Both |
-| Approve confirmation | Calm confirmation dialog over Review context | Confirm or cancel | Gravity Flow native confirmation lifecycle | **HOST-SEAM-DEPENDENT** | Runtime/Interaction primarily; visual after host reconciliation |
-| Reject confirmation | Equivalent native-host confirmation with rejection semantics distinct from error | Confirm or cancel | Gravity Flow native confirmation lifecycle | **HOST-SEAM-DEPENDENT** | Runtime/Interaction primarily; visual after host reconciliation |
-| Approved result | Explicit approved title, completion icon, explanatory text, return action | Return to My Tasks | Authoritative runtime result + workflow outcome | **RUNTIME-RESULT-DEPENDENT** | Both |
-| Rejected result | Explicit rejected title; execution success is visually distinct from technical error | Return to My Tasks | Authoritative runtime result + workflow outcome | **RUNTIME-RESULT-DEPENDENT** | Both |
-| Correction requested | Correction-specific success state and next-step guidance | Continue only through a proven host continuation, or return to My Tasks | Gravity Flow native Revert / workflow transition | **RUNTIME-RESULT-DEPENDENT** | Both |
-| Correction / User Input | Clear correction orientation around representative native form composition | Edit only host-exposed fields and complete native submission | Gravity Forms + Gravity Flow User Input | **HOST-STRUCTURE-DEPENDENT** | Runtime/Interaction primarily; visual for layout |
-| Technical Error | Explicit technical-failure title, no business-result claim | Return to My Tasks and re-check state before retrying anything | Runtime failure evidence | **RUNTIME-RESULT-DEPENDENT** | Both |
-| Unknown result | Explicit ambiguity, duplicate-action prevention, safe continuation | Do not repeat action; return to My Tasks and inspect state | Absence of sufficient authoritative result evidence | **RUNTIME-RESULT-DEPENDENT** | Both |
-| Return to My Tasks | Visible continuation from Review/result states | Return to canonical Inbox page 1 | Supported/native navigation seam + target contract | **HOST-SEAM-DEPENDENT** until qualified | Runtime/Interaction + visual presence |
-| Mobile equivalents | Stacked actions, touch-safe targets, single-column dossier/results, bottom-sheet-like host confirmation candidate | Same semantic actions as desktop | Same owners as corresponding desktop state | Design-only responsive candidate | Visual Regression + targeted interaction |
+| My Tasks / Inbox | Existing approved Inbox + inactive future report region | Open a case | Gravity Flow Inbox membership/assignment | Existing visual authority + one additive placeholder | Visual + Runtime |
+| Entry Detail / Review | Existing vNext dossier + separate host-owned workflow region + one top return control | Review and choose an available native action | Gravity Forms data + Gravity Flow action availability | Existing visual authority; no redesign | Both |
+| Approve confirmation | Calm host-owned confirmation presentation | Confirm or cancel | Gravity Flow native confirmation lifecycle | **HOST-SEAM-DEPENDENT** | Runtime primarily; visual after reconciliation |
+| Reject confirmation | Host-owned confirmation with rejection semantics distinct from error | Confirm or cancel | Gravity Flow native confirmation lifecycle | **HOST-SEAM-DEPENDENT** | Runtime primarily; visual after reconciliation |
+| Approved result | Approved outcome + compact student identity + return action | Return to My Tasks | Authoritative runtime result + workflow outcome | **RUNTIME-RESULT-DEPENDENT** | Both |
+| Rejected result | Rejected business outcome + compact student identity + return action | Return to My Tasks | Authoritative runtime result + workflow outcome | **RUNTIME-RESULT-DEPENDENT** | Both |
+| Correction requested | Correction-specific result + compact student identity + host-dependent continuation | Continue only through a proven host seam, or return | Gravity Flow native Revert / transition | **RUNTIME-RESULT-DEPENDENT** | Both |
+| Correction / User Input | Native-form orientation; no second editor | Edit only host-exposed fields | Gravity Forms + Gravity Flow User Input | **HOST-STRUCTURE-DEPENDENT** | Runtime primarily |
+| Technical Error | Technical-problem copy + compact student identity; final case state explicitly unconfirmed | Return and inspect state before retrying | Runtime technical-failure evidence | **RUNTIME-RESULT-DEPENDENT** | Both |
+| Unknown result | Ambiguous-result copy + compact student identity + duplicate-action warning | Do not repeat; return and inspect state | Lack of sufficient authoritative evidence | **RUNTIME-RESULT-DEPENDENT** | Both |
+| Return to My Tasks | One canonical continuation in Review; one continuation in each result | Return to canonical Inbox page 1 | Qualified supported/native navigation seam | **HOST-SEAM-DEPENDENT** | Runtime + visual presence |
+| Mobile equivalents | Real 390 × 844 CSS-pixel reference, approved responsive grammar and additive state layouts | Same semantic actions | Same owners as desktop | Design-only responsive candidate | Visual + targeted interaction |
 
-## Key design decisions
+## Requested review corrections applied
 
-1. **No visual reset.** Existing Inbox and Entry Detail tokens and component grammar remain recognizable throughout the journey.
-2. **Action hierarchy is explicit.** Approve is the primary filled action; Reject and Request Correction are distinct outlined actions. On mobile they stack vertically so wrapping cannot scramble priority.
-3. **Business rejection is not technical failure.** Rejected uses a file/outcome semantic; Technical Error uses warning/technical-failure semantics and different explanatory copy.
-4. **Unknown is its own state.** It uses neutral/uncertain semantics and explicitly tells the operator not to repeat the action based on false certainty.
-5. **Every terminal result has a visible continuation.** `بازگشت به کارهای من` is the stable next step; no `پرونده بعدی` control is introduced.
-6. **Correction stays native.** The User Input mockup demonstrates orientation and responsive composition only; it does not define which fields are editable or introduce a second editor.
-7. **Future daily report is location-only.** Inbox shows a dashed, clearly inactive structural region; no count, classification, scheduling, SMS, amendment, or delivery truth is designed as active behavior.
-8. **Accessibility is visible in the candidate.** Focus rings, 44px-class targets, semantic titles, text+icon status signals, RTL layout, and LTR isolation for numeric fragments are demonstrated.
+1. **Inbox fidelity restored.** The custom PR #94 icon-only toolbar/display-options interpretation was removed. The approved search, filter, sort, refresh, cards and pagination grammar is represented again. The report region is the only addition.
+2. **Entry Detail fidelity restored.** The novel two-column dossier/sidebar interpretation was removed. The approved vNext dossier order/group styling is represented, with native workflow presentation kept outside the dossier ownership boundary.
+3. **Duplicate Back-to-My-Tasks removed.** Review now has one canonical page-level/top control only.
+4. **Case identity added to results.** Approved, Rejected, Correction requested, Technical Error and Unknown all show a compact `student name + national ID` context strip on desktop and mobile.
+5. **Technical Error wording corrected.** Candidate title is now `در ثبت نتیجه مشکلی رخ داد`; supporting copy says the final case state is not confirmed instead of asserting that mutation definitely did not occur.
+6. **Primary mobile reference corrected to real target width.** The principal phone screen is explicitly `390 × 844 CSS px`; action stacking, RTL, wrapping, result context, confirmation and correction layouts are reviewed at that width.
 
 ## Candidate UX copy
 
-The following wording is proposed for Owner review where exact business wording is not already authoritative:
+Where wording is not already authoritative, these remain candidate copy for Owner review:
 
 - Approve confirmation: `پرونده تأیید شود؟`
 - Reject confirmation: `پرونده رد شود؟`
 - Approved: `پرونده تأیید شد`
 - Rejected: `پرونده رد شد`
 - Correction: `پرونده برای اصلاح باز شد`
-- Technical Error: `نتیجه ثبت نشد`
+- Technical Error: `در ثبت نتیجه مشکلی رخ داد`
 - Unknown: `نتیجه هنوز مشخص نیست`
 
-These strings are candidate copy, not new business rules.
+These strings do not create business rules or runtime truth.
 
-## Host-dependent assumptions
+## Unresolved host-dependent items
 
-- Exact native Approve/Reject confirmation markup, button order, copy, initial focus, focus trap, Escape behavior, and focus restoration are not claimed as proven. Desired presentation is marked `HOST-SEAM-DEPENDENT — to be reconciled during qualification`.
-- `ادامه به اصلاح پرونده` is shown only as a candidate continuation. It may be admitted later only if Gravity Flow exposes a supported destination/continuation seam for the actual correction topology.
-- Exact User Input fields, validation messages, editability, and submit behavior remain host-owned and must be taken from the real Gravity Forms / Gravity Flow configuration.
-- `بازگشت به کارهای من` is the target UX. Exact production navigation must later use a supported/native seam and land on canonical Inbox page 1.
-- Result states may render only after authoritative evidence establishes the technical and business outcome. Button click alone is never sufficient.
+- Exact native Approve/Reject confirmation markup, wording, button order, initial focus, focus trap, Escape/cancel semantics and focus restoration remain unproven and must be reconciled with the real Gravity Flow seam.
+- `ادامه به اصلاح پرونده` remains a candidate continuation and may be admitted only if the native correction topology exposes a supported continuation/destination.
+- Exact User Input fields, editability, validation, submit behavior and post-submit route remain Gravity Forms / Gravity Flow owned.
+- Production `بازگشت به کارهای من` must later use a qualified supported/native navigation seam and land on canonical Inbox page 1.
+- Approved / Rejected / Correction / Technical Error / Unknown may render only from authoritative runtime evidence; a click is never sufficient proof.
 
 ## Visual-CI impact — future only
 
-Good future `PREVIEW_DIAGNOSTIC` candidates after Owner approval and host reconciliation:
+After Owner approval and host reconciliation, suitable `PREVIEW_DIAGNOSTIC` candidates are limited to presentation concerns such as:
 
-- Entry Detail Review layout and action hierarchy;
-- native-confirmation presentation geometry after its real host seam is proven;
-- Approved / Rejected / Correction / Error / Unknown result presentations;
-- mobile action ordering and minimum target geometry;
-- visible focus treatment and RTL layout stability;
-- Back-to-My-Tasks control presence and geometry.
+- additive result-state geometry and case-context strip;
+- reconciled host confirmation presentation;
+- real 390px mobile action/result layouts;
+- focus-ring presentation and RTL stability;
+- presence/geometry of the single canonical Back-to-My-Tasks control.
 
-Do **not** use screenshots to prove workflow mutation, authorization, native confirmation lifecycle, authoritative result truth, correction topology, assignment, or navigation destination. Those remain runtime/interaction evidence obligations.
+Existing Inbox and Entry Detail visual authority should continue to be tested by their current coverage rather than being replaced by this candidate. Runtime mutation, authorization, transition truth, confirmation lifecycle and correction topology remain interaction/runtime evidence obligations.
 
 ## Production impact
 
-`NONE — design-only task`
+`NONE — design-only revision`
 
-No production PHP, CSS, JavaScript, Gravity Forms/Gravity Flow configuration, workflow behavior, Visual Regression CI, Golden, runtime reference, release, or deployment is changed by this design batch.
+No production PHP, CSS, JavaScript, Gravity Forms/Gravity Flow configuration, workflow behavior, Visual Regression CI, Golden, release, deployment or approved visual authority is changed by this revision.
 
 ## Status
 
