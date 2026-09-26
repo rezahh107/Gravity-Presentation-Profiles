@@ -50,6 +50,21 @@ foreach ( $manifest['entries'] as $key => $entry_id ) {
     $preflight[ $key ] = $snap;
 }
 
+// Fresh-request capability proof. The setup request wrote the configuration;
+// these assertions deliberately resolve new step objects in this later request.
+$review_step = gravity_flow()->get_step( $review_id, GFAPI::get_entry( (int) $manifest['entries']['correction'] ) );
+$input_step = gravity_flow()->get_step( $input_id, GFAPI::get_entry( (int) $manifest['entries']['correction'] ) );
+srwfq_assert( $review_step && $input_step, 'Configured journey steps are unavailable in fresh request.' );
+srwfq_assert( (bool) $review_step->confirmation_prompt, 'Require Confirmation is not effective in fresh request.' );
+srwfq_assert( (bool) $review_step->revertEnable && (int) $review_step->revertValue === $input_id, 'Native Revert target is not effective in fresh request.' );
+srwfq_assert( (string) $review_step->destination_approved === 'complete' && (string) $review_step->destination_rejected === 'complete', 'Approval terminal destinations are not effective.' );
+srwfq_assert( (int) $input_step->destination_complete === $review_id, 'User Input return destination is not effective.' );
+$editable = array();
+foreach ( (array) $input_step->get_editable_fields() as $field ) {
+    $editable[] = is_object( $field ) && isset( $field->id ) ? (string) $field->id : (string) $field;
+}
+srwfq_assert( in_array( '2', $editable, true ), 'User Input editable-field contract is not effective.' );
+
 // Negative control: an authenticated/native-nonce request with an unsupported status
 // must fail host validation and leave authoritative workflow state unchanged.
 $failure_id = (int) $manifest['entries']['failure'];
@@ -71,14 +86,8 @@ $after_failure = srwfq_snapshot( $form_id, $failure_id );
 srwfq_assert( $before_failure['current_step_id'] === $after_failure['current_step_id'], 'Failed status update mutated current step.' );
 srwfq_assert( $before_failure['workflow_current_status'] === $after_failure['workflow_current_status'], 'Failed status update mutated workflow status.' );
 
-$review_step = gravity_flow()->get_step( $review_id, GFAPI::get_entry( (int) $manifest['entries']['correction'] ) );
-$input_step = gravity_flow()->get_step( $input_id, GFAPI::get_entry( (int) $manifest['entries']['correction'] ) );
-srwfq_assert( (bool) $review_step->confirmation_prompt, 'Require Confirmation is not effective.' );
-srwfq_assert( (bool) $review_step->revertEnable && (int) $review_step->revertValue === $input_id, 'Native Revert target is not effective.' );
-srwfq_assert( (int) $input_step->destination_complete === $review_id, 'User Input return destination is not effective.' );
-
 $out = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'evidence_class_ceiling' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
     'preflight' => $preflight,
     'negative_validation' => array(
@@ -88,7 +97,16 @@ $out = array(
         'after' => $after_failure,
         'state_unchanged' => true,
     ),
-    'effective_configuration' => $manifest['effective_configuration'],
+    'requested_configuration' => $manifest['requested_configuration'],
+    'effective_configuration' => array(
+        'confirmation_prompt' => (bool) $review_step->confirmation_prompt,
+        'revert_enabled' => (bool) $review_step->revertEnable,
+        'revert_target' => (int) $review_step->revertValue,
+        'approved_destination' => (string) $review_step->destination_approved,
+        'rejected_destination' => (string) $review_step->destination_rejected,
+        'user_input_complete_destination' => (int) $input_step->destination_complete,
+        'user_input_editable_fields' => $editable,
+    ),
     'block_registered' => ! empty( $manifest['frontend']['block_registered'] ),
 );
 file_put_contents( trailingslashit( $artifact_dir ) . 'wu18-srwf-journey-runtime.json', wp_json_encode( $out, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n" );
