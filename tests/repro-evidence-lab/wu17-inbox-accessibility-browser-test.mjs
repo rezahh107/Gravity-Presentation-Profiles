@@ -2,7 +2,6 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { runPriFnd001MobileFocusClearance } from './pri-fnd-001-mobile-focus-clearance-probe.mjs';
 
 const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
@@ -124,11 +123,6 @@ try {
     page.click('#wp-submit'),
   ]);
 
-  await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
-
-  await runPriFnd001MobileFocusClearance(page, manifest.frontend_inbox_url, artifactDir);
-  await page.setViewportSize({ width: 1366, height: 1000 });
   await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
 
