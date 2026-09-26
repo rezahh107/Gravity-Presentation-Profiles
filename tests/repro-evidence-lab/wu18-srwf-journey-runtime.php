@@ -80,8 +80,11 @@ foreach ( (array) $input_step->get_editable_fields() as $field ) {
     }
 }
 
-// Negative control: an authenticated/native-nonce request with an unsupported status
-// must fail host validation and leave authoritative workflow state unchanged.
+// Negative control: a native authenticated request carrying an unsupported
+// Approval status is sent through the real host handler. Gravity Flow 3.1.0
+// rejects it as a false/no-op rather than necessarily materializing WP_Error.
+// The semantic requirement is fail-closed: authoritative workflow state must
+// remain unchanged and no completed result may be inferred from the attempt.
 $failure_id = (int) $manifest['entries']['failure'];
 $before_failure = srwfq_snapshot( $form_id, $failure_id );
 $failure_step = ( new Gravity_Flow_API( $form_id ) )->get_current_step( GFAPI::get_entry( $failure_id ) );
@@ -96,21 +99,26 @@ $_REQUEST = $_POST;
 $result = $failure_step->maybe_process_status_update( $form, GFAPI::get_entry( $failure_id ) );
 $_POST = $old_post;
 $_REQUEST = $old_request;
-srwfq_assert( is_wp_error( $result ), 'Unsupported Approval status did not fail host validation.' );
 $after_failure = srwfq_snapshot( $form_id, $failure_id );
+srwfq_assert( false === $result || is_wp_error( $result ), 'Unsupported status unexpectedly produced positive host feedback.' );
 srwfq_assert( $before_failure['current_step_id'] === $after_failure['current_step_id'], 'Failed status update mutated current step.' );
+srwfq_assert( $before_failure['current_step_status'] === $after_failure['current_step_status'], 'Failed status update mutated step status.' );
 srwfq_assert( $before_failure['workflow_current_status'] === $after_failure['workflow_current_status'], 'Failed status update mutated workflow status.' );
+$result_shape = is_wp_error( $result )
+    ? array( 'type' => 'WP_Error', 'codes' => $result->get_error_codes() )
+    : array( 'type' => gettype( $result ), 'value' => $result );
 
 $out = array(
-    'schema_version' => '1.2.0',
+    'schema_version' => '1.3.0',
     'evidence_class_ceiling' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
     'preflight' => $preflight,
     'negative_validation' => array(
-        'result_is_wp_error' => true,
-        'error_codes' => $result->get_error_codes(),
+        'case' => 'unsupported_approval_status_with_valid_native_nonce',
+        'host_result' => $result_shape,
         'before' => $before_failure,
         'after' => $after_failure,
         'state_unchanged' => true,
+        'semantic_consequence' => 'NO_COMPLETED_RESULT_TRUTH_FROM_ATTEMPT',
     ),
     'requested_configuration' => $manifest['requested_configuration'],
     'effective_configuration' => array(
