@@ -80,13 +80,22 @@ $method_names = array(
         'get_status_config',
         'get_settings',
         'process',
-        'workflow_detail_status_box_actions',
+        'status_evaluation',
+        'maybe_process_status_update',
+        'process_assignee_status',
+        'update_status',
+        'display_status_inputs',
+        'display_update_button',
+        'workflow_detail_box',
         'entry_detail_status_box',
     ),
     'Gravity_Flow_Step' => array(
         'get_status_config',
-        'get_destination',
-        'get_next_step',
+        'get_next_step_id',
+        'set_next_step_id',
+        'get_status',
+        'get_status_key',
+        'update_step_status',
         'process',
         'end',
     ),
@@ -140,12 +149,16 @@ $needles = array(
     'handleApprovalStepButtonClick',
     'gravityflow_approval_new_status_step_',
     'gravityflow_approvals_',
+    'gravityflow_status',
     'revertEnable',
+    'revertValue',
     'revert',
     'destination_approved',
     'destination_rejected',
-    'destination_revert',
+    'destination_complete',
     'next_step',
+    'workflow_step_status_',
+    'workflow_current_status',
     'workflow_final_status',
     'gravityflow_back_link_url_entry_detail',
 );
@@ -167,11 +180,11 @@ foreach ( $iterator as $file ) {
             if ( false === strpos( $line, $needle ) ) {
                 continue;
             }
-            if ( count( $occurrences[ $needle ] ?? array() ) >= 30 ) {
+            if ( count( $occurrences[ $needle ] ?? array() ) >= 40 ) {
                 continue;
             }
             $start = max( 0, $index - 5 );
-            $end = min( count( $lines ) - 1, $index + 12 );
+            $end = min( count( $lines ) - 1, $index + 14 );
             $snippet = array();
             for ( $i = $start; $i <= $end; $i++ ) {
                 $snippet[] = array( 'line' => $i + 1, 'text' => rtrim( $lines[ $i ] ) );
@@ -186,7 +199,7 @@ foreach ( $iterator as $file ) {
 }
 
 $inventory = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'evidence_class' => 'PINNED_SOURCE_AND_RUNTIME_INVENTORY',
     'qualification_only' => true,
     'runtime' => array(
