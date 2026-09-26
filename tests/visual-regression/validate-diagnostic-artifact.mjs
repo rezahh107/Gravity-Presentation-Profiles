@@ -5,6 +5,7 @@ import { assertSerializedReferenceIdentity } from './reference-selection.mjs';
 import { assertActionVisualCoverage, assertDesignComparisonEvidence, projectScenarioStatus } from './design-convergence-policy.mjs';
 import { buildDesignEvidenceContext, EMPTY_STATE_QUALIFICATION_ID, MATRIX_J_QUALIFICATION_ID } from './evidence-context.mjs';
 import { assertArtifactVazirProvenance } from './font-runtime-contract.mjs';
+import { assertSerializedMatrixJProvenEvidence } from './matrix-j-evidence-contract.mjs';
 
 const contract = JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json', import.meta.url), 'utf8'));
 
@@ -44,7 +45,8 @@ const matrixContractStatus={
 if(!matrixContractStatus) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: unsupported Matrix J runtime status ${matrixJ.status}.`);
 if(zoom?.matrix!=='J'||zoom?.status!==matrixContractStatus) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J contract/runtime status mismatch: contract=${zoom?.status||'MISSING'} runtime=${matrixJ.status}.`);
 if(matrixJ.status==='PROVEN'){
-  if(matrixJ.conclusion!=='GENUINE_BROWSER_ZOOM_200_EXECUTED_AND_QUALIFIED'||!Array.isArray(matrixJ.observations)||matrixJ.observations.length!==4||matrixJ.observations.some(item=>Math.abs((item.zoom_api?.actual??0)-2)>0.001)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J PROVEN evidence is incomplete.');
+  try { assertSerializedMatrixJProvenEvidence(matrixJ); }
+  catch (error) { throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J PROVEN evidence is incomplete: ${error.message}`); }
 }
 if(matrixJ.status==='NOT_PROVEN'&&!matrixJ.remaining_evidence_path) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J NOT_PROVEN must retain the authentic remaining evidence path.');
 

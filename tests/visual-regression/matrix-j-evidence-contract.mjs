@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MATRIX_J_QUALIFICATION_ID } from './evidence-context.mjs';
+export const MATRIX_J_QUALIFICATION_ID = 'GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1';
 
 export const MATRIX_J_CASES = Object.freeze({
   desktop_effective: Object.freeze({

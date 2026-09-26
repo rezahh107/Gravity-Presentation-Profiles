@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { MATRIX_J_CASES, MATRIX_J_ROUTES, assertSerializedMatrixJProvenEvidence } from './matrix-j-evidence-contract.mjs';
-import { MATRIX_J_QUALIFICATION_ID } from './evidence-context.mjs';
+import { MATRIX_J_CASES, MATRIX_J_ROUTES, MATRIX_J_QUALIFICATION_ID, assertSerializedMatrixJProvenEvidence } from './matrix-j-evidence-contract.mjs';
 
 const clone = value => structuredClone(value);
 const observation = (caseName, route) => {

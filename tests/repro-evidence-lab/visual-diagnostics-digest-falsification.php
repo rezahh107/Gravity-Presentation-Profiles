@@ -1,82 +1,65 @@
 <?php
 require_once __DIR__ . '/visual-diagnostics-manifest.php';
-
-function vd_req( $condition, $message ) {
-    if ( ! $condition ) {
-        throw new RuntimeException( $message );
-    }
+function check( $condition, $message ) { if ( ! $condition ) throw new RuntimeException( $message ); }
+function expect_failure( $fn, $label ) {
+    try { $fn(); } catch ( Throwable $e ) { return $e->getMessage(); }
+    throw new RuntimeException( $label . ' unexpectedly passed.' );
 }
-function vd_assert_throws( $callback, $message ) {
-    try {
-        $callback();
-    } catch ( Throwable $error ) {
-        return $error;
-    }
-    throw new RuntimeException( $message );
+function digest_for_manifest( $manifest ) {
+    return hash( 'sha256', wu21_visual_manifest_canonical_json( array( 'visual_regression_diagnostics' => $manifest ) ) );
 }
-function vd_evidence_digest( $manifest ) {
-    $evidence = array(
-        'artifact_type' => 'gpp.reproducible_simulation_evidence',
-        'schema_version' => '1.0.0',
-        'visual_diagnostics' => $manifest,
-        'production_equivalence' => array( 'state' => 'NOT_PROVEN' ),
-    );
-    return hash( 'sha256', wu21_visual_manifest_canonical_json( $evidence ) );
+function put_json( $path, $data ) {
+    $dir = dirname( $path ); if ( ! is_dir( $dir ) ) mkdir( $dir, 0777, true );
+    file_put_contents( $path, json_encode( $data, JSON_UNESCAPED_SLASHES ) . "\n" );
 }
-
-$root = sys_get_temp_dir() . '/gpp-vd-falsification-' . bin2hex( random_bytes( 6 ) );
-$artifact_dir = $root . '/artifacts';
-$diagnostics = $artifact_dir . '/visual-regression-diagnostics';
-mkdir( $diagnostics . '/shortcode-desktop', 0777, true );
-$files = array(
-    'empty-state-seam.json' => "{\"status\":\"PROVEN\"}\n",
-    'manifest.json' => "{\"status\":\"VISUAL_REGRESSION_WARNING\"}\n",
-    'matrix-j-browser-zoom.json' => "{\"status\":\"PROVEN\",\"matrix\":\"J\"}\n",
-    'shortcode-desktop/geometry.json' => "{\"cards_per_visual_row\":2}\n",
-    'empty-state-native-grid-config.jsonl' => "{\"grid\":\"native\"}\n",
-);
-foreach ( $files as $relative => $bytes ) {
-    $path = $diagnostics . '/' . $relative;
-    if ( ! is_dir( dirname( $path ) ) ) mkdir( dirname( $path ), 0777, true );
-    file_put_contents( $path, $bytes );
-}
-file_put_contents( $diagnostics . '/ignored.png', 'not-bound-binary-screenshot' );
-
+$root = sys_get_temp_dir() . '/gpp-visual-digest-' . bin2hex( random_bytes( 8 ) );
+$visual = $root . '/visual-regression-diagnostics';
+mkdir( $visual, 0777, true );
 try {
-    $baseline = wu21_visual_diagnostics_manifest( $artifact_dir );
-    vd_req( 5 === count( $baseline['files'] ), 'Recursive JSON/JSONL inclusion policy did not bind every machine-readable diagnostic.' );
-    vd_req( ! in_array( 'ignored.png', array_column( $baseline['files'], 'path' ), true ), 'Binary screenshot unexpectedly entered machine-readable evidence manifest.' );
-    wu21_assert_visual_diagnostics_manifest( $artifact_dir, $baseline );
+    put_json( $visual . '/manifest.json', array( 'status' => 'VISUAL_REGRESSION_WARNING' ) );
+    put_json( $visual . '/matrix-j-browser-zoom.json', array( 'qualification_id' => 'GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1', 'status' => 'PROVEN' ) );
+    put_json( $visual . '/empty-state-seam.json', array( 'qualification_id' => 'GPP-INBOX-EMPTY-STATE-SEAM-V1', 'status' => 'PROVEN' ) );
+    put_json( $visual . '/shortcode-desktop/geometry.json', array( 'cards_per_visual_row' => 2 ) );
+    file_put_contents( $visual . '/empty-state-native-grid-config.jsonl', "{\"route\":\"shortcode\"}\n" );
+    file_put_contents( $visual . '/shortcode-desktop/reference.png', 'supplemental-image-not-bound' );
 
-    $baseline_digest = vd_evidence_digest( $baseline );
-    $filename = 'wu21-repro-evidence-' . $baseline_digest . '.json';
-    vd_req( 'wu21-repro-evidence-' . $baseline_digest . '.json' === $filename, 'Content-addressed filename semantics changed.' );
+    $bound = wu21_visual_diagnostics_manifest( $root );
+    $baseline_digest = digest_for_manifest( $bound );
+    check( count( $bound['files'] ) === 5, 'Inclusion policy did not bind every JSON/JSONL proof file.' );
+    wu21_assert_visual_diagnostics_manifest( $root, $bound );
 
-    file_put_contents( $diagnostics . '/matrix-j-browser-zoom.json', "{\"status\":\"PROVEN\",\"matrix\":\"J\",\"mutated\":true}\n" );
-    vd_assert_throws( fn() => wu21_assert_visual_diagnostics_manifest( $artifact_dir, $baseline ), 'Matrix J mutation unexpectedly preserved canonical identity.' );
-    $mutated_matrix_manifest = wu21_visual_diagnostics_manifest( $artifact_dir );
-    vd_req( vd_evidence_digest( $mutated_matrix_manifest ) !== $baseline_digest, 'Matrix J mutation did not change canonical digest.' );
-    file_put_contents( $diagnostics . '/matrix-j-browser-zoom.json', $files['matrix-j-browser-zoom.json'] );
-
-    file_put_contents( $diagnostics . '/empty-state-seam.json', "{\"status\":\"PROVEN\",\"mutated\":true}\n" );
-    vd_assert_throws( fn() => wu21_assert_visual_diagnostics_manifest( $artifact_dir, $baseline ), 'Empty-state mutation unexpectedly preserved canonical identity.' );
-    file_put_contents( $diagnostics . '/empty-state-seam.json', $files['empty-state-seam.json'] );
-
-    file_put_contents( $diagnostics . '/shortcode-desktop/geometry.json', "{\"cards_per_visual_row\":1}\n" );
-    vd_assert_throws( fn() => wu21_assert_visual_diagnostics_manifest( $artifact_dir, $baseline ), 'Generic admitted diagnostic mutation unexpectedly preserved canonical identity.' );
-    file_put_contents( $diagnostics . '/shortcode-desktop/geometry.json', $files['shortcode-desktop/geometry.json'] );
-
-    unlink( $diagnostics . '/manifest.json' );
-    vd_assert_throws( fn() => wu21_visual_diagnostics_manifest( $artifact_dir ), 'Removing required manifest.json unexpectedly passed.' );
-
-    echo "VISUAL_DIAGNOSTICS_DIGEST_FALSIFICATION_PASS unchanged_validates=true matrix_j_mutation_rejected=true empty_state_mutation_rejected=true generic_json_mutation_rejected=true required_removal_rejected=true content_addressed_filename=true\n";
-} finally {
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ),
-        RecursiveIteratorIterator::CHILD_FIRST
+    $mutations = array(
+        'matrix-j-browser-zoom.json' => array( 'qualification_id' => 'GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1', 'status' => 'MUTATED' ),
+        'empty-state-seam.json' => array( 'qualification_id' => 'GPP-INBOX-EMPTY-STATE-SEAM-V1', 'status' => 'MUTATED' ),
+        'shortcode-desktop/geometry.json' => array( 'cards_per_visual_row' => 1 ),
     );
-    foreach ( $iterator as $item ) {
-        $item->isDir() ? rmdir( $item->getPathname() ) : unlink( $item->getPathname() );
+    foreach ( $mutations as $relative => $changed ) {
+        $path = $visual . '/' . $relative;
+        $original = file_get_contents( $path );
+        put_json( $path, $changed );
+        expect_failure( function () use ( $root, $bound ) { wu21_assert_visual_diagnostics_manifest( $root, $bound ); }, 'Mutation ' . $relative );
+        $changed_manifest = wu21_visual_diagnostics_manifest( $root );
+        check( ! hash_equals( $baseline_digest, digest_for_manifest( $changed_manifest ) ), 'Mutation did not change canonical identity: ' . $relative );
+        file_put_contents( $path, $original );
+        wu21_assert_visual_diagnostics_manifest( $root, $bound );
     }
-    if ( is_dir( $root ) ) rmdir( $root );
+
+    put_json( $visual . '/shortcode-desktop/new-proof.json', array( 'new' => true ) );
+    expect_failure( function () use ( $root, $bound ) { wu21_assert_visual_diagnostics_manifest( $root, $bound ); }, 'New admitted machine-readable proof' );
+    check( ! hash_equals( $baseline_digest, digest_for_manifest( wu21_visual_diagnostics_manifest( $root ) ) ), 'New admitted proof file did not change canonical identity.' );
+    unlink( $visual . '/shortcode-desktop/new-proof.json' );
+    wu21_assert_visual_diagnostics_manifest( $root, $bound );
+
+    unlink( $visual . '/manifest.json' );
+    expect_failure( function () use ( $root ) { wu21_visual_diagnostics_manifest( $root ); }, 'Required proof removal' );
+    put_json( $visual . '/manifest.json', array( 'status' => 'VISUAL_REGRESSION_WARNING' ) );
+    wu21_assert_visual_diagnostics_manifest( $root, $bound );
+
+    $filename = 'wu21-repro-evidence-' . $baseline_digest . '.json';
+    check( $filename === 'wu21-repro-evidence-' . digest_for_manifest( $bound ) . '.json', 'Content-addressed filename did not match recomputed canonical digest.' );
+    echo "VISUAL_DIAGNOSTICS_DIGEST_FALSIFICATION_PASS unchanged_validates=true matrix_mutation_fails=true empty_mutation_fails=true generic_admitted_file_mutation_fails=true admitted_file_addition_fails=true required_removal_fails=true content_addressed_filename_matches=true\n";
+} finally {
+    $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST );
+    foreach ( $it as $item ) { $item->isDir() ? rmdir( $item->getPathname() ) : unlink( $item->getPathname() ); }
+    @rmdir( $root );
 }

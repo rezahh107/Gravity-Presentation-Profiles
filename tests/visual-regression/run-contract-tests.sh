@@ -14,10 +14,12 @@ node tests/visual-regression/state-visual-falsification.mjs
 node tests/visual-regression/font-authority-falsification.mjs
 node tests/visual-regression/geometry-relations-falsification.mjs
 node tests/visual-regression/coverage-truth-falsification.mjs
+node tests/visual-regression/matrix-j-semantic-falsification.mjs
 node tests/visual-regression/reference-identity-falsification.mjs
 node tests/visual-regression/scenario-state-falsification.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs
 node tests/visual-regression/wu21-package-source-falsification.mjs
+php tests/repro-evidence-lab/visual-diagnostics-digest-falsification.php
 bash tests/visual-regression/repository-package-source-falsification.sh
 bash tests/visual-regression/archive-policy-falsification.sh
 after="$(sha256sum tests/visual-regression/references/manifest.json tests/visual-regression/inbox-visual-contract.json)"
@@ -62,4 +64,4 @@ if node tests/visual-regression/design-authority-contract.mjs "$tmp/changed-auth
   echo 'Modified design-authority hash unexpectedly passed.' >&2; exit 1
 fi
 
-echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true staged_failure_provenance=true design_authority_fail_closed=true'
+echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true staged_failure_provenance=true design_authority_fail_closed=true matrix_j_semantic_falsification=true visual_diagnostics_digest_falsification=true'

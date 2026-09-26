@@ -2,6 +2,7 @@
 $repo = dirname( __DIR__, 2 );
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 if ( ! $artifact_dir ) { fwrite( STDERR, "WU21_ARTIFACT_DIR required\n" ); exit( 1 ); }
+require_once __DIR__ . '/visual-diagnostics-manifest.php';
 function read_json( $path ) {
     if ( ! is_file( $path ) ) { throw new RuntimeException( 'Missing required evidence input: ' . $path ); }
     $data = json_decode( file_get_contents( $path ), true );
@@ -26,6 +27,7 @@ $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );
 $comparative = read_json( $artifact_dir . '/pr4-inbox-width-rtl-comparative.json' );
+$visual_diagnostics = wu21_visual_diagnostics_manifest( $artifact_dir );
 $expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
 $expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
 function require_exact_test_ids( $suite, $expected, $label ) {
@@ -68,7 +70,7 @@ $acceptance['AC-WU21-003']['evidence_refs'] = array( 'source_backed_seams', 'WU2
 $acceptance['AC-WU21-004']['evidence_refs'] = array_merge( $groups['native_inbox_behavior'] );
 $acceptance['AC-WU21-005']['evidence_refs'] = array_merge( $groups['semantic_binding'] );
 $acceptance['AC-WU21-006']['evidence_refs'] = array_merge( $groups['fail_closed'] );
-$acceptance['AC-WU21-007']['evidence_refs'] = array( 'content_digest', 'runtime', 'tests', 'production_equivalence' );
+$acceptance['AC-WU21-007']['evidence_refs'] = array( 'content_digest', 'runtime', 'tests', 'visual_regression_diagnostics', 'production_equivalence' );
 $acceptance['AC-WU21-008']['evidence_refs'] = array( 'fixture_manifest', 'WU21-PHP-017' );
 $acceptance['AC-WU21-009']['evidence_refs'] = array( 'mechanics' );
 $acceptance['AC-WU21-010']['evidence_refs'] = array( 'production_equivalence', 'target_production_facts' );
@@ -104,6 +106,7 @@ $evidence = array(
     'tests' => $tests,
     'mechanics' => $mechanics,
     'comparative_repair_qualification' => $comparative,
+    'visual_regression_diagnostics' => $visual_diagnostics,
     'acceptance_criteria' => $acceptance,
     'target_production_facts' => array(
         'form_ids' => 'UNBOUND',
@@ -122,6 +125,7 @@ $evidence = array(
         'workflow:.github/workflows/wu21-repro-evidence-lab.yml',
         'fixture:synthetic-non-pii',
         'comparative:pr4-inbox-width-rtl-comparative.json',
+        'visual-diagnostics:recursive-json-jsonl-sha256-manifest',
         'gravity-flow-package-sha256:' . $config['plugins']['gravity_flow']['sha256'],
         'gravity-forms-package-sha256:' . $config['plugins']['gravity_forms']['sha256']
     ),

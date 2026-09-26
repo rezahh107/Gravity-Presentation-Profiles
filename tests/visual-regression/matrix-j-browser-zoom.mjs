@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { applyScenarioAction } from './scenario-state.mjs';
+import { MATRIX_J_CASES, assertSerializedMatrixJProvenEvidence } from './matrix-j-evidence-contract.mjs';
 
 const qualificationId='GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1';
 const artifactRoot=path.join(process.env.WU21_ARTIFACT_DIR,'visual-regression-diagnostics');
@@ -21,14 +22,11 @@ const selectors={
   centerRows:'[data-js="gflow-inbox"] .ag-center-cols-container',
   searchInput:'[data-js="gflow-inbox-search"]',
 };
-const cases={
-  desktop_effective:{window_width:2000,window_height:1200,expected_narrow_media:false},
-  narrow_effective:{window_width:1400,window_height:1200,expected_narrow_media:true},
-};
 const evidence={
   qualification_id:qualificationId,
   matrix:'J',
   requested_zoom_factor:2,
+  declared_case_semantics:Object.fromEntries(Object.entries(MATRIX_J_CASES).map(([name,spec])=>[name,{expected_narrow_media:spec.expected_narrow_media,expected_cards_per_visual_row:spec.expected_cards_per_visual_row}])),
   status:'RUNNING',
   mechanism:{
     kind:'CHROMIUM_EXTENSION_TABS_SET_ZOOM',
@@ -126,7 +124,7 @@ let browserZoomApiProven=false;
 let layoutZoomSemanticsProven=false;
 let runtimeFinding=null;
 try{
-  for(const [caseName,windowCase] of Object.entries(cases)){
+  for(const [caseName,windowCase] of Object.entries(MATRIX_J_CASES)){
     const tempRoot=fs.mkdtempSync(path.join(os.tmpdir(),`gpp-matrix-j-${caseName}-`));
     const extension=extensionFixture(tempRoot);
     let context;
@@ -160,6 +158,7 @@ try{
         }
         layoutZoomSemanticsProven=true;
         assert.equal(after.narrow_media_matches,windowCase.expected_narrow_media,`${caseName}/${route}: effective 200% zoom geometry did not enter the expected responsive branch.`);
+        assert.equal(after.cards_per_visual_row,windowCase.expected_cards_per_visual_row,`${caseName}/${route}: Card Mode composition does not match the declared Matrix J case.`);
         assert.equal(after.document_horizontal_overflow,0,`${caseName}/${route}: 200% browser zoom created document horizontal overflow.`);
         assert.equal(after.surface_count,1,`${caseName}/${route}: intended GPP surface count changed.`);
         assert.equal(after.grid_count,1,`${caseName}/${route}: native Grid count changed.`);
@@ -184,6 +183,7 @@ try{
         await page.waitForFunction(selector=>document.querySelectorAll(`${selector} > .ag-row`).length===20,selectors.centerRows,{timeout:15000});
         const restored=await measure(page);
         assert.equal(restored.last_card_pager_overlap,false,`${caseName}/${route}: restored Card Mode overlaps pager at 200% zoom.`);
+        assert.equal(restored.cards_per_visual_row,windowCase.expected_cards_per_visual_row,`${caseName}/${route}: restored Card Mode composition does not match the declared Matrix J case.`);
         const observation={case:caseName,route,requested_window:{width:windowCase.window_width,height:windowCase.window_height},zoom_api:zoom,before,after,restored,layout_width_ratio:widthRatio,pagination:{page_after:pagination.page_after,second_page_rows:pagination.second_page_rows},search:{observed_rows:searchState.observed_rows,unique_fixture_present:searchState.unique_fixture_present}};
         evidence.observations.push(observation);
         routeMeasurements.push(observation);
@@ -193,6 +193,7 @@ try{
       const parity={case:caseName,shortcode_effective_width:shortcode.after.inner_width,block_effective_width:block.after.inner_width,shortcode_cards_per_row:shortcode.after.cards_per_visual_row,block_cards_per_row:block.after.cards_per_visual_row,shortcode_narrow:shortcode.after.narrow_media_matches,block_narrow:block.after.narrow_media_matches};
       assert.ok(Math.abs(parity.shortcode_effective_width-parity.block_effective_width)<=2,`${caseName}: Block/shortcode effective widths diverged at 200% zoom.`);
       assert.equal(parity.shortcode_cards_per_row,parity.block_cards_per_row,`${caseName}: Block/shortcode Card Mode columns diverged at 200% zoom.`);
+      assert.equal(parity.shortcode_cards_per_row,windowCase.expected_cards_per_visual_row,`${caseName}: Block/shortcode parity does not satisfy the declared Card Mode composition.`);
       assert.equal(parity.shortcode_narrow,parity.block_narrow,`${caseName}: Block/shortcode responsive branch diverged at 200% zoom.`);
       evidence.block_shortcode_parity.push(parity);
     }finally{
@@ -202,6 +203,7 @@ try{
   }
   evidence.status='PROVEN';
   evidence.conclusion='GENUINE_BROWSER_ZOOM_200_EXECUTED_AND_QUALIFIED';
+  assertSerializedMatrixJProvenEvidence(evidence);
 }catch(error){
   if(browserZoomApiProven&&layoutZoomSemanticsProven){
     evidence.status='PROVEN_WITH_RUNTIME_FINDING';
