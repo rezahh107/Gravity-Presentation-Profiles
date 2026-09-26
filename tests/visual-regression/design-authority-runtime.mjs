@@ -89,6 +89,7 @@ export async function designFacts(page) {
     return {
       anchors:{surface,title,helper:fact(document.querySelector('#inbox-view .page-heading p')),search,firstCard:first,secondCard:second,lastCard:last,pagination:pagerFact,photo:fact(document.querySelector('#case-grid .avatar')),resultSummary:fact(resultSummary),emptyState:fact(empty),emptyTitle:fact(emptyTitle),emptyBody:fact(emptyBody),pagerCurrent:fact(pagerCurrent),pagerPrevious:fact(pagerPrevious),pagerNext:fact(pagerNext)},
       relationships:{
+        visible_card_count:cards.length,
         first_card_width:first?.width??null,
         two_card_horizontal_gap:null,
         last_card_to_pager_gap:last&&pagerFact?pagerFact.y-last.bottom:null,
@@ -144,9 +145,15 @@ export async function designFacts(page) {
   return result;
 }
 
-export function compareDesignFacts(design, runtime, policy, requiredRelations) {
+export function compareDesignFacts(design, runtime, policy, requiredRelations, context = {}) {
   const fields=Object.keys(policy?.relations||{});
-  const deltas=Object.fromEntries(fields.map(field=>[field,{design:design.relationships[field]??null,runtime:runtime.relationships[field]??null,delta:Number.isFinite(design.relationships[field])&&Number.isFinite(runtime.relationships[field])?runtime.relationships[field]-design.relationships[field]:null}]));
-  const evaluation=evaluateDesignConvergence(deltas,policy,requiredRelations);
+  const deltas=Object.fromEntries(fields.map(field=>{
+    const evidence={design:design.relationships[field]??null,runtime:runtime.relationships[field]??null,delta:Number.isFinite(design.relationships[field])&&Number.isFinite(runtime.relationships[field])?runtime.relationships[field]-design.relationships[field]:null};
+    if (policy.relations[field]?.minimum_observations_each !== undefined) {
+      evidence.observations={design:design.relationships.visible_card_count,runtime:runtime.relationships.visible_card_count};
+    }
+    return [field,evidence];
+  }));
+  const evaluation=evaluateDesignConvergence(deltas,policy,requiredRelations,context);
   return { comparison:'GEOMETRY_STYLE_RELATIONSHIPS_NOT_CONTENT_EQUALITY', policy_version:policy.schema_version, required_relations:[...requiredRelations], deltas, evaluation };
 }
