@@ -153,66 +153,78 @@ async function captureGeometry(page) {
 }
 
 export async function runPriFnd001MobileFocusClearance(page, inboxUrl, artifactDir) {
+  const browser = page.context().browser();
+  if (!browser) throw new Error('PRI-FND-001 probe requires a browser-backed authenticated context.');
+
+  const probeContext = await browser.newContext({
+    storageState: await page.context().storageState(),
+    viewport: { width: 390, height: 900 },
+  });
+  page = await probeContext.newPage();
   const results = [];
 
-  for (const width of [390, 394]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(inboxUrl, { waitUntil: 'networkidle' });
-    await page.waitForSelector(`${scope} [data-js="gflow-inbox"] .ag-root-wrapper`, { timeout: 30000 });
-    await page.locator(`${scope} .gflow-grid__header`).scrollIntoViewIfNeeded();
+  try {
+    for (const width of [390, 394]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(inboxUrl, { waitUntil: 'networkidle' });
+      await page.waitForSelector(`${scope} [data-js="gflow-inbox"] .ag-root-wrapper`, { timeout: 30000 });
+      await page.locator(`${scope} .gflow-grid__header`).scrollIntoViewIfNeeded();
 
-    const inactiveBefore = await clearFiltersState(page);
-    if (inactiveBefore.filtersActive || inactiveBefore.display !== 'none') {
-      throw new Error(`Expected Clear Filters inactive/hidden at ${width}px: ${JSON.stringify(inactiveBefore)}`);
+      const inactiveBefore = await clearFiltersState(page);
+      if (inactiveBefore.filtersActive || inactiveBefore.display !== 'none') {
+        throw new Error(`Expected Clear Filters inactive/hidden at ${width}px: ${JSON.stringify(inactiveBefore)}`);
+      }
+
+      const positiveTabMoves = await keyboardFocusSearch(page);
+      const positiveGeometry = await captureGeometry(page);
+      if (!positiveGeometry.focusVisible) throw new Error(`Unfiltered search is not :focus-visible at ${width}px.`);
+      if (positiveGeometry.focusIndicator.outlineWidth !== 3 || positiveGeometry.focusIndicator.outlineOffset !== 3) {
+        throw new Error(`Approved 3px + 3px focus geometry changed at ${width}px.`);
+      }
+
+      const activation = await activateRealNativeColumnFilter(page);
+      const activeTabMoves = await keyboardFocusSearch(page);
+      const geometry = await captureGeometry(page);
+      if (!geometry.focusVisible) throw new Error(`Filtered search is not keyboard :focus-visible at ${width}px.`);
+      if (geometry.focusIndicator.outlineWidth !== 3 || geometry.focusIndicator.outlineOffset !== 3 || geometry.focusIndicator.extent !== 6) {
+        throw new Error(`Approved focus extent changed at ${width}px: ${JSON.stringify(geometry.focusIndicator)}`);
+      }
+      if (parseFloat(geometry.computed.columnGap) < geometry.focusIndicator.extent) {
+        throw new Error(`Responsive header does not reserve the complete focus extent at ${width}px: ${JSON.stringify({ columnGap: geometry.computed.columnGap, extent: geometry.focusIndicator.extent })}`);
+      }
+
+      const intersection = intersectionArea(geometry.focusIndicator.outerRect, geometry.clearFilters);
+      if (intersection.area !== 0) {
+        throw new Error(`PRI-FND-001 collision remains at ${width}px: ${JSON.stringify({ intersection, geometry })}`);
+      }
+
+      const screenshot = path.join(artifactDir, `pr4-pri-fnd-001-mobile-${width}.png`);
+      await page.screenshot({ path: screenshot, fullPage: false });
+
+      await page.locator(`${scope} [data-js="inbox-clear-filters"]`).click();
+      await page.waitForFunction(scopeSelector => {
+        const grid = document.querySelector(`${scopeSelector} [data-js="gflow-inbox"]`);
+        const clear = document.querySelector(`${scopeSelector} [data-js="inbox-clear-filters"]`);
+        return grid && clear && !grid.classList.contains('gflow-inbox--filters-active') && getComputedStyle(clear).display === 'none';
+      }, scope, { timeout: 15000 });
+      const inactiveAfter = await clearFiltersState(page);
+
+      results.push({
+        viewport: { width, height: 900 }, status: 'PASS',
+        positiveControl: { tabMoves: positiveTabMoves, clearFilters: inactiveBefore, geometry: positiveGeometry },
+        activeFilter: { activation, tabMoves: activeTabMoves, geometry, intersection },
+        reset: inactiveAfter,
+        screenshot: path.basename(screenshot),
+      });
     }
 
-    const positiveTabMoves = await keyboardFocusSearch(page);
-    const positiveGeometry = await captureGeometry(page);
-    if (!positiveGeometry.focusVisible) throw new Error(`Unfiltered search is not :focus-visible at ${width}px.`);
-    if (positiveGeometry.focusIndicator.outlineWidth !== 3 || positiveGeometry.focusIndicator.outlineOffset !== 3) {
-      throw new Error(`Approved 3px + 3px focus geometry changed at ${width}px.`);
+    const evidencePath = path.join(artifactDir, 'wu17-pri-fnd-001-mobile-focus-clearance.json');
+    fs.writeFileSync(evidencePath, JSON.stringify({ finding: 'PRI-FND-001', runtime: 'authentic WU21 Inbox', results }, null, 2) + '\n');
+    for (const result of results) {
+      process.stdout.write(`PASS PRI-FND-001 viewport=${result.viewport.width} intersection_area=${result.activeFilter.intersection.area}\n`);
     }
-
-    const activation = await activateRealNativeColumnFilter(page);
-    const activeTabMoves = await keyboardFocusSearch(page);
-    const geometry = await captureGeometry(page);
-    if (!geometry.focusVisible) throw new Error(`Filtered search is not keyboard :focus-visible at ${width}px.`);
-    if (geometry.focusIndicator.outlineWidth !== 3 || geometry.focusIndicator.outlineOffset !== 3 || geometry.focusIndicator.extent !== 6) {
-      throw new Error(`Approved focus extent changed at ${width}px: ${JSON.stringify(geometry.focusIndicator)}`);
-    }
-    if (parseFloat(geometry.computed.columnGap) < geometry.focusIndicator.extent) {
-      throw new Error(`Responsive header does not reserve the complete focus extent at ${width}px: ${JSON.stringify({ columnGap: geometry.computed.columnGap, extent: geometry.focusIndicator.extent })}`);
-    }
-
-    const intersection = intersectionArea(geometry.focusIndicator.outerRect, geometry.clearFilters);
-    if (intersection.area !== 0) {
-      throw new Error(`PRI-FND-001 collision remains at ${width}px: ${JSON.stringify({ intersection, geometry })}`);
-    }
-
-    const screenshot = path.join(artifactDir, `pr4-pri-fnd-001-mobile-${width}.png`);
-    await page.screenshot({ path: screenshot, fullPage: false });
-
-    await page.locator(`${scope} [data-js="inbox-clear-filters"]`).click();
-    await page.waitForFunction(scopeSelector => {
-      const grid = document.querySelector(`${scopeSelector} [data-js="gflow-inbox"]`);
-      const clear = document.querySelector(`${scopeSelector} [data-js="inbox-clear-filters"]`);
-      return grid && clear && !grid.classList.contains('gflow-inbox--filters-active') && getComputedStyle(clear).display === 'none';
-    }, scope, { timeout: 15000 });
-    const inactiveAfter = await clearFiltersState(page);
-
-    results.push({
-      viewport: { width, height: 900 }, status: 'PASS',
-      positiveControl: { tabMoves: positiveTabMoves, clearFilters: inactiveBefore, geometry: positiveGeometry },
-      activeFilter: { activation, tabMoves: activeTabMoves, geometry, intersection },
-      reset: inactiveAfter,
-      screenshot: path.basename(screenshot),
-    });
+    return { evidencePath, results };
+  } finally {
+    await probeContext.close();
   }
-
-  const evidencePath = path.join(artifactDir, 'wu17-pri-fnd-001-mobile-focus-clearance.json');
-  fs.writeFileSync(evidencePath, JSON.stringify({ finding: 'PRI-FND-001', runtime: 'authentic WU21 Inbox', results }, null, 2) + '\n');
-  for (const result of results) {
-    process.stdout.write(`PASS PRI-FND-001 viewport=${result.viewport.width} intersection_area=${result.activeFilter.intersection.area}\n`);
-  }
-  return { evidencePath, results };
 }
