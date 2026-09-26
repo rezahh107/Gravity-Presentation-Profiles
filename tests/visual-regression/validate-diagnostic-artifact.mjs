@@ -3,6 +3,7 @@ import path from 'node:path';
 import { assertIntegratedHostIdentity } from './host-runtime-contract.mjs';
 import { assertSerializedReferenceIdentity } from './reference-selection.mjs';
 import { assertActionVisualCoverage, assertDesignComparisonEvidence, projectScenarioStatus } from './design-convergence-policy.mjs';
+import { buildDesignEvidenceContext, EMPTY_STATE_QUALIFICATION_ID, MATRIX_J_QUALIFICATION_ID } from './evidence-context.mjs';
 import { assertArtifactVazirProvenance } from './font-runtime-contract.mjs';
 
 const contract = JSON.parse(fs.readFileSync(new URL('./inbox-visual-contract.json', import.meta.url), 'utf8'));
@@ -27,10 +28,26 @@ if (!['PREVIEW_DIAGNOSTIC', 'APPROVED_VISUAL_CONTRACT'].includes(manifest.mode) 
   throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid visual manifest.');
 }
 read('changed-files.json');
+const emptyStateQualification=read('empty-state-seam.json');
+if(emptyStateQualification.qualification_id!==EMPTY_STATE_QUALIFICATION_ID) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: empty-state seam qualification identity mismatch.');
+const matrixJ=read('matrix-j-browser-zoom.json');
+if(matrixJ.qualification_id!==MATRIX_J_QUALIFICATION_ID||matrixJ.matrix!=='J') throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J qualification identity mismatch.');
 const zoom=contract.future_scenarios?.true_browser_zoom_200;
-if (String(zoom?.status||'').includes('NOT_EXECUTED') && manifest.scenarios.some(scenario=>scenario.matrix?.includes('J'))) {
-  throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: matrix J cannot be reported as executed while true browser zoom is NOT_EXECUTED.');
+if (manifest.scenarios.some(scenario=>scenario.matrix?.includes('J'))) {
+  throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J is a separate genuine-browser-zoom qualification and must not be claimed by ordinary visual scenario matrices.');
 }
+const matrixContractStatus={
+  PROVEN:'EXECUTED_PROVEN',
+  NOT_PROVEN:'NOT_PROVEN',
+  PROVEN_WITH_RUNTIME_FINDING:'EXECUTED_WITH_RUNTIME_FINDING',
+}[matrixJ.status];
+if(!matrixContractStatus) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: unsupported Matrix J runtime status ${matrixJ.status}.`);
+if(zoom?.matrix!=='J'||zoom?.status!==matrixContractStatus) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J contract/runtime status mismatch: contract=${zoom?.status||'MISSING'} runtime=${matrixJ.status}.`);
+if(matrixJ.status==='PROVEN'){
+  if(matrixJ.conclusion!=='GENUINE_BROWSER_ZOOM_200_EXECUTED_AND_QUALIFIED'||!Array.isArray(matrixJ.observations)||matrixJ.observations.length!==4||matrixJ.observations.some(item=>Math.abs((item.zoom_api?.actual??0)-2)>0.001)) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J PROVEN evidence is incomplete.');
+}
+if(matrixJ.status==='NOT_PROVEN'&&!matrixJ.remaining_evidence_path) throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: Matrix J NOT_PROVEN must retain the authentic remaining evidence path.');
+
 for (const scenario of manifest.scenarios) {
   const scenarioContract=contract.scenarios.find(candidate=>candidate.id===scenario.id);
   if (!scenarioContract) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: scenario ${scenario.id} is absent from the versioned contract.`);
@@ -49,11 +66,12 @@ for (const scenario of manifest.scenarios) {
   if (environment.design_authority?.classification!=='OWNER_APPROVED_DESIGN_AUTHORITY' || !['inbox-desktop','inbox-mobile'].includes(environment.design_authority?.surface) || environment.capture_scope!==contract.capture.scope || environment.capture_selector!==contract.capture.selector || host.elementor_container_present!==true || host.fixture_mount_present!==true || host.surface_present!==true || host.surface_dom_nested_in_fixture_mount!==true || host.surface_dom_nested_in_elementor_container!==true || host.fixture_container_element_id!==environment.integrated_visual_host?.host_fixture?.container_element_id || host.fixture_mount_element_id!==environment.integrated_visual_host?.host_fixture?.mount_element_id) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid integrated host/design evidence for ${scenario.id}`);
   const metrics=read(path.join(scenario.id,'metrics.json')); const geometry=read(path.join(scenario.id,'geometry.json')); const designComparison=read(path.join(scenario.id,'design-vs-runtime.json'));
   assertSerializedReferenceIdentity({metrics,environment,scenario,mode:manifest.mode});
-  const designEvaluation=assertDesignComparisonEvidence(designComparison,contract.design_comparison_policy,scenarioContract.design_relations);
+  const evidenceContext=buildDesignEvidenceContext(scenarioContract,emptyStateQualification);
+  const designEvaluation=assertDesignComparisonEvidence(designComparison,contract.design_comparison_policy,scenarioContract.design_relations,evidenceContext);
   const projectedStatus=projectScenarioStatus({captureStability:scenario.capture_stability,designComparison:designEvaluation,mode:manifest.mode});
-  if (scenario.status!==projectedStatus || scenario.design_comparison_status!==designEvaluation.status || scenario.design_warning_count!==designEvaluation.warning_count) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: scenario status/design warning projection mismatch for ${scenario.id}`);
+  if (scenario.status!==projectedStatus || scenario.design_comparison_status!==designEvaluation.status || scenario.design_warning_count!==designEvaluation.warning_count || scenario.design_not_comparable_count!==designEvaluation.not_comparable_count || scenario.design_native_host_limitation_count!==designEvaluation.native_host_limitation_count) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: scenario status/design evidence projection mismatch for ${scenario.id}`);
   if (metrics.capture_scope!==contract.capture.scope) throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: invalid capture scope for ${scenario.id}`);
-  if (typeof metrics.differing_pixel_ratio!=='number' || !Object.hasOwn(geometry.relationships||{},'last_card_to_pager_gap') || typeof geometry.relationships?.visual_vs_native_height_delta!=='number') {
+  if (typeof metrics.differing_pixel_ratio!=='number' || !Object.hasOwn(geometry.relationships||{},'last_card_to_pager_gap') || typeof geometry.relationships?.visual_vs_native_height_delta!=='number' || !Number.isInteger(geometry.relationships?.visible_card_count)) {
     throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: incomplete metrics for ${scenario.id}`);
   }
   const state=read(path.join(scenario.id,'scenario-state.json'));
@@ -64,9 +82,12 @@ for (const scenario of manifest.scenarios) {
 }
 const warningCount=manifest.scenarios.filter(scenario=>scenario.status==='VISUAL_REGRESSION_WARNING').length;
 const failureCount=manifest.scenarios.filter(scenario=>scenario.status==='VISUAL_CONTRACT_FAIL').length;
+const evidenceLimitationScenarioCount=manifest.scenarios.filter(scenario=>scenario.status==='EVIDENCE_LIMITATION').length;
 const designWarningCount=manifest.scenarios.reduce((sum,scenario)=>sum+(scenario.design_warning_count||0),0);
-const expectedStatus=failureCount?'VISUAL_CONTRACT_FAIL':warningCount?'VISUAL_REGRESSION_WARNING':'PASS';
-if (manifest.warning_count!==warningCount || manifest.failure_count!==failureCount || manifest.design_relation_warning_count!==designWarningCount || manifest.status!==expectedStatus) {
-  throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: manifest warning/failure aggregation is inconsistent with scenario evidence.');
+const notComparableCount=manifest.scenarios.reduce((sum,scenario)=>sum+(scenario.design_not_comparable_count||0),0);
+const nativeHostLimitationCount=manifest.scenarios.reduce((sum,scenario)=>sum+(scenario.design_native_host_limitation_count||0),0);
+const expectedStatus=failureCount?'VISUAL_CONTRACT_FAIL':warningCount?'VISUAL_REGRESSION_WARNING':evidenceLimitationScenarioCount?'EVIDENCE_LIMITATION':'PASS';
+if (manifest.warning_count!==warningCount || manifest.failure_count!==failureCount || manifest.evidence_limitation_scenario_count!==evidenceLimitationScenarioCount || manifest.design_relation_warning_count!==designWarningCount || manifest.design_relation_not_comparable_count!==notComparableCount || manifest.native_host_limitation_relation_count!==nativeHostLimitationCount || manifest.status!==expectedStatus) {
+  throw new Error('VISUAL_TEST_INFRASTRUCTURE_FAILURE: manifest warning/failure/qualified-evidence aggregation is inconsistent with scenario evidence.');
 }
-console.log(`VISUAL_DIAGNOSTIC_ARTIFACT_PASS scenarios=${manifest.scenarios.length} status=${manifest.status} warnings=${manifest.warning_count} design_relation_warnings=${manifest.design_relation_warning_count}`);
+console.log(`VISUAL_DIAGNOSTIC_ARTIFACT_PASS scenarios=${manifest.scenarios.length} status=${manifest.status} warnings=${manifest.warning_count} design_relation_warnings=${manifest.design_relation_warning_count} not_comparable=${manifest.design_relation_not_comparable_count} native_host_limitations=${manifest.native_host_limitation_relation_count} matrix_j=${matrixJ.status}`);
