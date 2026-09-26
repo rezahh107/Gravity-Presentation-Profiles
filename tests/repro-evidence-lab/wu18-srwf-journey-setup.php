@@ -87,13 +87,9 @@ $input_meta['confirmation_messageEnable'] = '1';
 $input_meta['confirmation_messageValue'] = 'HOST_USER_INPUT_COMPLETE';
 gravity_flow()->update_feed_meta( $input_id, $input_meta );
 
-$review_step = gravity_flow()->get_step( $review_id );
-$input_step  = gravity_flow()->get_step( $input_id );
-if ( ! $review_step || ! $input_step ) throw new RuntimeException( 'Configured steps unavailable.' );
-if ( ! (bool) $review_step->confirmation_prompt || ! (bool) $review_step->revertEnable || (int) $review_step->revertValue !== $input_id ) throw new RuntimeException( 'Review capability settings are not host-effective.' );
-if ( (string) $review_step->destination_approved !== 'complete' || (string) $review_step->destination_rejected !== 'complete' ) throw new RuntimeException( 'Review terminal destinations are not host-effective.' );
-if ( (int) $input_step->destination_complete !== $review_id ) throw new RuntimeException( 'User Input return destination is not host-effective.' );
-if ( ! in_array( '2', array_map( 'strval', $input_step->get_editable_fields() ), true ) ) throw new RuntimeException( 'User Input editable field is not host-effective.' );
+// Deliberately do not re-read step properties in this same PHP request. Gravity
+// Flow can retain instantiated step/feed objects per request; host-effective
+// persistence is asserted by wu18-srwf-journey-runtime.php in a fresh request.
 
 $entries = array();
 foreach ( array( 'approve', 'reject', 'correction', 'failure' ) as $key ) {
@@ -124,7 +120,7 @@ if ( $registry && $registry->is_registered( 'gravityflow/inbox' ) ) {
 }
 
 $manifest = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'evidence_class_ceiling' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
     'runtime' => array( 'wordpress' => get_bloginfo( 'version' ), 'gravity_forms' => (string) $gf['Version'], 'gravity_flow' => (string) $flow['Version'] ),
@@ -135,14 +131,14 @@ $manifest = array(
     'participant_id' => (int) $participant->ID,
     'entries' => $entries,
     'frontend' => array( 'shortcode' => $shortcode, 'block_registered' => (bool) $block, 'block' => $block ),
-    'effective_configuration' => array(
-        'confirmation_prompt' => (bool) $review_step->confirmation_prompt,
-        'revert_enabled' => (bool) $review_step->revertEnable,
-        'revert_target' => (int) $review_step->revertValue,
-        'approved_destination' => (string) $review_step->destination_approved,
-        'rejected_destination' => (string) $review_step->destination_rejected,
-        'user_input_complete_destination' => (int) $input_step->destination_complete,
-        'user_input_editable_fields' => array_values( array_map( 'strval', $input_step->get_editable_fields() ) ),
+    'requested_configuration' => array(
+        'confirmation_prompt' => true,
+        'revert_enabled' => true,
+        'revert_target' => $input_id,
+        'approved_destination' => 'complete',
+        'rejected_destination' => 'complete',
+        'user_input_complete_destination' => $review_id,
+        'user_input_editable_fields' => array( '2' ),
     ),
 );
 update_option( 'gpp_srwf_journey_qualification_manifest', $manifest, false );
