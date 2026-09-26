@@ -8,7 +8,6 @@ const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const operatorPassword = 'wu21-bootstrap-pass-2026';
 const participantPassword = 'srwf-participant-pass-2026';
-
 if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned qualification environment is incomplete.');
 
 function wpEval(code) {
@@ -30,7 +29,7 @@ function hostState(entryId, asUserId = manifest.users.operator.id) {
     $api=new Gravity_Flow_API(${formId});
     $step=$api->get_current_step($entry);
     $timeline=$api->get_timeline($entry);
-    $out=array(
+    echo wp_json_encode(array(
       'entry_id'=>(int)$entry['id'],
       'workflow_step'=>gform_get_meta((int)$entry['id'],'workflow_step'),
       'workflow_current_status'=>gform_get_meta((int)$entry['id'],'workflow_current_status'),
@@ -43,16 +42,15 @@ function hostState(entryId, asUserId = manifest.users.operator.id) {
         'evaluated_status'=>$step->evaluate_status(),
         'can_update'=>Gravity_Flow_Entry_Detail::can_update($step),
         'editable_fields'=>method_exists($step,'get_editable_fields') ? array_values(array_map('strval',$step->get_editable_fields())) : array(),
-        'feed_assignees'=>(array) rgar($step->get_feed_meta(),'assignees'),
+        'feed_assignees'=>(array) rgar($step->get_feed_meta(),'assignees')
       ) : null,
-      'timeline'=>is_array($timeline) ? array_slice($timeline,-8) : $timeline,
-    );
-    echo wp_json_encode($out, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+      'timeline'=>$timeline
+    ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
   `;
   return JSON.parse(wpEval(code));
 }
 
-function validateInvalidStatus(entryId) {
+function validationProbe(entryId) {
   const code = `
     wp_set_current_user(${Number(manifest.users.operator.id)});
     $entry=GFAPI::get_entry(${Number(entryId)});
@@ -80,55 +78,51 @@ async function test(id, name, fn) {
   try { record(id, name, 'PASS', await fn()); }
   catch (error) { record(id, name, 'FAIL', { error: String(error?.stack || error).slice(0, 10000) }); }
 }
-
 async function login(page, user, pass) {
   await page.context().clearCookies();
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
   await page.fill('#user_login', user);
   await page.fill('#user_pass', pass);
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.click('#wp-submit'),
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 }
-
 async function actionBoxState(page) {
   return page.evaluate(() => {
-    const box = document.querySelector('.gravityflow-status-box');
     const buttons = [...document.querySelectorAll('.gravityflow-status-box .gravityflow-action-buttons button')];
     const hidden = document.querySelector('#gravityflow_approval_new_status_step');
     const nonce = document.querySelector('input[name="_wpnonce"]');
     return {
-      box_present: Boolean(box),
+      box_present: Boolean(document.querySelector('.gravityflow-status-box')),
       buttons: buttons.map((b, index) => ({ index, value: b.value, text: b.textContent.replace(/\s+/g, ' ').trim(), onclick: b.getAttribute('onclick') || '' })),
-      hidden_present: Boolean(hidden),
-      hidden_value: hidden?.value ?? null,
+      hidden_present: Boolean(hidden), hidden_value: hidden?.value ?? null,
       nonce_present: Boolean(nonce && nonce.value),
       dom_dialog_count: document.querySelectorAll('[role="dialog"], dialog').length,
       active_value: document.activeElement?.value || null,
     };
   });
 }
-
 async function acceptAction(page, value) {
   const button = page.locator(`.gravityflow-status-box .gravityflow-action-buttons button[value="${value}"]`).first();
   if (await button.count() !== 1) throw new Error(`Missing native action button: ${value}`);
   let dialogInfo = null;
-  page.once('dialog', async dialog => {
-    dialogInfo = { type: dialog.type(), message: dialog.message() };
-    await dialog.accept();
-  });
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    button.click(),
-  ]);
+  page.once('dialog', async dialog => { dialogInfo = { type: dialog.type(), message: dialog.message() }; await dialog.accept(); });
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), button.click()]);
   return dialogInfo;
+}
+async function assertCanonicalInbox(page, routeUrl, label) {
+  await page.goto(routeUrl, { waitUntil: 'networkidle' });
+  const current = new URL(page.url());
+  for (const key of ['view','lid','id','paged']) {
+    if (current.searchParams.has(key)) throw new Error(`${label} canonical route retained detail/paging state ${key}: ${current}`);
+  }
+  const grid = page.locator('[data-js="gflow-inbox"]');
+  const search = page.locator('[data-js="gflow-inbox-search"]');
+  if (await grid.count() !== 1 || await search.count() !== 1) throw new Error(`${label} canonical route did not render the native Inbox grid.`);
+  return { url: current.toString(), grid_count: await grid.count(), search_count: await search.count() };
 }
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
-
 await login(page, manifest.users.operator.login, operatorPassword);
 
 await test('SRWF-HOST-CONFIRM-001', 'native Approval confirmation is browser-owned and cancel preserves host state', async () => {
@@ -139,152 +133,162 @@ await test('SRWF-HOST-CONFIRM-001', 'native Approval confirmation is browser-own
   if (!initial.nonce_present || !initial.hidden_present) throw new Error(`Native nonce/status carrier missing: ${JSON.stringify(initial)}`);
   if (initial.buttons.map(x => x.value).join(',') !== 'approved,rejected,revert') throw new Error(`Native action ordering drifted: ${JSON.stringify(initial.buttons)}`);
   if (!initial.buttons.every(x => x.onclick.includes('handleApprovalStepButtonClick'))) throw new Error(`Native approval handler missing: ${JSON.stringify(initial.buttons)}`);
-  if (initial.dom_dialog_count !== 0) throw new Error(`Unexpected DOM confirmation markup exists before native browser confirm: ${JSON.stringify(initial)}`);
-
+  if (initial.dom_dialog_count !== 0) throw new Error(`Unexpected DOM confirmation markup exists: ${JSON.stringify(initial)}`);
   const approve = page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]').first();
   let dialogInfo = null;
-  page.once('dialog', async dialog => {
-    dialogInfo = { type: dialog.type(), message: dialog.message() };
-    await dialog.dismiss();
-  });
+  page.once('dialog', async dialog => { dialogInfo = { type: dialog.type(), message: dialog.message() }; await dialog.dismiss(); });
   await approve.click();
   await page.waitForTimeout(150);
-  const afterCancelUi = await actionBoxState(page);
+  const afterUi = await actionBoxState(page);
   const after = hostState(entryId);
   if (!dialogInfo || dialogInfo.type !== 'confirm') throw new Error(`Host did not emit native browser confirm: ${JSON.stringify(dialogInfo)}`);
-  if (after.current_step?.id !== before.current_step?.id || after.workflow_final_status !== before.workflow_final_status) throw new Error(`Cancelled confirmation mutated host workflow: ${JSON.stringify({before,after})}`);
-  if (afterCancelUi.hidden_value !== '') throw new Error(`Cancelled confirmation populated mutation carrier: ${JSON.stringify(afterCancelUi)}`);
-  return { initial, dialog: dialogInfo, after_cancel_ui: afterCancelUi, before, after };
+  if (after.current_step?.id !== before.current_step?.id || after.workflow_final_status !== before.workflow_final_status) throw new Error('Cancelled confirm mutated host workflow.');
+  if (afterUi.hidden_value !== '' || afterUi.active_value !== 'approved') throw new Error(`Cancel/focus behavior changed: ${JSON.stringify(afterUi)}`);
+  return { initial, dialog: dialogInfo, after_cancel_ui: afterUi, before, after, exact_keyboard_semantics: 'UA-owned; physical Escape not independently asserted' };
 });
 
-await test('SRWF-HOST-RESULT-APPROVE-001', 'accepted Approve produces authoritative host read-back before completed UI is eligible', async () => {
+await test('SRWF-HOST-RESULT-APPROVE-001', 'accepted Approve produces authoritative completed host truth', async () => {
   const entryId = manifest.entries.approve;
   await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
   const dialog = await acceptAction(page, 'approved');
   const after = hostState(entryId);
-  if (!dialog || dialog.type !== 'confirm') throw new Error('Approve did not traverse native browser confirmation.');
-  if (after.current_step !== null) throw new Error(`Terminal approved fixture still has a current step: ${JSON.stringify(after)}`);
-  if (!after.workflow_final_status || after.workflow_final_status === 'pending') throw new Error(`Approved fixture lacks terminal workflow truth: ${JSON.stringify(after)}`);
-  return { dialog, after, resulting_url: page.url(), body_sample: (await page.locator('body').innerText()).slice(0, 1200) };
+  if (!dialog || after.current_step !== null || after.workflow_final_status !== 'approved' || after.api_status !== 'approved') throw new Error(`Approved host truth missing: ${JSON.stringify({dialog,after})}`);
+  const body = (await page.locator('body').innerText()).slice(0, 1800);
+  if (!body.includes('Entry Approved') || !body.includes('Status: Approved')) throw new Error('Native approved render truth missing.');
+  return { dialog, after, resulting_url: page.url(), native_render_truth: ['Entry Approved','Status: Approved'] };
 });
 
-await test('SRWF-HOST-RESULT-REJECT-001', 'accepted Reject produces authoritative host read-back and remains distinct from technical failure', async () => {
+await test('SRWF-HOST-RESULT-REJECT-001', 'accepted Reject produces authoritative completed host truth', async () => {
   const entryId = manifest.entries.reject;
   await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
   const dialog = await acceptAction(page, 'rejected');
   const after = hostState(entryId);
-  if (!dialog || dialog.type !== 'confirm') throw new Error('Reject did not traverse native browser confirmation.');
-  if (after.current_step !== null) throw new Error(`Terminal rejected fixture still has a current step: ${JSON.stringify(after)}`);
-  if (!after.workflow_final_status || after.workflow_final_status === 'pending') throw new Error(`Rejected fixture lacks terminal workflow truth: ${JSON.stringify(after)}`);
-  return { dialog, after, resulting_url: page.url(), body_sample: (await page.locator('body').innerText()).slice(0, 1200) };
+  if (!dialog || after.current_step !== null || after.workflow_final_status !== 'rejected' || after.api_status !== 'rejected') throw new Error(`Rejected host truth missing: ${JSON.stringify({dialog,after})}`);
+  const body = (await page.locator('body').innerText()).slice(0, 1800);
+  if (!body.includes('Entry Rejected') || !body.includes('Status: Rejected')) throw new Error('Native rejected render truth missing.');
+  return { dialog, after, resulting_url: page.url(), native_render_truth: ['Entry Rejected','Status: Rejected'] };
 });
 
-await test('SRWF-HOST-CORRECTION-001', 'native Revert routes Review to assigned User Input without GPP workflow ownership', async () => {
+await test('SRWF-HOST-CORRECTION-001', 'native Revert routes Review to assigned User Input', async () => {
   const entryId = manifest.entries.revert;
   const beforeOperator = hostState(entryId, manifest.users.operator.id);
   await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
   const dialog = await acceptAction(page, 'revert');
   const operatorAfter = hostState(entryId, manifest.users.operator.id);
   const participantAfter = hostState(entryId, manifest.users.participant.id);
-  if (!dialog || dialog.type !== 'confirm') throw new Error('Revert did not traverse native browser confirmation.');
-  if (operatorAfter.current_step?.id !== correctionId || operatorAfter.current_step?.type !== 'user_input') throw new Error(`Revert did not reach User Input: ${JSON.stringify(operatorAfter)}`);
-  if (operatorAfter.current_step?.can_update) throw new Error(`Operator retained correction edit authority unexpectedly: ${JSON.stringify(operatorAfter)}`);
-  if (!participantAfter.current_step?.can_update) throw new Error(`Configured User Input participant did not receive native edit authority: ${JSON.stringify(participantAfter)}`);
-  if (!participantAfter.current_step?.editable_fields?.includes('1')) throw new Error(`Native User Input editable field set is incorrect: ${JSON.stringify(participantAfter)}`);
+  if (!dialog || operatorAfter.current_step?.id !== correctionId || operatorAfter.current_step?.type !== 'user_input') throw new Error(`Revert did not reach User Input: ${JSON.stringify(operatorAfter)}`);
+  if (operatorAfter.current_step?.can_update || !participantAfter.current_step?.can_update || !participantAfter.current_step?.editable_fields?.includes('1')) throw new Error(`Native correction authorization/editability wrong: ${JSON.stringify({operatorAfter,participantAfter})}`);
   return { before_operator: beforeOperator, dialog, operator_after: operatorAfter, participant_after: participantAfter };
 });
 
-await test('SRWF-HOST-CORRECTION-002', 'User Input participant completes correction and native Next Step returns to same Review Approval', async () => {
+await test('SRWF-HOST-CORRECTION-002', 'User Input completion returns to Review and restores original operator eligibility', async () => {
   const entryId = manifest.entries.revert;
   await login(page, manifest.users.participant.login, participantPassword);
   const userInputUrl = frontendEntryUrl(manifest.routes.shortcode, entryId);
   await page.goto(userInputUrl, { waitUntil: 'networkidle' });
   const input = page.locator('input[name="input_1"]').first();
-  if (await input.count() !== 1 || !(await input.isVisible())) throw new Error('Native User Input editable field is not visible to participant.');
+  if (await input.count() !== 1 || !(await input.isVisible())) throw new Error('Native User Input field unavailable.');
   await input.fill('SYNTHETIC-CORRECTED-VALUE');
   const submit = page.locator(`#gform_submit_button_${formId}, form[id^="gform_"] input[type="submit"], form[id^="gform_"] button[type="submit"]`).filter({ visible: true }).last();
-  if (await submit.count() < 1) throw new Error('Native User Input submit control unavailable.');
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    submit.click(),
-  ]);
+  if (await submit.count() < 1) throw new Error('Native User Input submit unavailable.');
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), submit.click()]);
   const participantAfter = hostState(entryId, manifest.users.participant.id);
   const operatorAfter = hostState(entryId, manifest.users.operator.id);
-  if (operatorAfter.current_step?.id !== reviewId || operatorAfter.current_step?.type !== 'approval') throw new Error(`User Input did not route back to Review: ${JSON.stringify(operatorAfter)}`);
-  if (!operatorAfter.current_step?.can_update) throw new Error(`Original registration operator did not regain native Review eligibility: ${JSON.stringify(operatorAfter)}`);
-  if (participantAfter.current_step?.can_update) throw new Error(`Correction participant retained Review approval authority unexpectedly: ${JSON.stringify(participantAfter)}`);
+  if (operatorAfter.current_step?.id !== reviewId || operatorAfter.current_step?.type !== 'approval' || !operatorAfter.current_step?.can_update || participantAfter.current_step?.can_update) throw new Error(`Return-to-Review ownership wrong: ${JSON.stringify({participantAfter,operatorAfter})}`);
   const value = wpEval(`echo GFAPI::get_entry(${Number(entryId)})['1'];`);
-  if (value !== 'SYNTHETIC-CORRECTED-VALUE') throw new Error(`Native Gravity Forms correction value did not persist: ${value}`);
+  if (value !== 'SYNTHETIC-CORRECTED-VALUE') throw new Error(`Corrected value did not persist: ${value}`);
   return { user_input_url: userInputUrl, resulting_url: page.url(), participant_after: participantAfter, operator_after: operatorAfter, persisted_value: value };
 });
 
-await test('SRWF-HOST-RESULT-ERROR-001', 'invalid Approval status is explicitly rejected by host and does not establish a completed outcome', async () => {
+await test('SRWF-HOST-RESULT-NEGATIVE-VALIDATOR-001', 'Approval validator alone is not a safe Technical Error truth seam', async () => {
   const entryId = manifest.entries.invalid;
   const before = hostState(entryId);
-  const validation = validateInvalidStatus(entryId);
+  const validation = validationProbe(entryId);
   const after = hostState(entryId);
-  if (!validation.is_wp_error) throw new Error(`Host accepted invalid Approval status: ${JSON.stringify(validation)}`);
-  if (after.current_step?.id !== reviewId || after.workflow_final_status !== 'pending') throw new Error(`Invalid action mutated host workflow: ${JSON.stringify({before,after})}`);
-  return { validation, before, after, classification_ceiling: 'explicit host validation failure can support Technical Error; missing post-action truth must remain Unknown' };
+  if (validation.is_wp_error) throw new Error(`Pinned host behavior changed: arbitrary status is now validator-rejected: ${JSON.stringify(validation)}`);
+  if (after.current_step?.id !== before.current_step?.id || after.workflow_final_status !== before.workflow_final_status) throw new Error('Validator probe mutated workflow.');
+  return { validation, before, after, disposition: 'validate_status_update is not an authoritative Technical Error classifier' };
 });
 
-await test('SRWF-HOST-NAV-001', 'frontend shortcode Entry Detail exposes native same-page canonical Inbox return', async () => {
+await test('SRWF-HOST-RESULT-FAILURE-NONCE-001', 'invalid native Approval nonce fails closed and leaves workflow pending', async () => {
   const entryId = manifest.entries.invalid;
   await login(page, manifest.users.operator.login, operatorPassword);
-  const detailUrl = frontendEntryUrl(manifest.routes.shortcode, entryId);
-  await page.goto(detailUrl, { waitUntil: 'networkidle' });
-  const link = page.locator('.gravityflow-back-link-container .back-link').first();
-  if (await link.count() !== 1) throw new Error('Native shortcode Entry Detail back link unavailable.');
-  const href = await link.getAttribute('href');
-  const expected = new URL(manifest.routes.shortcode.url).toString();
-  const actual = new URL(href, baseUrl).toString();
-  if (actual !== expected) throw new Error(`Native shortcode back link is not canonical page 1: ${JSON.stringify({actual,expected})}`);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), link.click()]);
-  const returned = new URL(page.url());
-  for (const key of ['view','lid','id','page','paged']) if (returned.searchParams.has(key)) throw new Error(`Return retained transient Entry Detail/paging query ${key}: ${returned}`);
-  return { detail_url: detailUrl, native_href: actual, returned_url: returned.toString() };
+  await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
+  const before = hostState(entryId);
+  await page.evaluate(() => { const n=document.querySelector('input[name="_wpnonce"]'); if(n) n.value='invalid-synthetic-nonce'; });
+  const button = page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]').first();
+  let dialogInfo = null;
+  page.once('dialog', async dialog => { dialogInfo={type:dialog.type(),message:dialog.message()}; await dialog.accept(); });
+  const responsePromise = page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => null);
+  await button.click();
+  const response = await responsePromise;
+  const after = hostState(entryId);
+  const body = (await page.locator('body').innerText()).slice(0, 1200);
+  if (!dialogInfo || dialogInfo.type !== 'confirm') throw new Error('Nonce failure did not traverse native confirmation.');
+  if (after.current_step?.id !== reviewId || after.workflow_final_status !== 'pending') throw new Error(`Nonce failure mutated workflow: ${JSON.stringify(after)}`);
+  if (response && response.status() < 400 && !/Are you sure|nonce|expired|invalid/i.test(body)) throw new Error(`Nonce failure lacked native failure surface: ${response.status()} ${body}`);
+  return { dialog: dialogInfo, http_status: response?.status() ?? null, body_sample: body, before, after, safe_completed_result: false };
 });
 
-await test('SRWF-HOST-NAV-002', 'registered Inbox Block route is measured for the same canonical return behavior', async () => {
-  if (!manifest.routes.block) return { supported: false, reason: 'gravityflow/inbox block not registered in pinned runtime' };
+await test('SRWF-HOST-RESULT-AMBIGUOUS-001', 'aborted action transport cannot justify a completed outcome before authoritative read-back', async () => {
   const entryId = manifest.entries.invalid;
-  const detailUrl = frontendEntryUrl(manifest.routes.block, entryId);
-  await page.goto(detailUrl, { waitUntil: 'networkidle' });
-  const link = page.locator('.gravityflow-back-link-container .back-link').first();
-  if (await link.count() !== 1) return { supported: true, native_back_link_emitted: false, detail_url: detailUrl, canonical_page_url: manifest.routes.block.url };
-  const actual = new URL(await link.getAttribute('href'), baseUrl).toString();
-  const expected = new URL(manifest.routes.block.url).toString();
-  if (actual !== expected) throw new Error(`Native Block back link is not canonical page 1: ${JSON.stringify({actual,expected})}`);
-  return { supported: true, native_back_link_emitted: true, detail_url: detailUrl, native_href: actual, canonical_page_url: expected };
+  await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
+  const before = hostState(entryId);
+  let aborted = false;
+  await page.route('**/*', async route => {
+    const req = route.request();
+    if (!aborted && req.method() === 'POST' && new URL(req.url()).pathname === '/wp-admin/admin.php') { aborted = true; await route.abort('failed'); return; }
+    await route.continue();
+  });
+  const button = page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]').first();
+  let dialogInfo = null;
+  page.once('dialog', async dialog => { dialogInfo={type:dialog.type(),message:dialog.message()}; await dialog.accept(); });
+  let navigationError = null;
+  const nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(error => { navigationError=String(error); return null; });
+  try { await button.click({ timeout: 5000 }); } catch (error) { navigationError = navigationError || String(error); }
+  await nav;
+  await page.unroute('**/*');
+  const after = hostState(entryId);
+  if (!aborted || !dialogInfo) throw new Error(`Transport ambiguity was not actually exercised: ${JSON.stringify({aborted,dialogInfo,navigationError})}`);
+  if (after.current_step?.id !== reviewId || after.workflow_final_status !== 'pending') throw new Error(`Aborted transport mutated workflow: ${JSON.stringify(after)}`);
+  return { dialog: dialogInfo, transport_aborted: aborted, navigation_error: navigationError, before, authoritative_readback: after, safe_ui_before_readback: 'UNKNOWN_ONLY' };
 });
 
-await test('SRWF-HOST-NAV-003', 'admin Entry Detail has no native frontend back-link but canonical native admin Inbox route is stable', async () => {
+await test('SRWF-HOST-NAV-001', 'shortcode Entry Detail has no default native back-link but its WordPress page permalink is canonical Inbox page 1', async () => {
+  await login(page, manifest.users.operator.login, operatorPassword);
+  const detailUrl = frontendEntryUrl(manifest.routes.shortcode, manifest.entries.invalid);
+  await page.goto(detailUrl, { waitUntil: 'networkidle' });
+  const nativeBackLinkCount = await page.locator('.gravityflow-back-link-container .back-link').count();
+  if (nativeBackLinkCount !== 0) throw new Error('Default shortcode fixture unexpectedly emitted opt-in native back-link.');
+  const canonical = await assertCanonicalInbox(page, manifest.routes.shortcode.url, 'shortcode');
+  return { detail_url: detailUrl, native_back_link_count: nativeBackLinkCount, canonical, native_back_link_requires_host_back_link_configuration: true };
+});
+
+await test('SRWF-HOST-NAV-002', 'registered Inbox Block page permalink is canonical Inbox page 1', async () => {
+  if (!manifest.routes.block) return { supported: false, reason: 'gravityflow/inbox block not registered in pinned runtime' };
+  const detailUrl = frontendEntryUrl(manifest.routes.block, manifest.entries.invalid);
+  await page.goto(detailUrl, { waitUntil: 'networkidle' });
+  const nativeBackLinkCount = await page.locator('.gravityflow-back-link-container .back-link').count();
+  const canonical = await assertCanonicalInbox(page, manifest.routes.block.url, 'block');
+  return { supported: true, detail_url: detailUrl, native_back_link_count: nativeBackLinkCount, canonical };
+});
+
+await test('SRWF-HOST-NAV-003', 'admin Entry Detail uses stable native admin Inbox route authority', async () => {
   const entryId = manifest.entries.invalid;
   await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
   const nativeBackLinks = await page.locator('.gravityflow-back-link-container .back-link').count();
   if (nativeBackLinks !== 0) throw new Error('Pinned admin Entry Detail unexpectedly emitted frontend back link.');
   const target = new URL(manifest.routes.admin_inbox_url);
-  if (target.pathname !== '/wp-admin/admin.php' || target.searchParams.get('page') !== 'gravityflow-inbox') throw new Error(`Canonical admin Inbox authority changed: ${target}`);
+  if (target.pathname !== '/wp-admin/admin.php' || target.searchParams.get('page') !== 'gravityflow-inbox') throw new Error(`Admin Inbox authority changed: ${target}`);
   await page.goto(target.toString(), { waitUntil: 'networkidle' });
-  if (!page.url().includes('page=gravityflow-inbox')) throw new Error(`Canonical admin Inbox route did not resolve: ${page.url()}`);
+  if (await page.locator('[data-js="gflow-inbox"]').count() !== 1) throw new Error('Canonical admin Inbox route did not render native Inbox.');
   return { admin_entry_url: adminEntryUrl(entryId), native_back_link_count: nativeBackLinks, canonical_admin_inbox: target.toString(), resolved_url: page.url() };
 });
 
 await browser.close();
-
 const failures = results.filter(r => r.status !== 'PASS');
-const payload = {
-  schema_version: '1.0.0',
-  data_class: 'SYNTHETIC_NON_PII',
-  evidence_class: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
-  production_equivalence: 'NOT_PROVEN',
-  runtime: manifest.runtime,
-  results,
-};
-fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(`${artifactDir}/srwf-journey-host-browser-results.json`, `${JSON.stringify(payload, null, 2)}\n`);
-if (failures.length) {
-  console.error(JSON.stringify(failures, null, 2));
-  process.exit(1);
-}
+const payload = { schema_version:'1.1.0', data_class:'SYNTHETIC_NON_PII', evidence_class:'PROVEN_IN_REPRODUCIBLE_SIMULATION', production_equivalence:'NOT_PROVEN', runtime:manifest.runtime, results };
+fs.mkdirSync(artifactDir, { recursive:true });
+fs.writeFileSync(`${artifactDir}/srwf-journey-host-browser-results.json`, `${JSON.stringify(payload,null,2)}\n`);
+if (failures.length) { console.error(JSON.stringify(failures,null,2)); process.exit(1); }
 console.log('SRWF_JOURNEY_HOST_BROWSER_PASS');
