@@ -185,9 +185,15 @@ await test('SRWF-Q3-USER-INPUT-RETURN', 'User Input participant completes native
     statuses: [...document.querySelectorAll('[name="gravityflow_status"]')].map(e => ({tag:e.tagName,type:e.type,value:e.value,checked:e.checked})),
     submits: [...document.querySelectorAll('form[id^="gform_"] :is(button,input)[type="submit"]')].map(e => ({tag:e.tagName,name:e.name,value:e.value,text:e.textContent?.trim()||'',visible:!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)})),
   }));
-  const completeRadio = p.locator('input[name="gravityflow_status"][value="complete"]');
-  if (await completeRadio.count()) await completeRadio.check();
-  else {
+  const completeStatus = p.locator('[name="gravityflow_status"][value="complete"]').first();
+  if (await completeStatus.count()) {
+    const type = (await completeStatus.getAttribute('type') || '').toLowerCase();
+    if (type === 'radio' || type === 'checkbox') {
+      await completeStatus.check();
+    } else if ((await completeStatus.inputValue()) !== 'complete') {
+      await completeStatus.evaluate(el => { el.value='complete'; el.dispatchEvent(new Event('change',{bubbles:true})); });
+    }
+  } else {
     const status = p.locator('[name="gravityflow_status"]').first();
     if (await status.count()) await status.evaluate(el => { el.value='complete'; el.dispatchEvent(new Event('change',{bubbles:true})); });
   }
@@ -238,7 +244,7 @@ await operatorContext.close();
 await browser.close();
 const failed = results.filter(r => r.status !== 'PASS');
 const payload = {
-  schema_version: '1.0.0',
+  schema_version: '1.0.1',
   evidence_class_ceiling: 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
   browser: 'Chromium via Playwright 1.55.0',
   results,
