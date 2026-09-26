@@ -1,0 +1,129 @@
+name: SRWF Operator Journey Host Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/srwf-operator-journey-host-qualification.yml'
+      - 'tests/repro-evidence-lab/wu18-srwf-journey-*'
+      - 'tests/repro-evidence-lab/setup-fixtures.php'
+      - 'tests/repro-evidence-lab/setup-wu18-fixtures.php'
+      - 'tests/repro-evidence-lab/verify-wu21-package-fixtures.php'
+      - 'tests/fixtures/wu21-packages/**'
+      - 'docs/evidence/SRWF_OPERATOR_JOURNEY_HOST_CAPABILITY_QUALIFICATION_V1.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-host-capabilities:
+    name: Exact-Head pinned Gravity Flow capability qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-wu18-root
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-wu18-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      WU21_WP_PATH: /tmp/srwf-journey-wordpress
+      WU21_ARTIFACT_DIR: /tmp/srwf-journey-artifacts
+      WU21_PACKAGE_DIR: /tmp/srwf-journey-packages
+      WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
+      WU21_GF_ZIP: /tmp/srwf-journey-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      WU21_FLOW_ZIP: /tmp/srwf-journey-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+      WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU21_FLOW_SHA256: ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404
+      WU21_GF_SIZE: '5300290'
+      WU21_FLOW_SIZE: '2603034'
+      WU21_WP_CLI: /tmp/wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+
+    steps:
+      - name: Checkout exact PR Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Assert exact repository identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3.35'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Repository-native validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          php -l tests/repro-evidence-lab/wu18-srwf-journey-source-probe.php
+          bash scripts/validate-committed-archives.sh
+
+      - name: Install exact WordPress runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          mkdir -p "$WU21_WP_PATH"
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=7.1.1 --force
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-wu18-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='SRWF Journey Qualification' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" rewrite structure '/%postname%/'
+          test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "7.1.1"
+
+      - name: Verify and install repository-owned Gravity packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="$GITHUB_WORKSPACE/$WU21_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU21_GF_ZIP"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU21_FLOW_ZIP"
+          test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
+          test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
+          echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
+          echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
+          unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+
+      - name: Activate exact plugins and capture source capability evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/wu18-srwf-journey-source-probe.php
+          test -s "$WU21_ARTIFACT_DIR/wu18-srwf-journey-source-probe.json"
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: srwf-operator-journey-host-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/srwf-journey-artifacts/wu18-srwf-journey-source-probe.json
+          if-no-files-found: warn
+          retention-days: 30
