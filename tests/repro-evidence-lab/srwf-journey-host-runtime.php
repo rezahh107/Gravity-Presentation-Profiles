@@ -44,34 +44,12 @@ function srwf_journey_add_form( $title ) {
     return (int) $form_id;
 }
 
-function srwf_journey_update_step_meta( $step, array $updates ) {
-    $meta = $step->get_feed_meta();
-    foreach ( $updates as $key => $value ) {
-        $meta[ $key ] = $value;
-    }
-    gravity_flow()->update_feed_meta( $step->get_id(), $meta );
-}
-
-function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $participant_id ) {
+function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
     $api = new Gravity_Flow_API( $form_id );
 
-    // Create Review first so it is the workflow start step.
-    $review_id = $api->add_step(
-        array(
-            'step_name' => 'SRWF Qualified Review',
-            'step_type' => 'approval',
-            'description' => 'Synthetic review step.',
-            'type' => 'select',
-            'assignees' => array( 'user_id|' . (int) $operator_id ),
-            'assignee_policy' => 'all',
-            'note_mode' => 'not_required',
-            'confirmation_prompt' => '1',
-        )
-    );
-    if ( ! $review_id || is_wp_error( $review_id ) ) {
-        throw new RuntimeException( 'Unable to create Review Approval step.' );
-    }
-
+    // User Input is deliberately created first so it is a real available target
+    // when the Approval step is created. This lets Gravity Flow persist the native
+    // checkbox_and_select Revert setting without inventing a transition seam.
     $correction_id = $api->add_step(
         array(
             'step_name' => 'SRWF Qualified Correction Input',
@@ -83,48 +61,39 @@ function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $
             'editable_fields' => array( '1' ),
             'instructionsEnable' => '1',
             'instructionsValue' => 'Update the synthetic correction value and submit.',
-            'default_status' => 'complete',
+            'default_status' => 'hidden',
         )
     );
     if ( ! $correction_id || is_wp_error( $correction_id ) ) {
         throw new RuntimeException( 'Unable to create User Input correction step.' );
     }
 
-    $review = $api->get_step( (int) $review_id );
-    $correction = $api->get_step( (int) $correction_id );
-    if ( ! $review || ! $correction ) {
-        throw new RuntimeException( 'Unable to resolve synthetic workflow steps.' );
-    }
-
-    // Exact Gravity Flow 3.1.0 settings discovered from the runtime settings schema.
-    srwf_journey_update_step_meta(
-        $review,
+    // Review is now the next step after User Input. This gives User Input a native
+    // default-next route back to Review, while Review's native Revert points back
+    // to the already-existing User Input step.
+    $review_id = $api->add_step(
         array(
+            'step_name' => 'SRWF Qualified Review',
+            'step_type' => 'approval',
+            'description' => 'Synthetic review step.',
+            'type' => 'select',
+            'assignees' => array( 'user_id|' . (int) $operator_id ),
+            'assignee_policy' => 'all',
+            'note_mode' => 'not_required',
             'confirmation_prompt' => '1',
             'revertEnable' => '1',
             'revertValue' => (string) $correction_id,
-            // Terminal destinations make approve/reject outcome fixtures unambiguous.
-            'destination_approved' => 'complete',
-            'destination_rejected' => 'complete',
         )
     );
+    if ( ! $review_id || is_wp_error( $review_id ) ) {
+        throw new RuntimeException( 'Unable to create Review Approval step.' );
+    }
 
-    // Generic Gravity_Flow_Step::get_next_step_id() resolves destination_<status>.
-    // User Input evaluates complete when its assignee submits, so route back to Review.
-    srwf_journey_update_step_meta(
-        $correction,
-        array(
-            'destination_complete' => (string) $review_id,
-        )
-    );
-
-    // Gravity Flow step objects cache feed metadata for the request. Re-resolve
-    // through a fresh API instance before accepting the configured state as proof.
     $fresh_api = new Gravity_Flow_API( $form_id );
     $review = $fresh_api->get_step( (int) $review_id );
     $correction = $fresh_api->get_step( (int) $correction_id );
     if ( ! $review || ! $correction ) {
-        throw new RuntimeException( 'Unable to fresh-resolve configured workflow steps.' );
+        throw new RuntimeException( 'Unable to resolve configured workflow steps.' );
     }
     $review_meta = $review->get_feed_meta();
     $correction_meta = $correction->get_feed_meta();
@@ -133,23 +102,14 @@ function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $
         '1' !== (string) rgar( $review_meta, 'confirmation_prompt' )
         || '1' !== (string) rgar( $review_meta, 'revertEnable' )
         || (string) rgar( $review_meta, 'revertValue' ) !== (string) $correction_id
-        || 'complete' !== (string) rgar( $review_meta, 'destination_approved' )
-        || 'complete' !== (string) rgar( $review_meta, 'destination_rejected' )
-        || (string) rgar( $correction_meta, 'destination_complete' ) !== (string) $review_id
     ) {
         throw new RuntimeException(
-            'Host-effective journey settings did not persist: ' . wp_json_encode(
+            'Host-effective Approval confirmation/Revert settings were not admitted at step creation: ' .
+            wp_json_encode(
                 array(
-                    'review' => array(
-                        'confirmation_prompt' => rgar( $review_meta, 'confirmation_prompt' ),
-                        'revertEnable' => rgar( $review_meta, 'revertEnable' ),
-                        'revertValue' => rgar( $review_meta, 'revertValue' ),
-                        'destination_approved' => rgar( $review_meta, 'destination_approved' ),
-                        'destination_rejected' => rgar( $review_meta, 'destination_rejected' ),
-                    ),
-                    'correction' => array(
-                        'destination_complete' => rgar( $correction_meta, 'destination_complete' ),
-                    ),
+                    'confirmation_prompt' => rgar( $review_meta, 'confirmation_prompt' ),
+                    'revertEnable' => rgar( $review_meta, 'revertEnable' ),
+                    'revertValue' => rgar( $review_meta, 'revertValue' ),
                 ),
                 JSON_UNESCAPED_SLASHES
             )
@@ -163,10 +123,15 @@ function srwf_journey_add_review_and_correction_steps( $form_id, $operator_id, $
         'correction_status_config' => $correction->get_status_config(),
         'review_feed_meta' => $review_meta,
         'correction_feed_meta' => $correction_meta,
+        'return_route' => array(
+            'mechanic' => 'user_input_default_next_by_native_step_order',
+            'correction_step_id' => (int) $correction_id,
+            'review_step_id' => (int) $review_id,
+        ),
     );
 }
 
-function srwf_journey_add_entry( $form_id, $participant_id, $label ) {
+function srwf_journey_add_entry_seeded_at_review( $form_id, $participant_id, $review_id, $label ) {
     $entry_id = GFAPI::add_entry(
         array(
             'form_id' => $form_id,
@@ -177,24 +142,35 @@ function srwf_journey_add_entry( $form_id, $participant_id, $label ) {
     if ( is_wp_error( $entry_id ) || ! $entry_id ) {
         throw new RuntimeException( is_wp_error( $entry_id ) ? $entry_id->get_error_message() : 'Unable to create entry.' );
     }
+    $entry_id = (int) $entry_id;
     $api = new Gravity_Flow_API( $form_id );
-    $api->process_workflow( (int) $entry_id );
-    $entry = GFAPI::get_entry( (int) $entry_id );
-    $step = $api->get_current_step( $entry );
-    if ( ! $step || 'approval' !== $step->get_type() ) {
-        throw new RuntimeException( 'Synthetic entry did not begin on Review Approval.' );
+    $api->process_workflow( $entry_id );
+
+    // Because User Input is first for the native return-loop ordering, use the
+    // public Gravity Flow API solely to seed the qualification entry at Review.
+    // No GPP or test-only transition implementation is introduced.
+    $entry = GFAPI::get_entry( $entry_id );
+    $sent = $api->send_to_step( $entry, (int) $review_id );
+    if ( false === $sent || is_wp_error( $sent ) ) {
+        throw new RuntimeException( is_wp_error( $sent ) ? $sent->get_error_message() : 'Native send_to_step() could not seed Review.' );
     }
-    return (int) $entry_id;
+
+    $entry = GFAPI::get_entry( $entry_id );
+    $step = ( new Gravity_Flow_API( $form_id ) )->get_current_step( $entry );
+    if ( ! $step || 'approval' !== $step->get_type() || (int) $step->get_id() !== (int) $review_id ) {
+        throw new RuntimeException( 'Synthetic entry could not be host-seeded at Review Approval.' );
+    }
+    return $entry_id;
 }
 
 $form_id = srwf_journey_add_form( 'SRWF Journey Host Qualification' );
-$steps = srwf_journey_add_review_and_correction_steps( $form_id, $operator->ID, $participant->ID );
+$steps = srwf_journey_add_steps( $form_id, $operator->ID, $participant->ID );
 
 $entries = array(
-    'approve' => srwf_journey_add_entry( $form_id, $participant->ID, 'APPROVE' ),
-    'reject' => srwf_journey_add_entry( $form_id, $participant->ID, 'REJECT' ),
-    'revert' => srwf_journey_add_entry( $form_id, $participant->ID, 'REVERT' ),
-    'invalid' => srwf_journey_add_entry( $form_id, $participant->ID, 'INVALID' ),
+    'approve' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'APPROVE' ),
+    'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'REJECT' ),
+    'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'REVERT' ),
+    'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'INVALID' ),
 );
 
 $shortcode_page_id = wp_insert_post(
@@ -233,7 +209,7 @@ if ( is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $r
 }
 
 $manifest = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'scope' => 'QUALIFICATION_ONLY',
     'runtime' => array(
@@ -260,6 +236,8 @@ $manifest = array(
         'confirmation_js' => 'js/inbox.js',
         'confirmation_function' => 'handleApprovalStepButtonClick',
         'confirmation_primitive' => 'window.confirm',
+        'revert_filter' => 'gravityflow_approval_revert_step_id',
+        'public_review_seed_api' => 'Gravity_Flow_API::send_to_step',
         'back_link_filter' => 'gravityflow_back_link_url_entry_detail',
     ),
 );
