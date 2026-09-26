@@ -1,7 +1,19 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 const infra = message => { throw new Error(`VISUAL_TEST_INFRASTRUCTURE_FAILURE: ${message}`); };
 
 export const EMPTY_STATE_QUALIFICATION_ID = 'GPP-INBOX-EMPTY-STATE-SEAM-V1';
 export const EMPTY_STATE_LIMITATION_OUTCOME = 'NO_SUPPORTED_SEARCH_NO_RESULT_PRESENTATION_SEAM';
+export const MATRIX_J_QUALIFICATION_ID = 'GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1';
+
+if (process.env.WU21_ARTIFACT_DIR && process.env.WU21_WP_PATH && process.env.WU21_WP_CLI) {
+  const root=path.join(process.env.WU21_ARTIFACT_DIR,'visual-regression-diagnostics');
+  const emptyPath=path.join(root,'empty-state-seam.json');
+  const matrixPath=path.join(root,'matrix-j-browser-zoom.json');
+  if(!fs.existsSync(emptyPath)) await import('../repro-evidence-lab/inbox-empty-state-seam-qualification.mjs');
+  if(!fs.existsSync(matrixPath)) await import('./matrix-j-browser-zoom.mjs');
+}
 
 export function buildDesignEvidenceContext(scenario, emptyStateQualification = null) {
   const context = { scenario_id: scenario?.id ?? null, relation_dispositions: {} };
