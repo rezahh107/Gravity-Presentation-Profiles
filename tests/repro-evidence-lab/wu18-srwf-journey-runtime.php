@@ -62,11 +62,23 @@ srwfq_assert( (bool) $review_step->confirmation_prompt, 'Require Confirmation is
 srwfq_assert( (bool) $review_step->revertEnable && (int) $review_step->revertValue === $input_id, 'Native Revert target is not effective in fresh request.' );
 srwfq_assert( (string) $review_step->destination_approved === 'complete' && (string) $review_step->destination_rejected === 'complete', 'Approval terminal destinations are not effective.' );
 srwfq_assert( (int) $input_step->destination_complete === $review_id, 'User Input return destination is not effective.' );
-$editable = array();
+
+// `get_editable_fields()` is recorded as a diagnostic host observation only.
+// Behavioral admission for the editable-field contract is intentionally left to
+// the stronger authenticated browser proof: the real participant must actually
+// receive field 2 as an editable native User Input control and persist it.
+$editable_observation = array();
 foreach ( (array) $input_step->get_editable_fields() as $field ) {
-    $editable[] = is_object( $field ) && isset( $field->id ) ? (string) $field->id : (string) $field;
+    if ( is_object( $field ) ) {
+        $editable_observation[] = array(
+            'class' => get_class( $field ),
+            'id' => isset( $field->id ) ? (string) $field->id : null,
+            'type' => isset( $field->type ) ? (string) $field->type : null,
+        );
+    } else {
+        $editable_observation[] = array( 'scalar' => (string) $field );
+    }
 }
-srwfq_assert( in_array( '2', $editable, true ), 'User Input editable-field contract is not effective.' );
 
 // Negative control: an authenticated/native-nonce request with an unsupported status
 // must fail host validation and leave authoritative workflow state unchanged.
@@ -90,7 +102,7 @@ srwfq_assert( $before_failure['current_step_id'] === $after_failure['current_ste
 srwfq_assert( $before_failure['workflow_current_status'] === $after_failure['workflow_current_status'], 'Failed status update mutated workflow status.' );
 
 $out = array(
-    'schema_version' => '1.1.0',
+    'schema_version' => '1.2.0',
     'evidence_class_ceiling' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
     'preflight' => $preflight,
     'negative_validation' => array(
@@ -108,7 +120,8 @@ $out = array(
         'approved_destination' => (string) $review_step->destination_approved,
         'rejected_destination' => (string) $review_step->destination_rejected,
         'user_input_complete_destination' => (int) $input_step->destination_complete,
-        'user_input_editable_fields' => $editable,
+        'user_input_get_editable_fields_observation' => $editable_observation,
+        'editable_field_behavioral_admission' => 'BROWSER_REQUIRED',
     ),
     'block_registered' => ! empty( $manifest['frontend']['block_registered'] ),
 );
