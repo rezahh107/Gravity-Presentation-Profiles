@@ -7,7 +7,7 @@ artifact: docs/visual/candidates/SRWF_REGISTRATION_OPERATOR_JOURNEY_CANDIDATE_V1
 scope: DESIGN_ONLY
 production_impact: NONE
 baseline: e24759ccdb00b36976389cf36ad49f2822dfa226
-reviewed_pr_head_before_revision: 521c5a9297673d4d0f9c3deb6078c0b9e678ed8a
+reviewed_pr_head_before_revision: 29b28174acb9ae2b5fc95a1a214f78d2919b1f78
 revision_rule: EXISTING_APPROVED_DESIGN_PLUS_NEW_PR93_JOURNEY_STATES
 ```
 
@@ -92,6 +92,18 @@ Only the following are new PR #93 journey designs:
 4. **Case identity added to results.** Approved, Rejected, Correction requested, Technical Error and Unknown all show a compact `student name + national ID` context strip on desktop and mobile.
 5. **Technical Error wording corrected.** Candidate title is now `در ثبت نتیجه مشکلی رخ داد`; supporting copy says the final case state is not confirmed instead of asserting that mutation definitely did not occur.
 6. **Primary mobile reference corrected to real target width.** The principal phone screen is explicitly `390 × 844 CSS px`; action stacking, RTL, wrapping, result context, confirmation and correction layouts are reviewed at that width.
+
+## Final bounded closure additions
+
+The final closure preserves the accepted Inbox and Entry Detail restoration and changes only the following additive journey details:
+
+- The Future Report placeholder no longer exposes technical English review metadata inside the simulated operator UI. Its operator-facing inactive label is `آینده — غیرفعال`; technical status remains review metadata outside the product surface.
+- Approve and Reject confirmation candidates now express the desired accessibility contract with `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, and `aria-describedby`. These attributes are design intent only and **do not** claim the native Gravity Flow seam already emits identical markup.
+- Result-state accessibility intent is explicit: Approved, Rejected, Correction requested and Unknown use `role="status"`; Technical Error uses `role="alert"`. Production support remains qualification-dependent.
+- Result icons use one dependency-free inline-SVG line grammar while leaving panel geometry and existing color families unchanged: circle/check (Approved), document/X (Rejected), document/return arrow (Correction), warning triangle/exclamation (Technical Error), circle/question (Unknown). Text remains the primary semantic carrier and the icons remain supplemental.
+- Semantic rule: **`PENDING DECISION != COMPLETED OUTCOME`**. Confirmation dialogs remain visually restrained and neutral/primary; they do not reuse completed success/reject result signaling.
+
+The native Gravity Flow optional note remains host-owned presentation, not a speculative GPP capability. Confirmation initial focus, focus trapping, Escape/cancel behavior, focus restoration, exact host button ordering, and exact production attributes remain `HOST-SEAM-DEPENDENT`.
 
 ## Candidate UX copy
 
