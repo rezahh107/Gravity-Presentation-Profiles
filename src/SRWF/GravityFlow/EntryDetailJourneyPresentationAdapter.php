@@ -4,10 +4,6 @@ namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDecisionTrace;
 use GravityPresentationProfiles\Core\Diagnostics\RuntimeDiagnostics;
-use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
-use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
-use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
-use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 
 /**
  * Additive presentation for the Owner-approved SRWF registration-operator journey.
@@ -62,8 +58,13 @@ final class EntryDetailJourneyPresentationAdapter {
     }
 
     public static function enqueueStyles() {
-        if ( ! EntryDetailRequestReachability::isReachable() || ! self::srwfEntryDetailProfileActive()
+        if ( ! EntryDetailRequestReachability::isReachable()
             || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+            return;
+        }
+
+        $model = EntryDetailPresentationAdapter::resolvedPresentationModel();
+        if ( null === $model || ! self::isJourneyProfileId( $model->profileId() ) ) {
             return;
         }
 
@@ -87,8 +88,8 @@ final class EntryDetailJourneyPresentationAdapter {
             return;
         }
 
-        $model = self::admittedPresentationModel( $entry );
-        if ( null === $model ) {
+        $model = EntryDetailPresentationAdapter::admittedPresentationModel( $entry );
+        if ( null === $model || ! self::isJourneyProfileId( $model->profileId() ) ) {
             return;
         }
 
@@ -192,7 +193,8 @@ final class EntryDetailJourneyPresentationAdapter {
             return $url;
         }
         $entry = \GFAPI::get_entry( $entry_id );
-        if ( ! is_array( $entry ) || null === self::admittedPresentationModel( $entry ) ) {
+        $model = is_array( $entry ) ? EntryDetailPresentationAdapter::admittedPresentationModel( $entry ) : null;
+        if ( null === $model || ! self::isJourneyProfileId( $model->profileId() ) ) {
             return $url;
         }
 
@@ -497,59 +499,6 @@ final class EntryDetailJourneyPresentationAdapter {
         return in_array( strtolower( trim( (string) $value ) ), array( '1', 'true', 'yes', 'on' ), true );
     }
 
-    private static function admittedPresentationModel( $entry ) {
-        if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
-            return null;
-        }
-
-        try {
-            $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
-            $activation = $visual->resolve( self::SURFACE );
-            if ( null === $activation ) {
-                return null;
-            }
-            $profile = $visual->effectiveProfile( self::SURFACE );
-            if ( ! is_array( $profile ) || empty( $profile['profile_id'] ) || ! self::isJourneyProfileId( $profile['profile_id'] ) ) {
-                return null;
-            }
-            $package = self::activeVisualPackage( $visual->snapshot(), $activation );
-            if ( null === $package ) {
-                return null;
-            }
-
-            $bindings = new BindingSetLifecycle(
-                new WordPressOptionStateStore( BindingSetLifecycle::OPTION_NAME ),
-                new EvidenceReferenceGate( array() )
-            );
-            $model = new EntryDetailPresentationModel(
-                $profile,
-                self::activeBindingSets( $bindings->snapshot() ),
-                $package['semantic_slots']
-            );
-            $readiness = $model->presentationReadiness( $entry, array() );
-            return ! empty( $readiness['ready'] ) ? $model : null;
-        } catch ( \Throwable $exception ) {
-            RuntimeDiagnostics::recordException(
-                self::SURFACE,
-                'ENTRY_DETAIL_JOURNEY_ADMISSION',
-                'presentation_context_unavailable',
-                'native_gravity_flow_entry_detail',
-                $exception
-            );
-            return null;
-        }
-    }
-
-    private static function srwfEntryDetailProfileActive() {
-        try {
-            $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
-            $profile = $visual->effectiveProfile( self::SURFACE );
-            return is_array( $profile ) && ! empty( $profile['profile_id'] ) && self::isJourneyProfileId( $profile['profile_id'] );
-        } catch ( \Throwable $exception ) {
-            return false;
-        }
-    }
-
     private static function isJourneyProfileId( $profile_id ) {
         return in_array(
             (string) $profile_id,
@@ -676,42 +625,6 @@ final class EntryDetailJourneyPresentationAdapter {
     private static function hostPayloadMatches( $form, $entry ) {
         return is_array( $form ) && is_array( $entry ) && ! empty( $form['id'] ) && ! empty( $entry['id'] ) && ! empty( $entry['form_id'] )
             && (string) $form['id'] === (string) $entry['form_id'];
-    }
-
-    private static function activeVisualPackage( $snapshot, $activation ) {
-        if ( ! is_array( $snapshot ) || ! is_array( $activation ) || ! isset( $activation['package_id'], $activation['package_version'] ) ) {
-            return null;
-        }
-        $id = $activation['package_id'];
-        $version = $activation['package_version'];
-        if ( empty( $snapshot['installed'][ $id ][ $version ]['artifact'] ) ) {
-            return null;
-        }
-        $package = $snapshot['installed'][ $id ][ $version ]['artifact'];
-        return ! empty( $package['semantic_slots'] ) && is_array( $package['semantic_slots'] ) ? $package : null;
-    }
-
-    private static function activeBindingSets( $snapshot ) {
-        if ( ! is_array( $snapshot ) || empty( $snapshot['installed'] ) || empty( $snapshot['activations'] ) ) {
-            return array();
-        }
-        $active = array();
-        foreach ( $snapshot['activations'] as $context_key => $identity ) {
-            if ( ! isset( $identity['binding_set_id'], $identity['binding_set_version'] ) ) {
-                continue;
-            }
-            $id = $identity['binding_set_id'];
-            $version = $identity['binding_set_version'];
-            if ( ! isset( $snapshot['installed'][ $id ][ $version ] ) ) {
-                continue;
-            }
-            $record = $snapshot['installed'][ $id ][ $version ];
-            if ( ! isset( $record['context_key'], $record['artifact'] ) || $record['context_key'] !== $context_key ) {
-                continue;
-            }
-            $active[] = $record['artifact'];
-        }
-        return $active;
     }
 
     private static function assetVersion( $absolute_path ) {

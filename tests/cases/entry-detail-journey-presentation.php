@@ -36,6 +36,7 @@ foreach ( $cases as $case ) {
 
 $root = dirname( __DIR__, 2 );
 $php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailJourneyPresentationAdapter.php' );
+$primary_php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php' );
 $css = file_get_contents( $root . '/assets/css/srwf-gravity-flow-entry-detail-journey.css' );
 $bootstrap = file_get_contents( $root . '/src/Bootstrap.php' );
 
@@ -43,10 +44,30 @@ gpp_journey_assert( false !== strpos( $bootstrap, 'EntryDetailJourneyPresentatio
 gpp_journey_assert( false !== strpos( $php, 'GFAPI::get_entry' ), 'Journey result truth must fresh-read the entry.' );
 gpp_journey_assert( false !== strpos( $php, 'get_current_step' ) && false !== strpos( $php, 'get_status' ) && false !== strpos( $php, 'workflow_final_status' ), 'Journey result truth must use current-step, API-status and final-status read-back.' );
 gpp_journey_assert( false !== strpos( $php, 'Gravity_Flow_Entry_Detail::can_update' ), 'Correction must defer current-operator authority to Gravity Flow.' );
-gpp_journey_assert( false !== strpos( $php, 'isExpectedCorrectionStep' ) && false !== strpos( $php, "'revertEnable'" ) && false !== strpos( $php, "'revertValue'" ) && false !== strpos( $php, 'get_steps' ), 'Correction semantics must bind to the host-configured Approval Revert target.' );
+gpp_journey_assert(
+    false !== strpos( $php, 'isExpectedSameOperatorCorrectionStep' )
+    && false !== strpos( $php, 'stepAssignedExclusivelyToUser' )
+    && false !== strpos( $php, "'revertEnable'" )
+    && false !== strpos( $php, "'revertValue'" )
+    && false !== strpos( $php, 'get_steps' ),
+    'Correction semantics must bind the same operator to the host-configured Approval Revert target.'
+);
+gpp_journey_assert(
+    false !== strpos( $primary_php, 'public static function resolvedPresentationModel' )
+    && false !== strpos( $primary_php, 'public static function admittedPresentationModel' )
+    && false !== strpos( $php, 'EntryDetailPresentationAdapter::resolvedPresentationModel' )
+    && false !== strpos( $php, 'EntryDetailPresentationAdapter::admittedPresentationModel' ),
+    'Journey presentation must reuse the canonical Entry Detail presentation admission primitive.'
+);
+foreach ( array( 'new VisualPackageLifecycle', 'new BindingSetLifecycle', 'WordPressOptionStateStore', 'EvidenceReferenceGate' ) as $duplicated_lifecycle_marker ) {
+    gpp_journey_assert(
+        false === strpos( $php, $duplicated_lifecycle_marker ),
+        'Journey adapter must not duplicate Entry Detail lifecycle/model admission: ' . $duplicated_lifecycle_marker
+    );
+}
 gpp_journey_assert( false !== strpos( $php, 'gravityflow_back_link_url_entry_detail' ), 'Native Gravity Flow back-link route must be canonicalized through its supported filter.' );
 gpp_journey_assert( false !== strpos( $php, 'admin.php?page=gravityflow-inbox' ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
-gpp_journey_assert( false !== strpos( $php, "'inbox' !== \$page" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
+gpp_journey_assert( false !== strpos( $php, "if ( 'inbox' === \$page )" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
 gpp_journey_assert( false === strpos( $php, "array( 'inbox', 'status' )" ), 'Gravity Flow Status pages must not be treated as canonical My Tasks routes.' );
 gpp_journey_assert( false !== strpos( $php, 'role="status"' ), 'Result/correction semantics must not rely on color alone.' );
 gpp_journey_assert( false !== strpos( $php, 'بازگشت به کارهای من' ), 'Canonical return control copy is missing.' );
