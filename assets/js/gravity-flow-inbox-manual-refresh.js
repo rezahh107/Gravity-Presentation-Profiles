@@ -86,6 +86,10 @@
             toolbar = document.createElement( 'div' );
             toolbar.setAttribute( 'data-gpp-inbox-toolbar', '' );
             toolbar.setAttribute( 'dir', 'rtl' );
+            // AG Grid's owned host establishes LTR through a class rule, which
+            // outranks the dir presentational hint. Set direction only on this
+            // GPP-owned toolbar boundary; never change the native grid root.
+            toolbar.style.direction = 'rtl';
             toolbar.setAttribute( 'role', 'group' );
             toolbar.setAttribute( 'aria-label', 'ابزارهای کارهای من' );
             var nodes = [ headers[0], control.parentNode, settings[0] ];
