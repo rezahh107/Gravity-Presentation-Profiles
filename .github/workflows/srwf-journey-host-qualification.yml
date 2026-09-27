@@ -191,8 +191,18 @@ jobs:
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/srwf-journey-host-runtime.php
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/srwf-journey-production-setup.php
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-setup.json"
+
+          # Preserve the existing 13 production journey assertions unchanged.
           node tests/repro-evidence-lab/srwf-journey-production-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-browser.json"
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==13||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
+
+          # Execute the exact-head negative controls only after the canonical
+          # production journey scenarios, because split-assignee setup adds
+          # workflow steps that would otherwise alter their terminal topology.
+          node tests/repro-evidence-lab/srwf-journey-production-negative-controls.mjs
+          test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-negative-controls.json"
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
 
           kill "$server_pid" >/dev/null 2>&1 || true
           wait "$server_pid" 2>/dev/null || true
