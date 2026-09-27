@@ -1,3 +1,4 @@
+import { exerciseInboxComposition } from './inbox-composition-assertions.mjs';
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -239,6 +240,7 @@ const page=await context.newPage();
 await login(page);
 
 await capture('SRWF-GAP-A-B-GEOMETRY-001','Pinned Inbox toolbar/pager geometry and cascade capture',async()=>({
+  production_assertions:await exerciseInboxComposition(page,inboxUrl()),
   desktop:await inboxGeometry(page,{width:1440,height:1000}),
   mobile:await inboxGeometry(page,{width:390,height:844}),
 }));

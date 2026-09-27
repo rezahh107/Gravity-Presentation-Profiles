@@ -333,198 +333,131 @@
     line-height: 1.8;
 }
 
-/*
- * Native Gravity Flow controls keep their host actions and state. GPP only
- * reflows their existing header geometry and strengthens target/focus styling.
- */
-.gpp-inbox-surface .gflow-grid__header {
+/* PR #99: compose original native controls, retaining one host action each. */
+.gpp-inbox-surface [data-gpp-inbox-toolbar] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
-    align-items: center;
-    gap: 0.375rem;
-    min-height: 64px;
-    height: auto;
-    padding: 0.5625rem 0.625rem;
-    border: 1px solid var(--gpp-inbox-border);
-    border-bottom: 0;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.625rem;
     background: var(--gpp-inbox-surface);
+    border: 1px solid var(--gpp-inbox-border);
 }
-
-.gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"] {
-    grid-column: 1;
-    box-sizing: border-box;
-    inline-size: 100%;
-    width: 100%;
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gflow-grid__header {
+    position: relative;
     min-width: 0;
-    min-height: 44px;
     height: auto;
     margin: 0;
-    padding-block: 0.5rem;
-    padding-inline: 2.8125rem 0.875rem;
+    padding: 0;
+}
+.gpp-inbox-surface [data-gpp-inbox-toolbar] [data-js="gflow-inbox-search"] {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gflow-grid__search-icon {
+    inset-inline-start: 0.875rem;
+    inset-inline-end: auto;
+}
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gpp-inbox-manual-refresh {
+    display: flex;
+    margin: 0;
+    min-width: 0;
+}
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gpp-inbox-manual-refresh__button,
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gflow-grid__button--settings {
+    position: static !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: auto !important;
+    height: auto !important;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--gpp-inbox-control-border);
     border-radius: 8px;
     background: var(--gpp-inbox-surface);
     color: var(--gpp-inbox-text);
-    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-family: inherit;
     font-size: 1rem;
-    font-weight: 400;
     line-height: 1.6;
-    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
-
-.gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"]:focus-visible {
-    border-color: var(--gpp-inbox-control-border);
-    outline: 3px solid var(--gpp-inbox-accent);
-    outline-offset: 3px;
-    box-shadow: none;
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gpp-inbox-manual-refresh__button {
+    width: 100% !important;
 }
-
-.gpp-inbox-surface .gflow-grid__header .gflow-grid__search-icon {
-    inset-inline-start: 1.4rem;
-    inset-inline-end: auto;
+.gpp-inbox-surface [data-gpp-inbox-toolbar] .gflow-grid__button--settings::before {
+    display: none;
 }
-
-.gpp-inbox-surface .gflow-grid__button:not(.hover):not(.active):not(.has-background) {
-    position: static;
-    top: auto;
-    right: auto;
-    left: auto;
-    box-sizing: border-box;
-    inline-size: 44px;
-    width: 44px;
-    block-size: 44px;
-    height: 44px;
-    border: 1px solid var(--gpp-inbox-border);
-    border-radius: 8px;
-    background: var(--gpp-inbox-surface);
-    color: var(--gpp-inbox-text-muted);
+.gpp-inbox-surface .gflow-grid__button--fullscreen,
+.gpp-inbox-surface .gflow-grid__button--clear-filters {
+    display: none !important;
 }
-
-.gpp-inbox-surface .gflow-grid__button--clear-filters:not(.hover):not(.active):not(.has-background) {
-    grid-column: 2;
-}
-
-.gpp-inbox-surface .gflow-grid__button--fullscreen:not(.hover):not(.active):not(.has-background) {
-    grid-column: 3;
-}
-
-.gpp-inbox-surface .gflow-grid__button--settings:not(.hover):not(.active):not(.has-background) {
-    grid-column: 4;
-}
-
-.gpp-inbox-surface .gflow-grid__button:focus-visible,
+.gpp-inbox-surface [data-gpp-inbox-toolbar] :focus-visible,
 .gpp-inbox-surface .ag-paging-button:focus-visible {
     outline: 2px solid var(--gpp-inbox-focus) !important;
     outline-offset: 2px;
 }
 
-/*
- * AG Grid 25.2.0 owns this pagination panel and every value shown here. That
- * bundled version has no native numbered-page panel, so GPP makes its real
- * Previous/Next/current-page/row-summary controls legible without a second pager.
- */
+/* Keep AG Grid's native 48px allocation. No root-height or overflow override. */
 .gpp-inbox-surface .ag-paging-panel {
     box-sizing: border-box;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: center;
-    gap: 0.75rem 1rem;
-    min-height: 0;
-    height: auto;
-    padding: 1rem 0.25rem 0;
+    padding: 0 4px;
     border: 0;
-    background: transparent;
     color: var(--gpp-inbox-text-muted);
-    font-family: 'Vazir', Tahoma, Arial, sans-serif;
+    font-family: inherit;
     font-size: 0.875rem;
-    line-height: 1.7;
+    line-height: 1;
 }
-
-.gpp-inbox-surface .ag-paging-row-summary-panel {
-    order: 1;
-    flex: 1 0 100%;
-    inline-size: 100%;
-    margin: 0;
-    color: var(--gpp-inbox-text-muted);
-    text-align: start;
+.gpp-inbox-surface .ag-paging-row-summary-panel,
+.gpp-inbox-surface .ag-paging-button[ref="btFirst"],
+.gpp-inbox-surface .ag-paging-button[ref="btLast"] {
+    display: none;
 }
-
 .gpp-inbox-surface .ag-paging-page-summary-panel {
-    order: 2;
     display: flex;
-    flex: 1 0 100%;
     align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.4375rem;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
     margin: 0;
 }
-
 .gpp-inbox-surface .ag-paging-button {
-    box-sizing: border-box;
     display: inline-flex;
+    box-sizing: border-box;
     align-items: center;
     justify-content: center;
-    min-inline-size: 40px;
-    min-block-size: 40px;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
     margin: 0;
-    padding: 0.375rem 0.625rem;
+    padding: 0;
     border: 1px solid var(--gpp-inbox-control-border);
     border-radius: 8px;
-    background: var(--gpp-inbox-surface);
     color: var(--gpp-inbox-text);
-    cursor: pointer;
+    background: var(--gpp-inbox-surface);
 }
-
-.gpp-inbox-surface .ag-paging-button[ref="btPrevious"],
-.gpp-inbox-surface .ag-paging-button[ref="btNext"] {
-    min-inline-size: 72px;
-    gap: 0.375rem;
+.gpp-inbox-surface .ag-paging-description {
+    margin: 0 4px;
+    white-space: nowrap;
 }
-
-.gpp-inbox-surface .ag-paging-button[ref="btPrevious"]::after {
-    content: "قبلی";
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.gpp-inbox-surface .ag-paging-button[ref="btNext"]::before {
-    content: "بعدی";
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.gpp-inbox-surface .ag-paging-button:hover:not(.ag-disabled) {
-    border-color: var(--gpp-inbox-focus);
-    color: var(--gpp-inbox-accent-active);
-}
-
 .gpp-inbox-surface .ag-paging-button.ag-disabled {
-    border-color: var(--gpp-inbox-border);
-    background: var(--gpp-inbox-canvas);
-    color: var(--gpp-inbox-text-muted);
-    cursor: default;
     opacity: 0.48;
 }
-
-.gpp-inbox-surface .ag-paging-description {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    margin: 0 0.25rem;
-}
-
-.gpp-inbox-surface .ag-paging-number[ref="lbCurrent"] {
-    box-sizing: border-box;
-    display: inline-grid;
-    place-items: center;
-    min-inline-size: 40px;
-    min-block-size: 40px;
-    padding-inline: 0.625rem;
-    border-radius: 8px;
-    background: var(--gpp-inbox-accent);
-    color: #fff;
-    font-weight: 700;
+/* Native disabled state is the only paging truth; keep its allocated band. */
+@supports selector(:has(*)) {
+    .gpp-inbox-surface .ag-paging-panel:has([ref="btPrevious"].ag-disabled):has([ref="btNext"].ag-disabled) {
+        visibility: hidden;
+    }
 }
 
 /* Keep the same host-owned quick-search presentation in wp-admin evidence. */
@@ -551,18 +484,7 @@
         padding-inline: 1rem;
     }
 
-    .gpp-inbox-surface .gflow-grid__header {
-        grid-template-columns: minmax(0, 1fr) repeat(3, 40px);
-        gap: 0.375rem;
-        padding: 0.5rem;
-    }
 
-    .gpp-inbox-surface .gflow-grid__button:not(.hover):not(.active):not(.has-background) {
-        inline-size: 40px;
-        width: 40px;
-        block-size: 40px;
-        height: 40px;
-    }
 
     @supports selector(:has(*)) {
         .gflow-inbox.gflow-grid.gflow-common:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--ready):not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready)) .ag-center-cols-container {
@@ -582,10 +504,6 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .gpp-inbox-surface .ag-paging-panel {
-        gap: 0.625rem;
-        padding-top: 0.875rem;
-    }
 }
 
 @media (max-width: 420px) {
@@ -593,9 +511,6 @@
         font-size: 1.5rem;
     }
 
-    .gpp-inbox-surface .gflow-grid__header {
-        grid-template-columns: minmax(0, 1fr) repeat(3, 40px);
-    }
 
     .gpp-inbox-surface .gflow-grid__header [data-js="gflow-inbox-search"] {
         font-size: 0.9375rem;
@@ -603,12 +518,20 @@
         padding-inline-end: 0.5rem;
     }
 
-    .gpp-inbox-surface .ag-paging-row-summary-panel {
-        text-align: center;
-    }
 
-    .gpp-inbox-surface .ag-paging-button[ref="btPrevious"],
-    .gpp-inbox-surface .ag-paging-button[ref="btNext"] {
-        min-inline-size: 68px;
+}
+@media (max-width: 782px) {
+    .gpp-inbox-surface [data-gpp-inbox-toolbar] {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .gpp-inbox-surface [data-gpp-inbox-toolbar] .gflow-grid__header {
+        grid-column: 1 / -1;
+    }
+}
+@media (max-width: 782px) {
+    /* Keep the native current number at narrow/large-text widths; the complete
+       native page description stays in the accessibility tree. */
+    .gpp-inbox-surface .ag-paging-description { font-size: 0; }
+    .gpp-inbox-surface .ag-paging-description [ref="lbTotal"] { display: none; }
+    .gpp-inbox-surface .ag-paging-description [ref="lbCurrent"] { font-size: 0.875rem; }
 }

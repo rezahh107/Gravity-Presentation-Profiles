@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/srwf-journey-host-qualification.yml'
       - 'src/Bootstrap.php'
+      - 'assets/css/srwf-gravity-flow-inbox*.css'
+      - 'assets/js/gravity-flow-inbox-manual-refresh.js'
+      - 'src/SRWF/GravityFlow/InboxManualRefreshControl.php'
+      - 'tests/repro-evidence-lab/inbox-composition-assertions.mjs'
       - 'src/SRWF/GravityFlow/EntryDetailJourneyPresentationAdapter.php'
       - 'assets/css/srwf-gravity-flow-entry-detail-journey.css'
       - 'tests/cases/entry-detail-journey-presentation.php'

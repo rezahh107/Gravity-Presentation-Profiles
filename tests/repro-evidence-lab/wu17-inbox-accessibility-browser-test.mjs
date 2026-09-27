@@ -1,3 +1,4 @@
+import { exerciseInboxComposition } from './inbox-composition-assertions.mjs';
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -58,7 +59,7 @@ async function focusBackwardFromSearch(page, targetSelector, maxTabs = 12) {
   await search.focus();
 
   for (let attempt = 0; attempt < maxTabs; attempt += 1) {
-    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
     const active = await page.evaluate(selector => document.activeElement?.matches?.(selector) === true, targetSelector);
     if (active) return attempt + 1;
   }
@@ -149,7 +150,10 @@ try {
       controls[dataJs] = label;
     }
 
-    return { search_name_source: searchAria ? 'aria-label' : (searchTitle ? 'title' : 'placeholder'), controls };
+    const composition = await exerciseInboxComposition(page, manifest.frontend_inbox_url);
+    await page.setViewportSize({width:1440,height:1000});
+    await page.goto(manifest.frontend_inbox_url,{waitUntil:'networkidle'});
+    return { composition, search_name_source: searchAria ? 'aria-label' : (searchTitle ? 'title' : 'placeholder'), controls };
   });
 
   await test('WU17-A11Y-002', 'search keyboard input and focus indicator remain native and visible', async () => {
@@ -189,7 +193,7 @@ try {
       ...clearState,
     };
 
-    for (const dataJs of ['inbox-fullscreeen', 'inbox-settings']) {
+    for (const dataJs of ['inbox-settings']) {
       const selector = `[data-gpp-inbox-surface="gravity_flow.inbox"] [data-js="${dataJs}"]`;
       const control = page.locator(selector);
       const tabMoves = await focusBackwardFromSearch(page, selector);

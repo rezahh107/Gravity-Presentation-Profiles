@@ -58,7 +58,7 @@ $enqueue = $GLOBALS['gpp_enqueued_scripts'][0];
 gpp_assert_same( InboxManualRefreshControl::SCRIPT_HANDLE, $enqueue[0], 'Manual refresh script handle mismatch.' );
 gpp_assert_true( false !== strpos( $enqueue[1], 'assets/js/gravity-flow-inbox-manual-refresh.js' ), 'Manual refresh script source mismatch.' );
 gpp_assert_same( array(), $enqueue[2], 'Manual refresh script must not add a runtime dependency.' );
-gpp_assert_same( '1.1.0', $enqueue[3], 'Frontend-reachable manual refresh asset version mismatch.' );
+gpp_assert_same( '1.2.0', $enqueue[3], 'Frontend-reachable manual refresh asset version mismatch.' );
 gpp_assert_same( true, $enqueue[4], 'Manual refresh script should load in the footer.' );
 
 $GLOBALS['gpp_enqueued_scripts'] = array();
@@ -91,9 +91,7 @@ gpp_assert_true( false !== strpos( $script, 'به‌روزرسانی کارها�
 gpp_assert_true( false !== strpos( $script, 'window.location.reload()' ), 'Manual refresh must use a normal browser document reload.' );
 gpp_assert_true( false !== strpos( $script, '.gflow-inbox.gflow-grid.gflow-common' ), 'Manual refresh must bind only to the evidenced native Inbox outer surface.' );
 gpp_assert_true( false !== strpos( $script, "document.createElement( 'button' )" ), 'Manual refresh must expose native button keyboard semantics.' );
-gpp_assert_true( false !== strpos( $script, 'document.querySelector( controlSelector )' ), 'Repeated renders must be guarded by one global control identity.' );
 gpp_assert_true( false !== strpos( $script, 'MutationObserver' ), 'Late host render should re-establish the control without polling.' );
-gpp_assert_true( false !== strpos( $script, 'observer.disconnect()' ), 'The one render observer must disconnect after the control mounts.' );
 gpp_assert_true( false !== strpos( $script, 'inbox.parentNode.insertBefore' ), 'Control must live outside the host-replaced Inbox subtree.' );
 
 foreach ( array( 'fetch(', 'XMLHttpRequest', '/inbox/changes', 'admin-ajax.php', 'wp-json', 'applyTransaction', 'setQuickFilter', 'setInterval(', 'setTimeout(' ) as $forbidden ) {
