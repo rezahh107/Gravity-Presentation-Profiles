@@ -59,15 +59,18 @@
         // Only the admitted SRWF frontend surface gets the composition. Keep
         // the Inbox/flyout sibling relationship used by native Push intact.
         if ( ! inbox.closest( '.gpp-inbox-surface' ) ) { return; }
-        var headers = inbox.querySelectorAll( '.gflow-grid__header' );
+        var roots = inbox.querySelectorAll( '[data-js="gflow-inbox"]' );
+        var host = roots.length === 1 ? roots[0] : null;
+        if ( ! host || host.dataset.gridId !== inbox.dataset.gridId ) { rollback( inbox ); return; }
+        var headers = host.querySelectorAll( '.gflow-grid__header' );
         var searches = inbox.querySelectorAll( '[data-js="gflow-inbox-search"]' );
         var settings = inbox.querySelectorAll( 'button[data-js="inbox-settings"]' );
         var toolbar = inbox.querySelector( '[data-gpp-inbox-toolbar]' );
         var valid = headers.length === 1 && searches.length === 1 && settings.length === 1
             && headers[0].contains( searches[0] ) && inbox.dataset.gridId
             && settings[0].dataset.gridId === inbox.dataset.gridId
-            && ( headers[0].parentNode === inbox || headers[0].parentNode === toolbar )
-            && ( settings[0].parentNode === inbox || settings[0].parentNode === toolbar );
+            && ( headers[0].parentNode === host || headers[0].parentNode === toolbar )
+            && ( settings[0].parentNode === host || settings[0].parentNode === toolbar );
         var existing = compositions.get( inbox );
         if ( existing && ( existing.toolbar !== toolbar || existing.slots[0].node !== headers[0] || existing.settings !== settings[0] ) ) {
             rollback( inbox );
@@ -95,7 +98,7 @@
                 } )
             };
             compositions.set( inbox, state );
-            inbox.insertBefore( toolbar, inbox.firstChild );
+            host.insertBefore( toolbar, host.firstChild );
         }
         // Idempotent original-node moves preserve delegated native events,
         // search's closest Inbox, grid identity and DOM keyboard order.
