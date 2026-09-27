@@ -22,8 +22,8 @@ if ( '3.1.0' !== (string) $flow['Version'] || '3.1.1.1' !== (string) $gf['Versio
 }
 
 $operator = get_user_by( 'login', 'bootstrap_admin' );
-$participant = get_user_by( 'login', 'srwf_participant' );
-if ( ! $operator || ! $participant ) {
+$negative_control = get_user_by( 'login', 'srwf_participant' );
+if ( ! $operator || ! $negative_control ) {
     throw new RuntimeException( 'Synthetic qualification users are unavailable.' );
 }
 
@@ -44,7 +44,46 @@ function srwf_journey_add_form( $title ) {
     return (int) $form_id;
 }
 
-function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
+function srwf_journey_feed_assignees( $feed_meta ) {
+    return array_values( array_map( 'strval', (array) rgar( $feed_meta, 'assignees' ) ) );
+}
+
+function srwf_journey_assert_same_operator_assignment( $review_meta, $correction_meta, $operator_id, $negative_control_id ) {
+    $expected = 'user_id|' . (int) $operator_id;
+    $negative = 'user_id|' . (int) $negative_control_id;
+    $review_assignees = srwf_journey_feed_assignees( $review_meta );
+    $correction_assignees = srwf_journey_feed_assignees( $correction_meta );
+
+    if (
+        array( $expected ) !== $review_assignees
+        || array( $expected ) !== $correction_assignees
+        || in_array( $negative, $correction_assignees, true )
+    ) {
+        throw new RuntimeException(
+            'Host-effective SAME-OPERATOR assignment invariant failed: ' .
+            wp_json_encode(
+                array(
+                    'expected_operator_assignee' => $expected,
+                    'negative_control_assignee' => $negative,
+                    'review_assignees' => $review_assignees,
+                    'correction_assignees' => $correction_assignees,
+                ),
+                JSON_UNESCAPED_SLASHES
+            )
+        );
+    }
+
+    return array(
+        'operator_id' => (int) $operator_id,
+        'negative_control_id' => (int) $negative_control_id,
+        'review_assignees' => $review_assignees,
+        'correction_assignees' => $correction_assignees,
+        'negative_control_in_correction_feed' => false,
+        'failure_semantics' => 'different_user_input_assignee_fails_qualification',
+    );
+}
+
+function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id ) {
     $api = new Gravity_Flow_API( $form_id );
 
     // User Input is deliberately created first so it is a real available target
@@ -56,7 +95,7 @@ function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
             'step_type' => 'user_input',
             'description' => 'Synthetic correction step.',
             'type' => 'select',
-            'assignees' => array( 'user_id|' . (int) $participant_id ),
+            'assignees' => array( 'user_id|' . (int) $operator_id ),
             'assignee_policy' => 'all',
             'editable_fields' => array( '1' ),
             'instructionsEnable' => '1',
@@ -116,6 +155,13 @@ function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
         );
     }
 
+    $assignment_invariant = srwf_journey_assert_same_operator_assignment(
+        $review_meta,
+        $correction_meta,
+        $operator_id,
+        $negative_control_id
+    );
+
     return array(
         'review_id' => (int) $review_id,
         'correction_id' => (int) $correction_id,
@@ -123,6 +169,7 @@ function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
         'correction_status_config' => $correction->get_status_config(),
         'review_feed_meta' => $review_meta,
         'correction_feed_meta' => $correction_meta,
+        'assignment_invariant' => $assignment_invariant,
         'return_route' => array(
             'mechanic' => 'user_input_default_next_by_native_step_order',
             'correction_step_id' => (int) $correction_id,
@@ -131,11 +178,11 @@ function srwf_journey_add_steps( $form_id, $operator_id, $participant_id ) {
     );
 }
 
-function srwf_journey_add_entry_seeded_at_review( $form_id, $participant_id, $review_id, $label ) {
+function srwf_journey_add_entry_seeded_at_review( $form_id, $created_by_id, $review_id, $label ) {
     $entry_id = GFAPI::add_entry(
         array(
             'form_id' => $form_id,
-            'created_by' => (int) $participant_id,
+            'created_by' => (int) $created_by_id,
             '1' => 'SYNTHETIC-' . $label,
         )
     );
@@ -164,13 +211,13 @@ function srwf_journey_add_entry_seeded_at_review( $form_id, $participant_id, $re
 }
 
 $form_id = srwf_journey_add_form( 'SRWF Journey Host Qualification' );
-$steps = srwf_journey_add_steps( $form_id, $operator->ID, $participant->ID );
+$steps = srwf_journey_add_steps( $form_id, $operator->ID, $negative_control->ID );
 
 $entries = array(
-    'approve' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'APPROVE' ),
-    'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'REJECT' ),
-    'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'REVERT' ),
-    'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $participant->ID, $steps['review_id'], 'INVALID' ),
+    'approve' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'APPROVE' ),
+    'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'REJECT' ),
+    'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'REVERT' ),
+    'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'INVALID' ),
 );
 
 $shortcode_page_id = wp_insert_post(
@@ -209,7 +256,7 @@ if ( is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $r
 }
 
 $manifest = array(
-    'schema_version' => '1.1.0',
+    'schema_version' => '1.2.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'scope' => 'QUALIFICATION_ONLY',
     'runtime' => array(
@@ -224,7 +271,7 @@ $manifest = array(
     'entries' => $entries,
     'users' => array(
         'operator' => array( 'id' => (int) $operator->ID, 'login' => $operator->user_login ),
-        'participant' => array( 'id' => (int) $participant->ID, 'login' => $participant->user_login ),
+        'negative_control' => array( 'id' => (int) $negative_control->ID, 'login' => $negative_control->user_login ),
     ),
     'routes' => array(
         'admin_inbox_url' => admin_url( 'admin.php?page=gravityflow-inbox' ),
