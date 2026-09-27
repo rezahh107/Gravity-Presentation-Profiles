@@ -52,6 +52,14 @@
     line-height: 1.85;
 }
 
+/* Preserve the already-approved search focus geometry after toolbar recomposition. */
+.gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"]:focus-visible {
+    border-color: var(--gpp-inbox-control-border);
+    outline: 3px solid var(--gpp-inbox-accent) !important;
+    outline-offset: 3px;
+    box-shadow: none;
+}
+
 /*
  * Baseline/fallback state: native Gravity Flow columns stay visible and the GPP
  * presentation column stays hidden. This is also the behavior for browsers
