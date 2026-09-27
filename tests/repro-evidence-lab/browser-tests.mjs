@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-await import('./wu17-column-state-causal-runner.mjs');
+await import('./wu17-a11y005-reload-differential-runner.mjs');
 await import('./browser-tests-core.mjs');
 await import('./wu11-ag-grid-host-contract.mjs');
 await import('./wu17-inbox-accessibility-browser-test.mjs');
