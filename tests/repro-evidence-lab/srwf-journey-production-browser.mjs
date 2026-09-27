@@ -58,6 +58,7 @@ async function test(id, name, fn) {
   try { results.push({ id, name, status: 'PASS', details: await fn() }); }
   catch (error) { results.push({ id, name, status: 'FAIL', details: { error: String(error?.stack || error).slice(0, 12000) } }); }
 }
+
 async function login(page, user, pass = operatorPassword) {
   await page.context().clearCookies();
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
@@ -65,17 +66,20 @@ async function login(page, user, pass = operatorPassword) {
   await page.fill('#user_pass', pass);
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 }
+
 async function returnControls(page) {
   return page.evaluate(() => ({
     gpp: [...document.querySelectorAll('a.gpp-entry-journey__return')].filter(a => a.offsetParent !== null).map(a => ({ text: a.textContent.replace(/\s+/g, ' ').trim(), href: a.href })),
     native: [...document.querySelectorAll('.gravityflow-back-link-container a.back-link')].filter(a => a.offsetParent !== null).map(a => ({ text: a.textContent.replace(/\s+/g, ' ').trim(), href: a.href })),
   }));
 }
+
 function canonicalComparable(url) {
   const u = new URL(url);
   for (const key of ['view', 'lid', 'id', 'paged', 'search', 'sort', 'sort_field', 'sort_direction']) u.searchParams.delete(key);
   return `${u.origin}${u.pathname}${u.search}`;
 }
+
 async function assertOneCanonicalReturn(page, expectedRoute) {
   const controls = await returnControls(page);
   const all = [...controls.gpp, ...controls.native];
@@ -84,11 +88,15 @@ async function assertOneCanonicalReturn(page, expectedRoute) {
   if (canonicalComparable(all[0].href) !== canonicalComparable(expectedRoute.url)) throw new Error(`Return target is not canonical Inbox page 1: ${JSON.stringify({ actual: all[0].href, expected: expectedRoute.url })}`);
   return { controls, selected: all[0] };
 }
+
 async function assertCanonicalInboxAfterClick(page, expectedRoute) {
   const controls = await returnControls(page);
   const all = [...controls.gpp, ...controls.native];
   if (all.length !== 1) throw new Error(`Cannot click non-unique return control: ${JSON.stringify(controls)}`);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.locator('a.gpp-entry-journey__return, .gravityflow-back-link-container a.back-link').filter({ visible: true }).first().click()]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator('a.gpp-entry-journey__return, .gravityflow-back-link-container a.back-link').filter({ visible: true }).first().click(),
+  ]);
   const current = new URL(page.url());
   for (const key of ['view', 'lid', 'id', 'paged', 'search', 'sort', 'sort_field', 'sort_direction']) {
     if (current.searchParams.has(key)) throw new Error(`Canonical return retained transient ${key}: ${current}`);
@@ -97,10 +105,16 @@ async function assertCanonicalInboxAfterClick(page, expectedRoute) {
   if (await page.locator('[data-js="gflow-inbox"]').count() !== 1) throw new Error('Canonical return did not render the native Gravity Flow Inbox grid.');
   return current.toString();
 }
+
 async function nativeActionButtons(page) {
-  return page.locator('.gravityflow-status-box .gravityflow-action-buttons button').evaluateAll(nodes => nodes.filter(n => n.offsetParent !== null).map(n => ({ value: n.value, text: n.textContent.replace(/\s+/g, ' ').trim(), onclick: n.getAttribute('onclick') || '' })));
+  return page.locator('.gravityflow-status-box .gravityflow-action-buttons button').evaluateAll(nodes => nodes.filter(n => n.offsetParent !== null).map(n => ({
+    value: n.value,
+    text: n.textContent.replace(/\s+/g, ' ').trim(),
+    onclick: n.getAttribute('onclick') || '',
+  })));
 }
-async function acceptNativeAction(page, value, expectedDialog = true) {
+
+async function acceptNativeAction(page, value) {
   const button = page.locator(`.gravityflow-status-box .gravityflow-action-buttons button[value="${value}"]`).first();
   if (await button.count() !== 1) throw new Error(`Missing native Gravity Flow action ${value}.`);
   let dialogInfo = null;
@@ -110,7 +124,6 @@ async function acceptNativeAction(page, value, expectedDialog = true) {
       await dialog.accept();
       resolve();
     });
-    if (!expectedDialog) resolve();
   });
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), button.click(), dialogPromise]);
   return dialogInfo;
@@ -128,9 +141,8 @@ await test('SRWF-PROD-REVIEW-001', 'admitted Review preserves dossier/native act
   const actions = await nativeActionButtons(page);
   if (actions.map(x => x.value).join(',') !== 'approved,rejected,revert') throw new Error(`Native workflow action set changed: ${JSON.stringify(actions)}`);
   if (!actions.every(x => x.onclick.includes('handleApprovalStepButtonClick'))) throw new Error('Native Gravity Flow action handler ownership changed.');
-  if (await page.locator('.gpp-entry-journey button').count() !== 0 || await page.locator('.gpp-entry-journey-result button').count() !== 0) throw new Error('GPP manufactured a journey workflow button.');
-  const returnControl = await assertOneCanonicalReturn(page, manifest.routes.shortcode);
-  return { actions, return_control: returnControl, dossier_count: 1 };
+  if (await page.locator('.gpp-entry-journey button, .gpp-entry-journey-result button').count() !== 0) throw new Error('GPP manufactured a journey workflow button.');
+  return { actions, return_control: await assertOneCanonicalReturn(page, manifest.routes.shortcode), dossier_count: 1 };
 });
 
 await test('SRWF-PROD-CONFIRM-CANCEL-001', 'browser-native Approve confirmation cancel preserves state and emits no result', async () => {
@@ -152,21 +164,20 @@ await test('SRWF-PROD-CONFIRM-CANCEL-001', 'browser-native Approve confirmation 
 await test('SRWF-PROD-APPROVE-001', 'Approve read-back gates Approved result and canonical continuation', async () => {
   const entryId = manifest.entries.approve;
   await page.goto(frontendEntryUrl(manifest.routes.shortcode, entryId), { waitUntil: 'networkidle' });
-  const dialog = await acceptNativeAction(page, 'approved', true);
+  const dialog = await acceptNativeAction(page, 'approved');
   const state = hostState(entryId);
   if (!dialog || dialog.type !== 'confirm' || state.current_step !== null || state.workflow_final_status !== 'approved' || state.api_status !== 'approved') throw new Error(`Authoritative Approved truth not established: ${JSON.stringify({ dialog, state })}`);
   const result = page.locator('[data-gpp-entry-journey-result="approved"]').first();
   if (await result.count() !== 1 || await result.getAttribute('role') !== 'status') throw new Error('Approved semantic result is missing or inaccessible.');
   const text = await result.innerText();
   if (!text.includes('پرونده تأیید شد') || !text.includes('Journey Approve') || !text.includes('JRN-PROD-APPROVE')) throw new Error(`Approved result lost compact case identity: ${text}`);
-  const returnControl = await assertOneCanonicalReturn(page, manifest.routes.shortcode);
-  return { dialog, authoritative_readback: state, result_text: text, return_control: returnControl };
+  return { dialog, authoritative_readback: state, result_text: text, return_control: await assertOneCanonicalReturn(page, manifest.routes.shortcode) };
 });
 
 await test('SRWF-PROD-REJECT-001', 'Reject read-back gates Rejected business result without error semantics', async () => {
   const entryId = manifest.entries.reject;
   await page.goto(frontendEntryUrl(manifest.routes.shortcode, entryId), { waitUntil: 'networkidle' });
-  const dialog = await acceptNativeAction(page, 'rejected', true);
+  const dialog = await acceptNativeAction(page, 'rejected');
   const state = hostState(entryId);
   if (!dialog || dialog.type !== 'confirm' || state.current_step !== null || state.workflow_final_status !== 'rejected' || state.api_status !== 'rejected') throw new Error(`Authoritative Rejected truth not established: ${JSON.stringify({ dialog, state })}`);
   const result = page.locator('[data-gpp-entry-journey-result="rejected"]').first();
@@ -179,7 +190,7 @@ await test('SRWF-PROD-REJECT-001', 'Reject read-back gates Rejected business res
 await test('SRWF-PROD-CORRECTION-001', 'native Revert exposes SAME-operator User Input guidance without a second editor', async () => {
   const entryId = manifest.entries.revert;
   await page.goto(frontendEntryUrl(manifest.routes.shortcode, entryId), { waitUntil: 'networkidle' });
-  const dialog = await acceptNativeAction(page, 'revert', true);
+  const dialog = await acceptNativeAction(page, 'revert');
   const operatorState = hostState(entryId, manifest.users.operator.id);
   if (operatorState.current_step?.id !== correctionId || operatorState.current_step?.type !== 'user_input' || !operatorState.current_step?.can_update) throw new Error(`Correction host truth missing: ${JSON.stringify(operatorState)}`);
   const orientation = page.locator('[data-gpp-entry-journey="correction"]').first();
@@ -220,39 +231,50 @@ await test('SRWF-PROD-CORRECTION-COMPLETE-001', 'native User Input persists edit
   return { operator_state: operatorState, negative_control_state: negativeState, persisted_value: corrected, return_control: await assertOneCanonicalReturn(page, manifest.routes.shortcode) };
 });
 
-await test('SRWF-PROD-AMBIGUITY-001', 'aborted accepted action cannot create false semantic success before authoritative read-back', async () => {
+await test('SRWF-PROD-AMBIGUITY-001', 'lost action response never turns stale client intent into result truth', async () => {
   const entryId = manifest.entries.invalid;
   await page.goto(frontendEntryUrl(manifest.routes.shortcode, entryId), { waitUntil: 'networkidle' });
   const before = hostState(entryId);
-  let aborted = false;
+  let intercepted = null;
   await page.route('**/*', async route => {
-    if (!aborted && route.request().method() === 'POST') {
-      aborted = true;
+    const request = route.request();
+    if (!intercepted && request.method() === 'POST' && request.isNavigationRequest()) {
+      const response = await route.fetch();
+      intercepted = { url: request.url(), method: request.method(), server_status: response.status() };
       await route.abort('failed');
       return;
     }
     await route.continue();
   });
+
   const button = page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]').first();
   let dialogInfo = null;
   page.once('dialog', async dialog => { dialogInfo = { type: dialog.type(), message: dialog.message() }; await dialog.accept(); });
   await button.click().catch(() => {});
   await page.waitForTimeout(200);
   await page.unroute('**/*');
-  const visibleResults = await page.locator('[data-gpp-entry-journey-result="approved"], [data-gpp-entry-journey-result="rejected"], [data-gpp-entry-journey="correction"]').count();
-  if (!dialogInfo || dialogInfo.type !== 'confirm' || !aborted || visibleResults !== 0) throw new Error(`Ambiguous transport generated unsupported result: ${JSON.stringify({ dialogInfo, aborted, visibleResults })}`);
+
+  const staleClaims = await page.locator('[data-gpp-entry-journey-result="approved"], [data-gpp-entry-journey-result="rejected"], [data-gpp-entry-journey="correction"]').count();
+  if (!dialogInfo || dialogInfo.type !== 'confirm' || !intercepted || staleClaims !== 0) throw new Error(`Response-loss control did not establish ambiguity safely: ${JSON.stringify({ dialogInfo, intercepted, staleClaims })}`);
+
+  const authoritative = hostState(entryId);
   await page.reload({ waitUntil: 'networkidle' });
-  const after = hostState(entryId);
-  if (await page.locator('[data-gpp-entry-journey-result="approved"], [data-gpp-entry-journey-result="rejected"]').count() !== 0) throw new Error('Fresh revisit fabricated success without host truth.');
-  return { dialog: dialogInfo, transport_aborted: aborted, before, authoritative_revisit: after, false_success_count: 0, fallback: 'native Review unless terminal truth is established' };
+  const rendered = await page.locator('[data-gpp-entry-journey-result]').evaluateAll(nodes => nodes.filter(n => n.offsetParent !== null).map(n => n.getAttribute('data-gpp-entry-journey-result')));
+  if (authoritative.current_step === null && authoritative.workflow_final_status === 'approved' && authoritative.api_status === 'approved') {
+    if (rendered.join(',') !== 'approved') throw new Error(`Fresh Approved host truth was not rendered exactly: ${JSON.stringify({ authoritative, rendered })}`);
+  } else if (authoritative.current_step?.type === 'approval') {
+    if (rendered.some(value => value === 'approved' || value === 'rejected')) throw new Error(`Review truth produced false terminal result: ${JSON.stringify({ authoritative, rendered })}`);
+  } else if (rendered.some(value => value === 'approved' || value === 'rejected')) {
+    throw new Error(`Ambiguous host truth produced false terminal result: ${JSON.stringify({ authoritative, rendered })}`);
+  }
+  return { before, dialog: dialogInfo, lost_response: intercepted, stale_result_claim_count: staleClaims, authoritative_readback: authoritative, rendered_after_fresh_readback: rendered };
 });
 
 await test('SRWF-PROD-RETURN-SHORTCODE-001', 'shortcode return reaches canonical Inbox page 1 with no detail/paging context', async () => {
   const entryId = manifest.entries.invalid;
   await page.goto(frontendEntryUrl(manifest.routes.shortcode, entryId), { waitUntil: 'networkidle' });
   const before = await assertOneCanonicalReturn(page, manifest.routes.shortcode);
-  const landed = await assertCanonicalInboxAfterClick(page, manifest.routes.shortcode);
-  return { before, landed };
+  return { before, landed: await assertCanonicalInboxAfterClick(page, manifest.routes.shortcode) };
 });
 
 await test('SRWF-PROD-RETURN-BLOCK-001', 'registered Inbox Block return reaches canonical Block page 1', async () => {
@@ -260,8 +282,7 @@ await test('SRWF-PROD-RETURN-BLOCK-001', 'registered Inbox Block return reaches 
   const entryId = manifest.entries.invalid;
   await page.goto(frontendEntryUrl(manifest.routes.block, entryId), { waitUntil: 'networkidle' });
   const before = await assertOneCanonicalReturn(page, manifest.routes.block);
-  const landed = await assertCanonicalInboxAfterClick(page, manifest.routes.block);
-  return { supported: true, before, landed };
+  return { supported: true, before, landed: await assertCanonicalInboxAfterClick(page, manifest.routes.block) };
 });
 
 await test('SRWF-PROD-RETURN-ADMIN-001', 'admin Entry Detail return resolves the stable native admin Inbox authority', async () => {
@@ -271,15 +292,18 @@ await test('SRWF-PROD-RETURN-ADMIN-001', 'admin Entry Detail return resolves the
   const all = [...controls.gpp, ...controls.native];
   if (all.length !== 1) throw new Error(`Admin route did not expose exactly one return: ${JSON.stringify(controls)}`);
   const target = new URL(all[0].href);
-  if (target.pathname !== '/wp-admin/admin.php' || target.searchParams.get('page') !== 'gravityflow-inbox' || [...target.searchParams.keys()].some(k => ['view','lid','id','paged'].includes(k))) throw new Error(`Admin return is not canonical native Inbox authority: ${target}`);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.locator('a.gpp-entry-journey__return, .gravityflow-back-link-container a.back-link').filter({ visible: true }).first().click()]);
+  if (target.pathname !== '/wp-admin/admin.php' || target.searchParams.get('page') !== 'gravityflow-inbox' || [...target.searchParams.keys()].some(k => ['view', 'lid', 'id', 'paged'].includes(k))) throw new Error(`Admin return is not canonical native Inbox authority: ${target}`);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator('a.gpp-entry-journey__return, .gravityflow-back-link-container a.back-link').filter({ visible: true }).first().click(),
+  ]);
   if (await page.locator('[data-js="gflow-inbox"]').count() !== 1) throw new Error('Admin canonical return did not render native Inbox.');
   return { controls, landed: page.url() };
 });
 
 await test('SRWF-PROD-MOBILE-RTL-A11Y-001', '390x844 Review keeps RTL, focus visibility, one action set and bounded geometry', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(frontendEntryUrl(manifest.routes.shortcode, manifest.entries.invalid), { waitUntil: 'networkidle' });
+  await page.goto(frontendEntryUrl(manifest.routes.shortcode, manifest.entries.revert), { waitUntil: 'networkidle' });
   const link = page.locator('a.gpp-entry-journey__return').filter({ visible: true }).first();
   if (await link.count() !== 1) throw new Error('Mobile return control unavailable.');
   await link.focus();
