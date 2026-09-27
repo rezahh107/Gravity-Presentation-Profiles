@@ -28,6 +28,14 @@ A visual reference illustrates a contract; it does not override it.
 
 Do not treat filenames, comments, screenshots, mockup labels such as `FINAL`/`APPROVED`, or historical summaries as authority by themselves.
 
+### External-plugin/runtime compatibility authority
+
+For external-plugin/runtime compatibility work, consume the Mother Architecture through its governing subordinate target `docs/architecture/CAPABILITY_FIRST_COMPATIBILITY_TARGET_V1.md`.
+
+That target is `OWNER_APPROVED_TARGET__IMPLEMENTATION_OPEN`: it defines the approved compatibility destination and migration/validation rules, but it is not evidence that current runtime code already conforms.
+
+When capability/contract detection is the applicable architecture, do not introduce or perpetuate plugin-version equality, exact-version allowlists, or version mismatch alone as runtime compatibility authority. Exact versions may remain in CI fixtures/matrix rows, diagnostics, provenance, release evidence, and reproducible historical qualification; an evidence-backed known-incompatible release may remain a bounded exception only under the target's rules. Existing runtime version gates remain truthful implementation debt until separately migrated and validated.
+
 ## 3. Core invariant
 
 Preserve this boundary:
