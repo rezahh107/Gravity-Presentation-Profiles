@@ -71,13 +71,18 @@ foreach ( $manifest['entries'] as $label => $entry_id ) {
     }
 }
 
+$operations = OperationsSetupService::forWordPress();
+$operations_setup = $operations->initialize( array( 'form_id' => $form_id ) );
+if ( OperationsSetupService::STATUS_COMPLETED !== $operations_setup['status'] ) {
+    throw new RuntimeException( 'Operations production setup did not complete: ' . wp_json_encode( $operations_setup ) );
+}
+
 $entry_setup = EntryDetailSetupService::forWordPress();
 $setup = $entry_setup->initialize( array( 'form_id' => $form_id ) );
 if ( EntryDetailSetupService::STATUS_COMPLETED !== $setup['status'] ) {
     throw new RuntimeException( 'Entry Detail production setup did not complete: ' . wp_json_encode( $setup ) );
 }
 
-$operations = OperationsSetupService::forWordPress();
 $repair = BindingRepairService::forWordPress();
 $context = $operations->bindingContext( $form_id );
 $lifecycle = new BindingSetLifecycle(
@@ -110,6 +115,7 @@ foreach ( array(
 
 EntryDetailPresentationAdapter::resetRuntimeCache();
 $manifest['production_presentation'] = array(
+    'operations_setup_status' => $operations_setup['status'],
     'entry_detail_setup_status' => $setup['status'],
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
