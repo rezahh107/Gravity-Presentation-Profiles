@@ -17,6 +17,13 @@ if ( ! is_array( $manifest ) || empty( $manifest['form_id'] ) || empty( $manifes
     throw new RuntimeException( 'Journey host manifest is unavailable.' );
 }
 
+$control_source = __DIR__ . '/srwf-journey-production-host-control.php';
+$control_target = trailingslashit( WPMU_PLUGIN_DIR ) . 'gpp-srwf-journey-production-host-control.php';
+wp_mkdir_p( WPMU_PLUGIN_DIR );
+if ( ! is_readable( $control_source ) || ! copy( $control_source, $control_target ) ) {
+    throw new RuntimeException( 'Unable to install the test-only journey host-args control.' );
+}
+
 $form_id = (int) $manifest['form_id'];
 $form = GFAPI::get_form( $form_id );
 if ( ! is_array( $form ) ) {
@@ -119,6 +126,7 @@ $manifest['production_presentation'] = array(
     'entry_detail_setup_status' => $setup['status'],
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
+    'host_args_control' => basename( $control_target ),
 );
 update_option( 'gpp_srwf_journey_host_manifest', $manifest, false );
 
