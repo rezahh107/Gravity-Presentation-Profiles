@@ -19,14 +19,15 @@ $classify = $adapter->getMethod( 'classifyHostTruth' );
 $classify->setAccessible( true );
 
 $cases = array(
-    array( array( 'approval', null, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_REVIEW, 'Approval must remain Review.' ),
-    array( array( null, null, 'approved', 'approved', true ), EntryDetailJourneyPresentationAdapter::STATE_APPROVED, 'Matching fresh Approved truth must classify Approved.' ),
-    array( array( null, null, 'rejected', 'rejected', true ), EntryDetailJourneyPresentationAdapter::STATE_REJECTED, 'Matching fresh Rejected truth must classify Rejected.' ),
-    array( array( 'user_input', true, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_CORRECTION, 'Authorized User Input must classify Correction.' ),
-    array( array( 'user_input', false, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_NATIVE, 'Unauthorized User Input must fall back to native.' ),
-    array( array( null, null, 'approved', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, 'Conflicting terminal truth must fail closed to Unknown.' ),
-    array( array( null, null, 'rejected', 'approved', true ), EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, 'Conflicting business outcomes must fail closed to Unknown.' ),
-    array( array( null, null, 'approved', 'approved', false ), EntryDetailJourneyPresentationAdapter::STATE_NATIVE, 'Unestablished read-back must never classify success.' ),
+    array( array( 'approval', null, false, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_REVIEW, 'Approval must remain Review.' ),
+    array( array( null, null, false, 'approved', 'approved', true ), EntryDetailJourneyPresentationAdapter::STATE_APPROVED, 'Matching fresh Approved truth must classify Approved.' ),
+    array( array( null, null, false, 'rejected', 'rejected', true ), EntryDetailJourneyPresentationAdapter::STATE_REJECTED, 'Matching fresh Rejected truth must classify Rejected.' ),
+    array( array( 'user_input', true, true, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_CORRECTION, 'Authorized expected Revert target must classify Correction.' ),
+    array( array( 'user_input', true, false, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_NATIVE, 'Unrelated authorized User Input must remain native.' ),
+    array( array( 'user_input', false, true, 'pending', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_NATIVE, 'Unauthorized correction target must fall back to native.' ),
+    array( array( null, null, false, 'approved', 'pending', true ), EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, 'Conflicting terminal truth must fail closed to Unknown.' ),
+    array( array( null, null, false, 'rejected', 'approved', true ), EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, 'Conflicting business outcomes must fail closed to Unknown.' ),
+    array( array( null, null, false, 'approved', 'approved', false ), EntryDetailJourneyPresentationAdapter::STATE_NATIVE, 'Unestablished read-back must never classify success.' ),
 );
 foreach ( $cases as $case ) {
     $actual = $classify->invokeArgs( null, $case[0] );
@@ -39,14 +40,17 @@ $css = file_get_contents( $root . '/assets/css/srwf-gravity-flow-entry-detail-jo
 $bootstrap = file_get_contents( $root . '/src/Bootstrap.php' );
 
 gpp_journey_assert( false !== strpos( $bootstrap, 'EntryDetailJourneyPresentationAdapter::register();' ), 'Journey adapter is not production-reachable from Bootstrap.' );
-gpp_journey_assert( false !== strpos( $php, "GFAPI::get_entry" ), 'Journey result truth must fresh-read the entry.' );
-gpp_journey_assert( false !== strpos( $php, "get_current_step" ) && false !== strpos( $php, "get_status" ) && false !== strpos( $php, "workflow_final_status" ), 'Journey result truth must use current-step, API-status and final-status read-back.' );
-gpp_journey_assert( false !== strpos( $php, "Gravity_Flow_Entry_Detail::can_update" ), 'Correction must defer current-operator authority to Gravity Flow.' );
-gpp_journey_assert( false !== strpos( $php, "gravityflow_back_link_url_entry_detail" ), 'Native Gravity Flow back-link route must be canonicalized through its supported filter.' );
-gpp_journey_assert( false !== strpos( $php, "admin.php?page=gravityflow-inbox" ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
-gpp_journey_assert( false !== strpos( $php, "back_link" ) && false !== strpos( $php, "gravityflow/inbox" ), 'Frontend duplicate-back-link avoidance must cover shortcode and Inbox Block composition.' );
+gpp_journey_assert( false !== strpos( $php, 'GFAPI::get_entry' ), 'Journey result truth must fresh-read the entry.' );
+gpp_journey_assert( false !== strpos( $php, 'get_current_step' ) && false !== strpos( $php, 'get_status' ) && false !== strpos( $php, 'workflow_final_status' ), 'Journey result truth must use current-step, API-status and final-status read-back.' );
+gpp_journey_assert( false !== strpos( $php, 'Gravity_Flow_Entry_Detail::can_update' ), 'Correction must defer current-operator authority to Gravity Flow.' );
+gpp_journey_assert( false !== strpos( $php, 'isExpectedCorrectionStep' ) && false !== strpos( $php, "'revertEnable'" ) && false !== strpos( $php, "'revertValue'" ) && false !== strpos( $php, 'get_steps' ), 'Correction semantics must bind to the host-configured Approval Revert target.' );
+gpp_journey_assert( false !== strpos( $php, 'gravityflow_back_link_url_entry_detail' ), 'Native Gravity Flow back-link route must be canonicalized through its supported filter.' );
+gpp_journey_assert( false !== strpos( $php, 'admin.php?page=gravityflow-inbox' ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
+gpp_journey_assert( false !== strpos( $php, "'inbox' !== \$page" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
+gpp_journey_assert( false === strpos( $php, "array( 'inbox', 'status' )" ), 'Gravity Flow Status pages must not be treated as canonical My Tasks routes.' );
 gpp_journey_assert( false !== strpos( $php, 'role="status"' ), 'Result/correction semantics must not rely on color alone.' );
 gpp_journey_assert( false !== strpos( $php, 'بازگشت به کارهای من' ), 'Canonical return control copy is missing.' );
+gpp_journey_assert( false !== strpos( $php, 'نتیجه بررسی با موفقیت ثبت شد.' ) && false !== strpos( $php, 'نتیجه رد با موفقیت ثبت شد.' ), 'Owner-approved result copy was not preserved.' );
 gpp_journey_assert( false !== strpos( $php, 'نتیجه نهایی هنوز مشخص نیست' ), 'Unknown fail-closed presentation is missing.' );
 gpp_journey_assert( false === strpos( $php, 'STATE_TECHNICAL_ERROR' ) && false === strpos( $php, 'data-gpp-entry-journey-result="technical' ), 'Unqualified Technical Error taxonomy must not exist.' );
 gpp_journey_assert( false === strpos( $php, 'window.confirm' ) && false === strpos( $php, 'preventDefault' ) && false === strpos( $php, 'wp_ajax_' ), 'GPP must not replace native confirmation/action transport.' );
