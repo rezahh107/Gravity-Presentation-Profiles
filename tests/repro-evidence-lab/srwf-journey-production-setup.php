@@ -13,7 +13,8 @@ use GravityPresentationProfiles\GravityForms\OperationsSetupService;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 
 $manifest = get_option( 'gpp_srwf_journey_host_manifest' );
-if ( ! is_array( $manifest ) || empty( $manifest['form_id'] ) || empty( $manifest['entries'] ) ) {
+if ( ! is_array( $manifest ) || empty( $manifest['form_id'] ) || empty( $manifest['entries'] )
+    || empty( $manifest['steps']['review_id'] ) || empty( $manifest['users']['operator']['id'] ) ) {
     throw new RuntimeException( 'Journey host manifest is unavailable.' );
 }
 
@@ -56,7 +57,7 @@ if ( is_wp_error( $result ) || true !== $result ) {
     throw new RuntimeException( 'Unable to extend the synthetic journey form with identity fields.' );
 }
 
-foreach ( $manifest['entries'] as $label => $entry_id ) {
+function gpp_srwf_journey_seed_identity( $entry_id, $label, $identity_fields ) {
     $entry_id = (int) $entry_id;
     $suffix = strtoupper( preg_replace( '/[^A-Z0-9]+/i', '-', (string) $label ) );
     foreach ( array(
@@ -69,6 +70,10 @@ foreach ( $manifest['entries'] as $label => $entry_id ) {
             throw new RuntimeException( 'Unable to seed synthetic journey identity field.' );
         }
     }
+}
+
+foreach ( $manifest['entries'] as $label => $entry_id ) {
+    gpp_srwf_journey_seed_identity( (int) $entry_id, $label, $identity_fields );
 }
 
 $operations = OperationsSetupService::forWordPress();
@@ -113,12 +118,67 @@ foreach ( array(
     }
 }
 
+function gpp_srwf_journey_create_review_entry( $form_id, $review_id, $operator_id, $label, $identity_fields ) {
+    $entry_id = GFAPI::add_entry(
+        array(
+            'form_id' => (int) $form_id,
+            'created_by' => (int) $operator_id,
+            '1' => 'PRODUCTION-' . strtoupper( (string) $label ),
+        )
+    );
+    if ( is_wp_error( $entry_id ) || ! $entry_id ) {
+        throw new RuntimeException( is_wp_error( $entry_id ) ? $entry_id->get_error_message() : 'Unable to create production journey evidence entry.' );
+    }
+    $entry_id = (int) $entry_id;
+    gpp_srwf_journey_seed_identity( $entry_id, 'production_' . $label, $identity_fields );
+
+    $api = new Gravity_Flow_API( (int) $form_id );
+    $api->process_workflow( $entry_id );
+    $entry = GFAPI::get_entry( $entry_id );
+    $sent = $api->send_to_step( $entry, (int) $review_id );
+    if ( false === $sent || is_wp_error( $sent ) ) {
+        throw new RuntimeException( is_wp_error( $sent ) ? $sent->get_error_message() : 'Unable to seed production journey entry at Review.' );
+    }
+
+    $fresh = GFAPI::get_entry( $entry_id );
+    $step = ( new Gravity_Flow_API( (int) $form_id ) )->get_current_step( $fresh );
+    if ( ! $step || 'approval' !== $step->get_type() || (int) $step->get_id() !== (int) $review_id ) {
+        throw new RuntimeException( 'Production journey entry did not reach the native Review step.' );
+    }
+    return $entry_id;
+}
+
+$production_entries = isset( $manifest['production_presentation']['entries'] ) && is_array( $manifest['production_presentation']['entries'] )
+    ? $manifest['production_presentation']['entries']
+    : array();
+$required_labels = array( 'review', 'cancel', 'approve', 'reject', 'revert', 'ambiguous' );
+$valid_existing = true;
+foreach ( $required_labels as $label ) {
+    if ( empty( $production_entries[ $label ] ) || ! is_array( GFAPI::get_entry( (int) $production_entries[ $label ] ) ) ) {
+        $valid_existing = false;
+        break;
+    }
+}
+if ( ! $valid_existing ) {
+    $production_entries = array();
+    foreach ( $required_labels as $label ) {
+        $production_entries[ $label ] = gpp_srwf_journey_create_review_entry(
+            $form_id,
+            (int) $manifest['steps']['review_id'],
+            (int) $manifest['users']['operator']['id'],
+            $label,
+            $identity_fields
+        );
+    }
+}
+
 EntryDetailPresentationAdapter::resetRuntimeCache();
 $manifest['production_presentation'] = array(
     'operations_setup_status' => $operations_setup['status'],
     'entry_detail_setup_status' => $setup['status'],
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
+    'entries' => $production_entries,
 );
 update_option( 'gpp_srwf_journey_host_manifest', $manifest, false );
 
