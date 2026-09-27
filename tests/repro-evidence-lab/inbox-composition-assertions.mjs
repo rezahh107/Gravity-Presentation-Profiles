@@ -7,6 +7,7 @@ export async function assertInboxComposition(page) {
   const result = await page.evaluate(() => {
     const root = document.querySelector('.gpp-inbox-surface [data-js="gflow-inbox"]');
     const toolbar = root.querySelector('[data-gpp-inbox-toolbar]');
+    const gridRoot = root.querySelector('.ag-root-wrapper');
     const visible = n => { const r=n.getBoundingClientRect(), s=getComputedStyle(n); return r.width>0 && r.height>0 && s.visibility!=='hidden' && s.display!=='none'; };
     const box = n => { const r=n.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}; };
     const issues=[];
@@ -27,7 +28,10 @@ export async function assertInboxComposition(page) {
     if([...root.querySelectorAll('.gflow-grid__button--fullscreen,.gflow-grid__button--clear-filters')].some(visible)) issues.push('unadmitted utility visible');
     if(controls[2].textContent.trim()!=='تنظیمات اعلان‌ها') issues.push('settings label');
     if(document.documentElement.scrollWidth>innerWidth+1) issues.push('document horizontal overflow');
-    if(getComputedStyle(toolbar).direction!=='rtl') issues.push('RTL lost');
+    const toolbarDirection=getComputedStyle(toolbar).direction;
+    const gridDirection=gridRoot ? getComputedStyle(gridRoot).direction : null;
+    if(toolbarDirection!=='rtl') issues.push('RTL lost');
+    if(!gridRoot || gridDirection!=='ltr') issues.push('native AG Grid direction changed');
     if(root.querySelectorAll('.ag-paging-panel').length!==1) issues.push('pager count');
     const pager=root.querySelector('.ag-paging-panel');
     const clipping=[];
@@ -43,7 +47,7 @@ export async function assertInboxComposition(page) {
       if(n.clientHeight && n.scrollHeight>n.clientHeight+1) issues.push('pager scrollHeight: '+n.className);
       clipping.push({node:n.getAttribute('ref')||n.className,rect:r,clip,chain});
     }
-    return {issues,rects,clipping,pagerVisible:visible(pager),width:innerWidth};
+    return {issues,rects,clipping,pagerVisible:visible(pager),directions:{toolbar:toolbarDirection,grid:gridDirection},width:innerWidth};
   });
   assert.deepEqual(result.issues, [], JSON.stringify(result));
   const search=page.locator('.gpp-inbox-surface [data-js="gflow-inbox-search"]');
