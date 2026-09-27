@@ -64,7 +64,7 @@ final class InboxManualRefreshControl {
             self::SCRIPT_HANDLE,
             plugins_url( 'assets/js/gravity-flow-inbox-manual-refresh.js', GPP_PLUGIN_FILE ),
             array(),
-            '1.2.0',
+            '1.2.1',
             true
         );
     }
