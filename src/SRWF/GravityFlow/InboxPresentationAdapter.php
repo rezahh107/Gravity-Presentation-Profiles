@@ -125,7 +125,29 @@ final class InboxPresentationAdapter {
             if ( ! self::isNativeInboxGridConfig( $grid_config ) ) {
                 continue;
             }
-            $config['grids'][ $grid_id ]['grid_options']['rowBuffer'] = self::CARD_MODE_ROW_BUFFER;
+
+            $grid_options = &$config['grids'][ $grid_id ]['grid_options'];
+            $grid_options['rowBuffer'] = self::CARD_MODE_ROW_BUFFER;
+
+            // Gravity Flow persists native AG Grid column state between renders.
+            // Card Mode removes native columns from the visual layout with CSS,
+            // so a persisted native-first order can make AG Grid's top tab guard
+            // target a CSS-hidden header and leave the grid. Lock only the GPP
+            // presentation column to the first LTR grid position. Native column
+            // widths, visibility, sorting, filtering and persistence remain host-owned.
+            foreach ( $grid_options['columnDefs'] as $column_index => $column_def ) {
+                if ( ! is_array( $column_def ) ) {
+                    continue;
+                }
+                $field = isset( $column_def['field'] ) ? (string) $column_def['field'] : '';
+                $col_id = isset( $column_def['colId'] ) ? (string) $column_def['colId'] : '';
+                if ( self::CARD_COLUMN !== $field && self::CARD_COLUMN !== $col_id ) {
+                    continue;
+                }
+                $grid_options['columnDefs'][ $column_index ]['lockPosition'] = 'left';
+                break;
+            }
+            unset( $grid_options );
         }
 
         return $config;
