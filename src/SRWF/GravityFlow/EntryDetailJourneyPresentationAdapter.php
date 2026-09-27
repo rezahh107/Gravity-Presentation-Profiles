@@ -28,15 +28,37 @@ final class EntryDetailJourneyPresentationAdapter {
     const STATE_UNKNOWN = 'unknown';
     const STATE_NATIVE = 'native';
 
+    private static $effective_entry_detail_args = null;
+
     public static function register() {
         if ( ! function_exists( 'add_action' ) || ! function_exists( 'add_filter' ) ) {
             return;
         }
 
+        // Capture the final host arguments after ordinary site customization.
+        // When the native back link is enabled, change only its operator-facing
+        // presentation label; Gravity Flow still owns whether and how it renders.
+        add_filter( 'gravityflow_entry_detail_args', array( __CLASS__, 'captureEffectiveEntryDetailArgs' ), PHP_INT_MAX, 1 );
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderJourneyPresentation' ), 15, 2 );
         add_filter( 'gravityflow_back_link_url_entry_detail', array( __CLASS__, 'filterNativeBackLinkUrl' ), 20, 2 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
+    }
+
+    public static function captureEffectiveEntryDetailArgs( $args ) {
+        if ( ! is_array( $args ) ) {
+            return $args;
+        }
+
+        if ( EntryDetailRequestReachability::isReachable() ) {
+            $route = self::frontendInboxRouteContext();
+            if ( null !== $route && self::truthyAttribute( isset( $args['back_link'] ) ? $args['back_link'] : false ) ) {
+                $args['back_link_text'] = __( 'بازگشت به کارهای من', 'gravity-presentation-profiles' );
+            }
+            self::$effective_entry_detail_args = $args;
+        }
+
+        return $args;
     }
 
     public static function enqueueStyles() {
@@ -128,7 +150,7 @@ final class EntryDetailJourneyPresentationAdapter {
                 self::SURFACE,
                 'ENTRY_DETAIL_JOURNEY_RESULT',
                 RuntimeDecisionTrace::RESULT_PASS,
-                'authoritative_user_input_correction'
+                'authoritative_same_operator_user_input_correction'
             );
             return;
         }
@@ -159,6 +181,12 @@ final class EntryDetailJourneyPresentationAdapter {
             return $url;
         }
 
+        // This filter is called by Gravity Flow only while emitting the native
+        // link. Keep the exact effective args as a request-local observation.
+        if ( is_array( $args ) ) {
+            self::$effective_entry_detail_args = $args;
+        }
+
         $entry_id = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
         if ( $entry_id < 1 || ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_entry' ) ) {
             return $url;
@@ -174,8 +202,6 @@ final class EntryDetailJourneyPresentationAdapter {
 
     /**
      * Pure taxonomy boundary. It deliberately has no Technical Error state.
-     * The caller may render semantic success only from a fresh established host
-     * snapshot; all other terminal ambiguity fails closed to Unknown/native.
      */
     private static function classifyHostTruth( $current_step_type, $current_step_can_update, $current_step_is_correction_target, $final_status, $api_status, $established ) {
         if ( ! $established ) {
@@ -204,7 +230,6 @@ final class EntryDetailJourneyPresentationAdapter {
         if ( 'rejected' === $final && 'rejected' === $api ) {
             return self::STATE_REJECTED;
         }
-
         if ( '' === $final && '' === $api ) {
             return self::STATE_NATIVE;
         }
@@ -241,7 +266,7 @@ final class EntryDetailJourneyPresentationAdapter {
             $step = $api->get_current_step( $fresh_entry );
             $step_type = null;
             $can_update = null;
-            $is_correction_target = false;
+            $same_operator_correction = false;
             if ( $step ) {
                 if ( ! is_object( $step ) || ! method_exists( $step, 'get_type' ) ) {
                     return $fallback;
@@ -252,7 +277,7 @@ final class EntryDetailJourneyPresentationAdapter {
                         return $fallback;
                     }
                     $can_update = (bool) \Gravity_Flow_Entry_Detail::can_update( $step );
-                    $is_correction_target = self::isExpectedCorrectionStep( $api, $step );
+                    $same_operator_correction = self::isExpectedSameOperatorCorrectionStep( $api, $step );
                 }
             }
 
@@ -262,7 +287,7 @@ final class EntryDetailJourneyPresentationAdapter {
                 'current_step' => $step,
                 'current_step_type' => $step_type,
                 'current_step_can_update' => $can_update,
-                'current_step_is_correction_target' => $is_correction_target,
+                'current_step_is_correction_target' => $same_operator_correction,
                 'final_status' => (string) gform_get_meta( (int) $fresh_entry['id'], 'workflow_final_status' ),
                 'api_status' => (string) $api->get_status( $fresh_entry ),
             );
@@ -279,14 +304,22 @@ final class EntryDetailJourneyPresentationAdapter {
     }
 
     /**
-     * A User Input step is called "correction" only when current host
-     * configuration actually exposes that exact step as a native Approval
-     * Revert target. This prevents unrelated User Input steps from inheriting
-     * SRWF correction semantics merely because the operator can edit them.
+     * The qualified correction topology is admitted only when the current
+     * User Input and the Approval step that natively Reverts to it are both
+     * assigned exclusively to the same currently authenticated user.
+     *
+     * Other legitimate Gravity Flow assignment models remain host-native; GPP
+     * simply does not label them as this Owner-approved SAME-OPERATOR journey.
      */
-    private static function isExpectedCorrectionStep( $api, $current_step ) {
+    private static function isExpectedSameOperatorCorrectionStep( $api, $current_step ) {
         if ( ! is_object( $api ) || ! method_exists( $api, 'get_steps' ) || ! is_object( $current_step )
-            || ! method_exists( $current_step, 'get_id' ) || ! method_exists( $current_step, 'get_editable_fields' ) ) {
+            || ! method_exists( $current_step, 'get_id' ) || ! method_exists( $current_step, 'get_editable_fields' )
+            || ! method_exists( $current_step, 'get_feed_meta' ) || ! function_exists( 'get_current_user_id' ) ) {
+            return false;
+        }
+
+        $user_id = (int) get_current_user_id();
+        if ( $user_id < 1 || ! self::stepAssignedExclusivelyToUser( $current_step, $user_id ) ) {
             return false;
         }
 
@@ -316,7 +349,7 @@ final class EntryDetailJourneyPresentationAdapter {
             }
             $enabled = isset( $meta['revertEnable'] ) ? (string) $meta['revertEnable'] : '';
             $target = isset( $meta['revertValue'] ) ? (string) $meta['revertValue'] : '';
-            if ( '1' === $enabled && $target_id === $target ) {
+            if ( '1' === $enabled && $target_id === $target && self::stepAssignedExclusivelyToUser( $step, $user_id ) ) {
                 return true;
             }
         }
@@ -324,10 +357,22 @@ final class EntryDetailJourneyPresentationAdapter {
         return false;
     }
 
+    private static function stepAssignedExclusivelyToUser( $step, $user_id ) {
+        if ( ! is_object( $step ) || ! method_exists( $step, 'get_feed_meta' ) || (int) $user_id < 1 ) {
+            return false;
+        }
+        $meta = $step->get_feed_meta();
+        if ( ! is_array( $meta ) ) {
+            return false;
+        }
+        $assignees = isset( $meta['assignees'] ) ? (array) $meta['assignees'] : array();
+        $assignees = array_values( array_map( 'strval', $assignees ) );
+        return array( 'user_id|' . (int) $user_id ) === $assignees;
+    }
+
     /**
-     * Resolve only a canonical Inbox page-1 authority. Entry Detail is also
-     * reachable from Gravity Flow Status surfaces, but those are intentionally
-     * not accepted as "My Tasks" destinations.
+     * Resolve only a canonical Inbox page-1 authority. Status surfaces may
+     * reach Entry Detail but are intentionally not accepted as "My Tasks".
      */
     private static function canonicalInboxContext() {
         if ( function_exists( 'is_admin' ) && is_admin() ) {
@@ -341,28 +386,45 @@ final class EntryDetailJourneyPresentationAdapter {
             );
         }
 
-        if ( ! function_exists( 'get_queried_object' ) || ! function_exists( 'get_permalink' ) ) {
+        $route = self::frontendInboxRouteContext();
+        if ( null === $route || ! function_exists( 'get_queried_object' ) || ! function_exists( 'get_permalink' ) ) {
             return null;
         }
         $object = get_queried_object();
-        if ( ! is_object( $object ) || empty( $object->ID ) || ! isset( $object->post_content ) || ! is_string( $object->post_content ) ) {
+        if ( ! is_object( $object ) || empty( $object->ID ) ) {
             return null;
         }
-
-        $route = self::shortcodeInboxContext( $object->post_content );
-        if ( null === $route ) {
-            $route = self::blockInboxContext( $object->post_content );
-        }
-        if ( null === $route ) {
-            return null;
-        }
-
         $url = get_permalink( (int) $object->ID );
         if ( ! is_string( $url ) || '' === trim( $url ) ) {
             return null;
         }
+
         $route['url'] = $url;
+        $route['native_back_link'] = self::effectiveNativeBackLinkEnabled();
         return $route;
+    }
+
+    private static function frontendInboxRouteContext() {
+        if ( function_exists( 'is_admin' ) && is_admin() ) {
+            return null;
+        }
+        if ( ! function_exists( 'get_queried_object' ) ) {
+            return null;
+        }
+        $object = get_queried_object();
+        if ( ! is_object( $object ) || ! isset( $object->post_content ) || ! is_string( $object->post_content ) ) {
+            return null;
+        }
+
+        $route = self::shortcodeInboxContext( $object->post_content );
+        return null !== $route ? $route : self::blockInboxContext( $object->post_content );
+    }
+
+    private static function effectiveNativeBackLinkEnabled() {
+        return is_array( self::$effective_entry_detail_args )
+            && self::truthyAttribute(
+                isset( self::$effective_entry_detail_args['back_link'] ) ? self::$effective_entry_detail_args['back_link'] : false
+            );
     }
 
     private static function shortcodeInboxContext( $content ) {
@@ -381,8 +443,6 @@ final class EntryDetailJourneyPresentationAdapter {
             return null;
         }
 
-        $found = false;
-        $native_back_link = false;
         foreach ( $tokens as $token ) {
             if ( ! is_string( $token ) || '' === $token ) {
                 continue;
@@ -406,22 +466,17 @@ final class EntryDetailJourneyPresentationAdapter {
                     continue;
                 }
                 $page = isset( $atts['page'] ) ? sanitize_key( (string) $atts['page'] ) : 'inbox';
-                if ( 'inbox' !== $page ) {
-                    continue;
-                }
-                $found = true;
-                if ( isset( $atts['back_link'] ) && self::truthyAttribute( $atts['back_link'] ) ) {
-                    $native_back_link = true;
+                if ( 'inbox' === $page ) {
+                    return array( 'kind' => 'shortcode_inbox' );
                 }
             }
         }
 
-        return $found ? array( 'kind' => 'shortcode_inbox', 'native_back_link' => $native_back_link ) : null;
+        return null;
     }
 
     private static function blockInboxContext( $content ) {
-        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'has_block' ) || ! function_exists( 'parse_blocks' )
-            || ! class_exists( 'WP_Block_Type_Registry' ) ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'has_block' ) || ! class_exists( 'WP_Block_Type_Registry' ) ) {
             return null;
         }
         $registry = \WP_Block_Type_Registry::get_instance();
@@ -429,41 +484,7 @@ final class EntryDetailJourneyPresentationAdapter {
             || ! $registry->is_registered( 'gravityflow/inbox' ) || ! has_block( 'gravityflow/inbox', $content ) ) {
             return null;
         }
-
-        $settings = self::findInboxBlockSettings( parse_blocks( $content ) );
-        return null === $settings ? null : array(
-            'kind' => 'block_inbox',
-            'native_back_link' => ! empty( $settings['native_back_link'] ),
-        );
-    }
-
-    private static function findInboxBlockSettings( $blocks ) {
-        if ( ! is_array( $blocks ) ) {
-            return null;
-        }
-        foreach ( $blocks as $block ) {
-            if ( ! is_array( $block ) ) {
-                continue;
-            }
-            if ( 'gravityflow/inbox' === ( isset( $block['blockName'] ) ? (string) $block['blockName'] : '' ) ) {
-                $attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
-                $native = false;
-                foreach ( array( 'back_link', 'backLink', 'backlink' ) as $key ) {
-                    if ( array_key_exists( $key, $attrs ) && self::truthyAttribute( $attrs[ $key ] ) ) {
-                        $native = true;
-                        break;
-                    }
-                }
-                return array( 'native_back_link' => $native );
-            }
-            if ( ! empty( $block['innerBlocks'] ) ) {
-                $nested = self::findInboxBlockSettings( $block['innerBlocks'] );
-                if ( null !== $nested ) {
-                    return $nested;
-                }
-            }
-        }
-        return null;
+        return array( 'kind' => 'block_inbox' );
     }
 
     private static function truthyAttribute( $value ) {
@@ -541,7 +562,9 @@ final class EntryDetailJourneyPresentationAdapter {
         $first = self::visibleMappedFieldValue( $model, $form, $entry, $current_step, 'student.first_name' );
         $last = self::visibleMappedFieldValue( $model, $form, $entry, $current_step, 'student.last_name' );
         $national_id = self::visibleMappedFieldValue( $model, $form, $entry, $current_step, 'student.national_id' );
-        $name = trim( implode( ' ', array_filter( array( $first, $last ), static function ( $value ) { return null !== $value && '' !== $value; } ) ) );
+        $name = trim( implode( ' ', array_filter( array( $first, $last ), static function ( $value ) {
+            return null !== $value && '' !== $value;
+        } ) ) );
 
         return array(
             'name' => '' !== $name ? $name : null,
