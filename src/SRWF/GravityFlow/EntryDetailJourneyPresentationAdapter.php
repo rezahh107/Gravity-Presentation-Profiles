@@ -45,6 +45,11 @@ final class EntryDetailJourneyPresentationAdapter {
             return;
         }
 
+        $context = self::canonicalInboxContext();
+        if ( null === $context ) {
+            return;
+        }
+
         $plugin_root = dirname( GPP_PLUGIN_FILE );
         $style_path = 'assets/css/srwf-gravity-flow-entry-detail-journey.css';
         wp_enqueue_style(
@@ -65,8 +70,8 @@ final class EntryDetailJourneyPresentationAdapter {
             return;
         }
 
-        $canonical_url = self::canonicalInboxUrl();
-        if ( null === $canonical_url ) {
+        $route = self::canonicalInboxContext();
+        if ( null === $route ) {
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_JOURNEY_RETURN_ROUTE',
@@ -81,6 +86,7 @@ final class EntryDetailJourneyPresentationAdapter {
         $state = self::classifyHostTruth(
             isset( $truth['current_step_type'] ) ? $truth['current_step_type'] : null,
             isset( $truth['current_step_can_update'] ) ? $truth['current_step_can_update'] : null,
+            ! empty( $truth['current_step_is_correction_target'] ),
             isset( $truth['final_status'] ) ? $truth['final_status'] : null,
             isset( $truth['api_status'] ) ? $truth['api_status'] : null,
             ! empty( $truth['established'] )
@@ -90,7 +96,6 @@ final class EntryDetailJourneyPresentationAdapter {
             return;
         }
 
-        $native_back_link = self::frontendNativeBackLinkConfigured();
         $identity = self::caseIdentity(
             $model,
             $form,
@@ -98,6 +103,7 @@ final class EntryDetailJourneyPresentationAdapter {
             isset( $truth['current_step'] ) ? $truth['current_step'] : null
         );
         $profile_id = $model->profileId();
+        $native_back_link = ! empty( $route['native_back_link'] );
 
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
@@ -108,14 +114,14 @@ final class EntryDetailJourneyPresentationAdapter {
 
         if ( self::STATE_REVIEW === $state ) {
             if ( ! $native_back_link ) {
-                echo self::returnNavigationMarkup( $canonical_url, $profile_id );
+                echo self::returnNavigationMarkup( $route['url'], $profile_id );
             }
             return;
         }
 
         if ( self::STATE_CORRECTION === $state ) {
             if ( ! $native_back_link ) {
-                echo self::returnNavigationMarkup( $canonical_url, $profile_id );
+                echo self::returnNavigationMarkup( $route['url'], $profile_id );
             }
             echo self::correctionOrientationMarkup( $identity, $profile_id );
             RuntimeDiagnostics::recordOnce(
@@ -128,7 +134,7 @@ final class EntryDetailJourneyPresentationAdapter {
         }
 
         if ( self::STATE_APPROVED === $state || self::STATE_REJECTED === $state ) {
-            echo self::resultMarkup( $state, $identity, $canonical_url, $profile_id, ! $native_back_link );
+            echo self::resultMarkup( $state, $identity, $route['url'], $profile_id, ! $native_back_link );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_JOURNEY_RESULT',
@@ -138,7 +144,7 @@ final class EntryDetailJourneyPresentationAdapter {
             return;
         }
 
-        echo self::resultMarkup( self::STATE_UNKNOWN, $identity, $canonical_url, $profile_id, ! $native_back_link );
+        echo self::resultMarkup( self::STATE_UNKNOWN, $identity, $route['url'], $profile_id, ! $native_back_link );
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
             'ENTRY_DETAIL_JOURNEY_RESULT',
@@ -162,8 +168,8 @@ final class EntryDetailJourneyPresentationAdapter {
             return $url;
         }
 
-        $canonical = self::canonicalInboxUrl();
-        return null === $canonical ? $url : $canonical;
+        $context = self::canonicalInboxContext();
+        return null === $context ? $url : $context['url'];
     }
 
     /**
@@ -171,7 +177,7 @@ final class EntryDetailJourneyPresentationAdapter {
      * The caller may render semantic success only from a fresh established host
      * snapshot; all other terminal ambiguity fails closed to Unknown/native.
      */
-    private static function classifyHostTruth( $current_step_type, $current_step_can_update, $final_status, $api_status, $established ) {
+    private static function classifyHostTruth( $current_step_type, $current_step_can_update, $current_step_is_correction_target, $final_status, $api_status, $established ) {
         if ( ! $established ) {
             return self::STATE_NATIVE;
         }
@@ -184,7 +190,9 @@ final class EntryDetailJourneyPresentationAdapter {
             return self::STATE_REVIEW;
         }
         if ( 'user_input' === $step_type ) {
-            return true === $current_step_can_update ? self::STATE_CORRECTION : self::STATE_NATIVE;
+            return true === $current_step_can_update && true === $current_step_is_correction_target
+                ? self::STATE_CORRECTION
+                : self::STATE_NATIVE;
         }
         if ( null !== $step_type && '' !== $step_type ) {
             return self::STATE_NATIVE;
@@ -211,6 +219,7 @@ final class EntryDetailJourneyPresentationAdapter {
             'current_step' => null,
             'current_step_type' => null,
             'current_step_can_update' => null,
+            'current_step_is_correction_target' => false,
             'final_status' => null,
             'api_status' => null,
         );
@@ -232,6 +241,7 @@ final class EntryDetailJourneyPresentationAdapter {
             $step = $api->get_current_step( $fresh_entry );
             $step_type = null;
             $can_update = null;
+            $is_correction_target = false;
             if ( $step ) {
                 if ( ! is_object( $step ) || ! method_exists( $step, 'get_type' ) ) {
                     return $fallback;
@@ -242,6 +252,7 @@ final class EntryDetailJourneyPresentationAdapter {
                         return $fallback;
                     }
                     $can_update = (bool) \Gravity_Flow_Entry_Detail::can_update( $step );
+                    $is_correction_target = self::isExpectedCorrectionStep( $api, $step );
                 }
             }
 
@@ -251,6 +262,7 @@ final class EntryDetailJourneyPresentationAdapter {
                 'current_step' => $step,
                 'current_step_type' => $step_type,
                 'current_step_can_update' => $can_update,
+                'current_step_is_correction_target' => $is_correction_target,
                 'final_status' => (string) gform_get_meta( (int) $fresh_entry['id'], 'workflow_final_status' ),
                 'api_status' => (string) $api->get_status( $fresh_entry ),
             );
@@ -266,94 +278,192 @@ final class EntryDetailJourneyPresentationAdapter {
         }
     }
 
-    private static function canonicalInboxUrl() {
+    /**
+     * A User Input step is called "correction" only when current host
+     * configuration actually exposes that exact step as a native Approval
+     * Revert target. This prevents unrelated User Input steps from inheriting
+     * SRWF correction semantics merely because the operator can edit them.
+     */
+    private static function isExpectedCorrectionStep( $api, $current_step ) {
+        if ( ! is_object( $api ) || ! method_exists( $api, 'get_steps' ) || ! is_object( $current_step )
+            || ! method_exists( $current_step, 'get_id' ) || ! method_exists( $current_step, 'get_editable_fields' ) ) {
+            return false;
+        }
+
+        $editable = $current_step->get_editable_fields();
+        if ( ! is_array( $editable ) || empty( array_filter( $editable, static function ( $field_id ) {
+            return is_scalar( $field_id ) && '' !== trim( (string) $field_id );
+        } ) ) ) {
+            return false;
+        }
+
+        $target_id = (string) $current_step->get_id();
+        $steps = $api->get_steps();
+        if ( ! is_array( $steps ) ) {
+            return false;
+        }
+
+        foreach ( $steps as $step ) {
+            if ( ! is_object( $step ) || ! method_exists( $step, 'get_type' ) || ! method_exists( $step, 'get_feed_meta' ) ) {
+                continue;
+            }
+            if ( 'approval' !== (string) $step->get_type() ) {
+                continue;
+            }
+            $meta = $step->get_feed_meta();
+            if ( ! is_array( $meta ) ) {
+                continue;
+            }
+            $enabled = isset( $meta['revertEnable'] ) ? (string) $meta['revertEnable'] : '';
+            $target = isset( $meta['revertValue'] ) ? (string) $meta['revertValue'] : '';
+            if ( '1' === $enabled && $target_id === $target ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve only a canonical Inbox page-1 authority. Entry Detail is also
+     * reachable from Gravity Flow Status surfaces, but those are intentionally
+     * not accepted as "My Tasks" destinations.
+     */
+    private static function canonicalInboxContext() {
         if ( function_exists( 'is_admin' ) && is_admin() ) {
-            return function_exists( 'admin_url' ) ? admin_url( 'admin.php?page=gravityflow-inbox' ) : null;
+            if ( ! function_exists( 'admin_url' ) ) {
+                return null;
+            }
+            return array(
+                'url' => admin_url( 'admin.php?page=gravityflow-inbox' ),
+                'kind' => 'admin_inbox',
+                'native_back_link' => false,
+            );
         }
 
         if ( ! function_exists( 'get_queried_object' ) || ! function_exists( 'get_permalink' ) ) {
             return null;
         }
         $object = get_queried_object();
-        if ( ! is_object( $object ) || empty( $object->ID ) ) {
+        if ( ! is_object( $object ) || empty( $object->ID ) || ! isset( $object->post_content ) || ! is_string( $object->post_content ) ) {
             return null;
         }
+
+        $route = self::shortcodeInboxContext( $object->post_content );
+        if ( null === $route ) {
+            $route = self::blockInboxContext( $object->post_content );
+        }
+        if ( null === $route ) {
+            return null;
+        }
+
         $url = get_permalink( (int) $object->ID );
-        return is_string( $url ) && '' !== trim( $url ) ? $url : null;
+        if ( ! is_string( $url ) || '' === trim( $url ) ) {
+            return null;
+        }
+        $route['url'] = $url;
+        return $route;
     }
 
-    private static function frontendNativeBackLinkConfigured() {
-        if ( function_exists( 'is_admin' ) && is_admin() ) {
-            return false;
-        }
-        if ( ! function_exists( 'get_queried_object' ) ) {
-            return false;
-        }
-        $object = get_queried_object();
-        if ( ! is_object( $object ) || ! isset( $object->post_content ) || ! is_string( $object->post_content ) ) {
-            return false;
+    private static function shortcodeInboxContext( $content ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'shortcode_exists' )
+            || ! shortcode_exists( 'gravityflow' ) || ! function_exists( 'wp_html_split' )
+            || ! function_exists( 'get_shortcode_regex' ) || ! function_exists( 'shortcode_parse_atts' ) ) {
+            return null;
         }
 
-        return self::shortcodeBackLinkConfigured( $object->post_content )
-            || self::blockBackLinkConfigured( $object->post_content );
-    }
-
-    private static function shortcodeBackLinkConfigured( $content ) {
-        if ( ! function_exists( 'get_shortcode_regex' ) || ! function_exists( 'shortcode_parse_atts' ) || ! function_exists( 'shortcode_exists' )
-            || ! shortcode_exists( 'gravityflow' ) ) {
-            return false;
+        $tokens = wp_html_split( $content );
+        if ( ! is_array( $tokens ) ) {
+            return null;
         }
         $pattern = get_shortcode_regex( array( 'gravityflow' ) );
-        $count = preg_match_all( '/' . $pattern . '/s', $content, $matches, PREG_SET_ORDER );
-        if ( ! is_int( $count ) || $count < 1 ) {
-            return false;
+        if ( ! is_string( $pattern ) || '' === $pattern ) {
+            return null;
         }
-        foreach ( $matches as $match ) {
-            if ( ! isset( $match[2], $match[3] ) || 'gravityflow' !== $match[2] ) {
+
+        $found = false;
+        $native_back_link = false;
+        foreach ( $tokens as $token ) {
+            if ( ! is_string( $token ) || '' === $token ) {
                 continue;
             }
-            $atts = shortcode_parse_atts( $match[3] );
-            if ( ! is_array( $atts ) ) {
+            if ( '<' === $token[0] && ( 0 === strpos( $token, '<!--' ) || 0 === strpos( $token, '<![CDATA[' ) ) ) ) {
                 continue;
             }
-            $page = isset( $atts['page'] ) ? sanitize_key( (string) $atts['page'] ) : 'inbox';
-            if ( ! in_array( $page, array( 'inbox', 'status' ), true ) ) {
+            $count = preg_match_all( '/' . $pattern . '/s', $token, $matches, PREG_SET_ORDER );
+            if ( ! is_int( $count ) || $count < 1 ) {
                 continue;
             }
-            return isset( $atts['back_link'] ) && self::truthyAttribute( $atts['back_link'] );
+            foreach ( $matches as $match ) {
+                if ( ! isset( $match[1], $match[2], $match[3], $match[6] ) || 'gravityflow' !== $match[2] ) {
+                    continue;
+                }
+                if ( '[' === $match[1] && ']' === $match[6] ) {
+                    continue;
+                }
+                $atts = shortcode_parse_atts( $match[3] );
+                if ( ! is_array( $atts ) ) {
+                    continue;
+                }
+                $page = isset( $atts['page'] ) ? sanitize_key( (string) $atts['page'] ) : 'inbox';
+                if ( 'inbox' !== $page ) {
+                    continue;
+                }
+                $found = true;
+                if ( isset( $atts['back_link'] ) && self::truthyAttribute( $atts['back_link'] ) ) {
+                    $native_back_link = true;
+                }
+            }
         }
-        return false;
+
+        return $found ? array( 'kind' => 'shortcode_inbox', 'native_back_link' => $native_back_link ) : null;
     }
 
-    private static function blockBackLinkConfigured( $content ) {
-        if ( ! function_exists( 'parse_blocks' ) ) {
-            return false;
+    private static function blockInboxContext( $content ) {
+        if ( ! is_string( $content ) || '' === $content || ! function_exists( 'has_block' ) || ! function_exists( 'parse_blocks' )
+            || ! class_exists( 'WP_Block_Type_Registry' ) ) {
+            return null;
         }
-        return self::blocksContainBackLink( parse_blocks( $content ) );
+        $registry = \WP_Block_Type_Registry::get_instance();
+        if ( ! is_object( $registry ) || ! method_exists( $registry, 'is_registered' )
+            || ! $registry->is_registered( 'gravityflow/inbox' ) || ! has_block( 'gravityflow/inbox', $content ) ) {
+            return null;
+        }
+
+        $settings = self::findInboxBlockSettings( parse_blocks( $content ) );
+        return null === $settings ? null : array(
+            'kind' => 'block_inbox',
+            'native_back_link' => ! empty( $settings['native_back_link'] ),
+        );
     }
 
-    private static function blocksContainBackLink( $blocks ) {
+    private static function findInboxBlockSettings( $blocks ) {
         if ( ! is_array( $blocks ) ) {
-            return false;
+            return null;
         }
         foreach ( $blocks as $block ) {
             if ( ! is_array( $block ) ) {
                 continue;
             }
-            $name = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
-            if ( in_array( $name, array( 'gravityflow/inbox', 'gravityflow/status' ), true ) ) {
+            if ( 'gravityflow/inbox' === ( isset( $block['blockName'] ) ? (string) $block['blockName'] : '' ) ) {
                 $attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+                $native = false;
                 foreach ( array( 'back_link', 'backLink', 'backlink' ) as $key ) {
                     if ( array_key_exists( $key, $attrs ) && self::truthyAttribute( $attrs[ $key ] ) ) {
-                        return true;
+                        $native = true;
+                        break;
                     }
                 }
+                return array( 'native_back_link' => $native );
             }
-            if ( ! empty( $block['innerBlocks'] ) && self::blocksContainBackLink( $block['innerBlocks'] ) ) {
-                return true;
+            if ( ! empty( $block['innerBlocks'] ) ) {
+                $nested = self::findInboxBlockSettings( $block['innerBlocks'] );
+                if ( null !== $nested ) {
+                    return $nested;
+                }
             }
         }
-        return false;
+        return null;
     }
 
     private static function truthyAttribute( $value ) {
@@ -474,7 +584,7 @@ final class EntryDetailJourneyPresentationAdapter {
         $html = '<section class="gpp-entry-journey gpp-entry-journey--correction" dir="rtl" data-gpp-entry-journey="correction" data-gpp-profile-id="' . esc_attr( $profile_id ) . '" role="status" aria-labelledby="gpp-entry-journey-correction-title">';
         $html .= self::stateIconMarkup( self::STATE_CORRECTION );
         $html .= '<div class="gpp-entry-journey__body"><h2 id="gpp-entry-journey-correction-title">' . esc_html__( 'پرونده برای اصلاح بازگردانده شد', 'gravity-presentation-profiles' ) . '</h2>';
-        $html .= '<p>' . esc_html__( 'فقط فیلدهایی را که Gravity Flow در فرم زیر قابل ویرایش کرده است اصلاح کنید و سپس فرم را با مسیر اصلی تکمیل کنید.', 'gravity-presentation-profiles' ) . '</p>';
+        $html .= '<p>' . esc_html__( 'فقط فیلدهای قابل ویرایش فرم زیر را اصلاح کنید و سپس فرم را از مسیر اصلی تکمیل کنید.', 'gravity-presentation-profiles' ) . '</p>';
         $html .= self::caseContextMarkup( $identity );
         $html .= '</div></section>';
         return $html;
@@ -498,13 +608,13 @@ final class EntryDetailJourneyPresentationAdapter {
         if ( self::STATE_APPROVED === $state ) {
             return array(
                 'title' => __( 'پرونده تأیید شد', 'gravity-presentation-profiles' ),
-                'body' => __( 'وضعیت نهایی تأیید از Gravity Flow دوباره خوانده و تأیید شد.', 'gravity-presentation-profiles' ),
+                'body' => __( 'نتیجه بررسی با موفقیت ثبت شد.', 'gravity-presentation-profiles' ),
             );
         }
         if ( self::STATE_REJECTED === $state ) {
             return array(
                 'title' => __( 'پرونده رد شد', 'gravity-presentation-profiles' ),
-                'body' => __( 'وضعیت نهایی رد از Gravity Flow دوباره خوانده و تأیید شد.', 'gravity-presentation-profiles' ),
+                'body' => __( 'نتیجه رد با موفقیت ثبت شد.', 'gravity-presentation-profiles' ),
             );
         }
         return array(
