@@ -366,6 +366,8 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
       };
       const surface = document.querySelector(selector);
       const host = surface?.parentElement;
+      const toolbar = surface?.querySelector('[data-gpp-inbox-toolbar]');
+      const searchHeader = surface?.querySelector('.gflow-grid__header');
       const hostRect = host?.getBoundingClientRect();
       const hostStyle = host ? getComputedStyle(host) : null;
       const px = value => Number.parseFloat(value) || 0;
@@ -382,7 +384,9 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         host_content: hostContent,
         surface: describe(surface),
         inner: box(`${selector} .gpp-inbox-surface__inner`),
-        header: box(`${selector} .gflow-grid__header`),
+        toolbar: describe(toolbar),
+        search_header: describe(searchHeader),
+        search_header_in_toolbar: Boolean(toolbar && searchHeader && toolbar.contains(searchHeader)),
         native_inbox: box(`${selector} [data-js="gflow-inbox"]`),
         grid: box(`${selector} .ag-root-wrapper`),
         paging: box(`${selector} .ag-paging-panel`),
@@ -392,9 +396,15 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     if (geometry.surface.width > geometry.viewport + 2) throw new Error(`Host-owned Full Width surface exceeded the viewport: ${JSON.stringify(geometry)}`);
     if (!geometry.inner || geometry.inner.width > 1121 || geometry.inner.width < 1060) throw new Error(`Bounded desktop content width is outside Owner calibration: ${JSON.stringify(geometry)}`);
     if (!geometry.native_inbox || geometry.native_inbox.width < 1040 || geometry.native_inbox.width > 1100) throw new Error(`Native Inbox did not reach the expected bounded host axis: ${JSON.stringify(geometry)}`);
-    for (const key of ['header', 'native_inbox', 'grid', 'paging']) {
+    for (const key of ['toolbar', 'native_inbox', 'grid', 'paging']) {
       if (!geometry[key]) throw new Error(`Missing ${key} geometry.`);
-      if (Math.abs(geometry[key].x - geometry.header.x) > 3 || Math.abs(geometry[key].right - geometry.header.right) > 3) throw new Error(`Desktop axes diverge: ${JSON.stringify(geometry)}`);
+      if (Math.abs(geometry[key].x - geometry.native_inbox.x) > 3 || Math.abs(geometry[key].right - geometry.native_inbox.right) > 3) throw new Error(`Desktop full axes diverge: ${JSON.stringify(geometry)}`);
+    }
+    if (!geometry.search_header || !geometry.toolbar || !geometry.search_header_in_toolbar
+      || geometry.search_header.x < geometry.toolbar.x - 3
+      || geometry.search_header.right > geometry.toolbar.right + 3
+      || geometry.search_header.width >= geometry.toolbar.width - 3) {
+      throw new Error(`Search header is not a contained toolbar cell: ${JSON.stringify(geometry)}`);
     }
     if (geometry.document_scroll_width > geometry.viewport + 2) throw new Error(`Document-level overflow at wide desktop: ${JSON.stringify(geometry)}`);
     await page.screenshot({ path: path.join(artifactDir, 'pr4-inbox-wide-1874.png'), fullPage: true });
@@ -436,7 +446,54 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await search.click();
     await search.pressSequentially('00:24:00');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 15000 });
-    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) throw new Error('One-page search result did not synchronize native pagination state.');
+    const onePageConvergence = [];
+    let stableSignature = null;
+    let stableSamples = 0;
+    for (let sampleIndex = 0; sampleIndex < 12; sampleIndex += 1) {
+      const sample = await page.evaluate(({ scopeSelector, rowsSelector }) => {
+        const scope = document.querySelector(scopeSelector);
+        const pager = scope?.querySelector('.ag-paging-panel');
+        const currentNode = scope?.querySelector('[ref="lbCurrent"]');
+        const totalNode = scope?.querySelector('[ref="lbTotal"]');
+        const previousNode = scope?.querySelector('[ref="btPrevious"]');
+        const nextNode = scope?.querySelector('[ref="btNext"]');
+        const text = node => ({
+          textContent: (node?.textContent || '').trim(),
+          innerText: node instanceof HTMLElement ? node.innerText.trim() : null,
+        });
+        const control = node => node ? {
+          classes: [...node.classList],
+          ariaDisabled: node.getAttribute('aria-disabled'),
+          disabledClass: node.classList.contains('ag-disabled'),
+        } : null;
+        const pagerStyle = pager ? getComputedStyle(pager) : null;
+        const pagerRect = pager?.getBoundingClientRect();
+        return {
+          rowCount: document.querySelectorAll(rowsSelector).length,
+          current: text(currentNode),
+          total: text(totalNode),
+          previous: control(previousNode),
+          next: control(nextNode),
+          pager: pager ? {
+            textContent: (pager.textContent || '').trim(),
+            innerText: pager.innerText.trim(),
+            visibility: pagerStyle.visibility,
+            display: pagerStyle.display,
+            rendered: pagerStyle.display !== 'none' && pagerStyle.visibility !== 'hidden' && pagerRect.width > 0 && pagerRect.height > 0,
+          } : null,
+        };
+      }, { scopeSelector: surfaceSelector, rowsSelector: centerRowsSelector });
+      onePageConvergence.push({ sample: sampleIndex + 1, ...sample });
+      const signature = JSON.stringify(sample);
+      stableSamples = signature === stableSignature ? stableSamples + 1 : 1;
+      stableSignature = signature;
+      if (sampleIndex >= 4 && stableSamples >= 3) break;
+      await page.waitForTimeout(100);
+    }
+    fs.writeFileSync(path.join(artifactDir, 'pr4-inbox-pager-convergence.json'), JSON.stringify({ samples: onePageConvergence }, null, 2) + '\n');
+    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) {
+      throw new Error(`One-page search result did not synchronize native pagination state. Convergence evidence: ${JSON.stringify({ sample_count: onePageConvergence.length, final: onePageConvergence.at(-1) })}`);
+    }
     if (await page.locator(`${surfaceSelector} .ag-paging-panel`).isVisible()) throw new Error('Single native page must not add pager noise.');
     const onePageSummary = (await rowSummary.innerText()).trim();
     if (!onePageSummary) throw new Error('Native row summary became empty after keyboard search.');
@@ -445,7 +502,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await search.press('Backspace');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 20, centerRowsSelector, { timeout: 15000 });
     if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '2' || !(await disabled(prev)) || await disabled(next)) throw new Error('Clearing keyboard search did not restore native page 1 of 2.');
-    return { first_page: '1/2', last_page: '2/2', returned_page: '1/2', one_page_after_search: '1/1', restored_after_clear: '1/2', one_page_row_summary: onePageSummary, previous: controlGeometry, next: nextGeometry, search_driver: 'keyboard_events' };
+    return { first_page: '1/2', last_page: '2/2', returned_page: '1/2', one_page_after_search: '1/1', restored_after_clear: '1/2', one_page_row_summary: onePageSummary, previous: controlGeometry, next: nextGeometry, search_driver: 'keyboard_events', pager_convergence: onePageConvergence };
   });
 
   await test('PR4-BROWSER-012', 'frontend Full Width composition reflows across required widths without document overflow', async () => {
