@@ -60,7 +60,7 @@ function srwf_journey_assert_same_operator_assignment( $review_meta, $correction
         || in_array( $negative, $correction_assignees, true )
     ) {
         throw new RuntimeException(
-            'Host-effective SAME-OPERATOR assignment invariant failed: ' .
+            'SAME_OPERATOR_ASSIGNMENT_INVARIANT_FAILED: ' .
             wp_json_encode(
                 array(
                     'expected_operator_assignee' => $expected,
@@ -83,8 +83,9 @@ function srwf_journey_assert_same_operator_assignment( $review_meta, $correction
     );
 }
 
-function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id ) {
+function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id, $force_different_correction_assignee = false ) {
     $api = new Gravity_Flow_API( $form_id );
+    $correction_assignee_id = $force_different_correction_assignee ? $negative_control_id : $operator_id;
 
     // User Input is deliberately created first so it is a real available target
     // when the Approval step is created. This lets Gravity Flow persist the native
@@ -95,7 +96,7 @@ function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id ) 
             'step_type' => 'user_input',
             'description' => 'Synthetic correction step.',
             'type' => 'select',
-            'assignees' => array( 'user_id|' . (int) $operator_id ),
+            'assignees' => array( 'user_id|' . (int) $correction_assignee_id ),
             'assignee_policy' => 'all',
             'editable_fields' => array( '1' ),
             'instructionsEnable' => '1',
@@ -211,13 +212,24 @@ function srwf_journey_add_entry_seeded_at_review( $form_id, $created_by_id, $rev
 }
 
 $form_id = srwf_journey_add_form( 'SRWF Journey Host Qualification' );
-$steps = srwf_journey_add_steps( $form_id, $operator->ID, $negative_control->ID );
+$force_different_correction_assignee = '1' === (string) getenv( 'SRWF_JOURNEY_FORCE_DIFFERENT_CORRECTION_ASSIGNEE' );
+try {
+    $steps = srwf_journey_add_steps(
+        $form_id,
+        $operator->ID,
+        $negative_control->ID,
+        $force_different_correction_assignee
+    );
+} catch ( Throwable $error ) {
+    GFAPI::delete_form( $form_id );
+    throw $error;
+}
 
 $entries = array(
-    'approve' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'APPROVE' ),
-    'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'REJECT' ),
-    'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'REVERT' ),
-    'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $negative_control->ID, $steps['review_id'], 'INVALID' ),
+    'approve' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'APPROVE' ),
+    'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'REJECT' ),
+    'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'REVERT' ),
+    'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'INVALID' ),
 );
 
 $shortcode_page_id = wp_insert_post(
