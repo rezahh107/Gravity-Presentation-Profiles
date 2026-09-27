@@ -212,7 +212,11 @@ gpp_assert_same( 99, $shared_config_filters[0][2], 'GPP must run after Gravity F
 gpp_assert_same( 1, $shared_config_filters[0][3], 'Shared config seam accepts only the native config payload.' );
 
 $native_grid_options = array(
-    'columnDefs' => array( array( 'field' => InboxPresentationAdapter::CARD_COLUMN ) ),
+    'columnDefs' => array(
+        array( 'field' => 'id', 'sortable' => true ),
+        array( 'field' => InboxPresentationAdapter::CARD_COLUMN ),
+        array( 'field' => 'form_title' ),
+    ),
     'rowData' => array( array( 'id' => 1 ) ),
     'pagination' => true,
     'paginationPageSize' => 20,
@@ -244,12 +248,16 @@ $reset_request( '[gravityflow page="inbox"]' );
 $filtered_config = InboxPresentationAdapter::filterSharedJsConfig( $shared_config );
 gpp_assert_same( InboxPresentationAdapter::CARD_MODE_ROW_BUFFER, $filtered_config['grids']['inbox_default']['grid_options']['rowBuffer'], 'Admitted native Inbox grid must receive the proven rowBuffer.' );
 gpp_assert_same( InboxPresentationAdapter::CARD_MODE_ROW_BUFFER, $filtered_config['grids']['inbox_secondary']['grid_options']['rowBuffer'], 'Every native Inbox grid in the admitted shared payload must receive the same proven rowBuffer.' );
+gpp_assert_same( 'left', $filtered_config['grids']['inbox_default']['grid_options']['columnDefs'][1]['lockPosition'], 'The presentation column must remain first in AG Grid focus order even when native state supplies a native-first order.' );
+gpp_assert_same( array( 'field' => 'id', 'sortable' => true ), $filtered_config['grids']['inbox_default']['grid_options']['columnDefs'][0], 'The native leading column definition must otherwise remain untouched.' );
 $expected_primary = $native_grid_options;
 $expected_primary['rowBuffer'] = InboxPresentationAdapter::CARD_MODE_ROW_BUFFER;
+$expected_primary['columnDefs'][1]['lockPosition'] = 'left';
 $expected_secondary = $secondary_grid_options;
 $expected_secondary['rowBuffer'] = InboxPresentationAdapter::CARD_MODE_ROW_BUFFER;
-gpp_assert_same( $expected_primary, $filtered_config['grids']['inbox_default']['grid_options'], 'Applying rowBuffer must preserve all existing native grid options.' );
-gpp_assert_same( $expected_secondary, $filtered_config['grids']['inbox_secondary']['grid_options'], 'Applying rowBuffer must preserve secondary native grid options.' );
+$expected_secondary['columnDefs'][1]['lockPosition'] = 'left';
+gpp_assert_same( $expected_primary, $filtered_config['grids']['inbox_default']['grid_options'], 'Card focus-position locking and rowBuffer must preserve every other native grid option.' );
+gpp_assert_same( $expected_secondary, $filtered_config['grids']['inbox_secondary']['grid_options'], 'Secondary native Inbox grids receive the same bounded card focus-position invariant without unrelated mutation.' );
 gpp_assert_same( $shared_config['grids']['unrelated_shape'], $filtered_config['grids']['unrelated_shape'], 'A non-Inbox-shaped grid entry must remain unchanged.' );
 gpp_assert_same( $shared_config['unrelated_config'], $filtered_config['unrelated_config'], 'Unrelated shared configuration must remain unchanged.' );
 
