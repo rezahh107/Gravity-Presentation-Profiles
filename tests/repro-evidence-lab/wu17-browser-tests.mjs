@@ -418,7 +418,9 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     const controlGeometry = await prev.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, label: el.getAttribute('aria-label'), after: getComputedStyle(el, '::after').content }; });
     const nextGeometry = await next.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, label: el.getAttribute('aria-label'), before: getComputedStyle(el, '::before').content }; });
     if (controlGeometry.width < 40 || controlGeometry.height < 40 || nextGeometry.width < 40 || nextGeometry.height < 40) throw new Error(`Pagination target too small: ${JSON.stringify({ controlGeometry, nextGeometry })}`);
-    if (!String(controlGeometry.after).includes('قبلی') || !String(nextGeometry.before).includes('بعدی')) throw new Error('Visible Persian Previous/Next labels are missing.');
+    // Compact native arrows retain native accessible names and the 40px target.
+    // Added text used to force the multi-row/clipped pager proven in PR #99.
+    if (!controlGeometry.label || !nextGeometry.label) throw new Error('Native Previous/Next accessible names are missing.');
     if (!(await rowSummary.innerText()).trim()) throw new Error('Authentic host row summary is empty.');
 
     await next.click();
@@ -435,6 +437,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
     await search.pressSequentially('00:24:00');
     await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 15000 });
     if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) throw new Error('One-page search result did not synchronize native pagination state.');
+    if (await page.locator(`${surfaceSelector} .ag-paging-panel`).isVisible()) throw new Error('Single native page must not add pager noise.');
     const onePageSummary = (await rowSummary.innerText()).trim();
     if (!onePageSummary) throw new Error('Native row summary became empty after keyboard search.');
 
