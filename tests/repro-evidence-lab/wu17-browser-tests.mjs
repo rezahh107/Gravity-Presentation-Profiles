@@ -455,6 +455,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
         const pager = scope?.querySelector('.ag-paging-panel');
         const currentNode = scope?.querySelector('[ref="lbCurrent"]');
         const totalNode = scope?.querySelector('[ref="lbTotal"]');
+        const rowSummaryNode = scope?.querySelector('.ag-paging-row-summary-panel');
         const previousNode = scope?.querySelector('[ref="btPrevious"]');
         const nextNode = scope?.querySelector('[ref="btNext"]');
         const text = node => ({
@@ -472,6 +473,7 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
           rowCount: document.querySelectorAll(rowsSelector).length,
           current: text(currentNode),
           total: text(totalNode),
+          rowSummary: text(rowSummaryNode),
           previous: control(previousNode),
           next: control(nextNode),
           pager: pager ? {
@@ -491,12 +493,21 @@ export async function runWu17BrowserTests({ page, inboxUrl, wpControl, artifactD
       await page.waitForTimeout(100);
     }
     fs.writeFileSync(path.join(artifactDir, 'pr4-inbox-pager-convergence.json'), JSON.stringify({ samples: onePageConvergence }, null, 2) + '\n');
-    if ((await current.innerText()).trim() !== '1' || (await total.innerText()).trim() !== '1' || !(await disabled(prev)) || !(await disabled(next))) {
-      throw new Error(`One-page search result did not synchronize native pagination state. Convergence evidence: ${JSON.stringify({ sample_count: onePageConvergence.length, final: onePageConvergence.at(-1) })}`);
+    const onePageState = onePageConvergence.at(-1);
+    const nativeDisabledState = state => Boolean(state?.disabledClass || state?.ariaDisabled === 'true');
+    if (
+      onePageState?.rowCount !== 1
+      || onePageState?.current?.textContent !== '1'
+      || onePageState?.total?.textContent !== '1'
+      || !nativeDisabledState(onePageState?.previous)
+      || !nativeDisabledState(onePageState?.next)
+    ) {
+      throw new Error(`One-page search result did not synchronize native pagination state. Convergence evidence: ${JSON.stringify({ sample_count: onePageConvergence.length, final: onePageState })}`);
     }
+    if (!onePageState?.rowSummary?.textContent) throw new Error(`Native row-summary DOM content became empty after keyboard search. Convergence evidence: ${JSON.stringify({ sample_count: onePageConvergence.length, final: onePageState })}`);
+    if (onePageState?.pager?.rendered !== false) throw new Error(`Single native page remained visibly rendered after convergence. Convergence evidence: ${JSON.stringify({ sample_count: onePageConvergence.length, final: onePageState })}`);
     if (await page.locator(`${surfaceSelector} .ag-paging-panel`).isVisible()) throw new Error('Single native page must not add pager noise.');
-    const onePageSummary = (await rowSummary.innerText()).trim();
-    if (!onePageSummary) throw new Error('Native row summary became empty after keyboard search.');
+    const onePageSummary = onePageState.rowSummary.textContent;
 
     await search.press('Control+A');
     await search.press('Backspace');
