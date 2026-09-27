@@ -154,6 +154,16 @@ Gravity Presentation Profiles may define profile-specific type scale, weight, li
 - visual adaptation around native host states;
 - profile-specific presentation rules.
 
+### External-plugin/runtime compatibility authority
+
+Product-wide compatibility with external plugins and host runtimes is determined by the required capability and its contract, not by plugin-version equality or an exact-version allowlist alone.
+
+Plugin versions may remain diagnostics, provenance, release evidence, reproducible CI/test-matrix inputs, and evidence for a specifically proven incompatible release. They are not runtime compatibility authority by themselves when the applicable capability/contract can be detected and qualified directly.
+
+The detailed migration and validation target is `docs/architecture/CAPABILITY_FIRST_COMPATIBILITY_TARGET_V1.md`. It is the governing subordinate target for this architecture decision and remains `OWNER_APPROVED_TARGET__IMPLEMENTATION_OPEN`; existing runtime version gates remain truthful implementation debt until each affected consumer seam is separately migrated and validated. Adopting this principle here does not claim that current runtime code already conforms.
+
+Capability-first integration must continue to preserve host/provider ownership and native fallback. It does not authorize universal future-version compatibility without contract evidence.
+
 ## 6. Behavior versus responsive presentation
 
 The word “responsive” must not blur ownership.
