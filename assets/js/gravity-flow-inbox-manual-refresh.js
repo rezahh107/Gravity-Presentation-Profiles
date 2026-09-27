@@ -85,6 +85,7 @@
         if ( ! toolbar ) {
             toolbar = document.createElement( 'div' );
             toolbar.setAttribute( 'data-gpp-inbox-toolbar', '' );
+            toolbar.setAttribute( 'dir', 'rtl' );
             toolbar.setAttribute( 'role', 'group' );
             toolbar.setAttribute( 'aria-label', 'ابزارهای کارهای من' );
             var nodes = [ headers[0], control.parentNode, settings[0] ];
