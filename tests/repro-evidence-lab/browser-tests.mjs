@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-await import('./wu17-a11y005-focus-diagnostic.mjs');
+await import('./wu17-a11y005-a11y001-stage-diagnostic.mjs');
 await import('./browser-tests-core.mjs');
 await import('./wu11-ag-grid-host-contract.mjs');
 await import('./wu17-inbox-accessibility-browser-test.mjs');
@@ -28,20 +28,10 @@ await import('./diagnostics-bundle-validate.mjs');
 await import('./inbox-settings-admin-browser-tests.mjs');
 await import('./inbox-human-display-browser-tests.mjs');
 
-// GPP-RP-WU-00/01 extends the admitted WU21 browser/runtime flow only after
-// all existing regression suites have completed. Its prototype CSS is injected
-// in-browser and never mutates production assets.
 await import('./inbox-width-rtl-comparative-bootstrap.mjs');
 await import('./inbox-width-rtl-comparative-browser-tests.mjs');
 await import('./inbox-width-rtl-comparative-finalize.mjs');
-
-// Establish the one authoritative, idempotent P06 fixture before the first
-// late-runtime consumer. The later P06 qualification reuses this same state.
 await import('./p06-fixture-bootstrap.mjs');
-
-// P06 exercises deliberate lifecycle mutation for its inactive-profile negative
-// control. Keep it after the established browser regressions so the new
-// qualification cannot alter the state observed by pre-existing suites.
 if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
   await import('./p06-inbox-asset-reachability-browser-test.mjs');
 }
