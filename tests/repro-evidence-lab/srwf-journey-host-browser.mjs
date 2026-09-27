@@ -7,7 +7,6 @@ const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const operatorPassword = 'wu21-bootstrap-pass-2026';
-const participantPassword = 'srwf-participant-pass-2026';
 if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned qualification environment is incomplete.');
 
 function wpEval(code) {
@@ -20,6 +19,9 @@ const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_srwf_jou
 const formId = Number(manifest.form_id);
 const reviewId = Number(manifest.steps.review_id);
 const correctionId = Number(manifest.steps.correction_id);
+const operatorAssignee = `user_id|${Number(manifest.users.operator.id)}`;
+const negativeControlAssignee = `user_id|${Number(manifest.users.negative_control.id)}`;
+const asStringArray = value => Array.isArray(value) ? value.map(String) : value == null ? [] : [String(value)];
 
 function hostState(entryId, asUserId = manifest.users.operator.id) {
   const code = `
@@ -125,6 +127,24 @@ const context = await browser.newContext();
 const page = await context.newPage();
 await login(page, manifest.users.operator.login, operatorPassword);
 
+await test('SRWF-HOST-CORRECTION-CONFIG-001', 'host-effective Review and User Input feeds enforce the SAME operator assignment', async () => {
+  const reviewAssignees = asStringArray(manifest.steps.review_feed_meta?.assignees);
+  const correctionAssignees = asStringArray(manifest.steps.correction_feed_meta?.assignees);
+  if (reviewAssignees.length !== 1 || reviewAssignees[0] !== operatorAssignee) {
+    throw new Error(`Review is not assigned exclusively to the synthetic registration operator: ${JSON.stringify(reviewAssignees)}`);
+  }
+  if (correctionAssignees.length !== 1 || correctionAssignees[0] !== operatorAssignee || correctionAssignees.includes(negativeControlAssignee)) {
+    throw new Error(`User Input does not preserve SAME-OPERATOR assignment: ${JSON.stringify({ correctionAssignees, operatorAssignee, negativeControlAssignee })}`);
+  }
+  return {
+    operator_id: Number(manifest.users.operator.id),
+    negative_control_id: Number(manifest.users.negative_control.id),
+    review_assignees: reviewAssignees,
+    correction_assignees: correctionAssignees,
+    different_participant_assignment_would_fail: true,
+  };
+});
+
 await test('SRWF-HOST-CONFIRM-001', 'native Approval confirmation is browser-owned and cancel preserves host state', async () => {
   const entryId = manifest.entries.approve;
   const before = hostState(entryId);
@@ -169,35 +189,39 @@ await test('SRWF-HOST-RESULT-REJECT-001', 'accepted Reject produces authoritativ
   return { dialog, after, resulting_url: page.url(), native_render_truth: ['Entry Rejected','Status: Rejected'] };
 });
 
-await test('SRWF-HOST-CORRECTION-001', 'native Revert routes Review to assigned User Input', async () => {
+await test('SRWF-HOST-CORRECTION-001', 'native Revert preserves correction authority for the SAME registration operator', async () => {
   const entryId = manifest.entries.revert;
   const beforeOperator = hostState(entryId, manifest.users.operator.id);
   await page.goto(adminEntryUrl(entryId), { waitUntil: 'networkidle' });
   const dialog = await acceptAction(page, 'revert');
   const operatorAfter = hostState(entryId, manifest.users.operator.id);
-  const participantAfter = hostState(entryId, manifest.users.participant.id);
+  const negativeControlAfter = hostState(entryId, manifest.users.negative_control.id);
   if (!dialog || operatorAfter.current_step?.id !== correctionId || operatorAfter.current_step?.type !== 'user_input') throw new Error(`Revert did not reach User Input: ${JSON.stringify(operatorAfter)}`);
-  if (operatorAfter.current_step?.can_update || !participantAfter.current_step?.can_update || !participantAfter.current_step?.editable_fields?.includes('1')) throw new Error(`Native correction authorization/editability wrong: ${JSON.stringify({operatorAfter,participantAfter})}`);
-  return { before_operator: beforeOperator, dialog, operator_after: operatorAfter, participant_after: participantAfter };
+  if (!operatorAfter.current_step?.can_update || negativeControlAfter.current_step?.can_update || !operatorAfter.current_step?.editable_fields?.includes('1')) {
+    throw new Error(`Native SAME-OPERATOR correction authorization/editability wrong: ${JSON.stringify({operatorAfter,negativeControlAfter})}`);
+  }
+  return { before_operator: beforeOperator, dialog, operator_after: operatorAfter, negative_control_after: negativeControlAfter };
 });
 
-await test('SRWF-HOST-CORRECTION-002', 'User Input completion returns to Review and restores original operator eligibility', async () => {
+await test('SRWF-HOST-CORRECTION-002', 'SAME operator completes native User Input and remains eligible when Review returns', async () => {
   const entryId = manifest.entries.revert;
-  await login(page, manifest.users.participant.login, participantPassword);
+  await login(page, manifest.users.operator.login, operatorPassword);
   const userInputUrl = frontendEntryUrl(manifest.routes.shortcode, entryId);
   await page.goto(userInputUrl, { waitUntil: 'networkidle' });
   const input = page.locator('input[name="input_1"]').first();
-  if (await input.count() !== 1 || !(await input.isVisible())) throw new Error('Native User Input field unavailable.');
+  if (await input.count() !== 1 || !(await input.isVisible())) throw new Error('Native User Input field unavailable to the assigned registration operator.');
   await input.fill('SYNTHETIC-CORRECTED-VALUE');
   const submit = page.locator(`#gform_submit_button_${formId}, form[id^="gform_"] input[type="submit"], form[id^="gform_"] button[type="submit"]`).filter({ visible: true }).last();
   if (await submit.count() < 1) throw new Error('Native User Input submit unavailable.');
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), submit.click()]);
-  const participantAfter = hostState(entryId, manifest.users.participant.id);
   const operatorAfter = hostState(entryId, manifest.users.operator.id);
-  if (operatorAfter.current_step?.id !== reviewId || operatorAfter.current_step?.type !== 'approval' || !operatorAfter.current_step?.can_update || participantAfter.current_step?.can_update) throw new Error(`Return-to-Review ownership wrong: ${JSON.stringify({participantAfter,operatorAfter})}`);
+  const negativeControlAfter = hostState(entryId, manifest.users.negative_control.id);
+  if (operatorAfter.current_step?.id !== reviewId || operatorAfter.current_step?.type !== 'approval' || !operatorAfter.current_step?.can_update || negativeControlAfter.current_step?.can_update) {
+    throw new Error(`Return-to-Review SAME-OPERATOR ownership wrong: ${JSON.stringify({operatorAfter,negativeControlAfter})}`);
+  }
   const value = wpEval(`echo GFAPI::get_entry(${Number(entryId)})['1'];`);
   if (value !== 'SYNTHETIC-CORRECTED-VALUE') throw new Error(`Corrected value did not persist: ${value}`);
-  return { user_input_url: userInputUrl, resulting_url: page.url(), participant_after: participantAfter, operator_after: operatorAfter, persisted_value: value };
+  return { user_input_url: userInputUrl, resulting_url: page.url(), operator_after: operatorAfter, negative_control_after: negativeControlAfter, persisted_value: value };
 });
 
 await test('SRWF-HOST-RESULT-NEGATIVE-VALIDATOR-001', 'Approval validator alone is not a safe Technical Error truth seam', async () => {
@@ -287,7 +311,7 @@ await test('SRWF-HOST-NAV-003', 'admin Entry Detail uses stable native admin Inb
 
 await browser.close();
 const failures = results.filter(r => r.status !== 'PASS');
-const payload = { schema_version:'1.1.0', data_class:'SYNTHETIC_NON_PII', evidence_class:'PROVEN_IN_REPRODUCIBLE_SIMULATION', production_equivalence:'NOT_PROVEN', runtime:manifest.runtime, results };
+const payload = { schema_version:'1.2.0', data_class:'SYNTHETIC_NON_PII', evidence_class:'PROVEN_IN_REPRODUCIBLE_SIMULATION', production_equivalence:'NOT_PROVEN', runtime:manifest.runtime, results };
 fs.mkdirSync(artifactDir, { recursive:true });
 fs.writeFileSync(`${artifactDir}/srwf-journey-host-browser-results.json`, `${JSON.stringify(payload,null,2)}\n`);
 if (failures.length) { console.error(JSON.stringify(failures,null,2)); process.exit(1); }
