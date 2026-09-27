@@ -9,6 +9,7 @@ use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsCon
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
 use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailJourneyPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
@@ -66,6 +67,7 @@ final class Bootstrap {
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         InboxBlockCompositionBridge::register();
+        EntryDetailJourneyPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
         EntryDetailFullWidthPresentationAdapter::register();
         EntryDetailTimelineSemanticPresentation::register();

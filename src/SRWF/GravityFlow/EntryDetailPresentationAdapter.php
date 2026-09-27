@@ -54,6 +54,37 @@ final class EntryDetailPresentationAdapter {
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
+    /**
+     * Reuse the canonical, request-cached Entry Detail presentation model.
+     *
+     * Additive Entry Detail presenters may inspect this read-only projection,
+     * but Gravity Flow continues to own authorization and workflow mutation.
+     */
+    public static function resolvedPresentationModel() {
+        return self::model();
+    }
+
+    /**
+     * Return the canonical Entry Detail model only when this entry satisfies
+     * the same structural presentation-readiness contract as the dossier.
+     */
+    public static function admittedPresentationModel( $entry ) {
+        if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
+            return null;
+        }
+
+        $model = self::model();
+        if ( null === $model ) {
+            return null;
+        }
+
+        try {
+            return $model->isPresentationReady( $entry, self::structuralCapabilities( $entry ) ) ? $model : null;
+        } catch ( \Throwable $exception ) {
+            return null;
+        }
+    }
+
     public static function renderDossier( $form, $entry ) {
         RuntimeDiagnostics::recordOnce(
             self::SURFACE,
