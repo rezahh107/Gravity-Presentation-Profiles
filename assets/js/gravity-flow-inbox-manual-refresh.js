@@ -5,6 +5,25 @@
     var controlSelector = '[data-gpp-inbox-manual-refresh]';
     var label = 'به‌روزرسانی کارهای من';
     var settingsLabel = 'تنظیمات اعلان‌ها';
+    var compositions = new WeakMap();
+
+    function rollback( inbox ) {
+        var state = compositions.get( inbox );
+        if ( ! state ) { return; }
+        state.slots.forEach( function ( slot ) {
+            if ( slot.node.isConnected && slot.anchor.parentNode ) {
+                slot.anchor.parentNode.insertBefore( slot.node, slot.anchor );
+            }
+            slot.anchor.remove();
+        } );
+        state.settings.textContent = state.text;
+        [ 'title', 'aria-label' ].forEach( function ( name, index ) {
+            if ( state.attributes[index] === null ) { state.settings.removeAttribute( name ); }
+            else { state.settings.setAttribute( name, state.attributes[index] ); }
+        } );
+        if ( ! state.toolbar.firstChild ) { state.toolbar.remove(); }
+        compositions.delete( inbox );
+    }
 
     function mount( inbox ) {
         var control = inbox.querySelector( controlSelector );
@@ -49,13 +68,15 @@
             && settings[0].dataset.gridId === inbox.dataset.gridId
             && ( headers[0].parentNode === inbox || headers[0].parentNode === toolbar )
             && ( settings[0].parentNode === inbox || settings[0].parentNode === toolbar );
+        var existing = compositions.get( inbox );
+        if ( existing && ( existing.toolbar !== toolbar || existing.slots[0].node !== headers[0] || existing.settings !== settings[0] ) ) {
+            rollback( inbox );
+            toolbar = null;
+        }
         if ( ! valid ) {
             // Unknown/replaced host shape: unwrap only our composition. Never
             // remove a native node or apply a substitute action.
-            if ( toolbar ) {
-                while ( toolbar.firstChild ) { inbox.insertBefore( toolbar.firstChild, toolbar ); }
-                toolbar.remove();
-            }
+            rollback( inbox );
             return;
         }
         if ( ! toolbar ) {
@@ -63,6 +84,17 @@
             toolbar.setAttribute( 'data-gpp-inbox-toolbar', '' );
             toolbar.setAttribute( 'role', 'group' );
             toolbar.setAttribute( 'aria-label', 'ابزارهای کارهای من' );
+            var nodes = [ headers[0], control.parentNode, settings[0] ];
+            var state = {
+                toolbar: toolbar, settings: settings[0], text: settings[0].textContent,
+                attributes: [ settings[0].getAttribute( 'title' ), settings[0].getAttribute( 'aria-label' ) ],
+                slots: nodes.map( function ( node ) {
+                    var anchor = document.createComment( 'gpp-inbox-original-position' );
+                    node.parentNode.insertBefore( anchor, node );
+                    return { node: node, anchor: anchor };
+                } )
+            };
+            compositions.set( inbox, state );
             inbox.insertBefore( toolbar, inbox.firstChild );
         }
         // Idempotent original-node moves preserve delegated native events,

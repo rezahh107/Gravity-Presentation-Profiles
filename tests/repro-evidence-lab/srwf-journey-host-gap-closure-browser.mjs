@@ -1,4 +1,4 @@
-import { exerciseInboxComposition } from './inbox-composition-assertions.mjs';
+import { exerciseInboxComposition, exerciseNativeInboxActions, exerciseNativePushPreference } from './inbox-composition-assertions.mjs';
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -234,6 +234,10 @@ function setFormOptIn(enabled) {
   return wpEval(`$form=GFAPI::get_form(${formId}); $classes=preg_split('/\\s+/',trim((string)rgar($form,'cssClass')),-1,PREG_SPLIT_NO_EMPTY); $classes=array_values(array_filter($classes,static function($c){return 'srwf-registration-theme'!==$c;})); ${enabled?'$classes[]="srwf-registration-theme";':''} $form['cssClass']=implode(' ',$classes); $r=GFAPI::update_form($form); if(is_wp_error($r)||true!==$r){fwrite(STDERR,'form class update failed');exit(2);} echo $form['cssClass'];`);
 }
 
+const inboxSetup=spawnSync('php',[wpCli,`--path=${wpPath}`,'eval-file','tests/repro-evidence-lab/srwf-journey-host-inbox-setup.php'],{encoding:'utf8',env:process.env});
+if(inboxSetup.status!==0) throw new Error(inboxSetup.stderr+inboxSetup.stdout);
+for(let i=0;i<25;i++) createReviewEntry(`INBOX-COMPOSITION-${i}`);
+
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000}});
 const page=await context.newPage();
@@ -241,6 +245,8 @@ await login(page);
 
 await capture('SRWF-GAP-A-B-GEOMETRY-001','Pinned Inbox toolbar/pager geometry and cascade capture',async()=>({
   production_assertions:await exerciseInboxComposition(page,inboxUrl()),
+  native_actions:await exerciseNativeInboxActions(page,inboxUrl()),
+  native_push:await exerciseNativePushPreference(page,inboxUrl()),
   desktop:await inboxGeometry(page,{width:1440,height:1000}),
   mobile:await inboxGeometry(page,{width:390,height:844}),
 }));

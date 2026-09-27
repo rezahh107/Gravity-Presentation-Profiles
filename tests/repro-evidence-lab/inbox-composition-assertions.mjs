@@ -71,3 +71,70 @@ export async function exerciseInboxComposition(page, url) {
   await page.evaluate(()=>document.documentElement.style.fontSize='');
   return results;
 }
+
+export async function exerciseNativeInboxActions(page, url) {
+  await page.setViewportSize({width:390,height:1000});
+  await page.goto(url,{waitUntil:'networkidle'});
+  const root=page.locator('.gpp-inbox-surface [data-js="gflow-inbox"]');
+  const search=root.locator('[data-js="gflow-inbox-search"]');
+  const rows=root.locator('.ag-center-cols-container > .ag-row');
+  const before=await rows.count();
+  assert.ok(before>0,'populated native fixture required');
+  await search.fill('GPP-NO-MATCH-SYNTHETIC-TEST');
+  await search.press('End'); // Flow owns keyup search, not a GPP filter API.
+  await page.waitForFunction(()=>document.querySelectorAll('.gpp-inbox-surface .ag-center-cols-container > .ag-row').length===0);
+  assert.equal(await root.locator('.ag-paging-panel').isVisible(),false,'native single/empty page adds no noise');
+  await search.fill(''); await search.press('Backspace');
+  await page.waitForFunction(n=>document.querySelectorAll('.gpp-inbox-surface .ag-center-cols-container > .ag-row').length===n,before);
+  await assertInboxComposition(page);
+  const next=root.locator('[ref="btNext"]'),previous=root.locator('[ref="btPrevious"]'),current=root.locator('[ref="lbCurrent"]');
+  assert.equal(await next.evaluate(n=>n.classList.contains('ag-disabled')),false,'multipage fixture required');
+  const start=await current.innerText();
+  await next.focus(); await page.keyboard.press('Enter');
+  await page.waitForFunction(value=>document.querySelector('.gpp-inbox-surface [ref="lbCurrent"]').textContent!==value,start);
+  await assertInboxComposition(page);
+  await previous.focus(); await page.keyboard.press('Enter');
+  await page.waitForFunction(value=>document.querySelector('.gpp-inbox-surface [ref="lbCurrent"]').textContent===value,start);
+  await assertInboxComposition(page);
+
+  let busy=null;
+  await page.exposeFunction('gppCaptureRefreshBusy',state=>{busy=state;});
+  await page.evaluate(()=>document.addEventListener('click',e=>{
+    const n=e.target.closest('[data-gpp-inbox-manual-refresh]');
+    if(n) window.gppCaptureRefreshBusy({disabled:n.disabled,busy:n.getAttribute('aria-busy'),label:n.textContent});
+  }));
+  await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),root.locator('[data-gpp-inbox-manual-refresh]').click()]);
+  assert.deepEqual(busy,{disabled:true,busy:'true',label:'در حال به‌روزرسانی…'});
+  assert.equal(await page.evaluate(()=>performance.getEntriesByType('navigation')[0].type),'reload');
+  assert.equal(await root.locator('[data-gpp-inbox-manual-refresh]').isEnabled(),true);
+  await assertInboxComposition(page);
+  return {search:'native keyup and empty/restored rows',pager:'keyboard next/previous after rerender',refresh:busy};
+}
+
+export async function exerciseNativePushPreference(page,url) {
+  const toggleSelector='input[name="inbox-setting--push-enabled"]';
+  await page.context().grantPermissions(['notifications'],{origin:new URL(url).origin});
+  await page.goto(url,{waitUntil:'networkidle'});
+  await page.locator('[data-js="inbox-settings"]').click();
+  const toggle=page.locator(toggleSelector);
+  assert.equal(await toggle.count(),1);
+  const original=await toggle.isChecked();
+  async function change(value) {
+    const response=page.waitForResponse(r=>r.url().includes('/inbox/preferences') && r.request().method()==='PUT');
+    // Native toggle inputs are visually hidden; activate their authentic label.
+    const id=await toggle.getAttribute('id');
+    await page.locator(`label[for="${id}"]`).click();
+    const r=await response;
+    assert.ok(r.ok());
+    const payload=r.request().postDataJSON();
+    assert.equal(payload.key,'push_enabled'); assert.equal(payload.value,value);
+    await page.reload({waitUntil:'networkidle'});
+    await page.locator('[data-js="inbox-settings"]').click();
+    assert.equal(await toggle.isChecked(),value,'native persisted preference readback');
+    return payload;
+  }
+  const changed=await change(!original);
+  const restored=await change(original);
+  await page.keyboard.press('Escape');
+  return {changed,restored,permission:await page.evaluate(()=>Notification.permission)};
+}

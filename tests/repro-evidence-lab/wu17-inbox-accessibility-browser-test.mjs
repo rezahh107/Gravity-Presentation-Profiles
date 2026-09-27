@@ -1,4 +1,4 @@
-import { exerciseInboxComposition } from './inbox-composition-assertions.mjs';
+import { exerciseInboxComposition, exerciseNativeInboxActions, exerciseNativePushPreference } from './inbox-composition-assertions.mjs';
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -151,9 +151,11 @@ try {
     }
 
     const composition = await exerciseInboxComposition(page, manifest.frontend_inbox_url);
+    const actions = await exerciseNativeInboxActions(page,manifest.frontend_inbox_url);
+    const push = await exerciseNativePushPreference(page,manifest.frontend_inbox_url);
     await page.setViewportSize({width:1440,height:1000});
     await page.goto(manifest.frontend_inbox_url,{waitUntil:'networkidle'});
-    return { composition, search_name_source: searchAria ? 'aria-label' : (searchTitle ? 'title' : 'placeholder'), controls };
+    return { composition, actions, push, search_name_source: searchAria ? 'aria-label' : (searchTitle ? 'title' : 'placeholder'), controls };
   });
 
   await test('WU17-A11Y-002', 'search keyboard input and focus indicator remain native and visible', async () => {
