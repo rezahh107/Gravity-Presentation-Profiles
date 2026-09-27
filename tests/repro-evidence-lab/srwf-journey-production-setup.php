@@ -62,7 +62,7 @@ foreach ( $manifest['entries'] as $label => $entry_id ) {
     foreach ( array(
         $identity_fields['first_name'] => 'Journey',
         $identity_fields['last_name'] => ucfirst( str_replace( '_', ' ', (string) $label ) ),
-        $identity_fields['national_id'] => 'JRN-' . $suffix . '-' . $entry_id,
+        $identity_fields['national_id'] => 'JRN-PROD-' . $suffix . '-' . $entry_id,
     ) as $field_id => $value ) {
         $updated = GFAPI::update_entry_field( $entry_id, (string) $field_id, $value );
         if ( is_wp_error( $updated ) || false === $updated ) {
