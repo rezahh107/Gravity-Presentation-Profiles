@@ -113,15 +113,31 @@ jobs:
           grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
           grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
 
+      - name: Install exact GTB Registration qualification dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          gtb_sha='b594d7a87fc904e86dedac5cfd3bd1aa3eb33d15'
+          rm -rf /tmp/gravity-theme-builder
+          git init -q /tmp/gravity-theme-builder
+          git -C /tmp/gravity-theme-builder remote add origin https://github.com/rezahh107/Gravity-Theme-Builder.git
+          git -C /tmp/gravity-theme-builder fetch -q --depth=1 origin "$gtb_sha"
+          git -C /tmp/gravity-theme-builder checkout -q --detach FETCH_HEAD
+          test "$(git -C /tmp/gravity-theme-builder rev-parse HEAD)" = "$gtb_sha"
+          mkdir -p "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme"
+          cp -a /tmp/gravity-theme-builder/themes/srwf-registration/src/. "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/"
+          grep -q '^ \* Version: 0\.1\.19$' "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/srwf-registration-theme.php"
+
       - name: Activate exact host packages
         shell: bash
         run: |
           set -euo pipefail
           ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
-          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles srwf-registration-theme --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" plugin status gravityforms --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" plugin status gravityflow --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" plugin status gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin status srwf-registration-theme --path="$WU21_WP_PATH"
 
       - name: Execute source and settings discovery probe
         shell: bash
@@ -129,6 +145,8 @@ jobs:
           set -euo pipefail
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/srwf-journey-host-source-probe.php
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-host-source-probe.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/srwf-journey-host-gap-source-probe.php
+          test -s "$WU21_ARTIFACT_DIR/srwf-journey-host-gap-source-probe.json"
 
       - name: Falsify historical split-assignee correction topology
         shell: bash
@@ -196,6 +214,13 @@ jobs:
           node tests/repro-evidence-lab/srwf-journey-production-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==13||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
+
+          # Gap-closure probes are evidence capture, not product-success assertions.
+          # They may document a negative capability finding while the harness stays
+          # green; only an inability to execute/capture the requested boundary fails.
+          node tests/repro-evidence-lab/srwf-journey-host-gap-closure-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/srwf-journey-host-gap-closure-browser.json"
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-host-gap-closure-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==9||j.results.some(x=>x.status!=="CAPTURED")) process.exit(1);'
 
           # Execute the exact-head negative controls only after the canonical
           # production journey scenarios, because split-assignee setup adds
