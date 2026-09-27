@@ -387,7 +387,7 @@ final class EntryDetailJourneyPresentationAdapter {
             if ( ! is_string( $token ) || '' === $token ) {
                 continue;
             }
-            if ( '<' === $token[0] && ( 0 === strpos( $token, '<!--' ) || 0 === strpos( $token, '<![CDATA[' ) ) ) ) {
+            if ( '<' === $token[0] && ( 0 === strpos( $token, '<!--' ) || 0 === strpos( $token, '<![CDATA[' ) ) ) {
                 continue;
             }
             $count = preg_match_all( '/' . $pattern . '/s', $token, $matches, PREG_SET_ORDER );
