@@ -19,25 +19,17 @@ function bounded(value, max = 5000) {
   const text = String(value ?? '');
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
-
 function wpControl(action) {
   const env = { ...process.env, WU21_CONTROL: action };
-  const cp = spawnSync(
-    'php',
-    [wpCli, `--path=${wpPath}`, 'eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/runtime-control.php')],
-    { env, encoding: 'utf8' },
-  );
+  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/runtime-control.php')], { env, encoding: 'utf8' });
   if (cp.status !== 0) throw new Error(`WP control ${action} failed: ${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
-
 function initiatorUrls(initiator) {
   const frames = [];
   let stack = initiator?.stack || null;
   while (stack) {
-    for (const frame of stack.callFrames || []) {
-      if (frame?.url) frames.push(frame.url);
-    }
+    for (const frame of stack.callFrames || []) if (frame?.url) frames.push(frame.url);
     stack = stack.parent || null;
   }
   return frames;
@@ -56,10 +48,7 @@ try {
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
   await page.fill('#user_login', 'bootstrap_admin');
   await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.click('#wp-submit'),
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 
   await page.goto(`${baseUrl}/wp-admin/`, { waitUntil: 'networkidle' });
   if (await page.locator(controlSelector).count() !== 0) throw new Error('Manual Inbox refresh leaked onto an unrelated admin page.');
@@ -74,24 +63,32 @@ try {
   if ((await control.textContent())?.trim() !== label) throw new Error('Owner-locked Persian label mismatch.');
   if ((await control.getAttribute('type')) !== 'button') throw new Error('Manual refresh control is not a non-submit button.');
   if ((await control.getAttribute('aria-label')) !== label) throw new Error('Manual refresh accessible name mismatch.');
+  const hostParent = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(element => element.parentElement?.className || null);
+  const refreshInsideHost = await page.locator('.gflow-inbox.gflow-grid.gflow-common [data-gpp-inbox-manual-refresh]').count();
+  if (refreshInsideHost !== 0) throw new Error('Manual refresh was mounted inside the host-owned Inbox subtree.');
+
+  // Prove the pageshow recovery handler independently of a real navigation: a
+  // bfcache restoration must not preserve a stale busy/disabled state.
+  await control.evaluate(button => {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'در حال به‌روزرسانی…';
+    window.dispatchEvent(new Event('pageshow'));
+  });
+  if (await control.isDisabled()) throw new Error('pageshow did not recover the manual refresh disabled state.');
+  if (await control.getAttribute('aria-busy')) throw new Error('pageshow did not clear the manual refresh busy state.');
+  if ((await control.textContent())?.trim() !== label) throw new Error('pageshow did not restore the idle Persian label.');
+  if (await page.locator(controlSelector).count() !== 1) throw new Error('pageshow recovery duplicated the manual refresh control.');
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Network.enable');
   cdp.on('Network.requestWillBeSent', event => {
-    network.push({
-      url: event.request.url,
-      type: event.type,
-      initiator_type: event.initiator?.type || null,
-      initiator_urls: initiatorUrls(event.initiator),
-    });
+    network.push({ url: event.request.url, type: event.type, initiator_type: event.initiator?.type || null, initiator_urls: initiatorUrls(event.initiator) });
   });
 
   network.length = 0;
   const beforeUrl = page.url();
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
-    control.click(),
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }), control.click()]);
   await page.waitForLoadState('networkidle');
   await page.waitForSelector(gridSelector, { timeout: 30000 });
 
@@ -100,24 +97,20 @@ try {
   if (navigationType !== 'reload') throw new Error(`Expected browser reload navigation, observed ${navigationType}`);
   const documentReloads = network.filter(item => item.type === 'Document' && item.url.startsWith(inboxUrl));
   if (documentReloads.length < 1) throw new Error('No top-level native Inbox document reload request was observed.');
-
-  const gppScriptRequests = network.filter(item =>
-    item.type !== 'Document' && item.initiator_urls.some(url => url.includes('/assets/js/gravity-flow-inbox-manual-refresh.js')),
-  );
-  if (gppScriptRequests.length !== 0) {
-    throw new Error(`Manual refresh script initiated non-document network requests: ${JSON.stringify(gppScriptRequests)}`);
-  }
+  const gppScriptRequests = network.filter(item => item.type !== 'Document' && item.initiator_urls.some(url => url.includes('/assets/js/gravity-flow-inbox-manual-refresh.js')));
+  if (gppScriptRequests.length !== 0) throw new Error(`Manual refresh script initiated non-document network requests: ${JSON.stringify(gppScriptRequests)}`);
 
   const wrappersAfterClick = await page.locator('.gflow-inbox.gflow-grid.gflow-common').count();
   const gridsAfterClick = await page.locator(gridSelector).count();
-  const cardsAfterClick = await page.locator('.gpp-inbox-card').count();
+  const cardModeAfterClick = await page.locator('.gpp-inbox-card, [col-id="gpp_case_card"]').count();
   const rowsAfterClick = await page.locator(centerRowsSelector).count();
-  if (wrappersAfterClick !== 1 || gridsAfterClick !== 1) throw new Error(`Native Inbox was not reconstructed exactly once after reload: wrapper=${wrappersAfterClick}, grid=${gridsAfterClick}`);
-  if (rowsAfterClick < 1 || cardsAfterClick !== rowsAfterClick) throw new Error(`GPP presentation did not reconstruct normally after reload: rows=${rowsAfterClick}, cards=${cardsAfterClick}`);
+  const controlsAfterClick = await page.locator(controlSelector).count();
+  if (wrappersAfterClick !== 1 || gridsAfterClick !== 1 || controlsAfterClick !== 1) throw new Error(`Native Inbox/manual utility was not reconstructed exactly once: wrapper=${wrappersAfterClick}, grid=${gridsAfterClick}, refresh=${controlsAfterClick}`);
+  if (rowsAfterClick < 1 || cardModeAfterClick !== 0) throw new Error(`Native-first presentation failed after reload: rows=${rowsAfterClick}, card_mode_nodes=${cardModeAfterClick}`);
 
   const search = page.locator('[data-js="gflow-inbox-search"]');
-  await search.click();
-  await search.pressSequentially('WU21 Refresh Student');
+  await search.fill('WU21 Refresh Student');
+  await search.dispatchEvent('keyup');
   await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 15000 });
   const dynamicId = Number(wpControl('add'));
   try {
@@ -128,23 +121,20 @@ try {
     wpControl('remove');
   }
   await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 45000 });
+  if (await page.locator(controlSelector).count() !== 1) throw new Error('Host Live Refresh duplicated the GPP manual refresh utility.');
 
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardControl = page.getByRole('button', { name: label, exact: true });
   await keyboardControl.focus();
-  if (!(await keyboardControl.evaluate(element => element === document.activeElement))) throw new Error('Manual refresh control could not receive keyboard focus.');
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
-    page.keyboard.press('Enter'),
-  ]);
+  const focusStyle = await keyboardControl.evaluate(element => ({ active: element === document.activeElement, outlineStyle: getComputedStyle(element).outlineStyle, outlineWidth: getComputedStyle(element).outlineWidth }));
+  if (!focusStyle.active || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0) throw new Error(`Manual refresh focus is not visible: ${JSON.stringify(focusStyle)}`);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }), page.keyboard.press('Enter')]);
   await page.waitForLoadState('networkidle');
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardNavigationType = await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type || null);
   if (keyboardNavigationType !== 'reload') throw new Error(`Keyboard activation did not perform a document reload: ${keyboardNavigationType}`);
-  if (await page.locator('.gflow-inbox.gflow-grid.gflow-common').count() !== 1 || await page.locator(gridSelector).count() !== 1) {
-    throw new Error('Keyboard reload did not reconstruct exactly one native Inbox/grid.');
-  }
+  if (await page.locator('.gflow-inbox.gflow-grid.gflow-common').count() !== 1 || await page.locator(gridSelector).count() !== 1 || await page.locator(controlSelector).count() !== 1) throw new Error('Keyboard reload did not reconstruct exactly one native Inbox/grid/refresh utility.');
 
   const hostInboxChanges = network.filter(item => item.url.includes('/wp-json/gravityflow/internal/inbox/changes'));
   const privateApiNames = network.filter(item => item.initiator_urls.some(url => /gravity-flow-inbox-manual-refresh\.js/.test(url)) && /inbox\/changes|admin-ajax|wp-json/.test(item.url));
@@ -152,32 +142,20 @@ try {
 
   result = {
     id: 'WU21-BROWSER-007',
-    name: 'manual Inbox refresh performs only a native top-level reload and preserves host Live Refresh',
+    name: 'manual Inbox refresh performs one native document reload, pageshow recovery and no host-node ownership',
     status: 'PASS',
     details: {
-      label,
-      route: inboxUrl,
-      click_navigation_type: navigationType,
-      keyboard_navigation_type: keyboardNavigationType,
-      native_wrappers_after_click: wrappersAfterClick,
-      native_grids_after_click: gridsAfterClick,
-      reconstructed_rows: rowsAfterClick,
-      reconstructed_cards: cardsAfterClick,
-      post_reload_live_refresh_entry_id: dynamicId,
-      direct_non_document_requests_from_gpp_control: gppScriptRequests.length,
-      direct_private_refresh_requests_from_gpp_control: privateApiNames.length,
-      host_owned_inbox_changes_observed_after_reload: hostInboxChanges.length,
-      unrelated_admin_control_count: 0,
-      unrelated_frontend_control_count: 0,
+      label, route: inboxUrl, click_navigation_type: navigationType, keyboard_navigation_type: keyboardNavigationType,
+      native_wrappers_after_click: wrappersAfterClick, native_grids_after_click: gridsAfterClick, reconstructed_rows: rowsAfterClick,
+      card_mode_nodes_after_click: cardModeAfterClick, refresh_controls_after_click: controlsAfterClick,
+      refresh_inside_native_host: refreshInsideHost, native_host_parent_class: hostParent, pageshow_recovery: true,
+      post_reload_live_refresh_entry_id: dynamicId, direct_non_document_requests_from_gpp_control: gppScriptRequests.length,
+      direct_private_refresh_requests_from_gpp_control: privateApiNames.length, host_owned_inbox_changes_observed_after_reload: hostInboxChanges.length,
+      unrelated_admin_control_count: 0, unrelated_frontend_control_count: 0, keyboard_focus: focusStyle,
     },
   };
 } catch (error) {
-  result = {
-    id: 'WU21-BROWSER-007',
-    name: 'manual Inbox refresh performs only a native top-level reload and preserves host Live Refresh',
-    status: 'FAIL',
-    details: { error: bounded(error?.stack || error) },
-  };
+  result = { id: 'WU21-BROWSER-007', name: 'manual Inbox refresh performs one native document reload, pageshow recovery and no host-node ownership', status: 'FAIL', details: { error: bounded(error?.stack || error) } };
 } finally {
   await browser.close();
 }
