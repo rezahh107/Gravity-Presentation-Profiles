@@ -132,6 +132,193 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     return array( 'members' => $members, 'error' => null );
 }
 
+/**
+ * Split one selector member into top-level compounds and combinators. This is
+ * intentionally bounded: nested attribute/pseudo-function syntax is preserved
+ * inside its compound, while unsupported/unbalanced syntax fails closed.
+ */
+function gpp_inbox_split_selector_compounds( $selector ) {
+    $compounds = array();
+    $combinators = array();
+    $current = '';
+    $quote = null;
+    $escaped = false;
+    $paren = 0;
+    $bracket = 0;
+    $pending_descendant = false;
+    $length = strlen( $selector );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $selector[ $i ];
+        if ( null !== $quote ) {
+            $current .= $char;
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            $current .= $char;
+            continue;
+        }
+        if ( '(' === $char ) {
+            ++$paren;
+            $current .= $char;
+            continue;
+        }
+        if ( ')' === $char ) {
+            --$paren;
+            if ( $paren < 0 ) {
+                return array( 'compounds' => array(), 'combinators' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+            }
+            $current .= $char;
+            continue;
+        }
+        if ( '[' === $char ) {
+            ++$bracket;
+            $current .= $char;
+            continue;
+        }
+        if ( ']' === $char ) {
+            --$bracket;
+            if ( $bracket < 0 ) {
+                return array( 'compounds' => array(), 'combinators' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+            }
+            $current .= $char;
+            continue;
+        }
+
+        if ( 0 === $paren && 0 === $bracket && ctype_space( $char ) ) {
+            if ( '' !== trim( $current ) ) {
+                $compounds[] = trim( $current );
+                $current = '';
+                $pending_descendant = true;
+            }
+            continue;
+        }
+
+        if ( 0 === $paren && 0 === $bracket && false !== strpos( '>+~', $char ) ) {
+            if ( '' !== trim( $current ) ) {
+                $compounds[] = trim( $current );
+                $current = '';
+            }
+            if ( empty( $compounds ) || count( $combinators ) >= count( $compounds ) ) {
+                return array( 'compounds' => array(), 'combinators' => array(), 'error' => 'Unclassifiable selector combinator syntax.' );
+            }
+            $combinators[] = $char;
+            $pending_descendant = false;
+            continue;
+        }
+
+        if ( $pending_descendant ) {
+            if ( count( $combinators ) < count( $compounds ) ) {
+                $combinators[] = ' ';
+            }
+            $pending_descendant = false;
+        }
+        $current .= $char;
+    }
+
+    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
+        return array( 'compounds' => array(), 'combinators' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+    }
+    if ( '' !== trim( $current ) ) {
+        $compounds[] = trim( $current );
+    }
+    if ( empty( $compounds ) || count( $combinators ) !== count( $compounds ) - 1 ) {
+        return array( 'compounds' => array(), 'combinators' => array(), 'error' => 'Unclassifiable selector compound/combinator sequence.' );
+    }
+
+    return array( 'compounds' => $compounds, 'combinators' => $combinators, 'error' => null );
+}
+
+/** Extract top-level class tokens from one bounded selector compound. */
+function gpp_inbox_compound_class_tokens( $compound ) {
+    $classes = array();
+    $quote = null;
+    $escaped = false;
+    $paren = 0;
+    $bracket = 0;
+    $length = strlen( $compound );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $compound[ $i ];
+        if ( null !== $quote ) {
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            continue;
+        }
+        if ( '(' === $char ) {
+            ++$paren;
+            continue;
+        }
+        if ( ')' === $char ) {
+            --$paren;
+            if ( $paren < 0 ) {
+                return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+            }
+            continue;
+        }
+        if ( '[' === $char ) {
+            ++$bracket;
+            continue;
+        }
+        if ( ']' === $char ) {
+            --$bracket;
+            if ( $bracket < 0 ) {
+                return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+            }
+            continue;
+        }
+        if ( 0 !== $paren || 0 !== $bracket ) {
+            foreach ( array( '.gflow-inbox', '.gflow-grid', '.gflow-common' ) as $native_token ) {
+                if ( 0 === substr_compare( $compound, $native_token, $i, strlen( $native_token ) ) ) {
+                    return array( 'classes' => array(), 'error' => 'Native Inbox root class appears in unsupported nested selector syntax.' );
+                }
+            }
+            continue;
+        }
+        if ( '\\' === $char ) {
+            return array( 'classes' => array(), 'error' => 'Escaped selector syntax is outside the bounded native-root classifier.' );
+        }
+        if ( '.' !== $char ) {
+            continue;
+        }
+
+        $start = $i + 1;
+        $end = $start;
+        while ( $end < $length && 1 === preg_match( '/[a-z0-9_-]/i', $compound[ $end ] ) ) {
+            ++$end;
+        }
+        if ( $end === $start ) {
+            return array( 'classes' => array(), 'error' => 'Unclassifiable class selector syntax.' );
+        }
+        $classes[] = substr( $compound, $start, $end - $start );
+        $i = $end - 1;
+    }
+
+    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
+        return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+    }
+
+    return array( 'classes' => $classes, 'error' => null );
+}
+
 /** Parse the bounded declaration grammar used by the current Inbox CSS. */
 function gpp_inbox_parse_native_declarations( $body ) {
     $pattern = '/(?:^|;)\s*((?:--[a-z0-9_-]+)|(?:[a-z-]+))\s*:\s*([^;{}]+)(?=;|$)/i';
@@ -154,17 +341,81 @@ function gpp_inbox_parse_native_declarations( $body ) {
     return array( 'declarations' => $declarations, 'error' => null );
 }
 
-/** Native host selectors begin at Gravity Flow's authoritative Inbox root. */
-function gpp_inbox_is_native_root_selector( $selector ) {
-    return 1 === preg_match(
-        '/^\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/',
-        trim( $selector )
-    );
+/** Return true when one compound semantically contains the authoritative root class set. */
+function gpp_inbox_compound_is_native_root( $classes ) {
+    foreach ( array( 'gflow-inbox', 'gflow-grid', 'gflow-common' ) as $required ) {
+        if ( ! in_array( $required, $classes, true ) ) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
-/** The only ancestor-qualified native-root selector admitted is the GPP host shell. */
-function gpp_inbox_is_admitted_host_shell_selector( $selector ) {
-    return '.gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common' === trim( $selector );
+/** The host-shell exception is frozen semantically, with native class order irrelevant. */
+function gpp_inbox_is_admitted_host_shell_classification( $parsed, $root_index ) {
+    if (
+        1 !== $root_index
+        || 2 !== count( $parsed['compounds'] )
+        || 1 !== count( $parsed['combinators'] )
+        || ' ' !== $parsed['combinators'][0]
+        || '.gpp-inbox-surface' !== $parsed['compounds'][0]
+        || 1 !== preg_match( '/^(?:\.[a-z0-9_-]+)+$/i', $parsed['compounds'][1] )
+    ) {
+        return false;
+    }
+
+    $classes = gpp_inbox_compound_class_tokens( $parsed['compounds'][1] );
+    if ( null !== $classes['error'] ) {
+        return false;
+    }
+    $actual = array_values( array_unique( $classes['classes'] ) );
+    $expected = array( 'gflow-inbox', 'gflow-grid', 'gflow-common' );
+    sort( $actual );
+    sort( $expected );
+
+    return $actual === $expected;
+}
+
+/**
+ * Authoritative bounded semantic classifier for one selector-list member.
+ * Every member flows through this path; there is no parallel lexical native-root
+ * candidate counter. The native root is the compound containing the complete
+ * required class set, regardless of class-token order.
+ */
+function gpp_inbox_classify_native_selector_member( $selector ) {
+    $parsed = gpp_inbox_split_selector_compounds( trim( $selector ) );
+    if ( null !== $parsed['error'] ) {
+        return array( 'kind' => 'error', 'error' => $parsed['error'] );
+    }
+
+    $root_indexes = array();
+    foreach ( $parsed['compounds'] as $index => $compound ) {
+        $classes = gpp_inbox_compound_class_tokens( $compound );
+        if ( null !== $classes['error'] ) {
+            return array( 'kind' => 'error', 'error' => $classes['error'] );
+        }
+        if ( gpp_inbox_compound_is_native_root( $classes['classes'] ) ) {
+            $root_indexes[] = $index;
+        }
+    }
+
+    if ( empty( $root_indexes ) ) {
+        return array( 'kind' => 'none', 'error' => null );
+    }
+    if ( 1 !== count( $root_indexes ) ) {
+        return array( 'kind' => 'error', 'error' => 'Ambiguous selector contains more than one native Inbox root compound.' );
+    }
+
+    $root_index = $root_indexes[0];
+    if ( 0 === $root_index ) {
+        return array( 'kind' => 'native-root', 'error' => null );
+    }
+    if ( gpp_inbox_is_admitted_host_shell_classification( $parsed, $root_index ) ) {
+        return array( 'kind' => 'host-shell', 'error' => null );
+    }
+
+    return array( 'kind' => 'ancestor', 'error' => null );
 }
 
 /** Positive Phase-B property contract for the authentic native Inbox subtree. */
@@ -231,9 +482,9 @@ function gpp_inbox_host_shell_declaration_errors( $declarations ) {
 }
 
 /**
- * Enforce the positive paint/typography contract on every selector-list member
- * that targets the authentic native root/subtree. Unknown ancestor-qualified
- * native selectors and unclassifiable syntax fail closed.
+ * Enforce the positive paint/typography contract on every selector-list member.
+ * The same semantic classifier both discovers native-root targets and proves
+ * coverage, so class-order permutations cannot bypass a parallel lexical count.
  */
 function gpp_inbox_native_paint_contract_errors( $css ) {
     $normalized = gpp_inbox_normalize_css_comments( $css );
@@ -246,42 +497,59 @@ function gpp_inbox_native_paint_contract_errors( $css ) {
     preg_match_all( '/([^{}]+)\{([^{}]*)\}/m', $css, $rules, PREG_SET_ORDER );
 
     $errors = array();
-    $classified_target_members = 0;
+    $native_target_members = 0;
     foreach ( $rules as $rule ) {
         $selector_text = trim( $rule[1] );
         $selectors = gpp_inbox_split_selector_list( $selector_text );
         if ( null !== $selectors['error'] ) {
-            if ( false !== strpos( $selector_text, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
-                $errors[] = $selectors['error'] . ' Selector: ' . $selector_text;
-            }
+            $errors[] = $selectors['error'] . ' Selector: ' . $selector_text;
             continue;
         }
 
         $target_members = array();
         foreach ( $selectors['members'] as $member ) {
-            if ( false !== strpos( $member, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
-                $target_members[] = $member;
+            $classification = gpp_inbox_classify_native_selector_member( $member );
+            if ( 'error' === $classification['kind'] ) {
+                $errors[] = $classification['error'] . ' Selector: ' . $member;
+                continue;
             }
+            if ( 'none' === $classification['kind'] ) {
+                continue;
+            }
+
+            ++$native_target_members;
+            $target_members[] = array(
+                'selector' => $member,
+                'kind'     => $classification['kind'],
+            );
         }
         if ( empty( $target_members ) ) {
             continue;
         }
-        $classified_target_members += count( $target_members );
 
         $declarations = gpp_inbox_parse_native_declarations( $rule[2] );
         if ( null !== $declarations['error'] ) {
-            $errors[] = $declarations['error'] . ' Selector: ' . implode( ', ', $target_members );
+            $errors[] = $declarations['error'] . ' Selector: ' . implode(
+                ', ',
+                array_map(
+                    function ( $target ) {
+                        return $target['selector'];
+                    },
+                    $target_members
+                )
+            );
             continue;
         }
 
-        foreach ( $target_members as $member ) {
-            if ( gpp_inbox_is_admitted_host_shell_selector( $member ) ) {
+        foreach ( $target_members as $target ) {
+            $member = $target['selector'];
+            if ( 'host-shell' === $target['kind'] ) {
                 foreach ( gpp_inbox_host_shell_declaration_errors( $declarations['declarations'] ) as $error ) {
                     $errors[] = $error . ' Selector: ' . $member;
                 }
                 continue;
             }
-            if ( ! gpp_inbox_is_native_root_selector( $member ) ) {
+            if ( 'ancestor' === $target['kind'] ) {
                 $errors[] = 'Unadmitted ancestor-qualified selector targets the native Inbox subtree: ' . $member;
                 continue;
             }
@@ -294,13 +562,8 @@ function gpp_inbox_native_paint_contract_errors( $css ) {
         }
     }
 
-    $candidate_matches = array();
-    preg_match_all( '/\.gflow-inbox\.gflow-grid\.gflow-common/', $css, $candidate_matches );
-    $candidate_count = count( $candidate_matches[0] );
-    if ( 0 === $candidate_count ) {
+    if ( 0 === $native_target_members ) {
         $errors[] = 'No native Inbox selector was found for paint-contract validation.';
-    } elseif ( $candidate_count !== $classified_target_members ) {
-        $errors[] = 'Native Inbox selector syntax could not be classified deterministically.';
     }
 
     return $errors;
@@ -442,8 +705,23 @@ gpp_inbox_assert_rejected_with_property(
     'width'
 );
 gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_REORDERED_WIDTH_REJECT',
+    '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }',
+    'width'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT',
+    '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }',
+    'width'
+);
+gpp_inbox_assert_rejected_with_property(
     'PRI_FND_001_GROUPED_NONFIRST_WIDTH_REJECT',
     '.decoy-selector, .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }',
+    'width'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_REORDERED_GROUPED_NONFIRST_WIDTH_REJECT',
+    '.decoy-selector, .gflow-common.gflow-inbox.gflow-grid .ag-row { width: 10px; }',
     'width'
 );
 gpp_inbox_assert_rejected_with_property(
@@ -464,8 +742,37 @@ gpp_inbox_assert_rejected_with_property(
     '--gpp-inbox-geometry'
 );
 
+$reordered_paint_errors = gpp_inbox_native_paint_contract_errors(
+    '.gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }'
+);
+gpp_assert_same(
+    array(),
+    $reordered_paint_errors,
+    'Reordered authentic native Inbox root with admitted paint unexpectedly failed: ' . implode( ' | ', $reordered_paint_errors )
+);
+echo "PRI_FND_001_REORDERED_ADMITTED_PAINT_PASS\n";
+
+$incomplete_root = gpp_inbox_classify_native_selector_member(
+    '.gflow-grid.gflow-inbox .ag-row'
+);
+gpp_assert_same(
+    'none',
+    $incomplete_root['kind'],
+    'Incomplete native Inbox class set was accidentally classified as the authentic root.'
+);
+echo "PRI_FND_001_INCOMPLETE_ROOT_NOT_CLASSIFIED_PASS\n";
+
+$nested_root_errors = gpp_inbox_native_paint_contract_errors(
+    ':is(.gflow-grid.gflow-inbox.gflow-common) .ag-row { width: 10px; }'
+);
+gpp_assert_true(
+    false !== strpos( implode( "\n", $nested_root_errors ), 'unsupported nested selector syntax' ),
+    'Unsupported nested native-root selector syntax must fail closed.'
+);
+echo "PRI_FND_001_NESTED_NATIVE_ROOT_SYNTAX_REJECT_PASS\n";
+
 $ancestor_errors = gpp_inbox_native_paint_contract_errors(
-    '.unexpected-wrapper .gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; }'
+    '.unexpected-wrapper .gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }'
 );
 gpp_assert_true(
     false !== strpos( implode( "\n", $ancestor_errors ), 'Unadmitted ancestor-qualified selector' ),
