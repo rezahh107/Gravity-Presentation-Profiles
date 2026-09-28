@@ -30,6 +30,18 @@ Before browser execution, the lab performs an HTTP negative-control probe agains
 
 A mechanic receives `PROVEN_IN_REPRODUCIBLE_SIMULATION` only when every test listed as required for that mechanic is `PASS`. A failed or missing required test leaves the mechanic `NOT_PROVEN`. The content-addressed evidence validator rejects any failed/not-run required test, any package/runtime identity mismatch, any digest mismatch, or any attempt to upgrade production equivalence.
 
+## Raw Native Inbox baseline capture
+
+The existing WU21 integrated visual/runtime host also performs the Owner-approved paired Inbox baseline capture automatically from `tests/visual-regression/inbox-visual-diagnostics.mjs`. Once the same pinned WU21 host has been established, the capture can also be invoked directly with `node tests/repro-evidence-lab/native-inbox-baseline-capture.mjs`.
+
+`RAW_NATIVE` means the authentic Gravity Flow Inbox on the synthetic fixture with only GPP Inbox presentation callbacks detached for that one WU21 evidence request. The detachment is implemented only by the test MU-plugin and does not disable or replace Gravity Flow/AG Grid behavior, query/state, native controls, navigation or Live Refresh. `NATIVE_FIRST_GPP` is the matching ordinary request through the current GPP Native-First presentation. The paired captures use the same route, runtime, host fixture and synthetic data.
+
+Every run captures four required scenarios: desktop at 1440 CSS px, mobile at 390 CSS px, narrow mobile at 320 CSS px, and genuine Chromium tab zoom at 200%. The 200% case reuses the qualified Matrix-J mechanism (`chrome.tabs.setZoom` with `chrome.tabs.getZoom` verification plus effective CSS viewport contraction); CSS zoom, root-font scaling, device-scale substitution and screenshot scaling are not accepted as 200% evidence.
+
+Machine-readable evidence and screenshots are emitted under `visual-regression-diagnostics/native-inbox-baseline/`. Scenario filenames distinguish `RAW_NATIVE` from `NATIVE_FIRST_GPP`, and `manifest.json` indexes the four paired scenarios. Because this directory is inside the existing WU21 visual diagnostics tree, its JSON and PNG files are included by the existing recursive content-addressed evidence manifest.
+
+The baseline sub-artifact may report **`PROVEN_IN_REPRODUCIBLE_RUNTIME`** for what actually executed in that pinned runtime. It does not establish target-production equivalence, Owner-site visual acceptance, runtime Golden approval or `APPROVED_VISUAL_CONTRACT` activation; those remain explicitly `NOT_PROVEN`/`NOT_ACTIVATED` in the capture evidence.
+
 ## Downstream consumption
 
 A downstream WU may cite the immutable WU21 evidence artifact for the portable mechanics whose required tests passed, but only with the evidence class `PROVEN_IN_REPRODUCIBLE_SIMULATION`. It must independently obtain target evidence before claiming exact production plugin versions, licenses/configuration, Form/Field/Step/Page/route IDs, or cache/CDN/theme/server facts. Those production-specific facts remain `UNBOUND` or `NOT_PROVEN` here.

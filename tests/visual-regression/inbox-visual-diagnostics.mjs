@@ -139,3 +139,8 @@ fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null,
 
 if (failure) throw new Error(`NATIVE_FIRST_DIAGNOSTIC_FAILURE: ${failure}`);
 console.log(`NATIVE_FIRST_STRUCTURAL_DIAGNOSTIC_PASS scenarios=${scenarios.length}`);
+
+// Extend the same pinned WU21 visual/runtime host with the Owner-approved raw
+// native baseline. The imported capture writes only beneath the existing
+// diagnostics evidence tree and does not change the current visual contract.
+await import('../repro-evidence-lab/native-inbox-baseline-capture.mjs');
