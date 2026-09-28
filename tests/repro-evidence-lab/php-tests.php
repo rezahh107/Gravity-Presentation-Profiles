@@ -64,7 +64,7 @@ wu21_test( 'WU21-PHP-001', 'exact runtime plugin versions', function () {
     return array( 'gravity_forms' => $gf['Version'], 'gravity_flow' => $flow['Version'] );
 } );
 
-wu21_test( 'WU21-PHP-002', 'source-backed native Inbox and frontend shortcode seams exist in exact Gravity Flow 3.1.0 package', function () use ( $flow_source ) {
+wu21_test( 'WU21-PHP-002', 'source-backed native Inbox ownership seams exist in exact Gravity Flow 3.1.0 package', function () use ( $flow_source ) {
     $task = file_get_contents( $flow_source . '/includes/inbox/models/class-task.php' );
     $api = file_get_contents( $flow_source . '/includes/class-api.php' );
     $page = file_get_contents( $flow_source . '/includes/pages/class-inbox.php' );
@@ -72,13 +72,13 @@ wu21_test( 'WU21-PHP-002', 'source-backed native Inbox and frontend shortcode se
     $gravity_flow = file_get_contents( $flow_source . '/class-gravity-flow.php' );
     $js = '';
     foreach ( glob( $flow_source . '/assets/js/dist/common-inbox.*.js' ) as $bundle ) $js .= file_get_contents( $bundle );
-    foreach ( array( 'gravityflow_columns_inbox_table', 'gravityflow_inbox_field_value' ) as $needle ) wu21_assert( false !== strpos( $task, $needle ), 'Missing task seam: ' . $needle );
-    foreach ( array( 'get_inbox_entries', 'get_inbox_search_criteria', 'get_inbox_paging', 'get_inbox_sorting', 'get_current_step' ) as $needle ) wu21_assert( false !== strpos( $api, $needle ), 'Missing API seam: ' . $needle );
+    foreach ( array( 'gravityflow_columns_inbox_table', 'gravityflow_inbox_field_value' ) as $needle ) wu21_assert( false !== strpos( $task, $needle ), 'Missing host task seam: ' . $needle );
+    foreach ( array( 'get_inbox_entries', 'get_inbox_search_criteria', 'get_inbox_paging', 'get_inbox_sorting', 'get_current_step' ) as $needle ) wu21_assert( false !== strpos( $api, $needle ), 'Missing host API seam: ' . $needle );
     wu21_assert( false !== strpos( $page, 'gflow-inbox gflow-grid gflow-common' ) && false !== strpos( $page, 'data-js="gflow-inbox"' ), 'Native Inbox DOM markers not found.' );
     wu21_assert( false !== strpos( $gravity_flow, 'gravityflow_shortcode_' ), 'Gravity Flow shortcode render filter family missing.' );
     foreach ( array( "'add'", "'remove'", "'update'" ) as $needle ) wu21_assert( false !== strpos( $endpoint, $needle ), 'Refresh transaction member absent: ' . $needle );
     foreach ( array( 'gflow-inbox-search', 'setQuickFilter', 'inbox/changes', 'applyTransaction' ) as $needle ) wu21_assert( false !== strpos( $js, $needle ), 'Native grid JavaScript seam absent: ' . $needle );
-    return 'Exact Gravity Flow 3.1.0 package contains every PR4 host seam exercised by GPP.';
+    return 'Exact host package exposes the native render, query, refresh, search and Grid behavior retained as authority by the Native-First Inbox.';
 } );
 
 wu21_test( 'WU21-PHP-003', 'explicit product setup owns one surface-scoped Operations Inbox activation with optional Due', function () {
@@ -118,24 +118,26 @@ wu21_test( 'WU21-PHP-005', 'native Gravity Flow assignment and authorization are
     return array( 'operator' => $operator_total, 'viewer' => $viewer_total );
 } );
 
-wu21_test( 'WU21-PHP-006', 'production adapter inserts one bounded card column while preserving native columns', function () {
+wu21_test( 'WU21-PHP-006', 'production adapter leaves native Inbox columns untouched and installs no Card Mode column seam', function () {
     $input = array( 'id' => 'Entry ID', 'date_created' => 'Date Created', 'workflow_step' => 'Step' );
     $columns = apply_filters( 'gravityflow_columns_inbox_table', $input, array() );
-    foreach ( array_keys( $input ) as $column ) wu21_assert( isset( $columns[ $column ] ), 'Production adapter removed host column ' . $column );
-    wu21_assert( isset( $columns[ InboxPresentationAdapter::CARD_COLUMN ] ), 'Production GPP card column missing.' );
+    wu21_assert( $input === $columns, 'GPP or another fixture callback changed native Inbox columns.' );
+    wu21_assert( ! method_exists( InboxPresentationAdapter::class, 'filterColumns' ), 'Superseded Card Mode column callback still exists.' );
+    wu21_assert( ! defined( InboxPresentationAdapter::class . '::CARD_COLUMN' ), 'Superseded gpp_case_card identity still exists.' );
     return array_keys( $columns );
 } );
 
-wu21_test( 'WU21-PHP-007', 'derived full name and mapped field semantics render from each real host form', function () use ( $manifest ) {
+wu21_test( 'WU21-PHP-007', 'native Inbox field values remain host-owned for both real fixture forms', function () use ( $manifest ) {
     $observed = array();
+    wu21_assert( ! method_exists( InboxPresentationAdapter::class, 'filterValue' ), 'GPP still owns the native Inbox value filter.' );
     foreach ( $manifest['forms'] as $form ) {
         $record = wu21_record_for_form( $manifest, $form['form_id'] );
         $entry = GFAPI::get_entry( $record['entry_id'] );
         wu21_assert( ! is_wp_error( $entry ), 'Entry unavailable.' );
-        $html = apply_filters( 'gravityflow_inbox_field_value', '', (int) $form['form_id'], InboxPresentationAdapter::CARD_COLUMN, $entry );
-        wu21_assert( false !== strpos( $html, 'gpp-inbox-card__readiness--ready' ), 'Mapped row is not ready.' );
-        foreach ( array( $record['student_name'], $record['grade_group'], $record['school'] ) as $value ) wu21_assert( false !== strpos( $html, esc_html( $value ) ), 'Mapped/derived value missing from production card: ' . $value );
-        $observed[] = array( 'form_id' => (int) $form['form_id'], 'name' => $record['student_name'] );
+        $sentinel = 'WU21-NATIVE-VALUE-' . (int) $form['form_id'];
+        $value = apply_filters( 'gravityflow_inbox_field_value', $sentinel, (int) $form['form_id'], 'date_created', $entry );
+        wu21_assert( $sentinel === $value, 'GPP changed a host Inbox field value after the Native-First reset.' );
+        $observed[] = array( 'form_id' => (int) $form['form_id'], 'entry_id' => (int) $record['entry_id'] );
     }
     return $observed;
 } );
@@ -160,7 +162,7 @@ wu21_test( 'WU21-PHP-008', 'runtime availability proof is bound to exact active 
     return $out;
 } );
 
-wu21_test( 'WU21-PHP-009', 'current-step and created-at extraction use authentic Gravity Flow/GF host state with native fallback when PersianGravity is absent', function () use ( $manifest ) {
+wu21_test( 'WU21-PHP-009', 'current-step and created-at remain authentic Gravity Flow/GF host state without GPP value transformation', function () use ( $manifest ) {
     $record = $manifest['entry_records'][0];
     $entry = GFAPI::get_entry( $record['entry_id'] );
     wu21_assert( ! is_wp_error( $entry ) && $entry['date_created'] === $record['date_created'], 'Authoritative date_created mismatch.' );
@@ -170,10 +172,10 @@ wu21_test( 'WU21-PHP-009', 'current-step and created-at extraction use authentic
     wu21_assert( ! class_exists( 'PGR_Jalali_Presentation', false ), 'WU21 native-fallback control unexpectedly has the optional PersianGravity facade loaded.' );
     $native_created_at = GFCommon::format_date( $record['date_created'], false );
     wu21_assert( is_scalar( $native_created_at ) && '' !== trim( (string) $native_created_at ), 'Gravity Forms native created-at presentation is unavailable.' );
-    $html = apply_filters( 'gravityflow_inbox_field_value', '', (int) $record['form_id'], InboxPresentationAdapter::CARD_COLUMN, $entry );
-    wu21_assert( false !== strpos( $html, esc_html( $record['step_name'] ) ), 'Production card did not display current host step.' );
-    wu21_assert( false !== strpos( $html, esc_html( trim( (string) $native_created_at ) ) ), 'Production card did not preserve Gravity Forms native created-at presentation while PersianGravity is absent.' );
-    return array( 'step' => $step->get_name(), 'created_at' => $entry['date_created'], 'native_created_at' => trim( (string) $native_created_at ) );
+    $native_created_at = trim( (string) $native_created_at );
+    $filtered = apply_filters( 'gravityflow_inbox_field_value', $native_created_at, (int) $record['form_id'], 'date_created', $entry );
+    wu21_assert( $native_created_at === $filtered, 'GPP changed the host-created-at value after Card Mode removal.' );
+    return array( 'step' => $step->get_name(), 'created_at' => $entry['date_created'], 'native_created_at' => $native_created_at );
 } );
 
 wu21_test( 'WU21-PHP-010', 'native Inbox form filtering remains host-owned', function () use ( $manifest ) {
@@ -218,7 +220,8 @@ wu21_test( 'WU21-PHP-014', 'native Inbox render emits repository-evidenced wrapp
     ob_start(); Gravity_Flow_Inbox::display( array() ); $html = ob_get_clean();
     wu21_assert( false !== strpos( $html, 'gflow-inbox gflow-grid gflow-common' ), 'Native wrapper absent.' );
     wu21_assert( false !== strpos( $html, 'data-js="gflow-inbox"' ), 'Native grid target absent.' );
-    return 'Native Gravity_Flow_Inbox::display markup rendered.';
+    wu21_assert( false === strpos( $html, 'gpp_case_card' ) && false === strpos( $html, 'gpp-inbox-card' ), 'Superseded GPP Card Mode leaked into native output.' );
+    return 'Native Gravity_Flow_Inbox::display markup rendered without a GPP replacement row/card layer.';
 } );
 
 wu21_test( 'WU21-PHP-015', 'native refresh endpoint and grid transaction mechanics remain source-backed', function () use ( $flow_source ) {
@@ -229,13 +232,20 @@ wu21_test( 'WU21-PHP-015', 'native refresh endpoint and grid transaction mechani
     return 'Native polling endpoint and AG Grid transaction/search behavior are present.';
 } );
 
-wu21_test( 'WU21-PHP-016', 'missing binding context fails presentation closed without fabricating a card', function () use ( $manifest ) {
-    $entry = array( 'id' => 999999, 'form_id' => 999999, 'date_created' => '2026-01-01 00:00:00' );
-    $html = apply_filters( 'gravityflow_inbox_field_value', '', 999999, InboxPresentationAdapter::CARD_COLUMN, $entry );
-    wu21_assert( false !== strpos( $html, 'gpp-inbox-card__readiness--unready' ), 'Missing environment did not emit unready marker.' );
-    wu21_assert( false === strpos( $html, '<article class="gpp-inbox-card"' ), 'Missing environment emitted a guessed card.' );
+wu21_test( 'WU21-PHP-016', 'presentation readiness loss returns exact native Inbox output without a replacement surface', function () use ( $manifest ) {
+    $native = '<div class="gravityflow_wrap"><div class="gflow-inbox gflow-grid gflow-common" data-js="gflow-inbox"></div></div>';
+    $reflection = new ReflectionClass( InboxPresentationAdapter::class );
+    $loaded = $reflection->getProperty( 'model_loaded' );
+    $loaded->setAccessible( true );
+    $model = $reflection->getProperty( 'model' );
+    $model->setAccessible( true );
+    $loaded->setValue( null, true );
+    $model->setValue( null, null );
+    $actual = InboxPresentationAdapter::filterShortcodeInbox( $native, array(), '' );
+    InboxPresentationAdapter::resetRuntimeCache();
+    wu21_assert( $native === $actual, 'Readiness loss changed native Gravity Flow Inbox output.' );
     wu21_assert( 'UNBOUND' === $manifest['optional_capabilities']['workflow.due_at'], 'Optional Due fixture truth changed unexpectedly.' );
-    return 'Presentation fails closed while native Gravity Flow remains fallback owner.';
+    return 'Native Gravity Flow markup is the exact fallback when GPP presentation readiness is unavailable.';
 } );
 
 wu21_test( 'WU21-PHP-017', 'fixture manifest and entries are synthetic non-PII', function () use ( $manifest ) {
@@ -248,6 +258,6 @@ wu21_test( 'WU21-PHP-017', 'fixture manifest and entries are synthetic non-PII',
     return array( 'data_class' => $manifest['data_class'], 'entry_count' => count( $manifest['entry_records'] ) );
 } );
 
-file_put_contents( trailingslashit( $artifact_dir ) . 'php-results.json', wp_json_encode( array( 'suite' => 'WU21 authentic native host and PR4 production path', 'results' => $GLOBALS['wu21_results'] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n" );
+file_put_contents( trailingslashit( $artifact_dir ) . 'php-results.json', wp_json_encode( array( 'suite' => 'WU21 authentic Native-First Inbox host/runtime path', 'results' => $GLOBALS['wu21_results'] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n" );
 foreach ( $GLOBALS['wu21_results'] as $result ) echo $result['status'] . ' ' . $result['id'] . ' ' . $result['name'] . PHP_EOL;
 foreach ( $GLOBALS['wu21_results'] as $result ) if ( 'PASS' !== $result['status'] ) exit( 1 );
