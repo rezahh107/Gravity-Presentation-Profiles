@@ -19,11 +19,19 @@ function bounded(value, max = 5000) {
   const text = String(value ?? '');
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
-function wpControl(action) {
-  const env = { ...process.env, WU21_CONTROL: action };
-  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/runtime-control.php')], { env, encoding: 'utf8' });
-  if (cp.status !== 0) throw new Error(`WP control ${action} failed: ${cp.stderr}\n${cp.stdout}`);
+function wpCommand(args, env = process.env) {
+  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, ...args], { env, encoding: 'utf8', cwd: repoRoot });
+  if (cp.status !== 0) throw new Error(`WP command failed: ${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
+}
+function wpEval(code) {
+  return wpCommand(['eval', code]);
+}
+function wpControl(action) {
+  return wpCommand(
+    ['eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/runtime-control.php')],
+    { ...process.env, WU21_CONTROL: action },
+  );
 }
 function initiatorUrls(initiator) {
   const frames = [];
@@ -34,22 +42,36 @@ function initiatorUrls(initiator) {
   }
   return frames;
 }
+async function waitForRowId(page, rowId, present, timeout = 45000) {
+  await page.waitForFunction(
+    ({ rowId, present }) => Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${CSS.escape(String(rowId))}"]`)) === present,
+    { rowId: String(rowId), present },
+    { timeout },
+  );
+}
 
 const browserResults = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
 if (!Array.isArray(browserResults.results)) throw new Error('WU21 browser results are missing before manual refresh test.');
 if (browserResults.results.some(item => item.id === 'WU21-BROWSER-007')) throw new Error('WU21-BROWSER-007 already exists.');
 
+const authCookies = JSON.parse(wpEval(`
+$u = get_user_by('login', 'bootstrap_admin');
+if (!$u) throw new RuntimeException('Synthetic WU21 admin unavailable.');
+$expiration = time() + 900;
+echo wp_json_encode(array(
+  array('name' => AUTH_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'auth')),
+  array('name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie($u->ID, $expiration, 'logged_in'))
+), JSON_UNESCAPED_SLASHES);
+`));
+
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage();
+const context = await browser.newContext();
+await context.addCookies(authCookies.map(cookie => ({ ...cookie, url: baseUrl })));
+const page = await context.newPage();
 const network = [];
 let result;
 
 try {
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', 'bootstrap_admin');
-  await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
-
   await page.goto(`${baseUrl}/wp-admin/`, { waitUntil: 'networkidle' });
   if (await page.locator(controlSelector).count() !== 0) throw new Error('Manual Inbox refresh leaked onto an unrelated admin page.');
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -67,8 +89,7 @@ try {
   const refreshInsideHost = await page.locator('.gflow-inbox.gflow-grid.gflow-common [data-gpp-inbox-manual-refresh]').count();
   if (refreshInsideHost !== 0) throw new Error('Manual refresh was mounted inside the host-owned Inbox subtree.');
 
-  // Prove the pageshow recovery handler independently of a real navigation: a
-  // bfcache restoration must not preserve a stale busy/disabled state.
+  // A bfcache restoration must not preserve stale busy/disabled utility state.
   await control.evaluate(button => {
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
@@ -88,7 +109,10 @@ try {
 
   network.length = 0;
   const beforeUrl = page.url();
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }), control.click()]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
+    control.click(),
+  ]);
   await page.waitForLoadState('networkidle');
   await page.waitForSelector(gridSelector, { timeout: 30000 });
 
@@ -108,33 +132,41 @@ try {
   if (wrappersAfterClick !== 1 || gridsAfterClick !== 1 || controlsAfterClick !== 1) throw new Error(`Native Inbox/manual utility was not reconstructed exactly once: wrapper=${wrappersAfterClick}, grid=${gridsAfterClick}, refresh=${controlsAfterClick}`);
   if (rowsAfterClick < 1 || cardModeAfterClick !== 0) throw new Error(`Native-first presentation failed after reload: rows=${rowsAfterClick}, card_mode_nodes=${cardModeAfterClick}`);
 
-  const search = page.locator('[data-js="gflow-inbox-search"]');
-  await search.fill('WU21 Refresh Student');
-  await search.dispatchEvent('keyup');
-  await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 15000 });
+  // Prove the host's own polling lifecycle still works after the GPP document
+  // reload. The native Inbox does not expose the former Card Mode student field,
+  // so observe the authoritative AG Grid row-id instead of Card-only text.
   const dynamicId = Number(wpControl('add'));
   try {
-    await page.waitForFunction(selector => document.querySelectorAll(selector).length === 1, centerRowsSelector, { timeout: 45000 });
-    const rowText = await page.locator(centerRowsSelector).first().innerText();
-    if (!rowText.includes('WU21 Refresh Student')) throw new Error('Host Live Refresh did not add the post-reload synthetic task.');
+    await waitForRowId(page, dynamicId, true, 45000);
+    const dynamicRow = page.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${dynamicId}"]`);
+    if (await dynamicRow.count() !== 1) throw new Error(`Host Live Refresh did not materialize native row-id ${dynamicId}.`);
   } finally {
     wpControl('remove');
   }
-  await page.waitForFunction(selector => document.querySelectorAll(selector).length === 0, centerRowsSelector, { timeout: 45000 });
+  await waitForRowId(page, dynamicId, false, 45000);
   if (await page.locator(controlSelector).count() !== 1) throw new Error('Host Live Refresh duplicated the GPP manual refresh utility.');
 
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardControl = page.getByRole('button', { name: label, exact: true });
   await keyboardControl.focus();
-  const focusStyle = await keyboardControl.evaluate(element => ({ active: element === document.activeElement, outlineStyle: getComputedStyle(element).outlineStyle, outlineWidth: getComputedStyle(element).outlineWidth }));
+  const focusStyle = await keyboardControl.evaluate(element => ({
+    active: element === document.activeElement,
+    outlineStyle: getComputedStyle(element).outlineStyle,
+    outlineWidth: getComputedStyle(element).outlineWidth,
+  }));
   if (!focusStyle.active || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0) throw new Error(`Manual refresh focus is not visible: ${JSON.stringify(focusStyle)}`);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }), page.keyboard.press('Enter')]);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
+    page.keyboard.press('Enter'),
+  ]);
   await page.waitForLoadState('networkidle');
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardNavigationType = await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type || null);
   if (keyboardNavigationType !== 'reload') throw new Error(`Keyboard activation did not perform a document reload: ${keyboardNavigationType}`);
-  if (await page.locator('.gflow-inbox.gflow-grid.gflow-common').count() !== 1 || await page.locator(gridSelector).count() !== 1 || await page.locator(controlSelector).count() !== 1) throw new Error('Keyboard reload did not reconstruct exactly one native Inbox/grid/refresh utility.');
+  if (await page.locator('.gflow-inbox.gflow-grid.gflow-common').count() !== 1 || await page.locator(gridSelector).count() !== 1 || await page.locator(controlSelector).count() !== 1) {
+    throw new Error('Keyboard reload did not reconstruct exactly one native Inbox/grid/refresh utility.');
+  }
 
   const hostInboxChanges = network.filter(item => item.url.includes('/wp-json/gravityflow/internal/inbox/changes'));
   const privateApiNames = network.filter(item => item.initiator_urls.some(url => /gravity-flow-inbox-manual-refresh\.js/.test(url)) && /inbox\/changes|admin-ajax|wp-json/.test(item.url));
@@ -145,17 +177,35 @@ try {
     name: 'manual Inbox refresh performs one native document reload, pageshow recovery and no host-node ownership',
     status: 'PASS',
     details: {
-      label, route: inboxUrl, click_navigation_type: navigationType, keyboard_navigation_type: keyboardNavigationType,
-      native_wrappers_after_click: wrappersAfterClick, native_grids_after_click: gridsAfterClick, reconstructed_rows: rowsAfterClick,
-      card_mode_nodes_after_click: cardModeAfterClick, refresh_controls_after_click: controlsAfterClick,
-      refresh_inside_native_host: refreshInsideHost, native_host_parent_class: hostParent, pageshow_recovery: true,
-      post_reload_live_refresh_entry_id: dynamicId, direct_non_document_requests_from_gpp_control: gppScriptRequests.length,
-      direct_private_refresh_requests_from_gpp_control: privateApiNames.length, host_owned_inbox_changes_observed_after_reload: hostInboxChanges.length,
-      unrelated_admin_control_count: 0, unrelated_frontend_control_count: 0, keyboard_focus: focusStyle,
+      label,
+      route: inboxUrl,
+      click_navigation_type: navigationType,
+      keyboard_navigation_type: keyboardNavigationType,
+      native_wrappers_after_click: wrappersAfterClick,
+      native_grids_after_click: gridsAfterClick,
+      reconstructed_rows: rowsAfterClick,
+      card_mode_nodes_after_click: cardModeAfterClick,
+      refresh_controls_after_click: controlsAfterClick,
+      refresh_inside_native_host: refreshInsideHost,
+      native_host_parent_class: hostParent,
+      pageshow_recovery: true,
+      post_reload_live_refresh_entry_id: dynamicId,
+      post_reload_live_refresh_observed_by_native_row_id: true,
+      direct_non_document_requests_from_gpp_control: gppScriptRequests.length,
+      direct_private_refresh_requests_from_gpp_control: privateApiNames.length,
+      host_owned_inbox_changes_observed_after_reload: hostInboxChanges.length,
+      unrelated_admin_control_count: 0,
+      unrelated_frontend_control_count: 0,
+      keyboard_focus: focusStyle,
     },
   };
 } catch (error) {
-  result = { id: 'WU21-BROWSER-007', name: 'manual Inbox refresh performs one native document reload, pageshow recovery and no host-node ownership', status: 'FAIL', details: { error: bounded(error?.stack || error) } };
+  result = {
+    id: 'WU21-BROWSER-007',
+    name: 'manual Inbox refresh performs one native document reload, pageshow recovery and no host-node ownership',
+    status: 'FAIL',
+    details: { error: bounded(error?.stack || error) },
+  };
 } finally {
   await browser.close();
 }
