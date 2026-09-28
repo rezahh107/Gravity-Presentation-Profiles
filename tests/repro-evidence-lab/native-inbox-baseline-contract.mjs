@@ -74,10 +74,15 @@ for (const identity of [
   "'RAW_NATIVE'",
   "'NATIVE_FIRST_GPP'",
   'native_search_count',
+  'native_search_visible_count',
   'native_settings_count',
+  'native_settings_visible_count',
   'native_fullscreen_count',
+  'native_fullscreen_visible_count',
   'native_grid_count',
+  'native_grid_visible_count',
   'native_pager_count',
+  'native_pager_visible_count',
   'direction_observations',
   'geometry',
   'PROVEN_IN_REPRODUCIBLE_RUNTIME',
@@ -87,9 +92,22 @@ for (const identity of [
   "approved_visual_contract: 'NOT_ACTIVATED'",
 ]) assert.ok(capture.includes(identity), `Baseline evidence contract is missing: ${identity}`);
 
+for (const visibleControl of [
+  'native_grid_visible_count',
+  'native_search_visible_count',
+  'native_settings_visible_count',
+  'native_fullscreen_visible_count',
+  'native_pager_visible_count',
+]) {
+  assert.ok(capture.includes(`assert.equal(facts.${visibleControl}, 1`), `Baseline capture does not fail closed when ${visibleControl} is not exactly one.`);
+}
+assert.ok(capture.includes("assert.equal(settings.settings_identity, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL'"), 'Baseline capture does not gate positive status on unambiguous native Settings identity.');
+assert.ok(capture.includes("assert.equal(settings.push_control?.status, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL'"), 'Baseline capture does not gate positive status on unambiguous native Push identity.');
+assert.ok(capture.includes('assertSettingsFactsProven(settings,'), 'Settings/Push honesty gate is not executed before positive scenario evidence is emitted.');
+
 assert.ok(capture.includes('gpp_surface_count, 0') || capture.includes('facts.gpp_surface_count, 0'), 'RAW_NATIVE does not prove GPP wrapper absence.');
 assert.ok(capture.includes('facts.gpp_manual_refresh_count, 0'), 'RAW_NATIVE does not prove GPP Manual Refresh absence.');
 assert.ok(capture.includes('facts.gpp_surface_count, 1'), 'Paired GPP capture does not prove ordinary GPP surface restoration.');
 assert.ok(capture.includes('getBrowserTabZoom(harness.worker, page)'), '200% screenshot is not bound to a non-mutating capture-time getZoom proof.');
 
-console.log('NATIVE_INBOX_BASELINE_CONTRACT_PASS production_seam=false paired_capture=true scenarios=4 genuine_zoom_reused=true evidence_ceiling_bounded=true');
+console.log('NATIVE_INBOX_BASELINE_CONTRACT_PASS production_seam=false paired_capture=true scenarios=4 genuine_zoom_reused=true control_visibility_fail_closed=true evidence_ceiling_bounded=true');
