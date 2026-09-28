@@ -54,6 +54,68 @@ function gpp_inbox_inner_rule_bodies( $css ) {
     );
 }
 
+/**
+ * Return production rules whose selector list begins at the authentic native
+ * Inbox root. GPP shell rules that merely supply the host width are excluded:
+ * this guard is specifically for the host-owned Search/Grid/Pager topology.
+ */
+function gpp_inbox_native_host_rules( $css ) {
+    $matches = array();
+    preg_match_all(
+        '/([^{}]*\.gflow-inbox\.gflow-grid\.gflow-common[^{}]*)\{([^{}]*)\}/m',
+        $css,
+        $matches,
+        PREG_SET_ORDER
+    );
+
+    $rules = array();
+    foreach ( $matches as $match ) {
+        $selector = trim( $match[1] );
+        if ( 0 !== strpos( $selector, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
+            continue;
+        }
+        $rules[] = array(
+            'selector' => $selector,
+            'body'     => trim( $match[2] ),
+        );
+    }
+
+    return $rules;
+}
+
+/**
+ * Paint-first Phase B deliberately rejects geometry/topology ownership on the
+ * authentic host subtree. Keep this list property-based so harmless paint can
+ * evolve without weakening the boundary.
+ */
+function gpp_inbox_is_forbidden_native_geometry_property( $property ) {
+    $property = strtolower( trim( $property ) );
+
+    if ( in_array(
+        $property,
+        array(
+            'display',
+            'position',
+            'transform',
+            'float',
+            'clear',
+            'direction',
+            'unicode-bidi',
+            'order',
+            'line-height',
+            'font-size',
+        ),
+        true
+    ) ) {
+        return true;
+    }
+
+    return 1 === preg_match(
+        '/^(?:overflow(?:-[xy])?|(?:min-|max-)?(?:width|height|inline-size|block-size)|margin(?:-[a-z-]+)?|padding(?:-[a-z-]+)?|(?:row-|column-)?gap|(?:top|right|bottom|left)|inset(?:-[a-z-]+)?|grid(?:-[a-z-]+)?|flex(?:-[a-z-]+)?|place(?:-[a-z-]+)?|align(?:-[a-z-]+)?|justify(?:-[a-z-]+)?)$/',
+        $property
+    );
+}
+
 $shared_rules = gpp_inbox_full_width_rule_bodies( $shared_css );
 $native_rules = gpp_inbox_full_width_rule_bodies( $native_css );
 $rules = array_merge( $shared_rules, $native_rules );
@@ -127,6 +189,58 @@ foreach ( $rules as $rule ) {
 gpp_assert_true(
     false === strpos( $native_css, 'calc(50% - 50vw)' ),
     'Native Inbox CSS still contains the historical physical viewport offset.'
+);
+
+$native_host_rules = array_merge(
+    gpp_inbox_native_host_rules( $shared_css ),
+    gpp_inbox_native_host_rules( $native_css )
+);
+gpp_assert_true( ! empty( $native_host_rules ), 'Native-First Inbox paint rules are unavailable for geometry ownership validation.' );
+
+foreach ( $native_host_rules as $rule ) {
+    $declarations = array();
+    preg_match_all( '/(?:^|;)\s*([a-z-]+)\s*:/i', $rule['body'], $declarations );
+    foreach ( isset( $declarations[1] ) ? $declarations[1] : array() as $property ) {
+        gpp_assert_true(
+            ! gpp_inbox_is_forbidden_native_geometry_property( $property ),
+            'Paint-first Inbox rule owns forbidden native geometry/topology property `' . strtolower( $property ) . '` in selector: ' . $rule['selector']
+        );
+    }
+}
+
+$combined_css = $shared_css . "\n" . $native_css;
+gpp_assert_true(
+    false === strpos( $combined_css, '.ag-rtl' ),
+    'Native-First Inbox CSS must not force or target AG Grid RTL mode.'
+);
+gpp_assert_true(
+    false === strpos( $combined_css, 'gpp_case_card' ),
+    'Retired gpp_case_card identity was reintroduced in Inbox production CSS.'
+);
+gpp_assert_true(
+    false === strpos( $combined_css, '.gpp-inbox-card' ),
+    'Retired Card Mode presentation was reintroduced in Inbox production CSS.'
+);
+
+gpp_assert_same(
+    1,
+    preg_match(
+        '/\.gflow-inbox\.gflow-grid\.gflow-common \[data-js="gflow-inbox-search"\]:focus-visible\s*\{[^}]*outline\s*:\s*3px solid var\(--gpp-inbox-focus\)\s*!important;[^}]*outline-offset\s*:\s*3px;/s',
+        $shared_css
+    ),
+    'Native Search lost the Entry-Detail-family visible focus treatment.'
+);
+gpp_assert_same(
+    1,
+    preg_match(
+        '/\.gflow-inbox\.gflow-grid\.gflow-common \.gflow-grid__button:focus-visible\s*\{[^}]*outline\s*:\s*3px solid var\(--gpp-inbox-focus\)\s*!important;[^}]*outline-offset\s*:\s*3px;/s',
+        $native_css
+    ),
+    'Native utility controls lost the Entry-Detail-family visible focus treatment.'
+);
+gpp_assert_true(
+    false !== strpos( $shared_css, '.gflow-inbox.gflow-grid.gflow-common .ag-paging-button:focus-visible' ),
+    'Native pager keyboard focus selector is missing.'
 );
 
 echo "INBOX_HOST_WIDTH_OWNERSHIP_PASS\n";
