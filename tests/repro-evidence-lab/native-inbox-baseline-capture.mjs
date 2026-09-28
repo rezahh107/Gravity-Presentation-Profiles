@@ -284,14 +284,27 @@ async function captureSettingsFacts(page, initialFacts) {
 function assertCommonNativeFacts(facts, label) {
   assert.equal(facts.native_inbox_count, 1, `${label}: expected one authentic native Inbox root.`);
   assert.equal(facts.native_grid_count, 1, `${label}: expected one native AG Grid.`);
+  assert.equal(facts.native_grid_visible_count, 1, `${label}: native AG Grid is not visibly exposed.`);
   assert.equal(facts.native_search_count, 1, `${label}: native Search identity changed.`);
+  assert.equal(facts.native_search_visible_count, 1, `${label}: native Search is not visibly exposed.`);
+  assert.equal(facts.native_settings_count, 1, `${label}: native Settings identity is missing or ambiguous.`);
+  assert.equal(facts.native_settings_visible_count, 1, `${label}: native Settings is not visibly exposed.`);
+  assert.equal(facts.native_fullscreen_count, 1, `${label}: native Fullscreen identity is missing or ambiguous.`);
+  assert.equal(facts.native_fullscreen_visible_count, 1, `${label}: native Fullscreen is not visibly exposed.`);
   assert.equal(facts.native_pager_count, 1, `${label}: native pager identity changed.`);
+  assert.equal(facts.native_pager_visible_count, 1, `${label}: native pager is not visibly exposed.`);
   assert.ok(facts.visible_native_row_count > 0, `${label}: synthetic native rows are unavailable.`);
-  assert.ok(facts.native_settings_count <= 1, `${label}: native Settings identity is ambiguous.`);
-  assert.ok(facts.native_fullscreen_count <= 1, `${label}: native Fullscreen identity is ambiguous.`);
   assert.equal(facts.gpp_card_node_count, 0, `${label}: Card Mode node resurrected.`);
   assert.equal(facts.gpp_case_card_column_count, 0, `${label}: gpp_case_card resurrected.`);
   assert.equal(facts.replacement_widget_count, 0, `${label}: structural Inbox replacement appeared.`);
+}
+
+function assertSettingsFactsProven(settings, label) {
+  assert.equal(settings.settings_identity, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL', `${label}: native Settings identity is not proven.`);
+  assert.equal(settings.settings_count, 1, `${label}: native Settings count is not singular.`);
+  assert.equal(settings.settings_visible_count, 1, `${label}: native Settings is not visibly exposed.`);
+  assert.equal(settings.push_control?.status, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL', `${label}: native Push control identity is not proven.`);
+  assert.equal(settings.push_control?.count, 1, `${label}: native Push control identity is missing or ambiguous.`);
 }
 
 function assertModeBoundary(mode, facts, label) {
@@ -307,12 +320,12 @@ function assertModeBoundary(mode, facts, label) {
 }
 
 function assertPairedHostParity(raw, gpp, scenarioId) {
-  for (const key of ['native_inbox_count', 'native_grid_count', 'native_search_count', 'native_settings_count', 'native_fullscreen_count', 'native_pager_count', 'visible_native_row_count']) {
+  for (const key of ['native_inbox_count', 'native_grid_count', 'native_grid_visible_count', 'native_search_count', 'native_search_visible_count', 'native_settings_count', 'native_settings_visible_count', 'native_fullscreen_count', 'native_fullscreen_visible_count', 'native_pager_count', 'native_pager_visible_count', 'visible_native_row_count']) {
     assert.equal(gpp.runtime[key], raw.runtime[key], `${scenarioId}: paired host fact ${key} diverged between RAW_NATIVE and NATIVE_FIRST_GPP.`);
   }
   return {
     status: 'PASS',
-    compared_facts: ['native_inbox_count', 'native_grid_count', 'native_search_count', 'native_settings_count', 'native_fullscreen_count', 'native_pager_count', 'visible_native_row_count'],
+    compared_facts: ['native_inbox_count', 'native_grid_count', 'native_grid_visible_count', 'native_search_count', 'native_search_visible_count', 'native_settings_count', 'native_settings_visible_count', 'native_fullscreen_count', 'native_fullscreen_visible_count', 'native_pager_count', 'native_pager_visible_count', 'visible_native_row_count'],
   };
 }
 
@@ -332,6 +345,7 @@ async function captureMode({ page, scenario, mode, zoomEvidence, navigate = true
   const screenshotName = `${scenario.id}__${mode}.png`;
   await page.screenshot({ path: path.join(outputRoot, screenshotName), fullPage: false });
   const settings = await captureSettingsFacts(page, runtimeFacts);
+  assertSettingsFactsProven(settings, `${scenario.id}/${mode}`);
   const browserIdentity = await page.evaluate(() => ({ user_agent: navigator.userAgent, platform: navigator.platform }));
   browserIdentity.chromium_version = page.context().browser()?.version() ?? null;
   const evidence = {
