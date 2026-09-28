@@ -91,6 +91,8 @@ const selectors = {
   native_inbox: '[data-js="gflow-inbox"]',
   search: '[data-js="gflow-inbox-search"]',
   settings: '.gflow-grid__button--settings',
+  settings_flyout: '.gform-flyout--inbox-settings',
+  push_control: 'input[name="inbox-setting--push-enabled"][data-js="inbox-setting"]',
   fullscreen: '.gflow-grid__button--fullscreen',
   grid: '[data-js="gflow-inbox"] .ag-root-wrapper',
   pager: '[data-js="gflow-inbox"] .ag-paging-panel',
@@ -208,7 +210,8 @@ async function captureSettingsFacts(page, initialFacts) {
       reason: settingsCount > 1 || visibleSettingsCount > 1 ? 'AMBIGUOUS_NATIVE_SETTINGS_CONTROL_IDENTITY' : 'NATIVE_SETTINGS_CONTROL_NOT_AUTHENTICALLY_EXPOSED',
       settings_count: settingsCount,
       settings_visible_count: visibleSettingsCount,
-      push_control: { status: 'NOT_PROVEN', count: null, candidates: [] },
+      settings_flyout: { status: 'NOT_PROVEN', count: null, visible_count: null, candidates: [] },
+      push_control: { status: 'NOT_PROVEN', count: null, structural_count: null, candidates: [] },
     };
   }
 
@@ -221,64 +224,221 @@ async function captureSettingsFacts(page, initialFacts) {
   }));
   await button.click();
   await page.waitForTimeout(150);
-  const panelFacts = await page.evaluate(() => {
-    const visible = (el) => {
-      const r = el.getBoundingClientRect();
-      const s = getComputedStyle(el);
-      return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
-    };
-    const text = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
-    const marker = /push|notification|notify|browser notification|اعلان|اطلاع/i;
-    const settingsMarker = /settings|setting|notification|push/i;
-    const candidates = [...document.querySelectorAll('body *')].filter(el => {
-      if (!visible(el)) return false;
-      const identity = `${el.id || ''} ${typeof el.className === 'string' ? el.className : ''} ${el.getAttribute('data-js') || ''} ${el.getAttribute('role') || ''}`;
-      const body = text(el);
-      return settingsMarker.test(identity) || (body.length > 0 && body.length <= 260 && marker.test(body));
-    }).slice(0, 80).map(el => ({
-      tag: el.tagName.toLowerCase(), id: el.id || null, class_name: typeof el.className === 'string' ? el.className : null,
-      data_js: el.getAttribute('data-js'), role: el.getAttribute('role'), text: text(el).slice(0, 260),
-    }));
-    const controls = [...document.querySelectorAll('input,button,select,textarea,label')].filter(visible).map(el => ({
-      tag: el.tagName.toLowerCase(), type: el.getAttribute('type'), name: el.getAttribute('name'), value: 'value' in el ? el.value : null,
-      checked: 'checked' in el ? el.checked : null, text: text(el).slice(0, 220), title: el.getAttribute('title'),
-      aria_label: el.getAttribute('aria-label'), id: el.id || null, class_name: typeof el.className === 'string' ? el.className : null,
-    }));
-    const pushCandidates = controls.filter(item => marker.test(Object.values(item).filter(v => typeof v === 'string').join(' ')));
-    return {
-      browser_notification_supported: 'Notification' in window,
-      browser_notification_permission: 'Notification' in window ? Notification.permission : null,
-      candidates,
-      push_candidates: pushCandidates,
-    };
-  });
-  await page.keyboard.press('Escape').catch(() => {});
 
-  let pushStatus = 'NOT_PROVEN';
-  let reason = 'NO_UNAMBIGUOUS_PUSH_CONTROL_IDENTITY';
-  if (panelFacts.push_candidates.length === 1) {
-    pushStatus = 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL';
-    reason = null;
-  } else if (panelFacts.push_candidates.length > 1) {
-    reason = 'AMBIGUOUS_NATIVE_PUSH_CONTROL_IDENTITY';
+  let panelFacts;
+  try {
+    panelFacts = await page.evaluate((s) => {
+      const visible = (el) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      };
+      const text = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const notificationMarker = /push|notification|notify|browser notification|اعلان|اطلاع/i;
+      const settingsMarker = /settings|setting|notification|push/i;
+      const describeElement = (el) => ({
+        tag: el.tagName.toLowerCase(),
+        type: el.getAttribute('type'),
+        name: el.getAttribute('name'),
+        value: 'value' in el ? el.value : null,
+        checked: 'checked' in el ? el.checked : null,
+        text: text(el).slice(0, 220),
+        title: el.getAttribute('title'),
+        aria_label: el.getAttribute('aria-label'),
+        id: el.id || null,
+        class_name: typeof el.className === 'string' ? el.className : null,
+        data_js: el.getAttribute('data-js'),
+        role: el.getAttribute('role'),
+      });
+      const describeFlyout = (el) => ({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        class_name: typeof el.className === 'string' ? el.className : null,
+        data_js: el.getAttribute('data-js'),
+        role: el.getAttribute('role'),
+        text: text(el).slice(0, 260),
+      });
+      const inspect = () => {
+        const flyouts = [...document.querySelectorAll(s.settings_flyout)];
+        const visibleFlyouts = flyouts.filter(visible);
+        const admittedFlyout = flyouts.length === 1 && visibleFlyouts.length === 1 ? visibleFlyouts[0] : null;
+        const structuralPushControls = admittedFlyout ? [...admittedFlyout.querySelectorAll(s.push_control)] : [];
+        const visiblePushControls = structuralPushControls.filter(visible);
+        const diagnosticCandidates = [...document.querySelectorAll('body *')].filter(el => {
+          if (!visible(el)) return false;
+          const identity = `${el.id || ''} ${typeof el.className === 'string' ? el.className : ''} ${el.getAttribute('data-js') || ''} ${el.getAttribute('role') || ''}`;
+          const body = text(el);
+          return settingsMarker.test(identity) || (body.length > 0 && body.length <= 260 && notificationMarker.test(body));
+        }).slice(0, 80).map(describeFlyout);
+        const diagnosticNotificationLikeControls = [...document.querySelectorAll('input,button,select,textarea,label')]
+          .filter(el => visible(el) && notificationMarker.test([
+            el.id || '',
+            typeof el.className === 'string' ? el.className : '',
+            el.getAttribute('data-js') || '',
+            el.getAttribute('name') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('aria-label') || '',
+            text(el),
+          ].join(' ')))
+          .map(describeElement);
+
+        let flyoutStatus = 'NOT_PROVEN';
+        let flyoutReason = 'NATIVE_SETTINGS_FLYOUT_NOT_AUTHENTICALLY_EXPOSED';
+        if (flyouts.length === 1 && visibleFlyouts.length === 1) {
+          flyoutStatus = 'OBSERVED_UNAMBIGUOUS_NATIVE_SURFACE';
+          flyoutReason = null;
+        } else if (flyouts.length > 1 || visibleFlyouts.length > 1) {
+          flyoutReason = 'AMBIGUOUS_NATIVE_SETTINGS_FLYOUT_IDENTITY';
+        }
+
+        let pushStatus = 'NOT_PROVEN';
+        let pushReason = admittedFlyout ? 'NATIVE_PUSH_CONTROL_NOT_AUTHENTICALLY_EXPOSED' : 'NATIVE_SETTINGS_FLYOUT_NOT_PROVEN';
+        if (admittedFlyout && structuralPushControls.length === 1 && visiblePushControls.length === 1) {
+          pushStatus = 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL';
+          pushReason = null;
+        } else if (admittedFlyout && (structuralPushControls.length > 1 || visiblePushControls.length > 1)) {
+          pushReason = 'AMBIGUOUS_NATIVE_PUSH_CONTROL_IDENTITY';
+        }
+
+        return {
+          browser_notification_supported: 'Notification' in window,
+          browser_notification_permission: 'Notification' in window ? Notification.permission : null,
+          settings_flyout: {
+            status: flyoutStatus,
+            reason: flyoutReason,
+            selector: s.settings_flyout,
+            count: flyouts.length,
+            visible_count: visibleFlyouts.length,
+            candidates: flyouts.map(describeFlyout),
+          },
+          push_control: {
+            status: pushStatus,
+            reason: pushReason,
+            provenance: 'NATIVE_SETTINGS_FLYOUT_STRUCTURAL_SELECTOR',
+            selector: s.push_control,
+            count: visiblePushControls.length,
+            structural_count: structuralPushControls.length,
+            candidates: visiblePushControls.map(describeElement),
+          },
+          diagnostic_candidates: diagnosticCandidates,
+          diagnostic_notification_like_controls: diagnosticNotificationLikeControls,
+          external_decoy_visible_count: [...document.querySelectorAll('[data-wu21-external-notification-decoy]')].filter(visible).length,
+        };
+      };
+
+      const authentic = inspect();
+      let decoy = null;
+      let authenticPush = null;
+      let originalStyle = null;
+      let ambiguousClone = null;
+      let externalDecoy = null;
+      let missingPushWithExternalDecoy = null;
+      let ambiguousPush = null;
+
+      try {
+        decoy = document.createElement('label');
+        decoy.setAttribute('data-wu21-external-notification-decoy', 'true');
+        decoy.setAttribute('style', 'position:fixed;left:4px;top:4px;display:block;width:180px;height:32px;visibility:visible;z-index:2147483647;background:#fff;');
+        decoy.textContent = 'External Notification decoy';
+        const decoyInput = document.createElement('input');
+        decoyInput.type = 'checkbox';
+        decoyInput.name = 'wu21-external-notification-decoy';
+        decoyInput.setAttribute('aria-label', 'External Notification decoy');
+        decoy.appendChild(decoyInput);
+        document.body.appendChild(decoy);
+        externalDecoy = inspect();
+
+        const admittedFlyout = [...document.querySelectorAll(s.settings_flyout)].filter(visible);
+        if (admittedFlyout.length === 1) {
+          authenticPush = admittedFlyout[0].querySelector(s.push_control);
+        }
+
+        if (authenticPush) {
+          originalStyle = authenticPush.getAttribute('style');
+          authenticPush.style.setProperty('display', 'none', 'important');
+          missingPushWithExternalDecoy = inspect();
+          if (originalStyle === null) authenticPush.removeAttribute('style');
+          else authenticPush.setAttribute('style', originalStyle);
+
+          ambiguousClone = authenticPush.cloneNode(true);
+          ambiguousClone.id = `${authenticPush.id || 'inbox-setting--push-enabled'}--wu21-ambiguous`;
+          ambiguousClone.setAttribute('data-wu21-native-push-clone', 'true');
+          ambiguousClone.setAttribute('style', 'position:fixed;left:4px;top:44px;display:block;width:16px;height:16px;visibility:visible;opacity:1;z-index:2147483647;');
+          admittedFlyout[0].appendChild(ambiguousClone);
+          ambiguousPush = inspect();
+        }
+      } finally {
+        if (ambiguousClone?.isConnected) ambiguousClone.remove();
+        if (authenticPush) {
+          if (originalStyle === null) authenticPush.removeAttribute('style');
+          else authenticPush.setAttribute('style', originalStyle);
+        }
+        if (decoy?.isConnected) decoy.remove();
+      }
+
+      return {
+        authentic,
+        external_decoy: externalDecoy,
+        missing_push_with_external_decoy: missingPushWithExternalDecoy,
+        ambiguous_native_push: ambiguousPush,
+      };
+    }, selectors);
+  } finally {
+    await page.keyboard.press('Escape').catch(() => {});
   }
 
-  return {
+  const asSettingsFacts = (observed) => ({
     settings_identity: 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL',
     reason: null,
     settings_count: settingsCount,
     settings_visible_count: visibleSettingsCount,
     button: buttonIdentity,
-    browser_notification_supported: panelFacts.browser_notification_supported,
-    browser_notification_permission: panelFacts.browser_notification_permission,
-    panel_candidates: panelFacts.candidates,
-    push_control: {
-      status: pushStatus,
-      reason,
-      count: panelFacts.push_candidates.length,
-      candidates: panelFacts.push_candidates,
+    browser_notification_supported: observed?.browser_notification_supported ?? null,
+    browser_notification_permission: observed?.browser_notification_permission ?? null,
+    panel_candidates: observed?.diagnostic_candidates ?? [],
+    diagnostic_notification_like_controls: observed?.diagnostic_notification_like_controls ?? [],
+    settings_flyout: observed?.settings_flyout ?? { status: 'NOT_PROVEN', count: null, visible_count: null, candidates: [] },
+    push_control: observed?.push_control ?? { status: 'NOT_PROVEN', count: null, structural_count: null, candidates: [] },
+  });
+
+  const authenticSettings = asSettingsFacts(panelFacts.authentic);
+  const decoySettings = asSettingsFacts(panelFacts.external_decoy);
+  assertSettingsFactsProven(decoySettings, 'push-provenance/external-decoy');
+  assert.equal(decoySettings.push_control.candidates[0]?.id, authenticSettings.push_control.candidates[0]?.id, 'External notification-like decoy changed admitted native Push identity.');
+  assert.equal(panelFacts.external_decoy?.external_decoy_visible_count, 1, 'External notification-like decoy was not visibly established for falsification.');
+
+  const missingSettings = asSettingsFacts(panelFacts.missing_push_with_external_decoy);
+  const missingRejection = assertSettingsFactsRejected(missingSettings, 'push-provenance/native-push-missing-with-external-decoy');
+  assert.equal(panelFacts.missing_push_with_external_decoy?.external_decoy_visible_count, 1, 'Missing-Push falsification lost its external notification-like decoy.');
+  assert.equal(missingSettings.push_control.status, 'NOT_PROVEN', 'Missing native Push must remain NOT_PROVEN even with an external notification-like decoy.');
+
+  assert.ok(panelFacts.ambiguous_native_push, 'Ambiguous native Push falsification did not execute despite an authentic Push precondition.');
+  const ambiguousSettings = asSettingsFacts(panelFacts.ambiguous_native_push);
+  const ambiguousRejection = assertSettingsFactsRejected(ambiguousSettings, 'push-provenance/ambiguous-native-push');
+  assert.equal(ambiguousSettings.push_control.status, 'NOT_PROVEN', 'Two qualifying native Push candidates must fail closed.');
+
+  authenticSettings.provenance_falsification = {
+    external_decoy: {
+      status: 'PASS_AUTHENTIC_PUSH_UNCHANGED',
+      external_decoy_visible_count: panelFacts.external_decoy.external_decoy_visible_count,
+      admitted_push_id: decoySettings.push_control.candidates[0]?.id ?? null,
+      admitted_push_provenance: decoySettings.push_control.provenance,
+    },
+    native_push_missing_with_external_decoy: {
+      ...missingRejection,
+      push_status: missingSettings.push_control.status,
+      external_decoy_visible_count: panelFacts.missing_push_with_external_decoy.external_decoy_visible_count,
+    },
+    ambiguous_native_push: {
+      ...ambiguousRejection,
+      push_status: ambiguousSettings.push_control.status,
+      structural_count: ambiguousSettings.push_control.structural_count,
+      visible_count: ambiguousSettings.push_control.count,
     },
   };
+
+  return authenticSettings;
 }
 
 function assertCommonNativeFacts(facts, label) {
@@ -303,8 +463,29 @@ function assertSettingsFactsProven(settings, label) {
   assert.equal(settings.settings_identity, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL', `${label}: native Settings identity is not proven.`);
   assert.equal(settings.settings_count, 1, `${label}: native Settings count is not singular.`);
   assert.equal(settings.settings_visible_count, 1, `${label}: native Settings is not visibly exposed.`);
+  assert.equal(settings.settings_flyout?.status, 'OBSERVED_UNAMBIGUOUS_NATIVE_SURFACE', `${label}: native Inbox Settings flyout provenance is not proven.`);
+  assert.equal(settings.settings_flyout?.count, 1, `${label}: native Inbox Settings flyout is missing or ambiguous.`);
+  assert.equal(settings.settings_flyout?.visible_count, 1, `${label}: native Inbox Settings flyout is not visibly exposed.`);
   assert.equal(settings.push_control?.status, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL', `${label}: native Push control identity is not proven.`);
-  assert.equal(settings.push_control?.count, 1, `${label}: native Push control identity is missing or ambiguous.`);
+  assert.equal(settings.push_control?.provenance, 'NATIVE_SETTINGS_FLYOUT_STRUCTURAL_SELECTOR', `${label}: native Push provenance is not structurally bound to the admitted Settings flyout.`);
+  assert.equal(settings.push_control?.selector, selectors.push_control, `${label}: native Push selector identity changed.`);
+  assert.equal(settings.push_control?.structural_count, 1, `${label}: native Push structural identity is missing or ambiguous.`);
+  assert.equal(settings.push_control?.count, 1, `${label}: native Push control is not singular and visible.`);
+  assert.equal(settings.push_control?.candidates?.[0]?.name, 'inbox-setting--push-enabled', `${label}: native Push name identity changed.`);
+  assert.equal(settings.push_control?.candidates?.[0]?.data_js, 'inbox-setting', `${label}: native Push data-js identity changed.`);
+}
+
+function assertSettingsFactsRejected(settings, label) {
+  try {
+    assertSettingsFactsProven(settings, label);
+  } catch (error) {
+    return {
+      status: 'REJECTED_AS_EXPECTED',
+      positive_scenario_status_allowed: false,
+      failure_message: String(error?.message || error),
+    };
+  }
+  throw new Error(`${label}: falsification unexpectedly satisfied the positive native Settings/Push admission gate.`);
 }
 
 function assertModeBoundary(mode, facts, label) {
