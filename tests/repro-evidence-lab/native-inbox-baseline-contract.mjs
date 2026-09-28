@@ -43,10 +43,12 @@ for (const forbidden of ['remove_all_filters', 'deactivate_plugins', 'wp_dequeue
 assert.ok(labPlugin.includes('wu21-native-inbox-baseline-mode.php'), 'Existing WU21 MU-plugin does not load the bounded Raw Native bypass.');
 assert.ok(diagnostics.includes("await import('../repro-evidence-lab/native-inbox-baseline-capture.mjs')"), 'Existing WU21 Inbox diagnostics do not execute baseline capture.');
 
-for (const semantic of ['chrome.tabs.setZoom', 'chrome.tabs.getZoom', 'launchPersistentContext', 'viewport: null']) {
+for (const semantic of ['chrome.tabs.setZoom', 'chrome.tabs.getZoom', 'launchPersistentContext']) {
   assert.ok(matrixJ.includes(semantic), `Historical qualified Matrix-J mechanism lost semantic ${semantic}.`);
   assert.ok(zoomHelper.includes(semantic), `Shared browser-zoom helper does not preserve Matrix-J semantic ${semantic}.`);
 }
+assert.match(matrixJ, /viewport\s*:\s*null/, 'Historical Matrix-J browser zoom no longer uses the real browser viewport.');
+assert.match(zoomHelper, /viewport\s*:\s*null/, 'Shared browser-zoom helper must preserve the Matrix-J real-browser viewport semantic.');
 for (const rejected of ['CSS zoom', 'root font-size scaling', 'deviceScaleFactor substitution', 'screenshot scaling']) {
   assert.ok(zoomHelper.includes(rejected), `Browser-zoom helper no longer rejects approximation: ${rejected}`);
 }
