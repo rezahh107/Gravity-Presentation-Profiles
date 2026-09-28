@@ -3,26 +3,22 @@
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
 /**
- * Adds an explicit manual reload control around the native Gravity Flow Inbox.
+ * Adds one explicit document-reload utility beside the native Gravity Flow Inbox.
  *
  * Gravity Flow remains the owner of Inbox data, assignment, authorization,
- * search, paging and Live Refresh. This control only asks the browser to reload
- * the current native Inbox document through the normal host lifecycle.
+ * search, paging, settings and Live Refresh. This control owns no Inbox state;
+ * it only asks the browser to reload the current document URL.
  */
 final class InboxManualRefreshControl {
     const SCRIPT_HANDLE = 'gpp-gravity-flow-inbox-manual-refresh';
+    const NATIVE_BLOCK = 'gravityflow/inbox';
 
     public static function register() {
         if ( ! function_exists( 'add_action' ) || ! function_exists( 'add_filter' ) ) {
             return;
         }
 
-        // WordPress admin Inbox is identified by its exact native admin route.
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueAdmin' ), 20 );
-
-        // Frontend reachability is attached to Gravity Flow's own Inbox shortcode
-        // render seam. The HTML is returned untouched; this is not a replacement
-        // Inbox and it does not enqueue on unrelated frontend pages.
         add_filter( 'gravityflow_shortcode_inbox', array( __CLASS__, 'filterFrontendInbox' ), 20, 3 );
         add_filter( 'render_block', array( __CLASS__, 'filterFrontendBlock' ), 20, 2 );
     }
@@ -36,23 +32,30 @@ final class InboxManualRefreshControl {
 
     public static function filterFrontendInbox( $html, $atts, $content ) {
         unset( $atts, $content );
-        self::enqueueScript();
+
+        // Enqueue only after Gravity Flow has produced its authentic Inbox
+        // surface. The HTML itself remains untouched.
+        if ( self::containsNativeInboxSurface( $html ) ) {
+            self::enqueueScript();
+        }
         return $html;
     }
 
-    /**
-     * Gravity Flow 3.1.0 also supports its native Inbox block. Keep the WordPress
-     * block filter generic but gate the enqueue on the exact admitted native
-     * Inbox DOM marker already used by the presentation layer.
-     */
     public static function filterFrontendBlock( $block_content, $block ) {
-        unset( $block );
-        if ( is_string( $block_content )
-            && false !== strpos( $block_content, 'gflow-inbox' )
-            && false !== strpos( $block_content, 'data-js="gflow-inbox"' ) ) {
-            self::enqueueScript();
+        if ( ! is_array( $block )
+            || self::NATIVE_BLOCK !== ( isset( $block['blockName'] ) ? $block['blockName'] : null )
+            || ! self::containsNativeInboxSurface( $block_content ) ) {
+            return $block_content;
         }
+
+        self::enqueueScript();
         return $block_content;
+    }
+
+    private static function containsNativeInboxSurface( $html ) {
+        return is_string( $html )
+            && false !== strpos( $html, 'gflow-inbox gflow-grid gflow-common' )
+            && false !== strpos( $html, 'data-js="gflow-inbox"' );
     }
 
     private static function enqueueScript() {
@@ -64,7 +67,7 @@ final class InboxManualRefreshControl {
             self::SCRIPT_HANDLE,
             plugins_url( 'assets/js/gravity-flow-inbox-manual-refresh.js', GPP_PLUGIN_FILE ),
             array(),
-            '1.1.0',
+            '2.0.0',
             true
         );
     }
