@@ -89,6 +89,13 @@ async function waitForRows(page, count, timeout = 15000) {
     { timeout },
   );
 }
+async function waitForRowId(page, rowId, present, timeout = 45000) {
+  await page.waitForFunction(
+    ({ rowId, present }) => Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${CSS.escape(String(rowId))}"]`)) === present,
+    { rowId: String(rowId), present },
+    { timeout },
+  );
+}
 async function findSortableHeader(page) {
   const headers = page.locator('[data-js="gflow-inbox"] .ag-header-cell');
   const count = await headers.count();
@@ -174,11 +181,15 @@ try {
       });
       if (!focus.active || focus.outlineStyle === 'none' || parseFloat(focus.outlineWidth) <= 0) throw new Error(`Search focus indicator is not visible: ${JSON.stringify(focus)}`);
 
-      await search.fill('00:24:00');
+      // Search only host-owned fields that the native Inbox actually exposes.
+      // Card Mode-only student/date raw values are intentionally not query targets.
+      await search.fill('WU21 Alpha Form');
       await search.dispatchEvent('keyup');
-      await waitForRows(page, 1);
-      const text = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().innerText();
-      if (!text.includes('WU21 Alpha Student 24') || !text.includes('2026-01-01 00:24:00')) throw new Error('Quick-search result did not contain the unique synthetic fixture.');
+      await page.waitForFunction(() => {
+        const rows = [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row')];
+        return rows.length > 0 && rows.length < 20 && rows.every(row => row.textContent.includes('WU21 Alpha Form'));
+      }, null, { timeout: 15000 });
+      const populatedRows = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').count();
 
       await search.fill('WU21 DEFINITELY NO RESULT');
       await search.dispatchEvent('keyup');
@@ -188,7 +199,7 @@ try {
       await search.dispatchEvent('keyup');
       await waitForRows(page, 20);
       if (await page.locator('[data-js="gflow-inbox-search"]').count() !== 1) throw new Error('Native Search was duplicated during the lifecycle.');
-      return { populated_rows: 1, no_result_rows: 0, cleared_rows: 20, focus };
+      return { query: 'WU21 Alpha Form', populated_rows: populatedRows, no_result_rows: 0, cleared_rows: 20, focus };
     });
 
     pollingPhase = 'browser_003_pre_mutation';
@@ -234,24 +245,25 @@ try {
     pollingPhase = 'browser_005_before_mutation';
     await test(page, 'WU21-BROWSER-005', 'native Live Refresh adds and removes a synthetic task without GPP reconciliation', async () => {
       await page.goto(inboxUrl, { waitUntil: 'networkidle' });
-      await page.waitForSelector('[data-js="gflow-inbox-search"]', { timeout: 30000 });
-      const search = page.locator('[data-js="gflow-inbox-search"]');
-      await search.fill('WU21 Refresh Student');
-      await search.dispatchEvent('keyup');
-      await waitForRows(page, 0);
+      await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
+      await waitForRows(page, 20);
       const id = wpControl('add');
       pollingPhase = 'browser_005_after_mutation';
-      await waitForRows(page, 1, 45000);
-      const addedText = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().innerText();
-      if (!addedText.includes('WU21 Refresh Student')) throw new Error('Native Live Refresh did not add the synthetic task.');
+
+      // The native Inbox does not expose the Card Mode student field. Observe
+      // the host-owned row identity emitted by Gravity Flow's polling response.
+      await waitForRowId(page, id, true, 45000);
+      const addedRow = page.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${String(id)}"]`);
+      if (await addedRow.count() !== 1) throw new Error(`Native Live Refresh did not materialize row-id ${id}.`);
+
       wpControl('remove');
-      await waitForRows(page, 0, 45000);
+      await waitForRowId(page, id, false, 45000);
       const nativeControls = {
         search: await page.locator('[data-js="gflow-inbox-search"]').count(),
         pager: await page.locator('[data-js="gflow-inbox"] .ag-paging-panel').count(),
       };
       if (nativeControls.search !== 1 || nativeControls.pager !== 1) throw new Error(`Native controls were invalid after rerender: ${JSON.stringify(nativeControls)}`);
-      return { dynamic_entry_id: Number(id), add_observed: true, remove_observed: true, native_controls: nativeControls };
+      return { dynamic_entry_id: Number(id), add_observed_by_native_row_id: true, remove_observed_by_native_row_id: true, native_controls: nativeControls };
     });
 
     pollingPhase = 'browser_006_after_mutation';
