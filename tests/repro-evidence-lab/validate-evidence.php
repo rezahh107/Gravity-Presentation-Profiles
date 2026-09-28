@@ -10,6 +10,7 @@ $config = rjson( $repo . '/tests/repro-evidence-lab/lab-config.json' );
 $filename = trim( file_get_contents( $dir . '/evidence-path.txt' ) );
 $e = rjson( $dir . '/' . $filename );
 req( 'gpp.reproducible_simulation_evidence' === $e['artifact_type'], 'artifact_type mismatch' );
+req( '1.1.0' === ( $e['schema_version'] ?? null ), 'Evidence schema mismatch' );
 req( 'REPRODUCIBLE_SIMULATION' === $e['environment_class'], 'environment_class mismatch' );
 req( 'PASS' === $e['overall_status'], 'Evidence overall_status is not PASS' );
 req( 'NOT_PROVEN' === $e['production_equivalence']['state'], 'Production equivalence must remain NOT_PROVEN' );
@@ -45,66 +46,55 @@ for ( $i=1; $i<=10; $i++ ) { $id=sprintf('AC-WU21-%03d',$i); req( 'PASS' === $e[
 req( 'UNBOUND' === $e['target_production_facts']['form_ids'], 'Production form IDs must remain UNBOUND' );
 req( 'NOT_PROVEN' === $e['target_production_facts']['plugin_license_configuration'], 'Production plugin/license config must remain NOT_PROVEN' );
 
+$a = isset( $e['architecture_reset'] ) && is_array( $e['architecture_reset'] ) ? $e['architecture_reset'] : array();
+req( 'PROVEN_IN_REPRODUCIBLE_SIMULATION' === ( $a['state'] ?? null ), 'Native-First architecture reset is not proven' );
+req( 'NATIVE_FIRST' === ( $a['mode'] ?? null ), 'Architecture reset mode mismatch' );
+req( 'CARD_MODE' === ( $a['superseded_mode'] ?? null ), 'Superseded architecture identity mismatch' );
+req( 'NOT_ATTEMPTED_OUT_OF_SCOPE' === ( $a['visual_golden_admission'] ?? null ), 'Reset must not claim visual Golden admission' );
+req( 'inbox-card-geometry.json' === ( $a['geometry_artifact'] ?? null ), 'Native-First geometry artifact binding mismatch' );
+
+$g = isset( $e['native_first_geometry'] ) && is_array( $e['native_first_geometry'] ) ? $e['native_first_geometry'] : array();
+req( '2.0.0' === ( $g['schema_version'] ?? null ), 'Native-First geometry schema mismatch' );
+req( getenv( 'GPP_WU21_REPOSITORY_SHA' ) === ( $g['repository_sha'] ?? null ), 'Native-First geometry repository SHA mismatch' );
+req( 'NATIVE_FIRST' === ( $g['architecture'] ?? null ), 'Native-First geometry architecture mismatch' );
+req( 'CARD_MODE' === ( $g['superseded_architecture'] ?? null ), 'Geometry does not identify retired Card Mode' );
+req( 'PASS' === ( $g['status'] ?? null ), 'Native-First geometry status is not PASS' );
+req( isset( $g['measurements'] ) && 2 === count( $g['measurements'] ), 'Native-First desktop/mobile geometry matrix incomplete' );
+foreach ( $g['measurements'] as $measurement ) {
+    req( 1 === ( $measurement['native_wrapper_count'] ?? null ), 'Native wrapper count mismatch' );
+    req( 1 === ( $measurement['native_grid_count'] ?? null ), 'Native grid count mismatch' );
+    req( 1 === ( $measurement['search_count'] ?? null ), 'Native Search count mismatch' );
+    req( 1 === ( $measurement['pager_count'] ?? null ), 'Native pager count mismatch' );
+    req( 1 === ( $measurement['manual_refresh_count'] ?? null ), 'Manual reload utility count mismatch' );
+    req( 0 === ( $measurement['card_node_count'] ?? null ), 'Card Mode markup remains in geometry evidence' );
+    req( 0 === ( $measurement['card_column_count'] ?? null ), 'gpp_case_card remains in geometry evidence' );
+    req( 0 === ( $measurement['replacement_widget_count'] ?? null ), 'Replacement Inbox remains in geometry evidence' );
+    req( ( $measurement['native_row_count'] ?? 0 ) > 0, 'Native geometry captured no rows' );
+    req( ( $measurement['document_horizontal_overflow_px'] ?? 9999 ) <= 4, 'Native geometry document overflow' );
+}
+
 $bound_visual = isset( $e['visual_regression_diagnostics'] ) && is_array( $e['visual_regression_diagnostics'] ) ? $e['visual_regression_diagnostics'] : null;
 $actual_visual = wu21_assert_visual_diagnostics_manifest( $dir, $bound_visual );
 req( 'RECURSIVE_EVIDENCE_JSON_JSONL_PNG_V1' === ( $actual_visual['inclusion_policy'] ?? null ), 'Visual diagnostics inclusion policy mismatch' );
 req( array( '.json', '.jsonl', '.png' ) === ( $actual_visual['included_extensions'] ?? null ), 'Visual diagnostics included extensions mismatch' );
-foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json', 'manifest.json' ) as $required_visual ) {
-    $paths = array_map( function ( $file ) { return $file['path'] ?? null; }, $actual_visual['files'] ?? array() );
-    req( in_array( $required_visual, $paths, true ), 'Required visual diagnostic is unbound: ' . $required_visual );
+$paths = array_map( function ( $file ) { return $file['path'] ?? null; }, $actual_visual['files'] ?? array() );
+foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json', 'manifest.json', 'native-first-desktop-1440.json', 'native-first-mobile-390.json' ) as $required_visual ) {
+    req( in_array( $required_visual, $paths, true ), 'Required Native-First diagnostic is unbound: ' . $required_visual );
 }
-
-$c = isset( $e['comparative_repair_qualification'] ) && is_array( $e['comparative_repair_qualification'] ) ? $e['comparative_repair_qualification'] : array();
-req( 'gpp.comparative_repair_qualification.v1' === ( $c['schema'] ?? null ), 'Comparative schema mismatch' );
-req( getenv( 'GPP_WU21_REPOSITORY_SHA' ) === ( $c['repository_sha'] ?? null ), 'Comparative repository SHA mismatch' );
-req( '8265507e7330a1e444ee10eec0592e816e03fad3' === ( $c['authorized_baseline_sha'] ?? null ), 'Comparative authorized baseline mismatch' );
-req( '8f2f83e46450a3f6165bb560a74771053517ad22' === ( $c['qualified_pr65_head'] ?? null ), 'Qualified PR65 Head mismatch' );
-req( 'twentytwentyfive' === ( $c['theme']['observed']['template'] ?? null ), 'Comparative template identity mismatch' );
-req( 'twentytwentyfive' === ( $c['theme']['observed']['stylesheet'] ?? null ), 'Comparative stylesheet identity mismatch' );
-req( 'NOT_PROVEN' === ( $c['production_equivalence'] ?? null ), 'Comparative production equivalence must remain NOT_PROVEN' );
-req( array( 'FULL_WIDTH_HOST', 'CONSTRAINED_HOST' ) === ( $c['contexts'] ?? null ), 'Comparative host contexts mismatch' );
-req( array( 'rtl', 'ltr' ) === ( $c['directions'] ?? null ), 'Comparative direction matrix mismatch' );
-req( 'REPRODUCED' === ( $c['control_reproduction']['status'] ?? null ), 'Historical PR65 control defect was not reproduced' );
-req( isset( $c['candidates'] ) && 2 === count( $c['candidates'] ), 'Exactly CONTROL and CANDIDATE_HOST_OWNED must execute' );
-req( 'CONTROL' === ( $c['candidates'][0]['id'] ?? null ), 'CONTROL must execute first' );
-req( 'historical_production_control_replay' === ( $c['candidates'][0]['kind'] ?? null ), 'CONTROL must remain the historical production mechanism replay' );
-req( 'CANDIDATE_HOST_OWNED' === ( $c['candidates'][1]['id'] ?? null ), 'Host-owned production repair candidate missing' );
-req( 'production_repair' === ( $c['candidates'][1]['kind'] ?? null ), 'Host-owned candidate must be current production repair' );
-req( false === ( $c['candidates'][1]['identity']['test_css_injected'] ?? null ), 'Production candidate must not rely on test-only CSS injection' );
-req( 'CANDIDATE_HOST_OWNED' === ( $c['production_repair']['candidate'] ?? null ), 'Production repair candidate identity mismatch' );
-req( false === ( $c['production_repair']['test_css_injected'] ?? null ), 'Production repair evidence used test-only CSS injection' );
-req( isset( $c['production_repair']['files'] ) && 2 === count( $c['production_repair']['files'] ), 'Production repair CSS identity is incomplete' );
-foreach ( array( 'assets/css/srwf-gravity-flow-inbox.css', 'assets/css/srwf-gravity-flow-inbox-native.css' ) as $file ) {
-    req( ! empty( $c['production_repair']['files'][ $file ]['git_blob_sha'] ), 'Missing production CSS git blob identity: ' . $file );
-    req( ! empty( $c['production_repair']['files'][ $file ]['sha256'] ), 'Missing production CSS sha256 identity: ' . $file );
+$visual_manifest = rjson( $dir . '/visual-regression-diagnostics/manifest.json' );
+req( '2.0.0' === ( $visual_manifest['schema_version'] ?? null ), 'Native-First diagnostic manifest schema mismatch' );
+req( 'NATIVE_FIRST_STRUCTURAL_DIAGNOSTIC' === ( $visual_manifest['evidence_kind'] ?? null ), 'Native-First diagnostic kind mismatch' );
+req( getenv( 'GPP_WU21_REPOSITORY_SHA' ) === ( $visual_manifest['repository_sha'] ?? null ), 'Native-First diagnostic repository SHA mismatch' );
+req( 'NATIVE_FIRST' === ( $visual_manifest['architecture'] ?? null ), 'Native-First diagnostic architecture mismatch' );
+req( 'CARD_MODE' === ( $visual_manifest['superseded_architecture'] ?? null ), 'Diagnostic does not identify retired Card Mode' );
+req( 'NOT_ATTEMPTED_OUT_OF_SCOPE' === ( $visual_manifest['visual_golden_admission'] ?? null ), 'Diagnostic improperly claims visual Golden admission' );
+req( 'PASS' === ( $visual_manifest['status'] ?? null ), 'Native-First structural diagnostic is not PASS' );
+foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json' ) as $legacy_file ) {
+    $legacy = rjson( $dir . '/visual-regression-diagnostics/' . $legacy_file );
+    req( 'NOT_APPLICABLE_NATIVE_FIRST_RESET' === ( $legacy['status'] ?? null ), $legacy_file . ' must be explicitly retired rather than treated as PASS' );
 }
-req( isset( $c['measurements'] ) && count( $c['measurements'] ) >= 18, 'Comparative measurement matrix is incomplete' );
-
-$expected_control = array(
-    'G1' => 'PASS',
-    'G2' => 'PASS',
-    'G3' => 'PASS',
-    'G4' => 'PASS',
-    'G5' => 'FAIL',
-    'G6' => 'PASS',
-    'G7' => 'FAIL',
-    'G8' => 'PASS',
-    'G9' => 'PASS',
-    'G10' => 'PASS',
-);
-foreach ( $expected_control as $gate => $status ) {
-    req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
-    req( $status === ( $c['per_candidate_gate_results']['CONTROL'][ $gate ]['status'] ?? null ), 'Historical CONTROL gate changed unexpectedly: ' . $gate );
-}
-for ( $i = 1; $i <= 10; $i++ ) {
-    $gate = 'G' . $i;
-    req( isset( $c['hard_gates'][ $gate ] ), 'Missing declared hard gate ' . $gate );
-    req( 'PASS' === ( $c['per_candidate_gate_results']['CANDIDATE_HOST_OWNED'][ $gate ]['status'] ?? null ), 'Production Host-Owned repair did not pass ' . $gate );
-}
-req( array( 'CANDIDATE_HOST_OWNED' ) === ( $c['surviving_candidates'] ?? null ), 'Production Host-Owned repair is not the sole surviving candidate' );
-req( 'METHOD_CLOSED_IN_REPRODUCIBLE_SIMULATION' === ( $c['outcome'] ?? null ), 'Production repair method is not closed in reproducible simulation' );
 
 $copy = $e; $actual = $copy['content_digest']['value']; unset( $copy['content_digest'] ); $expected = hash( 'sha256', cj( $copy ) );
 req( hash_equals( $expected, $actual ), 'Content digest mismatch' );
 req( 'wu21-repro-evidence-' . $actual . '.json' === $filename, 'Content-addressed filename mismatch' );
-echo "PASS WU21 evidence validation digest={$actual}\n";
+echo "PASS WU21 Native-First evidence validation digest={$actual}\n";

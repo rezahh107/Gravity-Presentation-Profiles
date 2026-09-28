@@ -14,16 +14,25 @@ if (!bundle.observed || !bundle.observed.binding_health || !bundle.observed.diag
 if (bundle.observed.entry_detail_setup.attempted !== false) throw new Error('Support bundle must report that no explicit Entry Detail setup was attempted in the WU21 diagnostics fixture.');
 if (!Array.isArray(bundle.unknown_or_unproven) || typeof bundle.privacy_boundary !== 'object') throw new Error('Support bundle fact/proof boundary is missing.');
 
-const traces = [
-  ...(bundle.observed.diagnostics.recent_incidents || []),
-  ...Object.values(bundle.observed.diagnostics.recent_success || {}),
-];
-const inbox = traces.find(trace => trace?.surface === 'gravity_flow.inbox');
-if (!inbox) throw new Error('Support bundle does not contain observed Inbox runtime decision evidence.');
+// Native-First Inbox keeps the shared diagnostics stage vocabulary stable for
+// historical consumers, but its production path no longer evaluates semantic
+// binding readiness or a GPP-owned row/cell presentation output. Requiring
+// those retired stages would force diagnostics to fabricate decisions that the
+// production adapter no longer makes. Validate the actual current decision
+// path instead: one successful profile-resolution event and no retired Card
+// Mode ownership stages.
+const inbox = bundle.observed.diagnostics.recent_success?.['gravity_flow.inbox'];
+if (!inbox) throw new Error('Support bundle does not contain successful Inbox runtime decision evidence.');
 const stages = (inbox.events || []).map(event => event.stage);
-if (!stages.includes('INBOX_PROFILE_RESOLUTION') || !stages.includes('INBOX_BINDING_READINESS') || !stages.includes('INBOX_PRESENTATION_OUTPUT')) {
-  throw new Error(`Inbox trace is not mapped to the shared stable stage vocabulary: ${JSON.stringify(stages)}`);
+if (stages.length !== 1 || stages[0] !== 'INBOX_PROFILE_RESOLUTION') {
+  throw new Error(`Inbox trace is not the Native-First decision path: ${JSON.stringify(stages)}`);
 }
+const retiredOwnershipStages = stages.filter(stage => ['INBOX_BINDING_READINESS', 'INBOX_PRESENTATION_OUTPUT'].includes(stage));
+if (retiredOwnershipStages.length !== 0) {
+  throw new Error(`Retired Card Mode diagnostics ownership leaked into Native-First Inbox: ${JSON.stringify(retiredOwnershipStages)}`);
+}
+if (inbox.events[0]?.result !== 'PASS') throw new Error(`Native-First Inbox profile resolution did not succeed: ${inbox.events[0]?.result ?? 'missing'}`);
+
 let previousSeq = 0;
 for (const event of inbox.events || []) {
   if (!Number.isInteger(event.seq) || event.seq <= previousSeq) throw new Error('Runtime trace sequence is not ordered.');
@@ -56,6 +65,7 @@ const validation = {
   entry_detail_setup_present: true,
   entry_detail_setup_attempted: bundle.observed.entry_detail_setup.attempted,
   inbox_stages: stages,
+  native_first_retired_ownership_stages_absent: true,
   privacy_falsification: 'PASS',
 };
 

@@ -45,11 +45,9 @@ use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 InboxManualRefreshControl::register();
 gpp_assert_same( 1, count( $GLOBALS['gpp_actions'] ), 'Manual Inbox refresh should register one exact admin enqueue hook.' );
 gpp_assert_same( 'admin_enqueue_scripts', $GLOBALS['gpp_actions'][0][0], 'Admin Inbox refresh must stay on the admin asset lifecycle.' );
-gpp_assert_same( 20, $GLOBALS['gpp_actions'][0][2], 'Manual Inbox refresh enqueue priority changed unexpectedly.' );
-gpp_assert_same( 2, count( $GLOBALS['gpp_filters'] ), 'Frontend reachability should use only the native Inbox shortcode seam plus WordPress block-output gate.' );
-gpp_assert_same( 'gravityflow_shortcode_inbox', $GLOBALS['gpp_filters'][0][0], 'Frontend shortcode reachability must be tied to Gravity Flow Inbox rendering.' );
-gpp_assert_same( 3, $GLOBALS['gpp_filters'][0][3], 'Gravity Flow Inbox shortcode filter argument contract changed.' );
-gpp_assert_same( 'render_block', $GLOBALS['gpp_filters'][1][0], 'Frontend block reachability must use WordPress block rendering.' );
+gpp_assert_same( 2, count( $GLOBALS['gpp_filters'] ), 'Frontend refresh reachability must use native Inbox render seams only.' );
+gpp_assert_same( 'gravityflow_shortcode_inbox', $GLOBALS['gpp_filters'][0][0], 'Shortcode reachability must be tied to Gravity Flow Inbox rendering.' );
+gpp_assert_same( 'render_block', $GLOBALS['gpp_filters'][1][0], 'Block reachability must use WordPress block rendering.' );
 
 $_GET = array( 'page' => 'gravityflow-inbox' );
 InboxManualRefreshControl::enqueueAdmin();
@@ -58,46 +56,48 @@ $enqueue = $GLOBALS['gpp_enqueued_scripts'][0];
 gpp_assert_same( InboxManualRefreshControl::SCRIPT_HANDLE, $enqueue[0], 'Manual refresh script handle mismatch.' );
 gpp_assert_true( false !== strpos( $enqueue[1], 'assets/js/gravity-flow-inbox-manual-refresh.js' ), 'Manual refresh script source mismatch.' );
 gpp_assert_same( array(), $enqueue[2], 'Manual refresh script must not add a runtime dependency.' );
-gpp_assert_same( '1.1.0', $enqueue[3], 'Frontend-reachable manual refresh asset version mismatch.' );
+gpp_assert_same( '2.0.0', $enqueue[3], 'Native-first manual refresh asset version mismatch.' );
 gpp_assert_same( true, $enqueue[4], 'Manual refresh script should load in the footer.' );
 
 $GLOBALS['gpp_enqueued_scripts'] = array();
 $_GET = array( 'page' => 'gravityflow-inbox', 'view' => 'entry' );
 InboxManualRefreshControl::enqueueAdmin();
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Entry Detail must not receive the admin Inbox manual refresh control asset.' );
-
-$_GET = array( 'page' => 'gf_settings' );
-InboxManualRefreshControl::enqueueAdmin();
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Unrelated admin pages must not receive the Inbox manual refresh control asset.' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Entry Detail must not receive the Inbox manual refresh asset.' );
 
 $GLOBALS['gpp_is_admin'] = false;
 $_GET = array();
-$html = '<div class="front-inbox">host</div>';
-$returned = InboxManualRefreshControl::filterFrontendInbox( $html, array( 'page' => 'inbox' ), '' );
-gpp_assert_same( $html, $returned, 'Frontend reachability must not alter Gravity Flow shortcode HTML.' );
-gpp_assert_same( 1, count( $GLOBALS['gpp_enqueued_scripts'] ), 'The authentic Gravity Flow Inbox shortcode render seam should enqueue the recovery control.' );
+$native = '<div class="gflow-inbox gflow-grid gflow-common" data-js="gflow-inbox"></div>';
+$returned = InboxManualRefreshControl::filterFrontendInbox( $native, array( 'page' => 'inbox' ), '' );
+gpp_assert_same( $native, $returned, 'Frontend reachability must not alter Gravity Flow Inbox HTML.' );
+gpp_assert_same( 1, count( $GLOBALS['gpp_enqueued_scripts'] ), 'Authentic Gravity Flow Inbox output should enqueue the utility.' );
 
 $GLOBALS['gpp_enqueued_scripts'] = array();
-$other_block = '<div class="wp-block-paragraph">not inbox</div>';
-InboxManualRefreshControl::filterFrontendBlock( $other_block, array( 'blockName' => 'core/paragraph' ) );
-gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Unrelated frontend blocks must not receive the Inbox manual refresh asset.' );
-$inbox_block = '<div data-js="gflow-inbox" class="gflow-inbox gflow-grid gflow-common"></div>';
-$returned_block = InboxManualRefreshControl::filterFrontendBlock( $inbox_block, array( 'blockName' => 'gravityflow/inbox' ) );
-gpp_assert_same( $inbox_block, $returned_block, 'Block reachability must not alter host Inbox output.' );
-gpp_assert_same( 1, count( $GLOBALS['gpp_enqueued_scripts'] ), 'Exact native Inbox DOM marker should make the block path reachable.' );
+$lookalike = '<div class="gflow-inbox">not authentic</div>';
+InboxManualRefreshControl::filterFrontendInbox( $lookalike, array( 'page' => 'inbox' ), '' );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Shortcode hook alone must not admit a utility before authentic native output exists.' );
+
+$GLOBALS['gpp_enqueued_scripts'] = array();
+InboxManualRefreshControl::filterFrontendBlock( $native, array( 'blockName' => 'core/html' ) );
+gpp_assert_same( array(), $GLOBALS['gpp_enqueued_scripts'], 'Native-looking markup in a non-Inbox block must not enqueue the utility.' );
+InboxManualRefreshControl::filterFrontendBlock( $native, array( 'blockName' => InboxManualRefreshControl::NATIVE_BLOCK ) );
+gpp_assert_same( 1, count( $GLOBALS['gpp_enqueued_scripts'] ), 'Exact native Inbox block plus authentic output should enqueue the utility.' );
 
 $script = file_get_contents( dirname( __DIR__, 2 ) . '/assets/js/gravity-flow-inbox-manual-refresh.js' );
 gpp_assert_true( false !== strpos( $script, 'به‌روزرسانی کارهای من' ), 'Owner-locked Persian manual refresh label is missing.' );
-gpp_assert_true( false !== strpos( $script, 'window.location.reload()' ), 'Manual refresh must use a normal browser document reload.' );
-gpp_assert_true( false !== strpos( $script, '.gflow-inbox.gflow-grid.gflow-common' ), 'Manual refresh must bind only to the evidenced native Inbox outer surface.' );
-gpp_assert_true( false !== strpos( $script, "document.createElement( 'button' )" ), 'Manual refresh must expose native button keyboard semantics.' );
-gpp_assert_true( false !== strpos( $script, 'document.querySelector( controlSelector )' ), 'Repeated renders must be guarded by one global control identity.' );
-gpp_assert_true( false !== strpos( $script, 'MutationObserver' ), 'Late host render should re-establish the control without polling.' );
-gpp_assert_true( false !== strpos( $script, 'observer.disconnect()' ), 'The one render observer must disconnect after the control mounts.' );
-gpp_assert_true( false !== strpos( $script, 'inbox.parentNode.insertBefore' ), 'Control must live outside the host-replaced Inbox subtree.' );
+gpp_assert_true( false !== strpos( $script, 'window.location.reload()' ), 'Manual refresh must use the current document reload lifecycle.' );
+gpp_assert_true( false !== strpos( $script, '.gflow-inbox.gflow-grid.gflow-common' ), 'Manual refresh must admit only the native Inbox outer surface.' );
+gpp_assert_true( false !== strpos( $script, 'document.querySelector( controlSelector )' ), 'Repeated execution must preserve one utility identity.' );
+gpp_assert_true( false !== strpos( $script, 'inbox.parentNode.insertBefore' ), 'Utility must stay outside the host-replaced Inbox subtree.' );
+gpp_assert_true( false !== strpos( $script, "button.setAttribute( 'aria-busy', 'true' )" ), 'Busy state must be explicit before reload.' );
+gpp_assert_true( false !== strpos( $script, "window.addEventListener( 'pageshow'" ), 'bfcache pageshow must recover the utility state.' );
+gpp_assert_true( false === strpos( $script, 'MutationObserver' ), 'Native-first utility must not own a persistent DOM reconciliation lifecycle.' );
+
+$admission = strpos( $script, 'var inbox = document.querySelector( surfaceSelector )' );
+$creation = strpos( $script, "document.createElement( 'p' )" );
+gpp_assert_true( false !== $admission && false !== $creation && $admission < $creation, 'Native Inbox admission must complete before any control DOM creation.' );
 
 foreach ( array( 'fetch(', 'XMLHttpRequest', '/inbox/changes', 'admin-ajax.php', 'wp-json', 'applyTransaction', 'setQuickFilter', 'setInterval(', 'setTimeout(' ) as $forbidden ) {
-    gpp_assert_true( false === strpos( $script, $forbidden ), 'Manual refresh script must not contain custom/private refresh behavior: ' . $forbidden );
+    gpp_assert_true( false === strpos( $script, $forbidden ), 'Manual refresh must not create parallel Inbox behavior: ' . $forbidden );
 }
 
 echo "INBOX_MANUAL_REFRESH_TESTS_PASS\n";

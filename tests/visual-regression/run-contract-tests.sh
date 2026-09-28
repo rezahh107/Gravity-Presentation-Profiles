@@ -46,17 +46,18 @@ then
   exit 1
 fi
 
-mkdir -p "$tmp/diagnostics/shortcode-desktop"
+# Native-First validator negative control. The old staged Card Mode failure schema
+# is intentionally retired; prove instead that a structurally plausible artifact
+# with the wrong exact-head identity still fails closed.
+mkdir -p "$tmp/diagnostics"
 cat > "$tmp/diagnostics/manifest.json" <<'JSON'
-{"mode":"PREVIEW_DIAGNOSTIC","status":"VISUAL_TEST_INFRASTRUCTURE_FAILURE","infrastructure_failure":{"scenario":"shortcode-desktop","failed_stage":"geometry_capture","error":{"stack":"SyntheticStageError: diagnostic probe"}}}
+{"schema_version":"2.0.0","evidence_kind":"NATIVE_FIRST_STRUCTURAL_DIAGNOSTIC","repository_sha":"synthetic-invalid-head","architecture":"NATIVE_FIRST","superseded_architecture":"CARD_MODE","visual_golden_admission":"NOT_ATTEMPTED_OUT_OF_SCOPE","status":"PASS","failure":null,"scenarios":[]}
 JSON
-printf '%s\n' '{"status":"VISUAL_TEST_INFRASTRUCTURE_FAILURE"}' > "$tmp/diagnostics/shortcode-desktop/infrastructure-failure.json"
-printf '%s\n' '{"active_stage":"geometry_capture"}' > "$tmp/diagnostics/shortcode-desktop/capture-state.json"
 if node tests/visual-regression/validate-diagnostic-artifact.mjs "$tmp/diagnostics" 2> "$tmp/validator-error.log"; then
-  echo 'Infrastructure-failure artifact unexpectedly validated as PASS.' >&2
+  echo 'Wrong-head Native-First diagnostic unexpectedly validated as PASS.' >&2
   exit 1
 fi
-grep -Fq 'shortcode-desktop failed at geometry_capture: SyntheticStageError: diagnostic probe' "$tmp/validator-error.log"
+grep -Fq 'exact-head identity mismatch' "$tmp/validator-error.log"
 
 node - "$tmp" <<'NODE'
 const fs=require('fs');const path=require('path');const root=process.argv[2];
@@ -73,4 +74,4 @@ if node tests/visual-regression/design-authority-contract.mjs "$tmp/changed-auth
   echo 'Modified design-authority hash unexpectedly passed.' >&2; exit 1
 fi
 
-echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true staged_failure_provenance=true design_authority_fail_closed=true matrix_j_semantic_falsification=true visual_diagnostics_digest_falsification=true matrix_j_documentation_current=true'
+echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true native_first_wrong_head_fails=true design_authority_fail_closed=true matrix_j_semantic_falsification=true visual_diagnostics_digest_falsification=true matrix_j_documentation_current=true'

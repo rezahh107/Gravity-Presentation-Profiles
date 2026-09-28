@@ -20,16 +20,6 @@ function canonicalize( $value ) {
 function canonical_json( $value ) { return json_encode( canonicalize( $value ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); }
 function status_map( $tests ) { $out = array(); foreach ( $tests as $t ) $out[$t['id']] = $t['status']; return $out; }
 function all_pass( $map, $ids ) { foreach ( $ids as $id ) if ( ! isset( $map[$id] ) || 'PASS' !== $map[$id] ) return false; return true; }
-
-$config = read_json( $repo . '/tests/repro-evidence-lab/lab-config.json' );
-$runtime = read_json( $artifact_dir . '/runtime.json' );
-$fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
-$php = read_json( $artifact_dir . '/php-results.json' );
-$browser = read_json( $artifact_dir . '/browser-results.json' );
-$comparative = read_json( $artifact_dir . '/pr4-inbox-width-rtl-comparative.json' );
-$visual_diagnostics = wu21_visual_diagnostics_manifest( $artifact_dir );
-$expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
-$expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
 function require_exact_test_ids( $suite, $expected, $label ) {
     if ( ! isset( $suite['results'] ) || ! is_array( $suite['results'] ) ) throw new RuntimeException( $label . ' results missing.' );
     $ids = array_map( function ( $t ) { return isset( $t['id'] ) ? $t['id'] : null; }, $suite['results'] );
@@ -39,6 +29,16 @@ function require_exact_test_ids( $suite, $expected, $label ) {
     sort( $expected_sorted, SORT_STRING );
     if ( count( $ids ) !== count( $unique ) || $unique !== $expected_sorted ) throw new RuntimeException( $label . ' test ID set mismatch.' );
 }
+
+$config = read_json( $repo . '/tests/repro-evidence-lab/lab-config.json' );
+$runtime = read_json( $artifact_dir . '/runtime.json' );
+$fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
+$php = read_json( $artifact_dir . '/php-results.json' );
+$browser = read_json( $artifact_dir . '/browser-results.json' );
+$geometry = read_json( $artifact_dir . '/inbox-card-geometry.json' );
+$visual_diagnostics = wu21_visual_diagnostics_manifest( $artifact_dir );
+$expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
+$expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
 require_exact_test_ids( $php, $expected_php_ids, 'PHP/runtime' );
 require_exact_test_ids( $browser, $expected_browser_ids, 'Browser/runtime' );
 $tests = array_merge( $php['results'], $browser['results'] );
@@ -53,40 +53,47 @@ $groups = array(
 $mechanics = array();
 foreach ( $groups as $name => $ids ) {
     $pass = all_pass( $map, $ids );
-    $mechanics[$name] = array(
-        'state' => $pass ? 'PROVEN_IN_REPRODUCIBLE_SIMULATION' : 'NOT_PROVEN',
-        'required_test_ids' => $ids,
-    );
+    $mechanics[$name] = array( 'state' => $pass ? 'PROVEN_IN_REPRODUCIBLE_SIMULATION' : 'NOT_PROVEN', 'required_test_ids' => $ids );
 }
 $all_tests_pass = count( array_filter( $tests, function ( $t ) { return 'PASS' !== $t['status']; } ) ) === 0;
+$native_first_geometry_pass = 'PASS' === ( $geometry['status'] ?? null )
+    && 'NATIVE_FIRST' === ( $geometry['architecture'] ?? null )
+    && 'CARD_MODE' === ( $geometry['superseded_architecture'] ?? null );
+$architecture_reset_proven = $all_tests_pass && $native_first_geometry_pass;
+$architecture_reset = array(
+    'state' => $architecture_reset_proven ? 'PROVEN_IN_REPRODUCIBLE_SIMULATION' : 'NOT_PROVEN',
+    'mode' => 'NATIVE_FIRST',
+    'superseded_mode' => 'CARD_MODE',
+    'visual_golden_admission' => 'NOT_ATTEMPTED_OUT_OF_SCOPE',
+    'geometry_artifact' => 'inbox-card-geometry.json',
+    'required_evidence_refs' => array( 'WU21-PHP-006', 'WU21-PHP-007', 'WU21-BROWSER-001', 'WU21-BROWSER-003', 'WU21-BROWSER-005', 'WU21-BROWSER-006', 'WU21-BROWSER-007', 'visual_regression_diagnostics' ),
+);
+
 $acceptance = array();
-for ( $i = 1; $i <= 10; $i++ ) {
-    $id = sprintf( 'AC-WU21-%03d', $i );
-    $acceptance[$id] = array( 'status' => 'PASS', 'evidence_refs' => array() );
-}
+for ( $i = 1; $i <= 10; $i++ ) $acceptance[sprintf( 'AC-WU21-%03d', $i )] = array( 'status' => 'PASS', 'evidence_refs' => array() );
 $acceptance['AC-WU21-001']['evidence_refs'] = array( 'runtime', 'configuration', 'environment', 'packages', 'workflow' );
 $acceptance['AC-WU21-002']['evidence_refs'] = array( 'fixture_manifest', 'WU21-PHP-004', 'WU21-PHP-017' );
 $acceptance['AC-WU21-003']['evidence_refs'] = array( 'source_backed_seams', 'WU21-PHP-002' );
 $acceptance['AC-WU21-004']['evidence_refs'] = array_merge( $groups['native_inbox_behavior'] );
 $acceptance['AC-WU21-005']['evidence_refs'] = array_merge( $groups['semantic_binding'] );
 $acceptance['AC-WU21-006']['evidence_refs'] = array_merge( $groups['fail_closed'] );
-$acceptance['AC-WU21-007']['evidence_refs'] = array( 'content_digest', 'runtime', 'tests', 'visual_regression_diagnostics', 'production_equivalence' );
+$acceptance['AC-WU21-007']['evidence_refs'] = array( 'content_digest', 'runtime', 'tests', 'architecture_reset', 'visual_regression_diagnostics', 'production_equivalence' );
 $acceptance['AC-WU21-008']['evidence_refs'] = array( 'fixture_manifest', 'WU21-PHP-017' );
-$acceptance['AC-WU21-009']['evidence_refs'] = array( 'mechanics' );
+$acceptance['AC-WU21-009']['evidence_refs'] = array( 'mechanics', 'architecture_reset' );
 $acceptance['AC-WU21-010']['evidence_refs'] = array( 'production_equivalence', 'target_production_facts' );
-if ( ! $all_tests_pass ) {
+if ( ! $architecture_reset_proven ) {
     foreach ( $acceptance as &$ac ) $ac['status'] = 'NOT_PROVEN';
     unset( $ac );
 }
 
 $evidence = array(
     'artifact_type' => 'gpp.reproducible_simulation_evidence',
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'work_unit_id' => $config['work_unit_id'],
     'run_id' => $config['run_id'],
     'environment_class' => 'REPRODUCIBLE_SIMULATION',
     'maximum_positive_evidence_class' => 'PROVEN_IN_REPRODUCIBLE_SIMULATION',
-    'overall_status' => $all_tests_pass ? 'PASS' : 'FAIL',
+    'overall_status' => $architecture_reset_proven ? 'PASS' : 'FAIL',
     'repository' => $runtime['repository'],
     'workflow' => array_merge( $runtime['workflow'], array( 'run_url' => $runtime['workflow']['server_url'] . '/' . $runtime['repository']['full_name'] . '/actions/runs/' . $runtime['workflow']['run_id'] ) ),
     'configuration' => $runtime['configuration'],
@@ -105,26 +112,21 @@ $evidence = array(
     'source_backed_seams' => $config['source_backed_seams'],
     'tests' => $tests,
     'mechanics' => $mechanics,
-    'comparative_repair_qualification' => $comparative,
+    'architecture_reset' => $architecture_reset,
+    'native_first_geometry' => $geometry,
     'visual_regression_diagnostics' => $visual_diagnostics,
     'acceptance_criteria' => $acceptance,
     'target_production_facts' => array(
-        'form_ids' => 'UNBOUND',
-        'field_ids' => 'UNBOUND',
-        'workflow_step_ids' => 'UNBOUND',
-        'page_route_ids' => 'UNBOUND',
-        'plugin_license_configuration' => 'NOT_PROVEN',
-        'cache_cdn_theme_server_configuration' => 'NOT_PROVEN'
+        'form_ids' => 'UNBOUND', 'field_ids' => 'UNBOUND', 'workflow_step_ids' => 'UNBOUND', 'page_route_ids' => 'UNBOUND',
+        'plugin_license_configuration' => 'NOT_PROVEN', 'cache_cdn_theme_server_configuration' => 'NOT_PROVEN'
     ),
-    'production_equivalence' => array(
-        'state' => 'NOT_PROVEN',
-        'reason' => 'WU21 is a reproducible simulation only; no target-production read-back is performed.'
-    ),
+    'production_equivalence' => array( 'state' => 'NOT_PROVEN', 'reason' => 'WU21 is a reproducible simulation only; no target-production read-back is performed.' ),
     'evidence_refs' => array(
         'config:tests/repro-evidence-lab/lab-config.json',
         'workflow:.github/workflows/wu21-repro-evidence-lab.yml',
         'fixture:synthetic-non-pii',
-        'comparative:pr4-inbox-width-rtl-comparative.json',
+        'architecture:native-first',
+        'geometry:inbox-card-geometry.json-legacy-filename-native-first-content',
         'visual-diagnostics:recursive-json-jsonl-png-sha256-manifest',
         'gravity-flow-package-sha256:' . $config['plugins']['gravity_flow']['sha256'],
         'gravity-forms-package-sha256:' . $config['plugins']['gravity_forms']['sha256']
