@@ -45,12 +45,13 @@ function gpp_inbox_inner_rule_bodies( $css ) {
     );
 }
 
-/** Normalize real CSS comments while preserving comment-looking data inside quoted strings. */
+/** Normalize separated CSS comments while preserving quoted data and failing closed on token-adjacent comments. */
 function gpp_inbox_normalize_css_comments( $css ) {
     $normalized = '';
     $quote = null;
     $escaped = false;
     $in_comment = false;
+    $comment_left_separated = true;
     $length = strlen( $css );
 
     for ( $i = 0; $i < $length; ++$i ) {
@@ -59,6 +60,12 @@ function gpp_inbox_normalize_css_comments( $css ) {
 
         if ( $in_comment ) {
             if ( '*' === $char && '/' === $next ) {
+                $right_index = $i + 2;
+                $comment_right_separated = $right_index >= $length || ctype_space( $css[ $right_index ] );
+                if ( ! $comment_left_separated || ! $comment_right_separated ) {
+                    return array( 'css' => '', 'error' => 'Token-adjacent CSS comment syntax is outside the bounded native Inbox verifier.' );
+                }
+                $normalized .= ' ';
                 $in_comment = false;
                 ++$i;
             }
@@ -84,7 +91,7 @@ function gpp_inbox_normalize_css_comments( $css ) {
         }
 
         if ( '/' === $char && '*' === $next ) {
-            $normalized .= ' ';
+            $comment_left_separated = 0 === $i || ctype_space( $css[ $i - 1 ] );
             $in_comment = true;
             ++$i;
             continue;
@@ -1066,6 +1073,41 @@ $historical_errors = gpp_inbox_historical_regression_errors( $shared_css, $nativ
 gpp_assert_same( array(), $historical_errors, 'Current production Inbox CSS violates an existing historical regression guard: ' . implode( ' | ', $historical_errors ) );
 
 /* Comment-normalization closure. */
+$comment_spliced_root_combined = <<<'CSS'
+.gflow-inbox.gflow-grid.gflow-common .ag-row {
+    color: #172033;
+}
+
+.gflow-inbox/**/.gflow-grid.gflow-common .ag-cell {
+    width: 10px;
+}
+CSS;
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_COMMENT_SPLICED_ROOT_COMBINED_REJECT',
+    $comment_spliced_root_combined,
+    'Token-adjacent CSS comment syntax'
+);
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_COMMENT_SPLICED_ROOT_SECOND_PAIR_REJECT',
+    '.gflow-inbox.gflow-grid/**/.gflow-common .ag-cell { width: 10px; }',
+    'Token-adjacent CSS comment syntax'
+);
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_COMMENT_SPLICED_CLASS_DELIMITER_REJECT',
+    './**/gflow-inbox.gflow-grid.gflow-common .ag-cell { width: 10px; }',
+    'Token-adjacent CSS comment syntax'
+);
+
+$whitespace_comment_fixture = '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* ordinary separated comment */ font-weight: 600; }';
+gpp_assert_same(
+    array(),
+    gpp_inbox_native_paint_contract_errors( $whitespace_comment_fixture ),
+    'Whitespace-separated ordinary CSS comment unexpectedly failed the bounded native paint contract.'
+);
+echo "PRI_FND_001_WHITESPACE_COMMENT_ADMITTED_PASS\n";
+
 gpp_inbox_assert_rejected_with_property(
     'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT',
     '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }',
