@@ -54,10 +54,7 @@ function gpp_inbox_inner_rule_bodies( $css ) {
     );
 }
 
-/**
- * Normalize comments before selector/declaration classification. Any comment
- * syntax that cannot be fully removed is an explicit fail-closed condition.
- */
+/** Normalize comments before selector/declaration classification. */
 function gpp_inbox_normalize_css_comments( $css ) {
     $normalized = preg_replace( '/\/\*.*?\*\//s', ' ', $css );
     if ( ! is_string( $normalized ) ) {
@@ -70,10 +67,7 @@ function gpp_inbox_normalize_css_comments( $css ) {
     return array( 'css' => $normalized, 'error' => null );
 }
 
-/**
- * Split a selector list on commas that are not inside strings, [] or ().
- * Unsupported/unbalanced selector syntax fails closed.
- */
+/** Split a selector list only at top-level commas. */
 function gpp_inbox_split_selector_list( $selector_text ) {
     $members = array();
     $current = '';
@@ -127,6 +121,7 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
         return array( 'members' => array(), 'error' => 'Unbalanced selector-list syntax.' );
     }
+
     $members[] = trim( $current );
     foreach ( $members as $member ) {
         if ( '' === $member ) {
@@ -137,18 +132,7 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     return array( 'members' => $members, 'error' => null );
 }
 
-/** Authentic native-root selectors start at Gravity Flow's Inbox root. */
-function gpp_inbox_is_native_root_selector( $selector ) {
-    return 1 === preg_match(
-        '/^\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/',
-        trim( $selector )
-    );
-}
-
-/**
- * Parse the bounded declaration grammar used by the current production Inbox
- * CSS. Anything outside that grammar is rejected instead of silently skipped.
- */
+/** Parse the bounded declaration grammar used by the current Inbox CSS. */
 function gpp_inbox_parse_native_declarations( $body ) {
     $pattern = '/(?:^|;)\s*((?:--[a-z0-9_-]+)|(?:[a-z-]+))\s*:\s*([^;{}]+)(?=;|$)/i';
     $matches = array();
@@ -156,20 +140,49 @@ function gpp_inbox_parse_native_declarations( $body ) {
 
     $residue = preg_replace( $pattern, '', $body );
     if ( ! is_string( $residue ) || '' !== trim( $residue, " \t\r\n;" ) ) {
-        return array( 'properties' => array(), 'error' => 'Unclassifiable CSS declaration syntax.' );
+        return array( 'declarations' => array(), 'error' => 'Unclassifiable CSS declaration syntax.' );
     }
 
-    $properties = array();
+    $declarations = array();
     foreach ( $matches as $match ) {
-        $properties[] = strtolower( $match[1] );
+        $declarations[] = array(
+            'property' => strtolower( $match[1] ),
+            'value'    => trim( $match[2] ),
+        );
     }
 
-    return array( 'properties' => $properties, 'error' => null );
+    return array( 'declarations' => $declarations, 'error' => null );
+}
+
+/** Native host selectors begin at Gravity Flow's authoritative Inbox root. */
+function gpp_inbox_is_native_root_selector( $selector ) {
+    return 1 === preg_match(
+        '/^\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/',
+        trim( $selector )
+    );
+}
+
+/** The only ancestor-qualified native-root selector admitted is the GPP host shell. */
+function gpp_inbox_is_admitted_host_shell_selector( $selector ) {
+    return '.gpp-inbox-surface .gflow-inbox.gflow-grid.gflow-common' === trim( $selector );
 }
 
 /** Positive Phase-B property contract for the authentic native Inbox subtree. */
 function gpp_inbox_is_admitted_native_paint_property( $property ) {
-    if ( 1 === preg_match( '/^--gpp-inbox-[a-z0-9-]+$/', $property ) ) {
+    $custom_properties = array(
+        '--gpp-inbox-canvas',
+        '--gpp-inbox-surface',
+        '--gpp-inbox-group-surface',
+        '--gpp-inbox-text',
+        '--gpp-inbox-text-muted',
+        '--gpp-inbox-border',
+        '--gpp-inbox-control-border',
+        '--gpp-inbox-accent',
+        '--gpp-inbox-focus',
+        '--gpp-inbox-row-hover',
+        '--gpp-inbox-elevation',
+    );
+    if ( in_array( $property, $custom_properties, true ) ) {
         return true;
     }
 
@@ -192,9 +205,35 @@ function gpp_inbox_is_admitted_native_paint_property( $property ) {
     );
 }
 
+/** The GPP host shell exception is frozen to the existing width handoff only. */
+function gpp_inbox_host_shell_declaration_errors( $declarations ) {
+    $expected = array(
+        'box-sizing'      => 'border-box',
+        'inline-size'     => '100%',
+        'max-inline-size' => 'none',
+        'margin-inline'   => '0',
+    );
+    $actual = array();
+    foreach ( $declarations as $declaration ) {
+        if ( isset( $actual[ $declaration['property'] ] ) ) {
+            return array( 'Duplicate GPP Inbox host-shell declaration `' . $declaration['property'] . '`.' );
+        }
+        $actual[ $declaration['property'] ] = strtolower( trim( $declaration['value'] ) );
+    }
+
+    ksort( $actual );
+    ksort( $expected );
+    if ( $actual !== $expected ) {
+        return array( 'GPP Inbox host-shell declaration set/value changed outside the admitted width handoff.' );
+    }
+
+    return array();
+}
+
 /**
  * Enforce the positive paint/typography contract on every selector-list member
- * that starts at the authentic native root, regardless of list position.
+ * that targets the authentic native root/subtree. Unknown ancestor-qualified
+ * native selectors and unclassifiable syntax fail closed.
  */
 function gpp_inbox_native_paint_contract_errors( $css ) {
     $normalized = gpp_inbox_normalize_css_comments( $css );
@@ -207,51 +246,67 @@ function gpp_inbox_native_paint_contract_errors( $css ) {
     preg_match_all( '/([^{}]+)\{([^{}]*)\}/m', $css, $rules, PREG_SET_ORDER );
 
     $errors = array();
-    $classified_native_members = 0;
+    $classified_target_members = 0;
     foreach ( $rules as $rule ) {
-        $selectors = gpp_inbox_split_selector_list( trim( $rule[1] ) );
+        $selector_text = trim( $rule[1] );
+        $selectors = gpp_inbox_split_selector_list( $selector_text );
         if ( null !== $selectors['error'] ) {
-            if ( false !== strpos( $rule[1], '.gflow-inbox.gflow-grid.gflow-common' ) ) {
-                $errors[] = $selectors['error'] . ' Selector: ' . trim( $rule[1] );
+            if ( false !== strpos( $selector_text, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
+                $errors[] = $selectors['error'] . ' Selector: ' . $selector_text;
             }
             continue;
         }
 
-        $native_members = array_filter( $selectors['members'], 'gpp_inbox_is_native_root_selector' );
-        if ( empty( $native_members ) ) {
+        $target_members = array();
+        foreach ( $selectors['members'] as $member ) {
+            if ( false !== strpos( $member, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
+                $target_members[] = $member;
+            }
+        }
+        if ( empty( $target_members ) ) {
             continue;
         }
-        $classified_native_members += count( $native_members );
+        $classified_target_members += count( $target_members );
 
         $declarations = gpp_inbox_parse_native_declarations( $rule[2] );
         if ( null !== $declarations['error'] ) {
-            $errors[] = $declarations['error'] . ' Selector: ' . implode( ', ', $native_members );
+            $errors[] = $declarations['error'] . ' Selector: ' . implode( ', ', $target_members );
             continue;
         }
-        foreach ( $declarations['properties'] as $property ) {
-            if ( ! gpp_inbox_is_admitted_native_paint_property( $property ) ) {
-                $errors[] = 'Unadmitted native Inbox property `' . $property . '` in selector: ' . implode( ', ', $native_members );
+
+        foreach ( $target_members as $member ) {
+            if ( gpp_inbox_is_admitted_host_shell_selector( $member ) ) {
+                foreach ( gpp_inbox_host_shell_declaration_errors( $declarations['declarations'] ) as $error ) {
+                    $errors[] = $error . ' Selector: ' . $member;
+                }
+                continue;
+            }
+            if ( ! gpp_inbox_is_native_root_selector( $member ) ) {
+                $errors[] = 'Unadmitted ancestor-qualified selector targets the native Inbox subtree: ' . $member;
+                continue;
+            }
+
+            foreach ( $declarations['declarations'] as $declaration ) {
+                if ( ! gpp_inbox_is_admitted_native_paint_property( $declaration['property'] ) ) {
+                    $errors[] = 'Unadmitted native Inbox property `' . $declaration['property'] . '` in selector: ' . $member;
+                }
             }
         }
     }
 
     $candidate_matches = array();
-    preg_match_all(
-        '/(?:^|[{},])\s*\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/m',
-        $css,
-        $candidate_matches
-    );
+    preg_match_all( '/\.gflow-inbox\.gflow-grid\.gflow-common/', $css, $candidate_matches );
     $candidate_count = count( $candidate_matches[0] );
     if ( 0 === $candidate_count ) {
         $errors[] = 'No native Inbox selector was found for paint-contract validation.';
-    } elseif ( $candidate_count !== $classified_native_members ) {
+    } elseif ( $candidate_count !== $classified_target_members ) {
         $errors[] = 'Native Inbox selector syntax could not be classified deterministically.';
     }
 
     return $errors;
 }
 
-/** Existing historical regression protections, exposed for falsification. */
+/** Existing historical regression protections, reused by production and falsification checks. */
 function gpp_inbox_historical_regression_errors( $shared_css, $native_css ) {
     $errors = array();
     $combined_css = $shared_css . "\n" . $native_css;
@@ -262,6 +317,7 @@ function gpp_inbox_historical_regression_errors( $shared_css, $native_css ) {
     if ( false !== stripos( $combined_css, '1120px' ) ) {
         $errors[] = 'Superseded ~1120px Inbox content-width lock was reintroduced.';
     }
+
     foreach ( array_merge( gpp_inbox_full_width_rule_bodies( $shared_css ), gpp_inbox_full_width_rule_bodies( $native_css ) ) as $rule ) {
         if ( 1 === preg_match( '/\b\d*\.?\d+(?:d|s|l)?vw\b/i', $rule ) ) {
             $errors[] = 'Full Width Inbox reintroduced viewport-owned sizing.';
@@ -276,6 +332,7 @@ function gpp_inbox_historical_regression_errors( $shared_css, $native_css ) {
             $errors[] = 'Full Width Inbox reintroduced a transform-based breakout.';
         }
     }
+
     if ( false !== strpos( $native_css, 'calc(50% - 50vw)' ) ) {
         $errors[] = 'Native Inbox CSS still contains the historical physical viewport offset.';
     }
@@ -401,12 +458,26 @@ foreach ( array( 'box-sizing', 'border-width', 'scale' ) as $property ) {
         $property
     );
 }
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_UNKNOWN_CUSTOM_PROPERTY_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common { --gpp-inbox-geometry: 10px; }',
+    '--gpp-inbox-geometry'
+);
+
+$ancestor_errors = gpp_inbox_native_paint_contract_errors(
+    '.unexpected-wrapper .gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; }'
+);
+gpp_assert_true(
+    false !== strpos( implode( "\n", $ancestor_errors ), 'Unadmitted ancestor-qualified selector' ),
+    'Unknown ancestor-qualified native Inbox selector unexpectedly escaped classification.'
+);
+echo "PRI_FND_001_ANCESTOR_NATIVE_SELECTOR_REJECT_PASS\n";
 
 $admitted_fixture = <<<'CSS'
-.gpp-owned-decoy,
+.decoy-selector,
 .gflow-inbox.gflow-grid.gflow-common .ag-row {
-    --gpp-inbox-test-paint: #fff;
-    background-color: var(--gpp-inbox-test-paint);
+    --gpp-inbox-surface: #fff;
+    background-color: var(--gpp-inbox-surface);
     border-color: #e4e7ec;
     border-radius: 8px;
     box-shadow: none;
