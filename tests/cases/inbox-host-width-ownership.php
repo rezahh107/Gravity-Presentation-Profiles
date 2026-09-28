@@ -70,7 +70,8 @@ function gpp_inbox_native_host_rules( $css ) {
 
     $rules = array();
     foreach ( $matches as $match ) {
-        $selector = trim( $match[1] );
+        $selector = preg_replace( '/\/\*.*?\*\//s', '', $match[1] );
+        $selector = trim( is_string( $selector ) ? $selector : $match[1] );
         if ( 0 !== strpos( $selector, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
             continue;
         }
