@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { chromium } from 'playwright';
 import { applyScenarioAction } from './scenario-state.mjs';
 import { MATRIX_J_CASES, assertSerializedMatrixJProvenEvidence } from './matrix-j-evidence-contract.mjs';
+import {
+  BROWSER_TAB_ZOOM_MECHANISM,
+  launchBrowserZoomContext,
+  setBrowserTabZoom,
+} from './browser-tab-zoom.mjs';
 
 const qualificationId='GPP-INBOX-MATRIX-J-BROWSER-ZOOM-V1';
 const artifactRoot=path.join(process.env.WU21_ARTIFACT_DIR,'visual-regression-diagnostics');
@@ -29,11 +32,8 @@ const evidence={
   declared_case_semantics:Object.fromEntries(Object.entries(MATRIX_J_CASES).map(([name,spec])=>[name,{expected_narrow_media:spec.expected_narrow_media,expected_cards_per_visual_row:spec.expected_cards_per_visual_row}])),
   status:'RUNNING',
   mechanism:{
-    kind:'CHROMIUM_EXTENSION_TABS_SET_ZOOM',
+    ...BROWSER_TAB_ZOOM_MECHANISM,
     api:'chrome.tabs.setZoom(tabId, 2)',
-    verification_api:'chrome.tabs.getZoom(tabId)',
-    playwright_launch:'chromium.launchPersistentContext(channel="chromium", viewport=null)',
-    approximation_rejected:['CSS zoom','root font-size scaling','viewport resizing as zoom','deviceScaleFactor substitution','screenshot scaling'],
     semantic_claim:'The Chrome tabs API changes the tab browser zoom factor itself; layout qualification is accepted only when the runtime also shows the expected effective CSS viewport contraction.',
   },
   repository_sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
@@ -42,32 +42,6 @@ const evidence={
   block_shortcode_parity:[],
   remaining_evidence_path:null,
 };
-
-function extensionFixture(root){
-  const extension=path.join(root,'extension');
-  fs.mkdirSync(extension,{recursive:true});
-  fs.writeFileSync(path.join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'GPP Matrix J Browser Zoom Harness',version:'1.0.0',permissions:['tabs'],background:{service_worker:'background.js'}}));
-  fs.writeFileSync(path.join(extension,'background.js'),'// Matrix J test-only service worker.\n');
-  return extension;
-}
-
-async function extensionWorker(context){
-  let [worker]=context.serviceWorkers();
-  if(!worker) worker=await context.waitForEvent('serviceworker',{timeout:15000});
-  return worker;
-}
-
-async function browserZoom(worker,page,factor){
-  return worker.evaluate(async ({url,factor})=>{
-    const tabs=await chrome.tabs.query({});
-    const tab=tabs.find(candidate=>candidate.url===url) || tabs.find(candidate=>candidate.active);
-    if(!tab?.id) throw new Error(`Unable to bind browser zoom to target tab: ${url}`);
-    await chrome.tabs.setZoom(tab.id,factor);
-    const actual=await chrome.tabs.getZoom(tab.id);
-    const settings=await chrome.tabs.getZoomSettings(tab.id);
-    return {tab_id:tab.id,requested:factor,actual,settings};
-  },{url:page.url(),factor});
-}
 
 async function measure(page){
   return page.evaluate(()=>{
@@ -125,16 +99,10 @@ let layoutZoomSemanticsProven=false;
 let runtimeFinding=null;
 try{
   for(const [caseName,windowCase] of Object.entries(MATRIX_J_CASES)){
-    const tempRoot=fs.mkdtempSync(path.join(os.tmpdir(),`gpp-matrix-j-${caseName}-`));
-    const extension=extensionFixture(tempRoot);
-    let context;
+    const harness=await launchBrowserZoomContext({windowWidth:windowCase.window_width,windowHeight:windowCase.window_height});
     try{
-      context=await chromium.launchPersistentContext(path.join(tempRoot,'profile'),{
-        channel:'chromium',headless:true,viewport:null,locale:'en-US',timezoneId:'UTC',reducedMotion:'reduce',
-        args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`,`--window-size=${windowCase.window_width},${windowCase.window_height}`],
-      });
+      const {context,worker}=harness;
       await context.addCookies(cookies.map(cookie=>({...cookie,url:baseUrl})));
-      const worker=await extensionWorker(context);
       const routeMeasurements=[];
       for(const [route,url] of Object.entries(routes)){
         assert.ok(url,`Matrix J ${route} route is unavailable.`);
@@ -142,10 +110,10 @@ try{
         await page.goto(url,{waitUntil:'networkidle'});
         await page.waitForSelector(selectors.gridRoot,{timeout:30000});
         await page.waitForFunction(selector=>document.querySelectorAll(`${selector} > .ag-row`).length===20,selectors.centerRows,{timeout:15000});
-        const reset=await browserZoom(worker,page,1);
+        const reset=await setBrowserTabZoom(worker,page,1);
         assert.ok(Math.abs(reset.actual-1)<0.001,`${caseName}/${route}: browser zoom did not reset to 100%.`);
         const before=await measure(page);
-        const zoom=await browserZoom(worker,page,2);
+        const zoom=await setBrowserTabZoom(worker,page,2);
         browserZoomApiProven=browserZoomApiProven||Math.abs(zoom.actual-2)<0.001;
         assert.ok(Math.abs(zoom.actual-2)<0.001,`${caseName}/${route}: chrome.tabs.getZoom did not confirm factor 2.`);
         await page.waitForTimeout(500);
@@ -197,8 +165,7 @@ try{
       assert.equal(parity.shortcode_narrow,parity.block_narrow,`${caseName}: Block/shortcode responsive branch diverged at 200% zoom.`);
       evidence.block_shortcode_parity.push(parity);
     }finally{
-      if(context) await context.close().catch(()=>{});
-      fs.rmSync(tempRoot,{recursive:true,force:true});
+      await harness.close();
     }
   }
   evidence.status='PROVEN';
