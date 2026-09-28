@@ -19,6 +19,7 @@ node tests/visual-regression/reference-identity-falsification.mjs
 node tests/visual-regression/scenario-state-falsification.mjs
 node tests/visual-regression/trigger-coverage-falsification.mjs
 node tests/visual-regression/wu21-package-source-falsification.mjs
+node tests/repro-evidence-lab/native-inbox-baseline-contract.mjs
 php tests/repro-evidence-lab/visual-diagnostics-digest-falsification.php
 
 doc="docs/evidence/INBOX_VISUAL_REGRESSION_DIAGNOSTICS_V1.md"
@@ -74,4 +75,4 @@ if node tests/visual-regression/design-authority-contract.mjs "$tmp/changed-auth
   echo 'Modified design-authority hash unexpectedly passed.' >&2; exit 1
 fi
 
-echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true native_first_wrong_head_fails=true design_authority_fail_closed=true matrix_j_semantic_falsification=true visual_diagnostics_digest_falsification=true matrix_j_documentation_current=true'
+echo 'VISUAL_DIAGNOSTIC_CONTRACT_TESTS_PASS baseline_immutability=true missing_reference_fails=true native_first_wrong_head_fails=true design_authority_fail_closed=true matrix_j_semantic_falsification=true native_baseline_contract=true visual_diagnostics_digest_falsification=true matrix_j_documentation_current=true'
