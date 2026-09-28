@@ -215,6 +215,7 @@ $full_width = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailFullW
 $timeline = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailTimelineSemanticPresentation.php' );
 $inbox = file_get_contents( $root . '/src/SRWF/GravityFlow/InboxPresentationAdapter.php' );
 $inbox_css = file_get_contents( $root . '/assets/css/srwf-gravity-flow-inbox.css' );
+$inbox_native_css = file_get_contents( $root . '/assets/css/srwf-gravity-flow-inbox-native.css' );
 
 gpp_assert_true(
     is_string( $full_width )
@@ -231,12 +232,26 @@ gpp_assert_true(
     'Timeline decoration must retain the event-count mismatch native fallback.'
 );
 
-gpp_assert_true(
-    is_string( $inbox_css )
-        && false !== strpos( $inbox_css, '.ag-center-cols-container > .ag-row > .ag-cell[col-id="gpp_case_card"]' )
-        && false !== strpos( $inbox_css, ':not(:has(.ag-center-cols-container > .ag-row .gpp-inbox-card__readiness--unready))' ),
-    'Card Mode must remain gated on the exact pinned AG Grid row/card-cell seam and all-ready rendered set.'
-);
+foreach ( array( 'gpp_case_card', 'gravityflow_columns_inbox_table', 'gravityflow_inbox_field_value', 'gravityflow_js_config_shared', 'rowBuffer' ) as $retired_contract ) {
+    gpp_assert_true(
+        is_string( $inbox ) && false === strpos( $inbox, $retired_contract ),
+        'Native-first Inbox adapter must retire the old Card Mode/Grid-config contract: ' . $retired_contract
+    );
+}
+
+foreach ( array( 'gpp_case_card', '.ag-center-cols-container', 'display: grid !important', 'position: relative !important', 'transform: none !important', 'overflow-x: hidden !important' ) as $retired_css ) {
+    gpp_assert_true(
+        is_string( $inbox_css ) && false === strpos( $inbox_css, $retired_css ),
+        'Native-first shared Inbox CSS must not manufacture host row/grid geometry: ' . $retired_css
+    );
+    gpp_assert_true(
+        is_string( $inbox_native_css ) && false === strpos( $inbox_native_css, $retired_css ),
+        'Native-first native projection must not restore Card Mode geometry: ' . $retired_css
+    );
+}
+
+gpp_assert_true( false === strpos( $inbox_css, 'flex-wrap:' ), 'Native pager allocation must not be reflowed by GPP.' );
+gpp_assert_true( false === strpos( $inbox_css, '.ag-paging-button[ref=' ), 'GPP must not construct a custom pager presentation from native pager internals.' );
 
 foreach ( array( 'setQuickFilter', 'applyTransaction(', 'paginationGoToPage(', 'get_inbox_entries(' ) as $host_api ) {
     gpp_assert_true(
