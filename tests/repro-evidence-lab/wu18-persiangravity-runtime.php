@@ -44,12 +44,6 @@ $extract_entry_created = static function ( $html ) use ( $decode_text ) {
         ? $decode_text( $match[1] )
         : null;
 };
-$extract_inbox_created = static function ( $html ) use ( $decode_text ) {
-    $match = array();
-    return 1 === preg_match( '~class="gpp-inbox-card__detail gpp-inbox-card__created-at"[^>]*>.*?<dd>(.*?)</dd>~su', (string) $html, $match )
-        ? $decode_text( $match[1] )
-        : null;
-};
 $extract_timeline_meta = static function ( $html ) use ( $decode_text ) {
     $matches = array();
     preg_match_all( '~<div class="gravityflow-note-meta">(.*?)</div>~su', (string) $html, $matches );
@@ -60,12 +54,14 @@ $provider_for_utc = static function ( $raw ) {
 };
 
 /*
- * WU18 upgrades the Alpha binding while qualifying Entry Detail. Use the other
- * authentic WU21 form for Inbox evidence so Inbox readiness remains version-
- * current instead of silently testing an intentionally stale binding record.
+ * Native-First Inbox ownership means GPP no longer manufactures an Inbox value
+ * or Card column where PersianGravity could be applied. Keep one authentic
+ * independent Inbox entry only to prove that this qualification does not mutate
+ * the host-owned date_created while Entry Detail continues to exercise the GPP
+ * PersianGravity bridge below.
  */
 $inbox_manifest = get_option( 'gpp_wu21_fixture_manifest' );
-wu18_assert( is_array( $inbox_manifest ) && ! empty( $inbox_manifest['entry_records'] ), 'Authentic Inbox fixture is unavailable for PersianGravity consumer proof.' );
+wu18_assert( is_array( $inbox_manifest ) && ! empty( $inbox_manifest['entry_records'] ), 'Authentic Inbox fixture is unavailable for Native-First ownership proof.' );
 $mutated_entry_detail_form_id = (int) $manifest['alpha']['form_id'];
 $inbox_entry_id = 0;
 foreach ( $inbox_manifest['entry_records'] as $record ) {
@@ -74,20 +70,18 @@ foreach ( $inbox_manifest['entry_records'] as $record ) {
         break;
     }
 }
-wu18_assert( $inbox_entry_id > 0, 'No independent ready Inbox entry remained after Entry Detail fixture setup.' );
+wu18_assert( $inbox_entry_id > 0, 'No independent Inbox entry remained after Entry Detail fixture setup.' );
 $inbox_entry = GFAPI::get_entry( $inbox_entry_id );
 wu18_assert( is_array( $inbox_entry ) && ! empty( $inbox_entry['date_created'] ), 'Authentic Inbox entry date_created is unavailable.' );
-wu18_assert( (int) $inbox_entry['form_id'] !== $mutated_entry_detail_form_id, 'Inbox consumer proof accidentally reused the Entry Detail-mutated form.' );
+wu18_assert( (int) $inbox_entry['form_id'] !== $mutated_entry_detail_form_id, 'Inbox ownership proof accidentally reused the Entry Detail-mutated form.' );
 $inbox_raw_before = (string) $inbox_entry['date_created'];
 $inbox_native_expected = $decode_text( GFCommon::format_date( $inbox_raw_before, false ) );
 wu18_assert( $inbox_native_expected === $decode_text( PersianDateFormatter::formatDateTime( $inbox_raw_before ) ), 'Provider-disabled formatter did not preserve normalized Gravity Forms native date presentation.' );
-
 wu18_assert( ! class_exists( 'PGR_Jalali_Presentation', false ), 'Jalali presentation facade loaded while the released module default is disabled.' );
-InboxPresentationAdapter::resetRuntimeCache();
-$inbox_native_card = InboxPresentationAdapter::filterValue( '', (int) $inbox_entry['form_id'], InboxPresentationAdapter::CARD_COLUMN, $inbox_entry );
-wu18_assert( false !== strpos( (string) $inbox_native_card, 'data-gpp-readiness="ready"' ), 'Native-fallback Inbox evidence did not exercise a presentation-ready authentic row.' );
-wu18_assert( $inbox_native_expected === $extract_inbox_created( $inbox_native_card ), 'Disabled exact provider module did not preserve native Inbox date presentation.' );
-wu18_assert( $inbox_raw_before === (string) GFAPI::get_entry( $inbox_entry_id )['date_created'], 'Native-fallback Inbox presentation mutated authoritative date_created.' );
+wu18_assert( ! method_exists( InboxPresentationAdapter::class, 'filterValue' ), 'Native-First Inbox unexpectedly retained the retired GPP value-presentation seam.' );
+wu18_assert( ! defined( InboxPresentationAdapter::class . '::CARD_COLUMN' ), 'Native-First Inbox unexpectedly retained the retired Card Mode column identity.' );
+wu18_assert( false === has_filter( 'gravityflow_inbox_field_value', array( InboxPresentationAdapter::class, 'filterValue' ) ), 'Native-First Inbox unexpectedly registered the retired Gravity Flow value filter.' );
+wu18_assert( $inbox_raw_before === (string) GFAPI::get_entry( $inbox_entry_id )['date_created'], 'Native-First Inbox qualification mutated authoritative date_created.' );
 
 wp_set_current_user( $operator->ID );
 $variant_service = EntryDetailVisualVariantService::forWordPress();
@@ -158,13 +152,9 @@ try {
 
         $inbox_entry = GFAPI::get_entry( $inbox_entry_id );
         $inbox_raw = (string) $inbox_entry['date_created'];
-        $inbox_expected = $provider_for_utc( $inbox_raw );
-        wu18_assert( is_string( $inbox_expected ) && '' !== $inbox_expected, 'Exact provider returned no Inbox fixture presentation.' );
-        InboxPresentationAdapter::resetRuntimeCache();
-        $inbox_provider_card = InboxPresentationAdapter::filterValue( '', (int) $inbox_entry['form_id'], InboxPresentationAdapter::CARD_COLUMN, $inbox_entry );
-        wu18_assert( false !== strpos( (string) $inbox_provider_card, 'data-gpp-readiness="ready"' ), 'Provider-backed Inbox evidence did not exercise a presentation-ready authentic row.' );
-        wu18_assert( $decode_text( $inbox_expected ) === $extract_inbox_created( $inbox_provider_card ), 'Production Inbox adapter did not apply exact PersianGravity output.' );
-        wu18_assert( $inbox_raw === (string) GFAPI::get_entry( $inbox_entry_id )['date_created'], 'Provider-backed Inbox presentation mutated authoritative date_created.' );
+        wu18_assert( $inbox_raw_before === $inbox_raw, 'Enabling PersianGravity changed the authoritative native Inbox date_created value.' );
+        wu18_assert( ! method_exists( InboxPresentationAdapter::class, 'filterValue' ), 'Provider enablement unexpectedly restored the retired GPP Inbox value seam.' );
+        wu18_assert( false === has_filter( 'gravityflow_inbox_field_value', array( InboxPresentationAdapter::class, 'filterValue' ) ), 'Provider enablement unexpectedly attached GPP to native Inbox field-value presentation.' );
 
         EntryDetailPresentationAdapter::resetRuntimeCache();
         list( $provider_entry_html, , $provider_entry ) = wu18_render_entry( $manifest['alpha']['form_id'], $manifest['alpha']['entry_id'] );
@@ -252,12 +242,13 @@ $results['persian_gravity_jalali_consumer'] = array(
     'provider_null_native_fallback' => true,
     'repeated_render_deterministic' => true,
     'inbox' => array(
-        'source' => 'entry.date_created',
-        'source_timezone' => 'UTC',
-        'independent_ready_form' => true,
-        'native_fallback_proven' => true,
-        'provider_application_proven' => true,
+        'ownership' => 'gravity_flow_native',
+        'gpp_value_consumer' => false,
+        'retired_gpp_seam' => 'gravityflow_inbox_field_value / gpp_case_card',
+        'native_first_reset' => true,
         'raw_value_unchanged' => true,
+        'provider_application_via_gpp' => false,
+        'reason' => 'Native-First Inbox no longer manufactures date/value presentation in GPP.',
     ),
     'entry_detail' => array(
         'source' => 'entry.date_created',
