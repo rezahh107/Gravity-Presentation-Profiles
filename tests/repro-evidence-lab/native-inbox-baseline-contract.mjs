@@ -105,9 +105,26 @@ assert.ok(capture.includes("assert.equal(settings.settings_identity, 'OBSERVED_U
 assert.ok(capture.includes("assert.equal(settings.push_control?.status, 'OBSERVED_UNAMBIGUOUS_NATIVE_CONTROL'"), 'Baseline capture does not gate positive status on unambiguous native Push identity.');
 assert.ok(capture.includes('assertSettingsFactsProven(settings,'), 'Settings/Push honesty gate is not executed before positive scenario evidence is emitted.');
 
+assert.ok(capture.includes("settings_flyout: '.gform-flyout--inbox-settings'"), 'Native Settings flyout provenance is not bound to the observed Gravity Flow Inbox flyout identity.');
+assert.ok(capture.includes("push_control: 'input[name=\"inbox-setting--push-enabled\"][data-js=\"inbox-setting\"]'"), 'Native Push provenance is not bound to the observed structural field identity.');
+assert.match(capture, /admittedFlyout\s*\?\s*\[\.\.\.admittedFlyout\.querySelectorAll\(s\.push_control\)\]/, 'Push discovery is not scoped to the admitted native Settings flyout.');
+assert.ok(!capture.includes('const pushCandidates = controls.filter(item => marker.test'), 'Legacy document-global textual Push inference remains active.');
+assert.ok(capture.includes("provenance: 'NATIVE_SETTINGS_FLYOUT_STRUCTURAL_SELECTOR'"), 'Positive Push evidence does not record structural native provenance.');
+for (const falsificationLock of [
+  'data-wu21-external-notification-decoy',
+  'missing_push_with_external_decoy',
+  'ambiguous_native_push',
+  'assertSettingsFactsRejected',
+  'PASS_AUTHENTIC_PUSH_UNCHANGED',
+  'positive_scenario_status_allowed: false',
+]) assert.ok(capture.includes(falsificationLock), `Push provenance falsification lock is missing: ${falsificationLock}`);
+assert.match(capture, /assertSettingsFactsProven\(decoySettings,\s*'push-provenance\/external-decoy'\)/, 'External decoy control is not proven unable to displace authentic Push identity.');
+assert.match(capture, /assertSettingsFactsRejected\(missingSettings,\s*'push-provenance\/native-push-missing-with-external-decoy'\)/, 'Missing native Push + external decoy is not exercised against the real positive admission gate.');
+assert.match(capture, /assertSettingsFactsRejected\(ambiguousSettings,\s*'push-provenance\/ambiguous-native-push'\)/, 'Ambiguous in-flyout Push candidates are not proven to fail closed.');
+
 assert.ok(capture.includes('gpp_surface_count, 0') || capture.includes('facts.gpp_surface_count, 0'), 'RAW_NATIVE does not prove GPP wrapper absence.');
 assert.ok(capture.includes('facts.gpp_manual_refresh_count, 0'), 'RAW_NATIVE does not prove GPP Manual Refresh absence.');
 assert.ok(capture.includes('facts.gpp_surface_count, 1'), 'Paired GPP capture does not prove ordinary GPP surface restoration.');
 assert.ok(capture.includes('getBrowserTabZoom(harness.worker, page)'), '200% screenshot is not bound to a non-mutating capture-time getZoom proof.');
 
-console.log('NATIVE_INBOX_BASELINE_CONTRACT_PASS production_seam=false paired_capture=true scenarios=4 genuine_zoom_reused=true control_visibility_fail_closed=true evidence_ceiling_bounded=true');
+console.log('NATIVE_INBOX_BASELINE_CONTRACT_PASS production_seam=false paired_capture=true scenarios=4 genuine_zoom_reused=true control_visibility_fail_closed=true push_provenance_structural=true decoy_falsification=true missing_push_falsification=true ambiguous_push_falsification=true evidence_ceiling_bounded=true');
