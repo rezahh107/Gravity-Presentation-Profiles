@@ -31,9 +31,33 @@ function gpp_inbox_full_width_rule_bodies( $css ) {
     );
 }
 
+/**
+ * Return declaration bodies for the GPP-owned inner shell. The Native-First
+ * contract allows responsive gutters here, but no fixed historical content
+ * width. A future calibrated width may arrive through a runtime-owned variable;
+ * a literal fixed max width must not silently become the contract again.
+ */
+function gpp_inbox_inner_rule_bodies( $css ) {
+    $matches = array();
+    preg_match_all(
+        '/([^{}]*\.gpp-inbox-surface__inner[^{}]*)\{([^{}]*)\}/m',
+        $css,
+        $matches,
+        PREG_SET_ORDER
+    );
+
+    return array_map(
+        function ( $match ) {
+            return trim( $match[2] );
+        },
+        $matches
+    );
+}
+
 $shared_rules = gpp_inbox_full_width_rule_bodies( $shared_css );
 $native_rules = gpp_inbox_full_width_rule_bodies( $native_css );
 $rules = array_merge( $shared_rules, $native_rules );
+$inner_rules = gpp_inbox_inner_rule_bodies( $shared_css );
 
 gpp_assert_true( ! empty( $shared_rules ), 'Admitted Full Width Inbox ownership rule is missing.' );
 gpp_assert_true(
@@ -47,6 +71,38 @@ gpp_assert_true(
 gpp_assert_true(
     false !== strpos( $shared_rules[0], 'margin-inline: 0;' ),
     'Full Width Inbox must not use margin breakout geometry.'
+);
+
+gpp_assert_true( ! empty( $inner_rules ), 'GPP Inbox inner shell rule is missing.' );
+$host_width_rule_count = 0;
+foreach ( $inner_rules as $rule ) {
+    if ( false !== strpos( $rule, 'inline-size: 100%;' ) ) {
+        ++$host_width_rule_count;
+        gpp_assert_true(
+            false !== strpos( $rule, 'padding-inline:' ),
+            'Host-width Inbox inner shell lost its bounded responsive gutter.'
+        );
+    }
+
+    $max_matches = array();
+    preg_match_all( '/max-inline-size\s*:\s*([^;}]*)/i', $rule, $max_matches );
+    foreach ( isset( $max_matches[1] ) ? $max_matches[1] : array() as $max_value ) {
+        $max_value = trim( $max_value );
+        gpp_assert_true(
+            'none' === strtolower( $max_value ) || 0 === stripos( $max_value, 'var(' ),
+            'Native-First Inbox inner shell reintroduced a fixed max-inline-size contract: ' . $max_value
+        );
+    }
+}
+gpp_assert_same( 1, $host_width_rule_count, 'Inbox inner shell must have exactly one host-width ownership rule.' );
+
+gpp_assert_true(
+    false === stripos( $shared_css . "\n" . $native_css, '70rem' ),
+    'Superseded 70rem Inbox content-width lock was reintroduced.'
+);
+gpp_assert_true(
+    false === stripos( $shared_css . "\n" . $native_css, '1120px' ),
+    'Superseded ~1120px Inbox content-width lock was reintroduced.'
 );
 
 foreach ( $rules as $rule ) {
