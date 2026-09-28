@@ -53,40 +53,42 @@ echo 'RESTORED';
 
 async function inboxAssetState(page) {
   return page.evaluate(() => {
-    const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => ({
-      id: link.id || '',
-      href: link.href || '',
-    }));
-    const presentation = links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox\.css(?:\?|$)/.test(link.href));
-    const native = links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox-native\.css(?:\?|$)/.test(link.href));
+    const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => ({ id: link.id || '', href: link.href || '' }));
     return {
-      presentation,
-      native,
+      presentation: links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox\.css(?:\?|$)/.test(link.href)),
+      native_projection: links.filter(link => /\/assets\/css\/srwf-gravity-flow-inbox-native\.css(?:\?|$)/.test(link.href)),
       native_target_count: document.querySelectorAll('[data-js="gflow-inbox"]').length,
       native_wrapper_count: document.querySelectorAll('.gflow-inbox.gflow-grid.gflow-common').length,
+      native_grid_count: document.querySelectorAll('[data-js="gflow-inbox"] .ag-root-wrapper').length,
       gpp_surface_count: document.querySelectorAll('[data-gpp-inbox-surface="gravity_flow.inbox"]').length,
-      card_count: document.querySelectorAll('.gpp-inbox-card').length,
+      manual_refresh_count: document.querySelectorAll('[data-gpp-inbox-manual-refresh]').length,
+      card_node_count: document.querySelectorAll('.gpp-inbox-card').length,
+      card_column_count: document.querySelectorAll('[col-id="gpp_case_card"]').length,
+      replacement_widget_count: document.querySelectorAll('[data-gpp-replacement-inbox], .gpp-custom-inbox-app').length,
     };
   });
 }
 
 function assertStylesPresent(state, label) {
   assert.equal(state.presentation.length, 1, `${label}: presentation stylesheet count mismatch.`);
-  assert.equal(state.native.length, 1, `${label}: native projection stylesheet count mismatch.`);
+  assert.equal(state.native_projection.length, 1, `${label}: native projection stylesheet count mismatch.`);
 }
-
 function assertStylesAbsent(state, label) {
   assert.equal(state.presentation.length, 0, `${label}: presentation stylesheet leaked.`);
-  assert.equal(state.native.length, 0, `${label}: native projection stylesheet leaked.`);
+  assert.equal(state.native_projection.length, 0, `${label}: native projection stylesheet leaked.`);
 }
-
+function assertNativeFirst(state, label) {
+  assert.equal(state.native_wrapper_count, 1, `${label}: expected exactly one native Gravity Flow Inbox wrapper.`);
+  assert.equal(state.native_grid_count, 1, `${label}: expected exactly one native AG Grid instance.`);
+  assert.equal(state.card_node_count, 0, `${label}: superseded Card Mode markup is still present.`);
+  assert.equal(state.card_column_count, 0, `${label}: superseded gpp_case_card column is still present.`);
+  assert.equal(state.replacement_widget_count, 0, `${label}: replacement Inbox widget is present.`);
+}
 async function waitForNativeInbox(page) {
-  await page.waitForSelector('[data-js="gflow-inbox"]', { timeout: 30000 });
   await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
 }
 
 runRuntimeQualification();
-
 for (const mode of ['shortcode', 'block']) {
   const script = path.join(repoRoot, 'tests/repro-evidence-lab/p06-inbox-late-runtime.php');
   const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', script], {
@@ -126,6 +128,7 @@ await context.addCookies(authCookies.map(cookie => ({ ...cookie, url: baseUrl })
 const page = await context.newPage();
 const results = {
   status: 'PASS',
+  architecture: 'NATIVE_FIRST',
   repository_head: repositoryHead,
   exact_runtime_block_name: p06.inbox_block.block_name,
   positive_controls: {},
@@ -139,21 +142,24 @@ try {
   await waitForNativeInbox(page);
   results.positive_controls.admin_inbox = await inboxAssetState(page);
   assertStylesPresent(results.positive_controls.admin_inbox, 'authentic admin Inbox');
-  assert.ok(results.positive_controls.admin_inbox.card_count > 0, 'Authentic admin Inbox lost Card Mode content.');
+  assertNativeFirst(results.positive_controls.admin_inbox, 'authentic admin Inbox');
+  assert.equal(results.positive_controls.admin_inbox.manual_refresh_count, 1, 'Admin Inbox must expose exactly one bounded GPP manual reload utility.');
 
   await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.positive_controls.frontend_shortcode = await inboxAssetState(page);
   assertStylesPresent(results.positive_controls.frontend_shortcode, 'authentic frontend shortcode Inbox');
+  assertNativeFirst(results.positive_controls.frontend_shortcode, 'authentic frontend shortcode Inbox');
   assert.equal(results.positive_controls.frontend_shortcode.gpp_surface_count, 1, 'Authentic frontend shortcode Inbox lost the admitted GPP surface wrapper.');
+  assert.equal(results.positive_controls.frontend_shortcode.manual_refresh_count, 1, 'Frontend shortcode Inbox must expose exactly one bounded GPP manual reload utility.');
 
   await page.goto(p06.authentic_block_page.url, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.positive_controls.frontend_block = await inboxAssetState(page);
   assertStylesPresent(results.positive_controls.frontend_block, 'authentic frontend block Inbox');
-  assert.equal(results.positive_controls.frontend_block.gpp_surface_count, 1, 'Authentic frontend block Inbox lost the admitted current-post GPP surface composition.');
-  assert.equal(results.positive_controls.frontend_block.native_wrapper_count, 1, 'Authentic frontend block composition must retain exactly one native Gravity Flow Inbox wrapper.');
-  assert.ok(results.positive_controls.frontend_block.card_count > 0, 'Authentic frontend block Inbox lost Card Mode content.');
+  assertNativeFirst(results.positive_controls.frontend_block, 'authentic frontend block Inbox');
+  assert.equal(results.positive_controls.frontend_block.gpp_surface_count, 1, 'Authentic frontend block Inbox lost the admitted GPP surface composition.');
+  assert.equal(results.positive_controls.frontend_block.manual_refresh_count, 1, 'Frontend block Inbox must expose exactly one bounded GPP manual reload utility.');
 
   await page.goto(p06.unrelated_page.url, { waitUntil: 'networkidle' });
   results.negative_controls.unrelated_frontend = await inboxAssetState(page);
@@ -161,7 +167,7 @@ try {
 
   await page.goto(p06.lookalike_page.url, { waitUntil: 'networkidle' });
   results.negative_controls.lookalike_block = await inboxAssetState(page);
-  assert.equal(results.negative_controls.lookalike_block.native_target_count, 1, 'Lookalike browser control did not render its native-looking marker.');
+  assert.equal(results.negative_controls.lookalike_block.native_target_count, 1, 'Lookalike control did not render its native-looking marker.');
   assertStylesAbsent(results.negative_controls.lookalike_block, 'lookalike/non-authentic block');
 
   await page.goto(unrelatedAdminUrl, { waitUntil: 'networkidle' });
@@ -185,22 +191,19 @@ try {
   results.inactive_profile.frontend_shortcode = await inboxAssetState(page);
   assertStylesAbsent(results.inactive_profile.frontend_shortcode, 'inactive-profile frontend Inbox');
   assert.equal(results.inactive_profile.frontend_shortcode.gpp_surface_count, 0, 'Inactive frontend Inbox still emitted GPP surface composition.');
-  assert.equal(results.inactive_profile.frontend_shortcode.native_wrapper_count, 1, 'Inactive frontend Inbox did not preserve the native Gravity Flow wrapper.');
+  assertNativeFirst(results.inactive_profile.frontend_shortcode, 'inactive-profile frontend Inbox');
 
   await page.goto(adminInboxUrl, { waitUntil: 'networkidle' });
   await waitForNativeInbox(page);
   results.inactive_profile.admin_inbox = await inboxAssetState(page);
   assertStylesAbsent(results.inactive_profile.admin_inbox, 'inactive-profile admin Inbox');
-  assert.equal(results.inactive_profile.admin_inbox.native_wrapper_count, 1, 'Inactive admin Inbox did not preserve the native Gravity Flow wrapper.');
+  assertNativeFirst(results.inactive_profile.admin_inbox, 'inactive-profile admin Inbox');
 } catch (error) {
   results.status = 'FAIL';
   results.error = error?.stack || String(error);
   throw error;
 } finally {
-  if (profileDeactivated) {
-    setInboxProfileActive(true);
-    profileDeactivated = false;
-  }
+  if (profileDeactivated) setInboxProfileActive(true);
   fs.writeFileSync(path.join(artifactDir, 'p06-browser-results.json'), JSON.stringify(results, null, 2) + '\n');
   await browser.close();
 }
