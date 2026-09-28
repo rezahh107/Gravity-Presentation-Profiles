@@ -43,6 +43,17 @@ async function extensionWorker(context) {
   return worker;
 }
 
+export async function getBrowserTabZoom(worker, page) {
+  return worker.evaluate(async (url) => {
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(candidate => candidate.url === url) || tabs.find(candidate => candidate.active);
+    if (!tab?.id) throw new Error(`Unable to bind browser zoom to target tab: ${url}`);
+    const actual = await chrome.tabs.getZoom(tab.id);
+    const settings = await chrome.tabs.getZoomSettings(tab.id);
+    return { tab_id: tab.id, actual, settings };
+  }, page.url());
+}
+
 export async function setBrowserTabZoom(worker, page, factor) {
   return worker.evaluate(async ({ url, factor: requested }) => {
     const tabs = await chrome.tabs.query({});
