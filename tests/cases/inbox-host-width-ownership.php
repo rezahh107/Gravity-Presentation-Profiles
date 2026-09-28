@@ -9,11 +9,7 @@ $native_css = file_get_contents( $repo_root . '/assets/css/srwf-gravity-flow-inb
 gpp_assert_true( false !== $shared_css, 'Shared Inbox CSS could not be read.' );
 gpp_assert_true( false !== $native_css, 'Native Inbox CSS could not be read.' );
 
-/**
- * Return declaration bodies for rules that directly target the admitted
- * Full Width Inbox modifier. This deliberately scopes the regression guard to
- * the ownership boundary instead of banning harmless viewport units elsewhere.
- */
+/** Return declaration bodies for rules that directly target the admitted Full Width Inbox modifier. */
 function gpp_inbox_full_width_rule_bodies( $css ) {
     $matches = array();
     preg_match_all(
@@ -31,12 +27,7 @@ function gpp_inbox_full_width_rule_bodies( $css ) {
     );
 }
 
-/**
- * Return declaration bodies for the GPP-owned inner shell. The Native-First
- * contract allows responsive gutters here, but no fixed historical content
- * width. A future calibrated width may arrive through a runtime-owned variable;
- * a literal fixed max width must not silently become the contract again.
- */
+/** Return declaration bodies for the GPP-owned inner shell. */
 function gpp_inbox_inner_rule_bodies( $css ) {
     $matches = array();
     preg_match_all(
@@ -132,11 +123,7 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     return array( 'members' => $members, 'error' => null );
 }
 
-/**
- * Split one selector member into top-level compounds and combinators. This is
- * intentionally bounded: nested attribute/pseudo-function syntax is preserved
- * inside its compound, while unsupported/unbalanced syntax fails closed.
- */
+/** Split one selector member into top-level compounds and combinators. */
 function gpp_inbox_split_selector_compounds( $selector ) {
     $compounds = array();
     $combinators = array();
@@ -161,7 +148,6 @@ function gpp_inbox_split_selector_compounds( $selector ) {
             }
             continue;
         }
-
         if ( '"' === $char || "'" === $char ) {
             $quote = $char;
             $current .= $char;
@@ -202,7 +188,6 @@ function gpp_inbox_split_selector_compounds( $selector ) {
             }
             continue;
         }
-
         if ( 0 === $paren && 0 === $bracket && false !== strpos( '>+~', $char ) ) {
             if ( '' !== trim( $current ) ) {
                 $compounds[] = trim( $current );
@@ -215,7 +200,6 @@ function gpp_inbox_split_selector_compounds( $selector ) {
             $pending_descendant = false;
             continue;
         }
-
         if ( $pending_descendant ) {
             if ( count( $combinators ) < count( $compounds ) ) {
                 $combinators[] = ' ';
@@ -238,17 +222,20 @@ function gpp_inbox_split_selector_compounds( $selector ) {
     return array( 'compounds' => $compounds, 'combinators' => $combinators, 'error' => null );
 }
 
-/** Extract top-level class tokens from one bounded selector compound. */
-function gpp_inbox_compound_class_tokens( $compound ) {
-    $classes = array();
+/** True when text explicitly names one of the authoritative native-root class tokens. */
+function gpp_inbox_text_references_native_root_token( $text ) {
+    return 1 === preg_match( '/(?:^|[^a-z0-9_-])(?:gflow-inbox|gflow-grid|gflow-common)(?=$|[^a-z0-9_-])/', $text );
+}
+
+/** Find a balanced closing delimiter while respecting quoted strings and escapes. */
+function gpp_inbox_find_matching_delimiter( $text, $start, $open, $close ) {
+    $depth = 0;
     $quote = null;
     $escaped = false;
-    $paren = 0;
-    $bracket = 0;
-    $length = strlen( $compound );
+    $length = strlen( $text );
 
-    for ( $i = 0; $i < $length; ++$i ) {
-        $char = $compound[ $i ];
+    for ( $i = $start; $i < $length; ++$i ) {
+        $char = $text[ $i ];
         if ( null !== $quote ) {
             if ( $escaped ) {
                 $escaped = false;
@@ -263,38 +250,68 @@ function gpp_inbox_compound_class_tokens( $compound ) {
             $quote = $char;
             continue;
         }
-        if ( '(' === $char ) {
-            ++$paren;
-            continue;
-        }
-        if ( ')' === $char ) {
-            --$paren;
-            if ( $paren < 0 ) {
-                return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+        if ( $open === $char ) {
+            ++$depth;
+        } elseif ( $close === $char ) {
+            --$depth;
+            if ( 0 === $depth ) {
+                return array( 'index' => $i, 'error' => null );
             }
-            continue;
-        }
-        if ( '[' === $char ) {
-            ++$bracket;
-            continue;
-        }
-        if ( ']' === $char ) {
-            --$bracket;
-            if ( $bracket < 0 ) {
-                return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
+            if ( $depth < 0 ) {
+                break;
             }
-            continue;
         }
-        if ( 0 !== $paren || 0 !== $bracket ) {
-            foreach ( array( '.gflow-inbox', '.gflow-grid', '.gflow-common' ) as $native_token ) {
-                if ( 0 === substr_compare( $compound, $native_token, $i, strlen( $native_token ) ) ) {
-                    return array( 'classes' => array(), 'error' => 'Native Inbox root class appears in unsupported nested selector syntax.' );
-                }
-            }
-            continue;
-        }
+    }
+
+    return array( 'index' => null, 'error' => 'Unbalanced bounded CSS delimiter syntax.' );
+}
+
+/**
+ * Extract authoritative class identity tokens from one compound. Supported
+ * identity forms are ordinary `.class` and exact `[class~="token"]` selectors.
+ */
+function gpp_inbox_compound_class_tokens( $compound ) {
+    $classes = array();
+    $length = strlen( $compound );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $compound[ $i ];
         if ( '\\' === $char ) {
             return array( 'classes' => array(), 'error' => 'Escaped selector syntax is outside the bounded native-root classifier.' );
+        }
+        if ( '[' === $char ) {
+            $closing = gpp_inbox_find_matching_delimiter( $compound, $i, '[', ']' );
+            if ( null !== $closing['error'] ) {
+                return array( 'classes' => array(), 'error' => $closing['error'] );
+            }
+            $attribute = substr( $compound, $i + 1, $closing['index'] - $i - 1 );
+            if ( false !== strpos( $attribute, '\\' ) ) {
+                return array( 'classes' => array(), 'error' => 'Escaped attribute selector syntax is outside the bounded native-root classifier.' );
+            }
+            if ( gpp_inbox_text_references_native_root_token( $attribute ) ) {
+                $attribute_match = array();
+                if ( 1 !== preg_match( '/^\s*class\s*~=\s*(["\'])(gflow-inbox|gflow-grid|gflow-common)\1\s*$/', $attribute, $attribute_match ) ) {
+                    return array( 'classes' => array(), 'error' => 'Authoritative native Inbox class token appears in unsupported class-token attribute syntax.' );
+                }
+                $classes[] = $attribute_match[2];
+            }
+            $i = $closing['index'];
+            continue;
+        }
+        if ( '(' === $char ) {
+            $closing = gpp_inbox_find_matching_delimiter( $compound, $i, '(', ')' );
+            if ( null !== $closing['error'] ) {
+                return array( 'classes' => array(), 'error' => $closing['error'] );
+            }
+            $nested = substr( $compound, $i + 1, $closing['index'] - $i - 1 );
+            if ( gpp_inbox_text_references_native_root_token( $nested ) ) {
+                return array( 'classes' => array(), 'error' => 'Native Inbox root class appears in unsupported nested selector syntax.' );
+            }
+            $i = $closing['index'];
+            continue;
+        }
+        if ( ')' === $char || ']' === $char ) {
+            return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
         }
         if ( '.' !== $char ) {
             continue;
@@ -310,10 +327,6 @@ function gpp_inbox_compound_class_tokens( $compound ) {
         }
         $classes[] = substr( $compound, $start, $end - $start );
         $i = $end - 1;
-    }
-
-    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
-        return array( 'classes' => array(), 'error' => 'Unbalanced selector compound syntax.' );
     }
 
     return array( 'classes' => $classes, 'error' => null );
@@ -341,48 +354,47 @@ function gpp_inbox_parse_native_declarations( $body ) {
     return array( 'declarations' => $declarations, 'error' => null );
 }
 
-/** Return true when one compound semantically contains the authoritative root class set. */
 function gpp_inbox_compound_is_native_root( $classes ) {
     foreach ( array( 'gflow-inbox', 'gflow-grid', 'gflow-common' ) as $required ) {
         if ( ! in_array( $required, $classes, true ) ) {
             return false;
         }
     }
-
     return true;
 }
 
-/** The host-shell exception is frozen semantically, with native class order irrelevant. */
-function gpp_inbox_is_admitted_host_shell_classification( $parsed, $root_index ) {
-    if (
-        1 !== $root_index
-        || 2 !== count( $parsed['compounds'] )
-        || 1 !== count( $parsed['combinators'] )
-        || ' ' !== $parsed['combinators'][0]
-        || '.gpp-inbox-surface' !== $parsed['compounds'][0]
-        || 1 !== preg_match( '/^(?:\.[a-z0-9_-]+)+$/i', $parsed['compounds'][1] )
-    ) {
+/** True only when a compound is nothing except the three native-root identity tokens. */
+function gpp_inbox_compound_is_exact_native_root_identity( $compound ) {
+    $tokens = gpp_inbox_compound_class_tokens( $compound );
+    if ( null !== $tokens['error'] || ! gpp_inbox_compound_is_native_root( $tokens['classes'] ) ) {
         return false;
     }
 
-    $classes = gpp_inbox_compound_class_tokens( $parsed['compounds'][1] );
-    if ( null !== $classes['error'] ) {
-        return false;
-    }
-    $actual = array_values( array_unique( $classes['classes'] ) );
+    $actual = array_values( array_unique( $tokens['classes'] ) );
     $expected = array( 'gflow-inbox', 'gflow-grid', 'gflow-common' );
     sort( $actual );
     sort( $expected );
+    if ( $actual !== $expected ) {
+        return false;
+    }
 
-    return $actual === $expected;
+    $remainder = preg_replace( '/\.(?:gflow-inbox|gflow-grid|gflow-common)\b/', '', $compound );
+    $remainder = preg_replace( '/\[\s*class\s*~=\s*(["\'])(?:gflow-inbox|gflow-grid|gflow-common)\1\s*\]/', '', $remainder );
+
+    return is_string( $remainder ) && '' === trim( $remainder );
 }
 
-/**
- * Authoritative bounded semantic classifier for one selector-list member.
- * Every member flows through this path; there is no parallel lexical native-root
- * candidate counter. The native root is the compound containing the complete
- * required class set, regardless of class-token order.
- */
+/** The host-shell exception is frozen semantically, with native class order/identity representation irrelevant. */
+function gpp_inbox_is_admitted_host_shell_classification( $parsed, $root_index ) {
+    return 1 === $root_index
+        && 2 === count( $parsed['compounds'] )
+        && 1 === count( $parsed['combinators'] )
+        && ' ' === $parsed['combinators'][0]
+        && '.gpp-inbox-surface' === $parsed['compounds'][0]
+        && gpp_inbox_compound_is_exact_native_root_identity( $parsed['compounds'][1] );
+}
+
+/** Authoritative bounded semantic classifier for one effective selector-list member. */
 function gpp_inbox_classify_native_selector_member( $selector ) {
     $parsed = gpp_inbox_split_selector_compounds( trim( $selector ) );
     if ( null !== $parsed['error'] ) {
@@ -456,7 +468,6 @@ function gpp_inbox_is_admitted_native_paint_property( $property ) {
     );
 }
 
-/** The GPP host shell exception is frozen to the existing width handoff only. */
 function gpp_inbox_host_shell_declaration_errors( $declarations ) {
     $expected = array(
         'box-sizing'      => 'border-box',
@@ -477,95 +488,409 @@ function gpp_inbox_host_shell_declaration_errors( $declarations ) {
     if ( $actual !== $expected ) {
         return array( 'GPP Inbox host-shell declaration set/value changed outside the admitted width handoff.' );
     }
-
     return array();
 }
 
+/** Find the closing structural brace while ignoring braces inside strings, [] and (). */
+function gpp_inbox_find_matching_brace( $text, $start ) {
+    $depth = 0;
+    $quote = null;
+    $escaped = false;
+    $paren = 0;
+    $bracket = 0;
+    $length = strlen( $text );
+
+    for ( $i = $start; $i < $length; ++$i ) {
+        $char = $text[ $i ];
+        if ( null !== $quote ) {
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            continue;
+        }
+        if ( '(' === $char ) {
+            ++$paren;
+            continue;
+        }
+        if ( ')' === $char ) {
+            --$paren;
+            if ( $paren < 0 ) {
+                return array( 'index' => null, 'error' => 'Unbalanced parenthesis while scanning CSS braces.' );
+            }
+            continue;
+        }
+        if ( '[' === $char ) {
+            ++$bracket;
+            continue;
+        }
+        if ( ']' === $char ) {
+            --$bracket;
+            if ( $bracket < 0 ) {
+                return array( 'index' => null, 'error' => 'Unbalanced bracket while scanning CSS braces.' );
+            }
+            continue;
+        }
+        if ( 0 !== $paren || 0 !== $bracket ) {
+            continue;
+        }
+        if ( '{' === $char ) {
+            ++$depth;
+        } elseif ( '}' === $char ) {
+            --$depth;
+            if ( 0 === $depth ) {
+                return array( 'index' => $i, 'error' => null );
+            }
+            if ( $depth < 0 ) {
+                break;
+            }
+        }
+    }
+
+    return array( 'index' => null, 'error' => 'Unbalanced bounded CSS brace structure.' );
+}
+
 /**
- * Enforce the positive paint/typography contract on every selector-list member.
- * The same semantic classifier both discovers native-root targets and proves
- * coverage, so class-order permutations cannot bypass a parallel lexical count.
+ * Scan one bounded block body into top-level statements and child blocks while
+ * preserving brace structure. Braces inside quoted strings, [] and () are ignored.
  */
+function gpp_inbox_scan_block_items( $text ) {
+    $items = array();
+    $buffer = '';
+    $quote = null;
+    $escaped = false;
+    $paren = 0;
+    $bracket = 0;
+    $length = strlen( $text );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $text[ $i ];
+        if ( null !== $quote ) {
+            $buffer .= $char;
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            $buffer .= $char;
+            continue;
+        }
+        if ( '(' === $char ) {
+            ++$paren;
+            $buffer .= $char;
+            continue;
+        }
+        if ( ')' === $char ) {
+            --$paren;
+            if ( $paren < 0 ) {
+                return array( 'items' => array(), 'error' => 'Unbalanced parenthesis in bounded CSS block.' );
+            }
+            $buffer .= $char;
+            continue;
+        }
+        if ( '[' === $char ) {
+            ++$bracket;
+            $buffer .= $char;
+            continue;
+        }
+        if ( ']' === $char ) {
+            --$bracket;
+            if ( $bracket < 0 ) {
+                return array( 'items' => array(), 'error' => 'Unbalanced bracket in bounded CSS block.' );
+            }
+            $buffer .= $char;
+            continue;
+        }
+        if ( 0 === $paren && 0 === $bracket && ';' === $char ) {
+            if ( '' !== trim( $buffer ) ) {
+                $items[] = array( 'type' => 'statement', 'text' => trim( $buffer ) );
+            }
+            $buffer = '';
+            continue;
+        }
+        if ( 0 === $paren && 0 === $bracket && '{' === $char ) {
+            $prelude = trim( $buffer );
+            if ( '' === $prelude ) {
+                return array( 'items' => array(), 'error' => 'CSS child block has an empty prelude.' );
+            }
+            $closing = gpp_inbox_find_matching_brace( $text, $i );
+            if ( null !== $closing['error'] ) {
+                return array( 'items' => array(), 'error' => $closing['error'] );
+            }
+            $items[] = array(
+                'type'    => 'block',
+                'prelude' => $prelude,
+                'body'    => substr( $text, $i + 1, $closing['index'] - $i - 1 ),
+            );
+            $buffer = '';
+            $i = $closing['index'];
+            continue;
+        }
+        if ( 0 === $paren && 0 === $bracket && '}' === $char ) {
+            return array( 'items' => array(), 'error' => 'Unexpected closing brace in bounded CSS block.' );
+        }
+
+        $buffer .= $char;
+    }
+
+    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
+        return array( 'items' => array(), 'error' => 'Unbalanced bounded CSS block syntax.' );
+    }
+    if ( '' !== trim( $buffer ) ) {
+        $items[] = array( 'type' => 'statement', 'text' => trim( $buffer ) );
+    }
+
+    return array( 'items' => $items, 'error' => null );
+}
+
+/** Resolve exactly one top-level nesting `&` against one effective parent selector. */
+function gpp_inbox_resolve_nested_selector_member( $member, $parent_selector ) {
+    $positions = array();
+    $quote = null;
+    $escaped = false;
+    $paren = 0;
+    $bracket = 0;
+    $length = strlen( $member );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $member[ $i ];
+        if ( null !== $quote ) {
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            continue;
+        }
+        if ( '(' === $char ) {
+            ++$paren;
+            continue;
+        }
+        if ( ')' === $char ) {
+            --$paren;
+            if ( $paren < 0 ) {
+                return array( 'selector' => '', 'error' => 'Unbalanced nested selector syntax.' );
+            }
+            continue;
+        }
+        if ( '[' === $char ) {
+            ++$bracket;
+            continue;
+        }
+        if ( ']' === $char ) {
+            --$bracket;
+            if ( $bracket < 0 ) {
+                return array( 'selector' => '', 'error' => 'Unbalanced nested selector syntax.' );
+            }
+            continue;
+        }
+        if ( 0 === $paren && 0 === $bracket && '&' === $char ) {
+            $positions[] = $i;
+        }
+    }
+
+    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
+        return array( 'selector' => '', 'error' => 'Unbalanced nested selector syntax.' );
+    }
+    if ( 1 !== count( $positions ) ) {
+        return array( 'selector' => '', 'error' => 'Supported nested selector grammar requires exactly one top-level `&`.' );
+    }
+
+    $position = $positions[0];
+    return array(
+        'selector' => trim( substr( $member, 0, $position ) . $parent_selector . substr( $member, $position + 1 ) ),
+        'error'    => null,
+    );
+}
+
+function gpp_inbox_supported_grouping_at_rule( $prelude ) {
+    return 1 === preg_match( '/^@media\b.+$/is', trim( $prelude ) );
+}
+
+/** Classify effective selectors through the single authoritative path. */
+function gpp_inbox_classify_effective_selectors( $selectors, &$errors, &$native_target_members ) {
+    $targets = array();
+    foreach ( $selectors as $selector ) {
+        $classification = gpp_inbox_classify_native_selector_member( $selector );
+        if ( 'error' === $classification['kind'] ) {
+            $errors[] = $classification['error'] . ' Selector: ' . $selector;
+            continue;
+        }
+        if ( 'none' === $classification['kind'] ) {
+            continue;
+        }
+        ++$native_target_members;
+        $targets[] = array( 'selector' => $selector, 'kind' => $classification['kind'] );
+    }
+    return $targets;
+}
+
+/** Apply the declaration allowlist to already classified target members. */
+function gpp_inbox_enforce_native_declarations( $targets, $statement_texts, &$errors ) {
+    if ( empty( $targets ) || empty( $statement_texts ) ) {
+        return;
+    }
+
+    $declarations = gpp_inbox_parse_native_declarations( implode( ';', $statement_texts ) );
+    if ( null !== $declarations['error'] ) {
+        $errors[] = $declarations['error'] . ' Selector: ' . implode(
+            ', ',
+            array_map(
+                function ( $target ) {
+                    return $target['selector'];
+                },
+                $targets
+            )
+        );
+        return;
+    }
+
+    foreach ( $targets as $target ) {
+        if ( 'host-shell' === $target['kind'] ) {
+            foreach ( gpp_inbox_host_shell_declaration_errors( $declarations['declarations'] ) as $error ) {
+                $errors[] = $error . ' Selector: ' . $target['selector'];
+            }
+            continue;
+        }
+        if ( 'ancestor' === $target['kind'] ) {
+            $errors[] = 'Unadmitted ancestor-qualified selector targets the native Inbox subtree: ' . $target['selector'];
+            continue;
+        }
+        foreach ( $declarations['declarations'] as $declaration ) {
+            if ( ! gpp_inbox_is_admitted_native_paint_property( $declaration['property'] ) ) {
+                $errors[] = 'Unadmitted native Inbox property `' . $declaration['property'] . '` in selector: ' . $target['selector'];
+            }
+        }
+    }
+}
+
+/** Walk one style-rule body, preserving current effective selector ancestry. */
+function gpp_inbox_walk_style_body( $body, $effective_selectors, &$errors, &$native_target_members ) {
+    $scanned = gpp_inbox_scan_block_items( $body );
+    if ( null !== $scanned['error'] ) {
+        $errors[] = $scanned['error'];
+        return;
+    }
+
+    $statements = array();
+    $blocks = array();
+    foreach ( $scanned['items'] as $item ) {
+        if ( 'statement' === $item['type'] ) {
+            $statements[] = $item['text'];
+        } else {
+            $blocks[] = $item;
+        }
+    }
+
+    $targets = gpp_inbox_classify_effective_selectors( $effective_selectors, $errors, $native_target_members );
+    gpp_inbox_enforce_native_declarations( $targets, $statements, $errors );
+
+    foreach ( $blocks as $block ) {
+        $prelude = trim( $block['prelude'] );
+        if ( 0 === strpos( $prelude, '@' ) ) {
+            if ( ! gpp_inbox_supported_grouping_at_rule( $prelude ) ) {
+                $errors[] = 'Unsupported grouping at-rule inside bounded style context: ' . $prelude;
+                continue;
+            }
+            gpp_inbox_walk_style_body( $block['body'], $effective_selectors, $errors, $native_target_members );
+            continue;
+        }
+
+        gpp_inbox_walk_style_rule( $prelude, $block['body'], $effective_selectors, $errors, $native_target_members );
+    }
+}
+
+/** Walk one style rule, resolving bounded nesting against parent effective selectors. */
+function gpp_inbox_walk_style_rule( $selector_text, $body, $parent_selectors, &$errors, &$native_target_members ) {
+    $split = gpp_inbox_split_selector_list( $selector_text );
+    if ( null !== $split['error'] ) {
+        $errors[] = $split['error'] . ' Selector: ' . $selector_text;
+        return;
+    }
+
+    $effective = array();
+    if ( null === $parent_selectors ) {
+        $effective = $split['members'];
+    } else {
+        foreach ( $split['members'] as $member ) {
+            foreach ( $parent_selectors as $parent_selector ) {
+                $resolved = gpp_inbox_resolve_nested_selector_member( $member, $parent_selector );
+                if ( null !== $resolved['error'] ) {
+                    $errors[] = $resolved['error'] . ' Nested selector: ' . $member;
+                    continue;
+                }
+                $effective[] = $resolved['selector'];
+            }
+        }
+    }
+
+    if ( empty( $effective ) ) {
+        return;
+    }
+    gpp_inbox_walk_style_body( $body, $effective, $errors, $native_target_members );
+}
+
+/** Walk a stylesheet/grouping-rule list. Only ordinary style rules and @media are admitted. */
+function gpp_inbox_walk_rule_list( $css, &$errors, &$native_target_members ) {
+    $scanned = gpp_inbox_scan_block_items( $css );
+    if ( null !== $scanned['error'] ) {
+        $errors[] = $scanned['error'];
+        return;
+    }
+
+    foreach ( $scanned['items'] as $item ) {
+        if ( 'statement' === $item['type'] ) {
+            $errors[] = 'Unsupported top-level CSS statement in bounded native Inbox contract: ' . $item['text'];
+            continue;
+        }
+
+        $prelude = trim( $item['prelude'] );
+        if ( 0 === strpos( $prelude, '@' ) ) {
+            if ( ! gpp_inbox_supported_grouping_at_rule( $prelude ) ) {
+                $errors[] = 'Unsupported grouping at-rule in bounded native Inbox contract: ' . $prelude;
+                continue;
+            }
+            gpp_inbox_walk_rule_list( $item['body'], $errors, $native_target_members );
+            continue;
+        }
+
+        gpp_inbox_walk_style_rule( $prelude, $item['body'], null, $errors, $native_target_members );
+    }
+}
+
+/** Enforce the positive paint/typography contract through one structure-aware classification path. */
 function gpp_inbox_native_paint_contract_errors( $css ) {
     $normalized = gpp_inbox_normalize_css_comments( $css );
     if ( null !== $normalized['error'] ) {
         return array( $normalized['error'] );
     }
-    $css = $normalized['css'];
-
-    $rules = array();
-    preg_match_all( '/([^{}]+)\{([^{}]*)\}/m', $css, $rules, PREG_SET_ORDER );
 
     $errors = array();
     $native_target_members = 0;
-    foreach ( $rules as $rule ) {
-        $selector_text = trim( $rule[1] );
-        $selectors = gpp_inbox_split_selector_list( $selector_text );
-        if ( null !== $selectors['error'] ) {
-            $errors[] = $selectors['error'] . ' Selector: ' . $selector_text;
-            continue;
-        }
-
-        $target_members = array();
-        foreach ( $selectors['members'] as $member ) {
-            $classification = gpp_inbox_classify_native_selector_member( $member );
-            if ( 'error' === $classification['kind'] ) {
-                $errors[] = $classification['error'] . ' Selector: ' . $member;
-                continue;
-            }
-            if ( 'none' === $classification['kind'] ) {
-                continue;
-            }
-
-            ++$native_target_members;
-            $target_members[] = array(
-                'selector' => $member,
-                'kind'     => $classification['kind'],
-            );
-        }
-        if ( empty( $target_members ) ) {
-            continue;
-        }
-
-        $declarations = gpp_inbox_parse_native_declarations( $rule[2] );
-        if ( null !== $declarations['error'] ) {
-            $errors[] = $declarations['error'] . ' Selector: ' . implode(
-                ', ',
-                array_map(
-                    function ( $target ) {
-                        return $target['selector'];
-                    },
-                    $target_members
-                )
-            );
-            continue;
-        }
-
-        foreach ( $target_members as $target ) {
-            $member = $target['selector'];
-            if ( 'host-shell' === $target['kind'] ) {
-                foreach ( gpp_inbox_host_shell_declaration_errors( $declarations['declarations'] ) as $error ) {
-                    $errors[] = $error . ' Selector: ' . $member;
-                }
-                continue;
-            }
-            if ( 'ancestor' === $target['kind'] ) {
-                $errors[] = 'Unadmitted ancestor-qualified selector targets the native Inbox subtree: ' . $member;
-                continue;
-            }
-
-            foreach ( $declarations['declarations'] as $declaration ) {
-                if ( ! gpp_inbox_is_admitted_native_paint_property( $declaration['property'] ) ) {
-                    $errors[] = 'Unadmitted native Inbox property `' . $declaration['property'] . '` in selector: ' . $member;
-                }
-            }
-        }
-    }
+    gpp_inbox_walk_rule_list( $normalized['css'], $errors, $native_target_members );
 
     if ( 0 === $native_target_members ) {
         $errors[] = 'No native Inbox selector was found for paint-contract validation.';
     }
-
     return $errors;
 }
 
@@ -637,6 +962,16 @@ function gpp_inbox_assert_rejected_with_property( $label, $css, $property ) {
     echo $label . "_PASS\n";
 }
 
+function gpp_inbox_assert_rejected_with_message( $label, $css, $needle ) {
+    $errors = gpp_inbox_native_paint_contract_errors( $css );
+    gpp_assert_true( ! empty( $errors ), $label . ' unexpectedly passed the native paint contract.' );
+    gpp_assert_true(
+        false !== stripos( implode( "\n", $errors ), $needle ),
+        $label . ' failed for the wrong reason: ' . implode( ' | ', $errors )
+    );
+    echo $label . "_PASS\n";
+}
+
 function gpp_inbox_assert_historical_rejection( $label, $shared_css, $native_css, $needle ) {
     $errors = gpp_inbox_historical_regression_errors( $shared_css, $native_css );
     gpp_assert_true( ! empty( $errors ), $label . ' unexpectedly passed historical regression protection.' );
@@ -649,34 +984,20 @@ function gpp_inbox_assert_historical_rejection( $label, $shared_css, $native_css
 
 $shared_rules = gpp_inbox_full_width_rule_bodies( $shared_css );
 $native_rules = gpp_inbox_full_width_rule_bodies( $native_css );
-$rules = array_merge( $shared_rules, $native_rules );
 $inner_rules = gpp_inbox_inner_rule_bodies( $shared_css );
 
 gpp_assert_true( ! empty( $shared_rules ), 'Admitted Full Width Inbox ownership rule is missing.' );
-gpp_assert_true(
-    false !== strpos( $shared_rules[0], 'inline-size: 100%;' ),
-    'Full Width Inbox must consume the width supplied by its host.'
-);
-gpp_assert_true(
-    false !== strpos( $shared_rules[0], 'max-inline-size: none;' ),
-    'Full Width Inbox host-relative maximum sizing is missing.'
-);
-gpp_assert_true(
-    false !== strpos( $shared_rules[0], 'margin-inline: 0;' ),
-    'Full Width Inbox must not use margin breakout geometry.'
-);
+gpp_assert_true( false !== strpos( $shared_rules[0], 'inline-size: 100%;' ), 'Full Width Inbox must consume the width supplied by its host.' );
+gpp_assert_true( false !== strpos( $shared_rules[0], 'max-inline-size: none;' ), 'Full Width Inbox host-relative maximum sizing is missing.' );
+gpp_assert_true( false !== strpos( $shared_rules[0], 'margin-inline: 0;' ), 'Full Width Inbox must not use margin breakout geometry.' );
 
 gpp_assert_true( ! empty( $inner_rules ), 'GPP Inbox inner shell rule is missing.' );
 $host_width_rule_count = 0;
 foreach ( $inner_rules as $rule ) {
     if ( false !== strpos( $rule, 'inline-size: 100%;' ) ) {
         ++$host_width_rule_count;
-        gpp_assert_true(
-            false !== strpos( $rule, 'padding-inline:' ),
-            'Host-width Inbox inner shell lost its bounded responsive gutter.'
-        );
+        gpp_assert_true( false !== strpos( $rule, 'padding-inline:' ), 'Host-width Inbox inner shell lost its bounded responsive gutter.' );
     }
-
     $max_matches = array();
     preg_match_all( '/max-inline-size\s*:\s*([^;}]*)/i', $rule, $max_matches );
     foreach ( isset( $max_matches[1] ) ? $max_matches[1] : array() as $max_value ) {
@@ -698,37 +1019,13 @@ gpp_assert_same( array(), $paint_errors, 'Current production Inbox CSS violates 
 $historical_errors = gpp_inbox_historical_regression_errors( $shared_css, $native_css );
 gpp_assert_same( array(), $historical_errors, 'Current production Inbox CSS violates an existing historical regression guard: ' . implode( ' | ', $historical_errors ) );
 
-/* PRI-FND-001 deterministic falsification controls. */
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_DIRECT_WIDTH_REJECT',
-    '.gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }',
-    'width'
-);
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_REORDERED_WIDTH_REJECT',
-    '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }',
-    'width'
-);
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT',
-    '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }',
-    'width'
-);
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_GROUPED_NONFIRST_WIDTH_REJECT',
-    '.decoy-selector, .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }',
-    'width'
-);
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_REORDERED_GROUPED_NONFIRST_WIDTH_REJECT',
-    '.decoy-selector, .gflow-common.gflow-inbox.gflow-grid .ag-row { width: 10px; }',
-    'width'
-);
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT',
-    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }',
-    'width'
-);
+/* Existing flat-selector closure. */
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_DIRECT_WIDTH_REJECT', '.gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_WIDTH_REJECT', '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }', 'width' );
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT', '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }', 'width' );
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_GROUPED_NONFIRST_WIDTH_REJECT', '.decoy-selector, .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_GROUPED_NONFIRST_WIDTH_REJECT', '.decoy-selector, .gflow-common.gflow-inbox.gflow-grid .ag-row { width: 10px; }', 'width' );
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT', '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }', 'width' );
 foreach ( array( 'box-sizing', 'border-width', 'scale' ) as $property ) {
     gpp_inbox_assert_rejected_with_property(
         'PRI_FND_001_UNENUMERATED_' . strtoupper( str_replace( '-', '_', $property ) ) . '_REJECT',
@@ -736,48 +1033,108 @@ foreach ( array( 'box-sizing', 'border-width', 'scale' ) as $property ) {
         $property
     );
 }
-gpp_inbox_assert_rejected_with_property(
-    'PRI_FND_001_UNKNOWN_CUSTOM_PROPERTY_REJECT',
-    '.gflow-inbox.gflow-grid.gflow-common { --gpp-inbox-geometry: 10px; }',
-    '--gpp-inbox-geometry'
-);
+gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_UNKNOWN_CUSTOM_PROPERTY_REJECT', '.gflow-inbox.gflow-grid.gflow-common { --gpp-inbox-geometry: 10px; }', '--gpp-inbox-geometry' );
 
-$reordered_paint_errors = gpp_inbox_native_paint_contract_errors(
-    '.gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }'
-);
-gpp_assert_same(
-    array(),
-    $reordered_paint_errors,
-    'Reordered authentic native Inbox root with admitted paint unexpectedly failed: ' . implode( ' | ', $reordered_paint_errors )
-);
+$reordered_paint_errors = gpp_inbox_native_paint_contract_errors( '.gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }' );
+gpp_assert_same( array(), $reordered_paint_errors, 'Reordered authentic native Inbox root with admitted paint unexpectedly failed: ' . implode( ' | ', $reordered_paint_errors ) );
 echo "PRI_FND_001_REORDERED_ADMITTED_PAINT_PASS\n";
 
-$incomplete_root = gpp_inbox_classify_native_selector_member(
-    '.gflow-grid.gflow-inbox .ag-row'
-);
-gpp_assert_same(
-    'none',
-    $incomplete_root['kind'],
-    'Incomplete native Inbox class set was accidentally classified as the authentic root.'
-);
+$incomplete_root = gpp_inbox_classify_native_selector_member( '.gflow-grid.gflow-inbox .ag-row' );
+gpp_assert_same( 'none', $incomplete_root['kind'], 'Incomplete native Inbox class set was accidentally classified as the authentic root.' );
 echo "PRI_FND_001_INCOMPLETE_ROOT_NOT_CLASSIFIED_PASS\n";
 
-$nested_root_errors = gpp_inbox_native_paint_contract_errors(
-    ':is(.gflow-grid.gflow-inbox.gflow-common) .ag-row { width: 10px; }'
+/* Attribute-selector representation closure. */
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_ATTRIBUTE_FULL_WIDTH_REJECT',
+    '[class~="gflow-inbox"][class~="gflow-grid"][class~="gflow-common"] .ag-row { width: 10px; }',
+    'width'
 );
-gpp_assert_true(
-    false !== strpos( implode( "\n", $nested_root_errors ), 'unsupported nested selector syntax' ),
-    'Unsupported nested native-root selector syntax must fail closed.'
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_ATTRIBUTE_MIXED_WIDTH_REJECT',
+    '.gflow-inbox.gflow-grid[class~="gflow-common"] .ag-row { width: 10px; }',
+    'width'
 );
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_ATTRIBUTE_REORDERED_MIXED_WIDTH_REJECT',
+    '[class~="gflow-common"].gflow-grid[class~="gflow-inbox"] .ag-row { width: 10px; }',
+    'width'
+);
+$attribute_paint_errors = gpp_inbox_native_paint_contract_errors( '[class~="gflow-grid"].gflow-inbox[class~="gflow-common"] .ag-row { color: #172033; }' );
+gpp_assert_same( array(), $attribute_paint_errors, 'Supported attribute/mixed native-root representation with admitted paint unexpectedly failed: ' . implode( ' | ', $attribute_paint_errors ) );
+echo "PRI_FND_001_ATTRIBUTE_ADMITTED_PAINT_PASS\n";
+
+$attribute_incomplete = gpp_inbox_classify_native_selector_member( '[class~="gflow-grid"].gflow-inbox .ag-row' );
+gpp_assert_same( 'none', $attribute_incomplete['kind'], 'Incomplete attribute/mixed native Inbox token set was accidentally classified as authentic root.' );
+echo "PRI_FND_001_ATTRIBUTE_INCOMPLETE_NOT_CLASSIFIED_PASS\n";
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_ATTRIBUTE_UNSUPPORTED_FORM_REJECT',
+    '[class*="gflow-inbox"].gflow-grid.gflow-common .ag-row { width: 10px; }',
+    'unsupported class-token attribute syntax'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_ATTRIBUTE_COMBINED_STYLESHEET_REJECT',
+    ".gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; }\n[class~=\"gflow-inbox\"][class~=\"gflow-grid\"][class~=\"gflow-common\"] .ag-cell { width: 10px; }",
+    'width'
+);
+
+/* Existing pseudo-function fail-closed control remains distinct from real block nesting. */
+$nested_root_errors = gpp_inbox_native_paint_contract_errors( ':is(.gflow-grid.gflow-inbox.gflow-common) .ag-row { width: 10px; }' );
+gpp_assert_true( false !== strpos( implode( "\n", $nested_root_errors ), 'unsupported nested selector syntax' ), 'Unsupported pseudo-function native-root selector syntax must fail closed.' );
 echo "PRI_FND_001_NESTED_NATIVE_ROOT_SYNTAX_REJECT_PASS\n";
 
-$ancestor_errors = gpp_inbox_native_paint_contract_errors(
-    '.unexpected-wrapper .gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }'
+/* Real CSS nesting closure. */
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_REAL_NESTED_WIDTH_REJECT',
+    ".gflow-inbox.gflow-grid.gflow-common {\n & .ag-row { width: 10px; }\n}",
+    'width'
 );
-gpp_assert_true(
-    false !== strpos( implode( "\n", $ancestor_errors ), 'Unadmitted ancestor-qualified selector' ),
-    'Unknown ancestor-qualified native Inbox selector unexpectedly escaped classification.'
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_REAL_NESTED_REORDERED_BORDER_WIDTH_REJECT',
+    ".gflow-common.gflow-inbox.gflow-grid {\n & .ag-row { border-width: 2px; }\n}",
+    'border-width'
 );
+$nested_paint_errors = gpp_inbox_native_paint_contract_errors(
+    ".gflow-grid.gflow-common.gflow-inbox {\n & .ag-row { color: #172033; }\n}"
+);
+gpp_assert_same( array(), $nested_paint_errors, 'Real nested native selector with admitted paint unexpectedly failed: ' . implode( ' | ', $nested_paint_errors ) );
+echo "PRI_FND_001_REAL_NESTED_ADMITTED_PAINT_PASS\n";
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_REAL_NESTED_UNRESOLVED_REJECT',
+    ".gflow-inbox.gflow-grid.gflow-common {\n .ag-row { width: 10px; }\n}",
+    'requires exactly one top-level `&`'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_REAL_NESTED_COMBINED_STYLESHEET_REJECT',
+    ".gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; }\n.gflow-inbox.gflow-grid.gflow-common {\n & .ag-cell { width: 10px; }\n}",
+    'width'
+);
+
+/* @media/context preservation. */
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_MEDIA_FLAT_WIDTH_REJECT',
+    "@media (max-width: 782px) {\n .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }\n}",
+    'width'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_MEDIA_OUTER_NESTED_WIDTH_REJECT',
+    "@media (max-width: 782px) {\n .gflow-inbox.gflow-grid.gflow-common {\n  & .ag-row { width: 10px; }\n }\n}",
+    'width'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_MEDIA_INSIDE_STYLE_NESTED_WIDTH_REJECT',
+    ".gflow-inbox.gflow-grid.gflow-common {\n @media (max-width: 782px) {\n  & .ag-row { width: 10px; }\n }\n}",
+    'width'
+);
+$media_gpp_only = gpp_inbox_native_paint_contract_errors(
+    ".gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; }\n@media (max-width: 782px) { .gpp-inbox-surface { padding-inline: 1rem; } }"
+);
+gpp_assert_same( array(), $media_gpp_only, 'Existing-style GPP-owned @media rule produced a false positive: ' . implode( ' | ', $media_gpp_only ) );
+echo "PRI_FND_001_MEDIA_GPP_ONLY_CONTEXT_PASS\n";
+
+$ancestor_errors = gpp_inbox_native_paint_contract_errors( '.unexpected-wrapper .gflow-grid.gflow-common.gflow-inbox .ag-row { color: #172033; }' );
+gpp_assert_true( false !== strpos( implode( "\n", $ancestor_errors ), 'Unadmitted ancestor-qualified selector' ), 'Unknown ancestor-qualified native Inbox selector unexpectedly escaped classification.' );
 echo "PRI_FND_001_ANCESTOR_NATIVE_SELECTOR_REJECT_PASS\n";
 
 $admitted_fixture = <<<'CSS'
@@ -797,43 +1154,17 @@ $admitted_fixture = <<<'CSS'
     transition-property: color, border-color, background-color;
 }
 CSS;
-gpp_assert_same(
-    array(),
-    gpp_inbox_native_paint_contract_errors( $admitted_fixture ),
-    'Legitimate admitted native paint/typography/custom-property fixture was rejected.'
-);
+gpp_assert_same( array(), gpp_inbox_native_paint_contract_errors( $admitted_fixture ), 'Legitimate admitted native paint/typography/custom-property fixture was rejected.' );
 echo "PRI_FND_001_ADMITTED_PAINT_FIXTURE_PASS\n";
 
-$syntax_errors = gpp_inbox_native_paint_contract_errors(
-    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* unterminated'
-);
+$syntax_errors = gpp_inbox_native_paint_contract_errors( '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* unterminated' );
 gpp_assert_true( ! empty( $syntax_errors ), 'Unclassifiable CSS syntax must fail closed.' );
 echo "PRI_FND_001_UNCLASSIFIABLE_SYNTAX_REJECT_PASS\n";
 
-gpp_inbox_assert_historical_rejection(
-    'PRI_FND_001_FIXED_WIDTH_HISTORY_REJECT',
-    $shared_css . "\n.gpp-inbox-surface__inner { max-inline-size: 70rem; }",
-    $native_css,
-    '70rem'
-);
-gpp_inbox_assert_historical_rejection(
-    'PRI_FND_001_BREAKOUT_HISTORY_REJECT',
-    $shared_css . "\n.gpp-inbox-surface--full-width { transform: translateX(1px); }",
-    $native_css,
-    'transform-based breakout'
-);
-gpp_inbox_assert_historical_rejection(
-    'PRI_FND_001_CARD_MODE_HISTORY_REJECT',
-    $shared_css . "\n.gpp-inbox-card { color: #172033; }",
-    $native_css,
-    'Card Mode'
-);
-gpp_inbox_assert_historical_rejection(
-    'PRI_FND_001_AG_RTL_HISTORY_REJECT',
-    $shared_css . "\n.ag-rtl { color: #172033; }",
-    $native_css,
-    'AG Grid RTL'
-);
+gpp_inbox_assert_historical_rejection( 'PRI_FND_001_FIXED_WIDTH_HISTORY_REJECT', $shared_css . "\n.gpp-inbox-surface__inner { max-inline-size: 70rem; }", $native_css, '70rem' );
+gpp_inbox_assert_historical_rejection( 'PRI_FND_001_BREAKOUT_HISTORY_REJECT', $shared_css . "\n.gpp-inbox-surface--full-width { transform: translateX(1px); }", $native_css, 'transform-based breakout' );
+gpp_inbox_assert_historical_rejection( 'PRI_FND_001_CARD_MODE_HISTORY_REJECT', $shared_css . "\n.gpp-inbox-card { color: #172033; }", $native_css, 'Card Mode' );
+gpp_inbox_assert_historical_rejection( 'PRI_FND_001_AG_RTL_HISTORY_REJECT', $shared_css . "\n.ag-rtl { color: #172033; }", $native_css, 'AG Grid RTL' );
 
 $focus_mutation_count = 0;
 $focus_mutation = preg_replace(
@@ -844,11 +1175,6 @@ $focus_mutation = preg_replace(
     $focus_mutation_count
 );
 gpp_assert_same( 1, $focus_mutation_count, 'Focus falsification fixture could not mutate the native Search rule.' );
-gpp_inbox_assert_historical_rejection(
-    'PRI_FND_001_FOCUS_HISTORY_REJECT',
-    $focus_mutation,
-    $native_css,
-    'Native Search lost'
-);
+gpp_inbox_assert_historical_rejection( 'PRI_FND_001_FOCUS_HISTORY_REJECT', $focus_mutation, $native_css, 'Native Search lost' );
 
 echo "INBOX_HOST_WIDTH_OWNERSHIP_PASS\n";
