@@ -49,6 +49,16 @@ async function waitForRowId(page, rowId, present, timeout = 45000) {
     { timeout },
   );
 }
+async function focusByKeyboardTab(page, locator, maxTabs = 120) {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  for (let index = 0; index < maxTabs; index += 1) {
+    await page.keyboard.press('Tab');
+    if (await locator.evaluate(element => element === document.activeElement).catch(() => false)) return index + 1;
+  }
+  throw new Error(`Manual refresh was not keyboard-reachable within ${maxTabs} Tab stops.`);
+}
 
 const browserResults = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
 if (!Array.isArray(browserResults.results)) throw new Error('WU21 browser results are missing before manual refresh test.');
@@ -149,13 +159,16 @@ try {
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardControl = page.getByRole('button', { name: label, exact: true });
-  await keyboardControl.focus();
+  const keyboardTabStops = await focusByKeyboardTab(page, keyboardControl);
   const focusStyle = await keyboardControl.evaluate(element => ({
     active: element === document.activeElement,
+    focusVisible: element.matches(':focus-visible'),
     outlineStyle: getComputedStyle(element).outlineStyle,
     outlineWidth: getComputedStyle(element).outlineWidth,
   }));
-  if (!focusStyle.active || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0) throw new Error(`Manual refresh focus is not visible: ${JSON.stringify(focusStyle)}`);
+  if (!focusStyle.active || !focusStyle.focusVisible || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0) {
+    throw new Error(`Manual refresh keyboard focus is not visibly indicated: ${JSON.stringify(focusStyle)}`);
+  }
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
     page.keyboard.press('Enter'),
@@ -196,6 +209,7 @@ try {
       host_owned_inbox_changes_observed_after_reload: hostInboxChanges.length,
       unrelated_admin_control_count: 0,
       unrelated_frontend_control_count: 0,
+      keyboard_tab_stops_to_control: keyboardTabStops,
       keyboard_focus: focusStyle,
     },
   };
