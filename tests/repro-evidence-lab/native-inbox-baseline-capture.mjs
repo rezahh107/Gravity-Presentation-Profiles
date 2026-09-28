@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import {
   BROWSER_TAB_ZOOM_MECHANISM,
+  getBrowserTabZoom,
   launchBrowserZoomContext,
   setBrowserTabZoom,
 } from '../visual-regression/browser-tab-zoom.mjs';
@@ -315,10 +316,14 @@ function assertPairedHostParity(raw, gpp, scenarioId) {
   };
 }
 
-async function captureMode({ context, page, scenario, mode, zoomEvidence }) {
+async function captureMode({ page, scenario, mode, zoomEvidence, navigate = true }) {
   const url = captureUrl(mode);
-  const response = await page.goto(url, { waitUntil: 'networkidle' });
-  if (!response || !response.ok()) throw new Error(`${scenario.id}/${mode}: Inbox route HTTP status ${response?.status() ?? 'unknown'}.`);
+  if (navigate) {
+    const response = await page.goto(url, { waitUntil: 'networkidle' });
+    if (!response || !response.ok()) throw new Error(`${scenario.id}/${mode}: Inbox route HTTP status ${response?.status() ?? 'unknown'}.`);
+  } else if (page.url() !== url) {
+    throw new Error(`${scenario.id}/${mode}: capture tab is not on the qualified route.`);
+  }
   await waitForNativeInbox(page);
   const runtimeFacts = await measureRuntimeFacts(page);
   assertCommonNativeFacts(runtimeFacts, `${scenario.id}/${mode}`);
@@ -327,6 +332,8 @@ async function captureMode({ context, page, scenario, mode, zoomEvidence }) {
   const screenshotName = `${scenario.id}__${mode}.png`;
   await page.screenshot({ path: path.join(outputRoot, screenshotName), fullPage: false });
   const settings = await captureSettingsFacts(page, runtimeFacts);
+  const browserIdentity = await page.evaluate(() => ({ user_agent: navigator.userAgent, platform: navigator.platform }));
+  browserIdentity.chromium_version = page.context().browser()?.version() ?? null;
   const evidence = {
     schema_version: '1.0.0',
     evidence_kind: 'GPP_INBOX_NATIVE_BASELINE_SCENARIO',
@@ -343,6 +350,7 @@ async function captureMode({ context, page, scenario, mode, zoomEvidence }) {
       final_url: page.url(),
       native_surface_selector: selectors.native_inbox,
     },
+    browser: browserIdentity,
     browser_zoom: zoomEvidence,
     runtime: runtimeFacts,
     native_settings_push: settings,
@@ -370,7 +378,6 @@ async function runViewportScenario(browser, scenario) {
       const page = await context.newPage();
       try {
         const capture = await captureMode({
-          context,
           page,
           scenario,
           mode,
@@ -403,7 +410,8 @@ async function runBrowserZoomScenario(scenario) {
       const page = await harness.context.newPage();
       try {
         const url = captureUrl(mode);
-        await page.goto(url, { waitUntil: 'networkidle' });
+        const response = await page.goto(url, { waitUntil: 'networkidle' });
+        if (!response || !response.ok()) throw new Error(`${scenario.id}/${mode}: Inbox route HTTP status ${response?.status() ?? 'unknown'}.`);
         await waitForNativeInbox(page);
         const reset = await setBrowserTabZoom(harness.worker, page, 1);
         assert.ok(Math.abs(reset.actual - 1) < 0.001, `${scenario.id}/${mode}: genuine tab zoom did not reset to 100%.`);
@@ -412,23 +420,24 @@ async function runBrowserZoomScenario(scenario) {
         const zoom = await setBrowserTabZoom(harness.worker, page, scenario.requested_zoom);
         assert.ok(Math.abs(zoom.actual - scenario.requested_zoom) < 0.001, `${scenario.id}/${mode}: chrome.tabs.getZoom did not confirm 200%.`);
         await page.waitForTimeout(500);
+        const atCapture = await getBrowserTabZoom(harness.worker, page);
+        assert.ok(Math.abs(atCapture.actual - scenario.requested_zoom) < 0.001, `${scenario.id}/${mode}: capture-time browser zoom is not 200%.`);
         const after = await measureRuntimeFacts(page);
         const widthRatio = before.viewport.inner_width / after.viewport.inner_width;
         assert.ok(widthRatio >= 1.8 && widthRatio <= 2.2, `${scenario.id}/${mode}: browser zoom did not contract the effective CSS viewport as expected; ratio=${widthRatio}.`);
 
-        // captureMode navigates. Keep this page at the proven 200% factor while it
-        // performs the canonical screenshot/runtime capture of the same route.
         const capture = await captureMode({
-          context: harness.context,
           page,
           scenario,
           mode,
+          navigate: false,
           zoomEvidence: {
             requested_factor: scenario.requested_zoom,
-            actual_factor: zoom.actual,
+            actual_factor: atCapture.actual,
             verification: BROWSER_TAB_ZOOM_MECHANISM.verification_api,
             mechanism: BROWSER_TAB_ZOOM_MECHANISM,
-            tab_api: zoom,
+            tab_api_set_result: zoom,
+            tab_api_capture_time_verification: atCapture,
             reset_api: reset,
             before_effective_viewport: before.viewport,
             after_effective_viewport: after.viewport,
@@ -436,10 +445,9 @@ async function runBrowserZoomScenario(scenario) {
             genuine_tab_zoom_api_used: true,
           },
         });
-        // A same-tab navigation must not silently discard the qualified zoom.
-        const postNavigationZoom = await setBrowserTabZoom(harness.worker, page, scenario.requested_zoom);
-        assert.ok(Math.abs(postNavigationZoom.actual - scenario.requested_zoom) < 0.001, `${scenario.id}/${mode}: 200% tab zoom was not retained for captured route.`);
-        capture.browser_zoom.post_navigation_verification = postNavigationZoom;
+        const afterCapture = await getBrowserTabZoom(harness.worker, page);
+        assert.ok(Math.abs(afterCapture.actual - scenario.requested_zoom) < 0.001, `${scenario.id}/${mode}: 200% browser zoom did not remain active through screenshot/runtime capture.`);
+        capture.browser_zoom.post_capture_verification = afterCapture;
         fs.writeFileSync(path.join(outputRoot, capture.json), `${JSON.stringify(capture, null, 2)}\n`);
         pair.push(capture);
       } finally {
