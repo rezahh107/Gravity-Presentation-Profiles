@@ -47,6 +47,7 @@ $cases = array(
     'inbox-block-full-width-composition.php',
     'inbox-asset-versioning.php',
     'inbox-host-width-ownership.php',
+    'inbox-resolver-retirement.php',
     'entry-detail-presentation-model.php',
     'entry-detail-review-architecture.php',
     'entry-detail-journey-presentation.php',
