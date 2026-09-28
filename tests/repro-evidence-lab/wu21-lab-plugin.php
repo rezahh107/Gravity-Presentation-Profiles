@@ -210,3 +210,11 @@ function gpp_wu21_elementor_inbox_content( $attributes ) {
     return apply_filters( 'the_content', $content );
 }
 add_shortcode( 'gpp_wu21_elementor_inbox', 'gpp_wu21_elementor_inbox_content' );
+
+// Keep the Raw Native bypass as a separate WU21-only module. The repository is
+// symlinked into the ephemeral plugin directory by the existing lab workflow,
+// so this adds no production bootstrap or workflow-owned runtime mode.
+$gpp_wu21_native_baseline_module = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/repro-evidence-lab/wu21-native-inbox-baseline-mode.php';
+if ( is_file( $gpp_wu21_native_baseline_module ) ) {
+    require_once $gpp_wu21_native_baseline_module;
+}
