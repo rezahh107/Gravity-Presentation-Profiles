@@ -10,13 +10,15 @@
 .gflow-inbox.gflow-grid.gflow-common {
     --gpp-inbox-canvas: var(--wpds-color-background-surface-neutral-weak, #f7f8fc);
     --gpp-inbox-surface: #fff;
+    --gpp-inbox-group-surface: #fcfdfe;
     --gpp-inbox-text: #172033;
     --gpp-inbox-text-muted: #475467;
     --gpp-inbox-border: #e4e7ec;
     --gpp-inbox-control-border: #8690a1;
     --gpp-inbox-accent: #1d4ed8;
-    --gpp-inbox-focus: #3858e9;
+    --gpp-inbox-focus: var(--gpp-inbox-accent);
     --gpp-inbox-row-hover: #f8fafc;
+    --gpp-inbox-elevation: 0 2px 4px rgba(23, 32, 51, .05);
 }
 
 /* GPP-owned page canvas. */
@@ -129,7 +131,7 @@
 }
 
 .gflow-inbox.gflow-grid.gflow-common [data-js="gflow-inbox-search"]:focus-visible {
-    border-color: var(--gpp-inbox-control-border);
+    border-color: var(--gpp-inbox-accent);
     outline: 3px solid var(--gpp-inbox-focus) !important;
     outline-offset: 3px;
     box-shadow: none;
@@ -138,21 +140,36 @@
 .gflow-inbox.gflow-grid.gflow-common .gflow-grid__button {
     border-color: var(--gpp-inbox-border);
     border-radius: 8px;
-    background-color: var(--gpp-inbox-surface);
+    background-color: var(--gpp-inbox-group-surface);
     color: var(--gpp-inbox-text-muted);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gflow-grid__button:hover {
+    background-color: var(--gpp-inbox-row-hover);
 }
 
 .gflow-inbox.gflow-grid.gflow-common .gflow-grid__button:focus,
 .gflow-inbox.gflow-grid.gflow-common .gflow-grid__button:focus-visible,
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button:focus,
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button:focus-visible {
-    outline: 2px solid var(--gpp-inbox-focus) !important;
-    outline-offset: 2px;
+    outline: 3px solid var(--gpp-inbox-focus) !important;
+    outline-offset: 3px;
 }
 
 /* Native Grid paint hierarchy; AG Grid keeps all layout and direction semantics. */
-.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper,
-.gflow-inbox.gflow-grid.gflow-common .ag-header,
+.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper {
+    background-color: var(--gpp-inbox-surface);
+    border-color: var(--gpp-inbox-border);
+    border-radius: 14px;
+    box-shadow: var(--gpp-inbox-elevation);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-header {
+    background-color: var(--gpp-inbox-group-surface);
+    border-color: var(--gpp-inbox-border);
+    border-radius: 14px 14px 0 0;
+}
+
 .gflow-inbox.gflow-grid.gflow-common .ag-row {
     background-color: var(--gpp-inbox-surface);
     border-color: var(--gpp-inbox-border);
@@ -177,6 +194,7 @@
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-panel {
     background-color: var(--gpp-inbox-surface);
     border-color: var(--gpp-inbox-border);
+    border-radius: 0 0 14px 14px;
     color: var(--gpp-inbox-text-muted);
     font-family: inherit;
 }
@@ -184,8 +202,12 @@
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button {
     border-color: var(--gpp-inbox-control-border);
     border-radius: 8px;
-    background-color: var(--gpp-inbox-surface);
+    background-color: var(--gpp-inbox-group-surface);
     color: var(--gpp-inbox-text);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-button:hover:not(.ag-disabled) {
+    background-color: var(--gpp-inbox-row-hover);
 }
 
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button.ag-disabled {
