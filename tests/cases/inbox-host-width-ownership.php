@@ -55,233 +55,28 @@ function gpp_inbox_inner_rule_bodies( $css ) {
 }
 
 /**
- * Strip CSS comments while preserving strings and line structure. Unterminated
- * comments or strings fail closed instead of being silently ignored.
+ * Normalize comments before selector/declaration classification. Any comment
+ * syntax that cannot be fully removed is an explicit fail-closed condition.
  */
 function gpp_inbox_normalize_css_comments( $css ) {
-    $normalized = '';
-    $length = strlen( $css );
-    $quote = null;
-    $escaped = false;
-
-    for ( $i = 0; $i < $length; ++$i ) {
-        $char = $css[ $i ];
-
-        if ( null !== $quote ) {
-            $normalized .= $char;
-            if ( $escaped ) {
-                $escaped = false;
-                continue;
-            }
-            if ( '\\' === $char ) {
-                $escaped = true;
-                continue;
-            }
-            if ( $quote === $char ) {
-                $quote = null;
-            }
-            continue;
-        }
-
-        if ( '"' === $char || "'" === $char ) {
-            $quote = $char;
-            $normalized .= $char;
-            continue;
-        }
-
-        if ( '/' === $char && $i + 1 < $length && '*' === $css[ $i + 1 ] ) {
-            $normalized .= '  ';
-            ++$i;
-            $closed = false;
-            while ( ++$i < $length ) {
-                if ( '*' === $css[ $i ] && $i + 1 < $length && '/' === $css[ $i + 1 ] ) {
-                    $normalized .= '  ';
-                    ++$i;
-                    $closed = true;
-                    break;
-                }
-                $normalized .= "\n" === $css[ $i ] ? "\n" : ' ';
-            }
-            if ( ! $closed ) {
-                return array( 'css' => '', 'error' => 'Unterminated CSS comment.' );
-            }
-            continue;
-        }
-
-        $normalized .= $char;
+    $normalized = preg_replace( '/\/\*.*?\*\//s', ' ', $css );
+    if ( ! is_string( $normalized ) ) {
+        return array( 'css' => '', 'error' => 'CSS comment normalization failed.' );
     }
-
-    if ( null !== $quote ) {
-        return array( 'css' => '', 'error' => 'Unterminated CSS string.' );
+    if ( false !== strpos( $normalized, '/*' ) || false !== strpos( $normalized, '*/' ) ) {
+        return array( 'css' => '', 'error' => 'Unterminated or unclassifiable CSS comment syntax.' );
     }
 
     return array( 'css' => $normalized, 'error' => null );
 }
 
 /**
- * Find the matching closing brace for a block. Quotes are respected so braces
- * inside strings cannot change block ownership.
+ * Split a selector list on commas that are not inside strings, [] or ().
+ * Unsupported/unbalanced selector syntax fails closed.
  */
-function gpp_inbox_find_css_block_end( $css, $open_index ) {
-    $depth = 1;
-    $quote = null;
-    $escaped = false;
-    $length = strlen( $css );
-
-    for ( $i = $open_index + 1; $i < $length; ++$i ) {
-        $char = $css[ $i ];
-        if ( null !== $quote ) {
-            if ( $escaped ) {
-                $escaped = false;
-                continue;
-            }
-            if ( '\\' === $char ) {
-                $escaped = true;
-                continue;
-            }
-            if ( $quote === $char ) {
-                $quote = null;
-            }
-            continue;
-        }
-        if ( '"' === $char || "'" === $char ) {
-            $quote = $char;
-            continue;
-        }
-        if ( '{' === $char ) {
-            ++$depth;
-        } elseif ( '}' === $char && 0 === --$depth ) {
-            return $i;
-        }
-    }
-
-    return false;
-}
-
-/**
- * Collect ordinary style rules recursively through at-rule blocks. This is a
- * bounded static classifier, not a runtime CSS parser. Any unbalanced syntax
- * that prevents safe classification is returned as an error.
- */
-function gpp_inbox_collect_css_rules( $css ) {
-    $rules = array();
-    $errors = array();
-    $length = strlen( $css );
-    $offset = 0;
-
-    while ( $offset < $length ) {
-        while ( $offset < $length && preg_match( '/\s/', $css[ $offset ] ) ) {
-            ++$offset;
-        }
-        if ( $offset >= $length ) {
-            break;
-        }
-
-        $start = $offset;
-        $quote = null;
-        $escaped = false;
-        $paren = 0;
-        $bracket = 0;
-        $terminator = null;
-
-        for ( ; $offset < $length; ++$offset ) {
-            $char = $css[ $offset ];
-            if ( null !== $quote ) {
-                if ( $escaped ) {
-                    $escaped = false;
-                    continue;
-                }
-                if ( '\\' === $char ) {
-                    $escaped = true;
-                    continue;
-                }
-                if ( $quote === $char ) {
-                    $quote = null;
-                }
-                continue;
-            }
-            if ( '"' === $char || "'" === $char ) {
-                $quote = $char;
-                continue;
-            }
-            if ( '(' === $char ) {
-                ++$paren;
-                continue;
-            }
-            if ( ')' === $char ) {
-                if ( 0 === $paren ) {
-                    $errors[] = 'Unbalanced CSS parenthesis before rule block.';
-                    return array( 'rules' => $rules, 'errors' => $errors );
-                }
-                --$paren;
-                continue;
-            }
-            if ( '[' === $char ) {
-                ++$bracket;
-                continue;
-            }
-            if ( ']' === $char ) {
-                if ( 0 === $bracket ) {
-                    $errors[] = 'Unbalanced CSS bracket before rule block.';
-                    return array( 'rules' => $rules, 'errors' => $errors );
-                }
-                --$bracket;
-                continue;
-            }
-            if ( 0 === $paren && 0 === $bracket && ( '{' === $char || ';' === $char || '}' === $char ) ) {
-                $terminator = $char;
-                break;
-            }
-        }
-
-        if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
-            $errors[] = 'Unbalanced CSS selector/prelude syntax.';
-            break;
-        }
-        if ( null === $terminator ) {
-            if ( '' !== trim( substr( $css, $start ) ) ) {
-                $errors[] = 'Unterminated CSS rule/prelude.';
-            }
-            break;
-        }
-        if ( '}' === $terminator ) {
-            $errors[] = 'Unexpected CSS closing brace.';
-            break;
-        }
-
-        $prelude = trim( substr( $css, $start, $offset - $start ) );
-        if ( ';' === $terminator ) {
-            ++$offset;
-            continue;
-        }
-        if ( '' === $prelude ) {
-            $errors[] = 'Empty CSS rule prelude.';
-            break;
-        }
-
-        $close = gpp_inbox_find_css_block_end( $css, $offset );
-        if ( false === $close ) {
-            $errors[] = 'Unterminated CSS block for prelude: ' . $prelude;
-            break;
-        }
-        $body = substr( $css, $offset + 1, $close - $offset - 1 );
-        if ( '@' === $prelude[0] ) {
-            $nested = gpp_inbox_collect_css_rules( $body );
-            $rules = array_merge( $rules, $nested['rules'] );
-            $errors = array_merge( $errors, $nested['errors'] );
-        } else {
-            $rules[] = array( 'selector' => $prelude, 'body' => $body );
-        }
-        $offset = $close + 1;
-    }
-
-    return array( 'rules' => $rules, 'errors' => $errors );
-}
-
-/** Split a selector list on top-level commas only. */
 function gpp_inbox_split_selector_list( $selector_text ) {
     $members = array();
-    $start = 0;
+    $current = '';
     $quote = null;
     $escaped = false;
     $paren = 0;
@@ -291,6 +86,7 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     for ( $i = 0; $i < $length; ++$i ) {
         $char = $selector_text[ $i ];
         if ( null !== $quote ) {
+            $current .= $char;
             if ( $escaped ) {
                 $escaped = false;
             } elseif ( '\\' === $char ) {
@@ -300,20 +96,29 @@ function gpp_inbox_split_selector_list( $selector_text ) {
             }
             continue;
         }
+
         if ( '"' === $char || "'" === $char ) {
             $quote = $char;
+            $current .= $char;
         } elseif ( '(' === $char ) {
             ++$paren;
+            $current .= $char;
         } elseif ( ')' === $char ) {
             --$paren;
+            $current .= $char;
         } elseif ( '[' === $char ) {
             ++$bracket;
+            $current .= $char;
         } elseif ( ']' === $char ) {
             --$bracket;
+            $current .= $char;
         } elseif ( ',' === $char && 0 === $paren && 0 === $bracket ) {
-            $members[] = trim( substr( $selector_text, $start, $i - $start ) );
-            $start = $i + 1;
+            $members[] = trim( $current );
+            $current = '';
+        } else {
+            $current .= $char;
         }
+
         if ( $paren < 0 || $bracket < 0 ) {
             return array( 'members' => array(), 'error' => 'Unbalanced selector-list syntax.' );
         }
@@ -322,7 +127,7 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
         return array( 'members' => array(), 'error' => 'Unbalanced selector-list syntax.' );
     }
-    $members[] = trim( substr( $selector_text, $start ) );
+    $members[] = trim( $current );
     foreach ( $members as $member ) {
         if ( '' === $member ) {
             return array( 'members' => array(), 'error' => 'Empty selector-list member.' );
@@ -332,117 +137,37 @@ function gpp_inbox_split_selector_list( $selector_text ) {
     return array( 'members' => $members, 'error' => null );
 }
 
-/**
- * Parse declarations in a native-host rule. Semicolons/colons inside strings,
- * functions and attribute-like bracket groups are ignored for splitting.
- */
-function gpp_inbox_parse_css_declarations( $body ) {
-    if ( false !== strpos( $body, '{' ) || false !== strpos( $body, '}' ) ) {
-        return array( 'declarations' => array(), 'errors' => array( 'Nested CSS syntax inside a native-host style rule is not admitted.' ) );
-    }
-
-    $segments = array();
-    $start = 0;
-    $quote = null;
-    $escaped = false;
-    $paren = 0;
-    $bracket = 0;
-    $length = strlen( $body );
-
-    for ( $i = 0; $i < $length; ++$i ) {
-        $char = $body[ $i ];
-        if ( null !== $quote ) {
-            if ( $escaped ) {
-                $escaped = false;
-            } elseif ( '\\' === $char ) {
-                $escaped = true;
-            } elseif ( $quote === $char ) {
-                $quote = null;
-            }
-            continue;
-        }
-        if ( '"' === $char || "'" === $char ) {
-            $quote = $char;
-        } elseif ( '(' === $char ) {
-            ++$paren;
-        } elseif ( ')' === $char ) {
-            --$paren;
-        } elseif ( '[' === $char ) {
-            ++$bracket;
-        } elseif ( ']' === $char ) {
-            --$bracket;
-        } elseif ( ';' === $char && 0 === $paren && 0 === $bracket ) {
-            $segments[] = substr( $body, $start, $i - $start );
-            $start = $i + 1;
-        }
-        if ( $paren < 0 || $bracket < 0 ) {
-            return array( 'declarations' => array(), 'errors' => array( 'Unbalanced CSS declaration syntax.' ) );
-        }
-    }
-    if ( null !== $quote || 0 !== $paren || 0 !== $bracket ) {
-        return array( 'declarations' => array(), 'errors' => array( 'Unbalanced CSS declaration syntax.' ) );
-    }
-    $segments[] = substr( $body, $start );
-
-    $declarations = array();
-    $errors = array();
-    foreach ( $segments as $segment ) {
-        $segment = trim( $segment );
-        if ( '' === $segment ) {
-            continue;
-        }
-
-        $colon = null;
-        $quote = null;
-        $escaped = false;
-        $paren = 0;
-        $bracket = 0;
-        $segment_length = strlen( $segment );
-        for ( $i = 0; $i < $segment_length; ++$i ) {
-            $char = $segment[ $i ];
-            if ( null !== $quote ) {
-                if ( $escaped ) {
-                    $escaped = false;
-                } elseif ( '\\' === $char ) {
-                    $escaped = true;
-                } elseif ( $quote === $char ) {
-                    $quote = null;
-                }
-                continue;
-            }
-            if ( '"' === $char || "'" === $char ) {
-                $quote = $char;
-            } elseif ( '(' === $char ) {
-                ++$paren;
-            } elseif ( ')' === $char ) {
-                --$paren;
-            } elseif ( '[' === $char ) {
-                ++$bracket;
-            } elseif ( ']' === $char ) {
-                --$bracket;
-            } elseif ( ':' === $char && 0 === $paren && 0 === $bracket ) {
-                $colon = $i;
-                break;
-            }
-        }
-
-        if ( null === $colon ) {
-            $errors[] = 'Unclassifiable CSS declaration: ' . $segment;
-            continue;
-        }
-        $property = strtolower( trim( substr( $segment, 0, $colon ) ) );
-        $value = trim( substr( $segment, $colon + 1 ) );
-        if ( 1 !== preg_match( '/^(?:--[a-z0-9_-]+|[a-z-]+)$/', $property ) || '' === $value ) {
-            $errors[] = 'Invalid CSS declaration syntax: ' . $segment;
-            continue;
-        }
-        $declarations[] = array( 'property' => $property, 'value' => $value );
-    }
-
-    return array( 'declarations' => $declarations, 'errors' => $errors );
+/** Authentic native-root selectors start at Gravity Flow's Inbox root. */
+function gpp_inbox_is_native_root_selector( $selector ) {
+    return 1 === preg_match(
+        '/^\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/',
+        trim( $selector )
+    );
 }
 
-/** Positive Phase-B property contract for authentic native Inbox selectors. */
+/**
+ * Parse the bounded declaration grammar used by the current production Inbox
+ * CSS. Anything outside that grammar is rejected instead of silently skipped.
+ */
+function gpp_inbox_parse_native_declarations( $body ) {
+    $pattern = '/(?:^|;)\s*((?:--[a-z0-9_-]+)|(?:[a-z-]+))\s*:\s*([^;{}]+)(?=;|$)/i';
+    $matches = array();
+    preg_match_all( $pattern, $body, $matches, PREG_SET_ORDER );
+
+    $residue = preg_replace( $pattern, '', $body );
+    if ( ! is_string( $residue ) || '' !== trim( $residue, " \t\r\n;" ) ) {
+        return array( 'properties' => array(), 'error' => 'Unclassifiable CSS declaration syntax.' );
+    }
+
+    $properties = array();
+    foreach ( $matches as $match ) {
+        $properties[] = strtolower( $match[1] );
+    }
+
+    return array( 'properties' => $properties, 'error' => null );
+}
+
+/** Positive Phase-B property contract for the authentic native Inbox subtree. */
 function gpp_inbox_is_admitted_native_paint_property( $property ) {
     if ( 1 === preg_match( '/^--gpp-inbox-[a-z0-9-]+$/', $property ) ) {
         return true;
@@ -467,48 +192,60 @@ function gpp_inbox_is_admitted_native_paint_property( $property ) {
     );
 }
 
-/** Validate the positive paint/typography contract for native-root selectors. */
+/**
+ * Enforce the positive paint/typography contract on every selector-list member
+ * that starts at the authentic native root, regardless of list position.
+ */
 function gpp_inbox_native_paint_contract_errors( $css ) {
     $normalized = gpp_inbox_normalize_css_comments( $css );
     if ( null !== $normalized['error'] ) {
         return array( $normalized['error'] );
     }
+    $css = $normalized['css'];
 
-    $parsed = gpp_inbox_collect_css_rules( $normalized['css'] );
-    $errors = $parsed['errors'];
-    $matched_rules = 0;
-    foreach ( $parsed['rules'] as $rule ) {
-        $selectors = gpp_inbox_split_selector_list( $rule['selector'] );
+    $rules = array();
+    preg_match_all( '/([^{}]+)\{([^{}]*)\}/m', $css, $rules, PREG_SET_ORDER );
+
+    $errors = array();
+    $classified_native_members = 0;
+    foreach ( $rules as $rule ) {
+        $selectors = gpp_inbox_split_selector_list( trim( $rule[1] ) );
         if ( null !== $selectors['error'] ) {
-            $errors[] = $selectors['error'] . ' Selector: ' . $rule['selector'];
-            continue;
-        }
-
-        $targets_native_host = false;
-        foreach ( $selectors['members'] as $member ) {
-            if ( false !== strpos( $member, '.gflow-inbox.gflow-grid.gflow-common' ) ) {
-                $targets_native_host = true;
-                break;
+            if ( false !== strpos( $rule[1], '.gflow-inbox.gflow-grid.gflow-common' ) ) {
+                $errors[] = $selectors['error'] . ' Selector: ' . trim( $rule[1] );
             }
-        }
-        if ( ! $targets_native_host ) {
             continue;
         }
-        ++$matched_rules;
 
-        $declarations = gpp_inbox_parse_css_declarations( $rule['body'] );
-        foreach ( $declarations['errors'] as $error ) {
-            $errors[] = $error . ' Selector: ' . $rule['selector'];
+        $native_members = array_filter( $selectors['members'], 'gpp_inbox_is_native_root_selector' );
+        if ( empty( $native_members ) ) {
+            continue;
         }
-        foreach ( $declarations['declarations'] as $declaration ) {
-            if ( ! gpp_inbox_is_admitted_native_paint_property( $declaration['property'] ) ) {
-                $errors[] = 'Unadmitted native Inbox property `' . $declaration['property'] . '` in selector: ' . $rule['selector'];
+        $classified_native_members += count( $native_members );
+
+        $declarations = gpp_inbox_parse_native_declarations( $rule[2] );
+        if ( null !== $declarations['error'] ) {
+            $errors[] = $declarations['error'] . ' Selector: ' . implode( ', ', $native_members );
+            continue;
+        }
+        foreach ( $declarations['properties'] as $property ) {
+            if ( ! gpp_inbox_is_admitted_native_paint_property( $property ) ) {
+                $errors[] = 'Unadmitted native Inbox property `' . $property . '` in selector: ' . implode( ', ', $native_members );
             }
         }
     }
 
-    if ( 0 === $matched_rules ) {
-        $errors[] = 'No native Inbox selector was safely classified.';
+    $candidate_matches = array();
+    preg_match_all(
+        '/(?:^|[{},])\s*\.gflow-inbox\.gflow-grid\.gflow-common(?=$|[\s>+~.#:\[\(])/m',
+        $css,
+        $candidate_matches
+    );
+    $candidate_count = count( $candidate_matches[0] );
+    if ( 0 === $candidate_count ) {
+        $errors[] = 'No native Inbox selector was found for paint-contract validation.';
+    } elseif ( $candidate_count !== $classified_native_members ) {
+        $errors[] = 'Native Inbox selector syntax could not be classified deterministically.';
     }
 
     return $errors;
@@ -525,7 +262,6 @@ function gpp_inbox_historical_regression_errors( $shared_css, $native_css ) {
     if ( false !== stripos( $combined_css, '1120px' ) ) {
         $errors[] = 'Superseded ~1120px Inbox content-width lock was reintroduced.';
     }
-
     foreach ( array_merge( gpp_inbox_full_width_rule_bodies( $shared_css ), gpp_inbox_full_width_rule_bodies( $native_css ) ) as $rule ) {
         if ( 1 === preg_match( '/\b\d*\.?\d+(?:d|s|l)?vw\b/i', $rule ) ) {
             $errors[] = 'Full Width Inbox reintroduced viewport-owned sizing.';
@@ -540,7 +276,6 @@ function gpp_inbox_historical_regression_errors( $shared_css, $native_css ) {
             $errors[] = 'Full Width Inbox reintroduced a transform-based breakout.';
         }
     }
-
     if ( false !== strpos( $native_css, 'calc(50% - 50vw)' ) ) {
         $errors[] = 'Native Inbox CSS still contains the historical physical viewport offset.';
     }
@@ -594,6 +329,7 @@ function gpp_inbox_assert_historical_rejection( $label, $shared_css, $native_css
 
 $shared_rules = gpp_inbox_full_width_rule_bodies( $shared_css );
 $native_rules = gpp_inbox_full_width_rule_bodies( $native_css );
+$rules = array_merge( $shared_rules, $native_rules );
 $inner_rules = gpp_inbox_inner_rule_bodies( $shared_css );
 
 gpp_assert_true( ! empty( $shared_rules ), 'Admitted Full Width Inbox ownership rule is missing.' );
@@ -655,7 +391,7 @@ gpp_inbox_assert_rejected_with_property(
 );
 gpp_inbox_assert_rejected_with_property(
     'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT',
-    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* geometry must still be parsed */ width: 10px; }',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }',
     'width'
 );
 foreach ( array( 'box-sizing', 'border-width', 'scale' ) as $property ) {
