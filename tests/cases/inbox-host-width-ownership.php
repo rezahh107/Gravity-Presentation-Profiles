@@ -45,14 +45,60 @@ function gpp_inbox_inner_rule_bodies( $css ) {
     );
 }
 
-/** Normalize comments before selector/declaration classification. */
+/** Normalize real CSS comments while preserving comment-looking data inside quoted strings. */
 function gpp_inbox_normalize_css_comments( $css ) {
-    $normalized = preg_replace( '/\/\*.*?\*\//s', ' ', $css );
-    if ( ! is_string( $normalized ) ) {
-        return array( 'css' => '', 'error' => 'CSS comment normalization failed.' );
+    $normalized = '';
+    $quote = null;
+    $escaped = false;
+    $in_comment = false;
+    $length = strlen( $css );
+
+    for ( $i = 0; $i < $length; ++$i ) {
+        $char = $css[ $i ];
+        $next = $i + 1 < $length ? $css[ $i + 1 ] : null;
+
+        if ( $in_comment ) {
+            if ( '*' === $char && '/' === $next ) {
+                $in_comment = false;
+                ++$i;
+            }
+            continue;
+        }
+
+        if ( null !== $quote ) {
+            $normalized .= $char;
+            if ( $escaped ) {
+                $escaped = false;
+            } elseif ( '\\' === $char ) {
+                $escaped = true;
+            } elseif ( $quote === $char ) {
+                $quote = null;
+            }
+            continue;
+        }
+
+        if ( '"' === $char || "'" === $char ) {
+            $quote = $char;
+            $normalized .= $char;
+            continue;
+        }
+
+        if ( '/' === $char && '*' === $next ) {
+            $normalized .= ' ';
+            $in_comment = true;
+            ++$i;
+            continue;
+        }
+
+        if ( '*' === $char && '/' === $next ) {
+            return array( 'css' => '', 'error' => 'Unclassifiable CSS comment terminator.' );
+        }
+
+        $normalized .= $char;
     }
-    if ( false !== strpos( $normalized, '/*' ) || false !== strpos( $normalized, '*/' ) ) {
-        return array( 'css' => '', 'error' => 'Unterminated or unclassifiable CSS comment syntax.' );
+
+    if ( $in_comment ) {
+        return array( 'css' => '', 'error' => 'Unterminated CSS comment.' );
     }
 
     return array( 'css' => $normalized, 'error' => null );
@@ -1019,13 +1065,94 @@ gpp_assert_same( array(), $paint_errors, 'Current production Inbox CSS violates 
 $historical_errors = gpp_inbox_historical_regression_errors( $shared_css, $native_css );
 gpp_assert_same( array(), $historical_errors, 'Current production Inbox CSS violates an existing historical regression guard: ' . implode( ' | ', $historical_errors ) );
 
+/* Comment-normalization closure. */
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }',
+    'width'
+);
+
+$quoted_double_comment_fixture = <<<'CSS'
+.gflow-inbox.gflow-grid.gflow-common .ag-row {
+    font-family: "/*";
+    width: 10px;
+    font-family: "*/";
+}
+CSS;
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_QUOTED_COMMENT_DOUBLE_WIDTH_REJECT',
+    $quoted_double_comment_fixture,
+    'width'
+);
+
+$quoted_single_comment_fixture = <<<'CSS'
+.gflow-inbox.gflow-grid.gflow-common .ag-row {
+    font-family: '/*';
+    width: 10px;
+    font-family: '*/';
+}
+CSS;
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_QUOTED_COMMENT_SINGLE_WIDTH_REJECT',
+    $quoted_single_comment_fixture,
+    'width'
+);
+
+$escaped_quote_comment_fixture = <<<'CSS'
+.gflow-inbox.gflow-grid.gflow-common .ag-row {
+    font-family: "safe\"/*quoted*/tail";
+    width: 10px;
+}
+CSS;
+$escaped_quote_normalized = gpp_inbox_normalize_css_comments( $escaped_quote_comment_fixture );
+gpp_assert_same( null, $escaped_quote_normalized['error'], 'Escaped quoted comment-looking text unexpectedly failed normalization.' );
+gpp_assert_true(
+    false !== strpos( $escaped_quote_normalized['css'], 'font-family: "safe\"/*quoted*/tail";' ),
+    'Escaped quoted comment-looking text was altered during normalization.'
+);
+gpp_assert_true(
+    false !== strpos( $escaped_quote_normalized['css'], 'width: 10px;' ),
+    'Quoted comment-looking text caused unrelated declaration text to be deleted.'
+);
+echo "PRI_FND_001_QUOTED_COMMENT_ESCAPED_VALUE_PRESERVE_PASS\n";
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_QUOTED_COMMENT_ESCAPED_VALUE_WIDTH_REJECT',
+    $escaped_quote_comment_fixture,
+    'width'
+);
+
+$production_comment_fixture = $shared_css . "\n" . $native_css;
+gpp_assert_true( false !== strpos( $production_comment_fixture, '/*' ), 'Production Inbox CSS no longer contains an ordinary comment normalization fixture.' );
+$production_comment_normalized = gpp_inbox_normalize_css_comments( $production_comment_fixture );
+gpp_assert_same( null, $production_comment_normalized['error'], 'Ordinary production Inbox comments unexpectedly failed normalization.' );
+gpp_assert_true(
+    false === strpos( $production_comment_normalized['css'], 'SRWF Native-First Gravity Flow Inbox presentation.' ),
+    'Ordinary production Inbox comment text was not removed.'
+);
+gpp_assert_true(
+    false !== strpos( $production_comment_normalized['css'], '.gflow-inbox.gflow-grid.gflow-common .ag-row {' ),
+    'Production comment normalization removed adjacent authentic native Inbox source.'
+);
+echo "PRI_FND_001_PRODUCTION_COMMENT_NORMALIZATION_PASS\n";
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_UNTERMINATED_COMMENT_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* unterminated',
+    'Unterminated CSS comment'
+);
+
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_UNBALANCED_QUOTED_VALUE_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-row { font-family: "unterminated; width: 10px; }',
+    'Unbalanced bounded CSS brace structure'
+);
+
 /* Existing flat-selector closure. */
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_DIRECT_WIDTH_REJECT', '.gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_WIDTH_REJECT', '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT', '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_GROUPED_NONFIRST_WIDTH_REJECT', '.decoy-selector, .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_GROUPED_NONFIRST_WIDTH_REJECT', '.decoy-selector, .gflow-common.gflow-inbox.gflow-grid .ag-row { width: 10px; }', 'width' );
-gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_COMMENT_BEFORE_WIDTH_REJECT', '.gflow-inbox.gflow-grid.gflow-common .ag-row { color: #172033; /* still classify */ width: 10px; }', 'width' );
 foreach ( array( 'box-sizing', 'border-width', 'scale' ) as $property ) {
     gpp_inbox_assert_rejected_with_property(
         'PRI_FND_001_UNENUMERATED_' . strtoupper( str_replace( '-', '_', $property ) ) . '_REJECT',
