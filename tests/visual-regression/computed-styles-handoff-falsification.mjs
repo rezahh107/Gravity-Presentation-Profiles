@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { cssPixelNumber, physicalHorizontalGap } from './geometry-relations.mjs';
-import { primaryFamily } from './font-runtime-contract.mjs';
 
-// Prove the original defect control really fails before exercising the repair.
+// Preserve the historical falsification control: relying on an outer variable
+// inside a serialized browser callback fails when that value is not explicitly
+// transferred across the evaluate boundary.
 const evaluate = (_callback, argument) => argument;
 assert.throws(
   () => Function('evaluate', 'return evaluate(value => value, map);')(evaluate),
@@ -11,40 +11,20 @@ assert.throws(
   'Original undefined host argument did not reproduce.',
 );
 
-// Import only the helper definition without starting the module's runtime setup.
+// Native-First diagnostics removed the Card Mode computed-style handoff
+// altogether. The current structural probe intentionally uses a self-contained
+// page.evaluate callback with literal native selectors, so there is no selector
+// map to serialize or silently lose at this boundary.
 const source = fs.readFileSync(new URL('./inbox-visual-diagnostics.mjs', import.meta.url), 'utf8');
-const selectorsMatch = source.match(/const selectors = (\{[\s\S]*?\n\});\n\nasync function waitReady/);
-const diagnosticsMatch = source.match(/export async function diagnostics\(page\) \{[\s\S]*?\n\}/);
-const stylesMatch = source.match(/export async function styles\(page\) \{[\s\S]*?\n\}/);
-assert.ok(selectorsMatch && diagnosticsMatch && stylesMatch, 'Parameterized evaluate boundaries were not extractable.');
-const load = Function('physicalHorizontalGap', 'cssPixelNumber', 'primaryFamily', `${selectorsMatch[0].replace(/\n\nasync function waitReady[\s\S]*/, '')}\n${diagnosticsMatch[0].replace('export ', '')}\n${stylesMatch[0].replace('export ', '')}\nreturn { selectors, diagnostics, styles };`);
-const { selectors, diagnostics, styles } = load(physicalHorizontalGap, cssPixelNumber, primaryFamily);
+assert.match(source, /const state = await page\.evaluate\(\(\) => \{/,
+  'Native-First structural diagnostic no longer exposes a self-contained evaluate boundary.');
+assert.doesNotMatch(source, /export async function (?:diagnostics|styles)\(/,
+  'Superseded Card Mode computed-style helper is still exported.');
+assert.doesNotMatch(source, /page\.evaluate\([^;]*,\s*selectors\s*\)/s,
+  'Native-First diagnostic unexpectedly reintroduced selector-map argument handoff.');
+assert.match(source, /document\.querySelectorAll\('\[data-js="gflow-inbox"\] \.ag-root-wrapper'\)/,
+  'Native-First structural callback does not inspect the authoritative native Grid target.');
+assert.match(source, /card_column_count:\s*document\.querySelectorAll\('\[col-id="gpp_case_card"\]'\)\.length/,
+  'Native-First structural callback does not falsify the retired Card Mode column.');
 
-const previousDocument = globalThis.document;
-const previousGetComputedStyle = globalThis.getComputedStyle;
-const root = { getBoundingClientRect: () => ({ x:0,y:0,width:100,height:100,right:100,bottom:100 }), clientWidth:100,scrollWidth:100,clientHeight:100,scrollHeight:100 };
-globalThis.document = { documentElement:root,querySelector:()=>null,querySelectorAll:()=>[] };
-globalThis.getComputedStyle = () => ({ display:'block',visibility:'visible',overflow:'visible',direction:'ltr',gap:'normal',padding:'0px' });
-const transfers=[];
-try {
-  const page = {
-    evaluate(callback, argument) {
-      transfers.push(argument);
-      return callback(argument);
-    },
-  };
-  const result = await styles(page);
-  const geometry = await diagnostics(page);
-  assert.strictEqual(transfers[0], selectors, 'styles() did not transfer the authoritative selector map.');
-  assert.strictEqual(transfers[1], selectors, 'diagnostics() did not transfer the authoritative selector map.');
-  assert.deepEqual(Object.keys(result), Object.keys(selectors), 'Browser callback did not receive the complete selector map.');
-  assert.ok(Object.values(result).every(value => value === null), 'Null-element computed-style control was not deterministic.');
-  assert.equal(geometry.relationships.horizontal_overflow, null, 'Geometry argument-transfer control was not deterministic.');
-} finally {
-  if (previousDocument === undefined) delete globalThis.document;
-  else globalThis.document = previousDocument;
-  if (previousGetComputedStyle === undefined) delete globalThis.getComputedStyle;
-  else globalThis.getComputedStyle = previousGetComputedStyle;
-}
-
-console.log(`COMPUTED_STYLES_HANDOFF_PASS selectors=${Object.keys(selectors).length}`);
+console.log('COMPUTED_STYLES_HANDOFF_RETIRED_PASS architecture=NATIVE_FIRST boundary=self-contained');
