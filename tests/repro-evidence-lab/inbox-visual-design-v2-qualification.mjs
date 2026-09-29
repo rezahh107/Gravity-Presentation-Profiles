@@ -8,6 +8,12 @@ if (!artifactDir || !repoRoot || !wpCli || !wpPath) {
   throw new Error('WU21 Inbox V2 qualification environment is incomplete.');
 }
 
+// Fail closed on the focused Q2/Q4 contract controls before authentic runtime
+// capture. This verifier shares the same contract evaluator as the browser
+// qualification and does not create a parallel evidence/digest authority.
+await import('./inbox-visual-design-v2-contract-falsification.mjs');
+console.log('INBOX_VISUAL_DESIGN_V2_CONTRACT_FALSIFICATION_GATE_PASS');
+
 function wpCliRun(args, options = {}) {
   const result = spawnSync('php', [wpCli, `--path=${wpPath}`, ...args], { encoding: 'utf8', env: process.env, ...options });
   if (result.status !== 0) throw new Error(`WP-CLI failed: ${result.stderr}\n${result.stdout}`);
