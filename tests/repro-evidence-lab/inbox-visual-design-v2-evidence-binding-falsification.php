@@ -131,7 +131,7 @@ $qualification_sha256 = hash_file( 'sha256', $qualification_path );
 assert_test( false !== $qualification_sha256, 'Unable to hash baseline qualification evidence.' );
 assert_test( 'FAIL' === ( $qualification['qualifications']['q1']['status'] ?? null ), 'Expected captured Q1 FAIL disposition was not preserved.' );
 assert_test( 'CAPTURED' === ( $qualification['qualifications']['q1']['execution_status'] ?? null ), 'Baseline Q1 capture is incomplete.' );
-assert_test( 'PASS' === ( $qualification['qualifications']['q2']['status'] ?? null ), 'Expected captured Q2 PASS disposition was not preserved.' );
+assert_test( 'NOT_PROVEN' === ( $qualification['qualifications']['q2']['status'] ?? null ), 'Expected bounded Q2 NOT_PROVEN disposition was not preserved.' );
 assert_test( 'CAPTURED' === ( $qualification['qualifications']['q2']['execution_status'] ?? null ), 'Baseline Q2 capture is incomplete.' );
 assert_test(
     hash_equals(
@@ -224,7 +224,7 @@ try {
         'baseline_digest' => $baseline_digest,
         'standalone_browser_semantic_equality' => true,
         'baseline_q1_fail_accepted' => 'FAIL' === $qualification['qualifications']['q1']['status'] && 0 === $baseline['exit_code'],
-        'baseline_q2_pass_accepted' => 'PASS' === $qualification['qualifications']['q2']['status'] && 0 === $baseline['exit_code'],
+        'baseline_q2_not_proven_accepted' => 'NOT_PROVEN' === $qualification['qualifications']['q2']['status'] && 0 === $baseline['exit_code'],
         'captured_not_proven_accepted' => 0 === $results['not_proven_rebuild']['exit_code'] && 0 === $results['not_proven_validation']['exit_code'],
         'not_proven_qualification_sha256' => $not_proven_qualification_sha256,
         'not_proven_digest' => $not_proven_digest,
