@@ -23,7 +23,10 @@ export function q2ViewportEvaluation(capture) {
   const columns = Array.isArray(capture?.visual_column_order) ? capture.visual_column_order : [];
   const cells = Array.isArray(capture?.representative_cells) ? capture.representative_cells : [];
   const pagerChildren = Array.isArray(capture?.pager?.children) ? capture.pager.children : [];
-  const persianCells = cells.filter(cell => PERSIAN_TEXT.test(String(cell?.text || '')));
+  const observedPersianCells = Array.isArray(capture?.persian_text_samples)
+    ? capture.persian_text_samples
+    : cells.filter(cell => PERSIAN_TEXT.test(String(cell?.text || '')));
+  const persianCells = observedPersianCells.filter(cell => PERSIAN_TEXT.test(String(cell?.text || '')));
 
   const agRtlPresenceEvaluated = typeof capture?.ag_rtl === 'boolean';
   const visualOrderingEvaluated = orderedByX(columns) && columns.every(column => finite(column?.width) && Number(column.width) > 0);
