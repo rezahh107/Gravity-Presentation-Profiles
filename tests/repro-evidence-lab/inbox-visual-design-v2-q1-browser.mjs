@@ -76,7 +76,7 @@ try {
   if (headerCount === 1 && await menuButton.count()) {
     await menuButton.click();
     await page.waitForTimeout(250);
-    const filterInput = page.locator('.ag-menu .ag-filter-filter').first();
+    const filterInput = page.locator('.ag-menu .ag-filter-filter input').first();
     if (await filterInput.count()) {
       filter.available = true;
       await filterInput.fill('IVD2 Visible Alpha');
