@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
 import { evaluateQ4FocusLifecycle, evaluateQ4Page2OpenContext, evaluateQ4Page2OpenNavigation, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
+import { ensureNativePagerPage } from './inbox-native-pager-state.mjs';
+import './inbox-native-pager-state-falsification.mjs';
 
 assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
@@ -45,15 +47,24 @@ async function state() {
 
 async function mobilePagerRoundTrip(width, height) {
   await page.setViewportSize({ width, height });
+  const preflight = await ensureNativePagerPage(page, pagerState, 2);
   const current = page.locator('[data-js="gflow-inbox"] [ref="lbCurrent"]');
+  const beforePrevious = await pagerState(page);
+  if (beforePrevious.current !== '2' || beforePrevious.previous_disabled) {
+    throw new Error(`Mobile pager roundtrip requires enabled native Previous on Page 2: ${JSON.stringify(beforePrevious)}`);
+  }
   await page.locator('[data-js="gflow-inbox"] [ref="btPrevious"]').click();
   await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '1');
   const first = (await current.innerText()).trim();
+  const beforeNext = await pagerState(page);
+  if (beforeNext.current !== '1' || beforeNext.next_disabled) {
+    throw new Error(`Mobile pager roundtrip requires enabled native Next on Page 1: ${JSON.stringify(beforeNext)}`);
+  }
   await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
   await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '2');
   const second = (await current.innerText()).trim();
   const overflow = await page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth));
-  return { viewport: { width, height }, first, second, document_horizontal_overflow_px: overflow, native_pager_count: await page.locator('[data-js="gflow-inbox"] .ag-paging-panel').count() };
+  return { viewport: { width, height }, preflight, first, second, document_horizontal_overflow_px: overflow, native_pager_count: await page.locator('[data-js="gflow-inbox"] .ag-paging-panel').count() };
 }
 
 async function mobileNativeControls(width, height) {
@@ -172,7 +183,11 @@ try {
     post_poll_open_focus_visible: focusVisible(navigation.focus),
     focus_behavior_accounted_for: focusEvaluation.acceptable,
     no_document_overflow: states.every(item => item.document_horizontal_overflow_px === 0) && mobilePager.every(item => item.document_horizontal_overflow_px === 0) && mobileControls.every(item => item.document_horizontal_overflow_px === 0),
-    mobile_native_pager_round_trip: mobilePager.every(item => item.first === '1' && item.second === '2' && item.native_pager_count === 1),
+    mobile_native_pager_round_trip: mobilePager.every(item => item.preflight.final_page === '2' && item.first === '1' && item.second === '2' && item.native_pager_count === 1),
+    mobile_pager_precondition_independent: mobilePager[0]?.preflight?.initial_page === '1'
+      && mobilePager[0]?.preflight?.final_page === '2'
+      && mobilePager[1]?.preflight?.initial_page === '2'
+      && mobilePager[1]?.preflight?.final_page === '2',
     mobile_native_controls_usable: mobileControls.every(item => Object.values(item.identities).every(count => count === 1) && Object.values(item.visible).every(Boolean) && item.filtered_row_ids.length > 0 && item.settings_flyout_visible && item.fullscreen_entered && item.fullscreen_exited && item.pager.count === 1 && item.native_open_focus_visible && /view=entry/.test(item.native_open_href)),
   };
   out = {
