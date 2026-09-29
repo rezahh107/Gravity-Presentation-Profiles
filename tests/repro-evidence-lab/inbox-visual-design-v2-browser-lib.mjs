@@ -87,6 +87,19 @@ export async function activeElementState(page) {
     const el = document.activeElement;
     if (!el) return null;
     const row = el.closest?.('.ag-row');
-    return { tag: el.tagName, row_id: row ? row.getAttribute('row-id') : null, href: el.getAttribute?.('href') || null, text: (el.textContent || '').trim().slice(0, 120) };
+    const style = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    const href = el.getAttribute?.('href') || null;
+    const outlineVisible = style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0;
+    const shadowVisible = Boolean(style.boxShadow && style.boxShadow !== 'none');
+    return {
+      tag: el.tagName,
+      row_id: row ? row.getAttribute('row-id') : null,
+      href,
+      text: (el.textContent || '').trim().slice(0, 120),
+      native_entry_link: el.matches?.('.gflow-inbox__entry-cell-link') === true && typeof href === 'string' && href.includes('view=entry'),
+      visible: box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
+      focus_indicator_visible: document.activeElement === el && (outlineVisible || shadowVisible),
+    };
   });
 }
