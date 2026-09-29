@@ -10,6 +10,7 @@ const q1 = read('inbox-visual-design-v2-q1.json');
 const q2 = read('inbox-visual-design-v2-q2.json');
 const q4 = read('inbox-visual-design-v2-q4.json');
 if ([q1,q2,q4].some(q => q.execution_status !== 'CAPTURED')) throw new Error('Qualification browser capture incomplete.');
+await import('./inbox-visual-design-v2-contract-falsification.mjs');
 const workspace = process.env.GITHUB_WORKSPACE;
 if (!workspace) throw new Error('GITHUB_WORKSPACE required for exact checkout provenance.');
 const exactHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
