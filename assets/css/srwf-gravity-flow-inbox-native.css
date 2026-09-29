@@ -31,7 +31,6 @@
 
 .gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="workflow_step"] {
     color: #31415e;
-    font-weight: 600;
 }
 
 .gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="created_by"],

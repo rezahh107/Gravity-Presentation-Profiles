@@ -11,6 +11,8 @@ repository_base: main@19b91748f22d32de45fbc9a7a8bd43147c475054
 authority_handoff: HANDOFF-GPP-GF-FINAL-VISUAL-A4-20260910-02
 ```
 
+**Inbox-only successor notice:** [`SRWF_INBOX_V2_VISUAL_UX_CONTRACT_v1.0.0.md`](SRWF_INBOX_V2_VISUAL_UX_CONTRACT_v1.0.0.md) is the admitted current Inbox V2 authority in this PR Head. Its native-row/native-pager direction supersedes only the Inbox-specific composition in §4.3 where conflicting, §5, and OD-004 through OD-008 below. Those older Inbox rules are retained as WU15 history, not concurrent production requirements. Entry Detail, A4 print, typography/font constraints, six-surface accounting, and all unrelated WU15 decisions remain in force. See the [visual authority index](README.md) for current scope.
+
 ## 1. Purpose and authority
 
 This document is the canonical repository design/presentation contract admitted by WU15 for the owner-selected SRWF Gravity Flow operational baseline and its two-page A4 dossier output.

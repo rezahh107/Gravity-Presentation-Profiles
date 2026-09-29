@@ -187,3 +187,43 @@ export function evaluateQ4FocusLifecycle(states) {
 export function evaluateQ4QualificationStatus(flags) {
   return Object.values(flags || {}).every(Boolean) ? 'PASS' : 'FAIL';
 }
+
+export function evaluateQ4Page2OpenContext(afterRemove, immediatelyBeforeOpen, selectedRowId, selectedHref) {
+  const visibleRows = Array.isArray(immediatelyBeforeOpen?.visible_row_ids)
+    ? immediatelyBeforeOpen.visible_row_ids.map(Number)
+    : [];
+  const flags = {
+    page_two_immediately_before_open: immediatelyBeforeOpen?.pager?.current === '2',
+    same_native_grid_before_open: immediatelyBeforeOpen?.native_grid_count === 1
+      && immediatelyBeforeOpen?.grid_marker === afterRemove?.grid_marker,
+    one_native_pager_and_search_before_open: immediatelyBeforeOpen?.pager_count === 1
+      && immediatelyBeforeOpen?.search_count === 1
+      && immediatelyBeforeOpen?.pager?.count === 1,
+    post_poll_page_rows_unchanged_before_open: JSON.stringify(immediatelyBeforeOpen?.visible_row_ids) === JSON.stringify(afterRemove?.visible_row_ids),
+    selected_native_row_visible_on_page_two: Number.isFinite(Number(selectedRowId))
+      && visibleRows.includes(Number(selectedRowId))
+      && typeof selectedHref === 'string'
+      && /[?&]view=entry(?:&|$)/.test(selectedHref)
+      && new URL(selectedHref).searchParams.get('lid') === String(selectedRowId),
+  };
+  return { flags, acceptable: Object.values(flags).every(Boolean) };
+}
+
+export function evaluateQ4Page2OpenNavigation(context, navigation) {
+  const prerequisite = evaluateQ4Page2OpenContext(
+    context.after_remove,
+    context.immediately_before_open,
+    context.selected_row_id,
+    context.selected_href,
+  );
+  const flags = {
+    ...prerequisite.flags,
+    native_href_preserved: navigation?.href === context.selected_href,
+    native_entry_url_reached: navigation?.url === context.selected_href,
+    keyboard_focus_visible_on_selected_link: bool(navigation?.focus?.active)
+      && navigation?.focus?.href === context.selected_href
+      && ((navigation.focus.outline !== 'none' && Number.parseFloat(navigation.focus.width) > 0)
+        || (navigation.focus.shadow && navigation.focus.shadow !== 'none')),
+  };
+  return { flags, acceptable: Object.values(flags).every(Boolean) };
+}

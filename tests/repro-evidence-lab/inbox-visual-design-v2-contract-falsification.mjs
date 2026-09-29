@@ -1,4 +1,4 @@
-import { evaluateQ2Qualification, evaluateQ4FocusLifecycle, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
+import { evaluateQ2Qualification, evaluateQ4FocusLifecycle, evaluateQ4Page2OpenContext, evaluateQ4Page2OpenNavigation, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(`Inbox V2 contract falsification failed: ${message}`);
@@ -88,7 +88,7 @@ function q4State(rowId = 1) {
   };
 }
 
-function q4Status(focusEvaluation) {
+function q4Status(focusEvaluation, pageTwoOpen = true) {
   return evaluateQ4QualificationStatus({
     page_state_remains_two: true,
     pager_state_coherent: true,
@@ -107,6 +107,7 @@ function q4Status(focusEvaluation) {
     initial_focus_visible: true,
     post_poll_open_focus_visible: true,
     focus_behavior_accounted_for: focusEvaluation.acceptable,
+    page_two_immediately_before_native_open: pageTwoOpen,
   });
 }
 
@@ -146,6 +147,45 @@ assert(q4BoundedMove.acceptable === true && q4BoundedMove.disposition === 'BOUND
 assert(q4BoundedMove.changes.length === 1 && q4BoundedMove.changes[0].phase === 'after_add', 'bounded focus change must record the exact phase transition');
 assert(q4Status(q4BoundedMove) === 'PASS', 'only an evidenced bounded native focus transition may remain Q4 PASS');
 
+const entryHref = 'http://example.invalid/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id=2&lid=1';
+const pageTwoAfterRemove = {
+  pager: { count: 1, current: '2' },
+  visible_row_ids: [1, 2],
+  native_grid_count: 1,
+  pager_count: 1,
+  search_count: 1,
+  grid_marker: 'q4-page2-grid',
+};
+const pageTwoOpenContext = {
+  after_remove: pageTwoAfterRemove,
+  immediately_before_open: clone(pageTwoAfterRemove),
+  selected_row_id: '1',
+  selected_href: entryHref,
+};
+const validNavigation = {
+  href: entryHref,
+  url: entryHref,
+  focus: { active: true, href: entryHref, outline: 'solid', width: '3px', shadow: 'none' },
+};
+const pageTwoOpen = evaluateQ4Page2OpenNavigation(pageTwoOpenContext, validNavigation);
+assert(pageTwoOpen.acceptable, 'page-2 post-poll native Enter/Open positive control must PASS');
+
+const contaminatedPageOne = clone(pageTwoOpenContext);
+contaminatedPageOne.immediately_before_open.pager.current = '1';
+const pageOnePreflight = evaluateQ4Page2OpenContext(
+  contaminatedPageOne.after_remove,
+  contaminatedPageOne.immediately_before_open,
+  contaminatedPageOne.selected_row_id,
+  contaminatedPageOne.selected_href,
+);
+const pageOneOpen = evaluateQ4Page2OpenNavigation(contaminatedPageOne, validNavigation);
+assert(!pageOnePreflight.acceptable && !pageOneOpen.acceptable, 'valid Enter/Open URL on page 1 must not qualify page-2 navigation');
+assert(q4Status(q4Preserved, pageOneOpen.acceptable) === 'FAIL', 'the old page-1 ordering must make the full Q4 predicate FAIL');
+
+const wrongRow = clone(pageTwoOpenContext);
+wrongRow.selected_row_id = '99';
+assert(!evaluateQ4Page2OpenNavigation(wrongRow, validNavigation).acceptable, 'Open must originate from a visible post-poll page-2 row');
+
 console.log(JSON.stringify({
   status: 'PASS',
   q2: {
@@ -160,5 +200,8 @@ console.log(JSON.stringify({
     add_focus_loss: q4Status(q4AddLoss),
     remove_focus_loss: q4Status(q4RemoveLoss),
     evidenced_bounded_native_change: q4Status(q4BoundedMove),
+    page_two_native_open: pageTwoOpen.acceptable ? 'PASS' : 'FAIL',
+    page_one_contamination: pageOneOpen.acceptable ? 'FAIL' : 'REJECTED',
+    nonvisible_row_navigation: evaluateQ4Page2OpenNavigation(wrongRow, validNavigation).acceptable ? 'FAIL' : 'REJECTED',
   },
 }, null, 2));

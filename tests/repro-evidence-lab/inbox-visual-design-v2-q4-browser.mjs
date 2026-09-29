@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
-import { evaluateQ4FocusLifecycle, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
+import { evaluateQ4FocusLifecycle, evaluateQ4Page2OpenContext, evaluateQ4Page2OpenNavigation, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
@@ -138,9 +138,19 @@ try {
     after_add: afterAdd,
     after_remove: afterRemove,
   });
+  const immediatelyBeforeOpen = await state();
+  const pageTwoLink = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
+  const selectedRowId = await pageTwoLink.evaluate(el => el.closest('.ag-row')?.getAttribute('row-id'));
+  const selectedHref = await pageTwoLink.getAttribute('href');
+  const openContext = { after_remove: afterRemove, immediately_before_open: immediatelyBeforeOpen, selected_row_id: selectedRowId, selected_href: selectedHref };
+  const preflight = evaluateQ4Page2OpenContext(afterRemove, immediatelyBeforeOpen, selectedRowId, selectedHref);
+  if (!preflight.acceptable) throw new Error(`Q4 page-2 Open precondition failed: ${JSON.stringify(preflight.flags)}`);
+  const navigation = await openByEnter(page, pageTwoLink);
+  const openEvaluation = evaluateQ4Page2OpenNavigation(openContext, navigation);
+  await page.goto(inboxUrl, { waitUntil: 'networkidle' });
+  await waitForGrid(page);
   const mobilePager = [await mobilePagerRoundTrip(390, 844), await mobilePagerRoundTrip(320, 720)];
   const mobileControls = [await mobileNativeControls(390, 844), await mobileNativeControls(320, 720)];
-  const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first());
   const states = [before, afterUpdate, afterAdd, afterRemove];
   const flags = {
     page_state_remains_two: states.every(item => item.pager.current === '2'),
@@ -155,8 +165,9 @@ try {
     update_observed: updatePoll.status === 200,
     add_observed: addPoll.status === 200,
     remove_observed: removePoll.status === 200,
-    native_open_after_poll: /view=entry/.test(navigation.url),
-    keyboard_enter_after_poll: /view=entry/.test(navigation.url),
+    page_two_immediately_before_native_open: openEvaluation.flags.page_two_immediately_before_open,
+    native_open_after_poll: openEvaluation.acceptable,
+    keyboard_enter_after_poll: openEvaluation.acceptable,
     initial_focus_visible: focusVisible(initialFocus),
     post_poll_open_focus_visible: focusVisible(navigation.focus),
     focus_behavior_accounted_for: focusEvaluation.acceptable,
@@ -183,6 +194,9 @@ try {
     },
     mobile_native_pager: mobilePager,
     mobile_native_controls: mobileControls,
+    pager_immediately_before_native_open: immediatelyBeforeOpen.pager,
+    native_open_page_two_context: openContext,
+    native_open_page_two_evaluation: openEvaluation,
     native_open_after_poll: navigation,
     polling_statuses: { update: updatePoll.status, add: addPoll.status, remove: removePoll.status },
   };
