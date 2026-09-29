@@ -4,7 +4,9 @@ import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
 import { evaluateQ4FocusLifecycle, evaluateQ4Page2OpenContext, evaluateQ4Page2OpenNavigation, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
 import { ensureNativePagerPage } from './inbox-native-pager-state.mjs';
+import { q4QualificationRequiresNonzeroExit } from './inbox-visual-design-v2-q4-status-gate.mjs';
 import './inbox-native-pager-state-falsification.mjs';
+import './inbox-visual-design-v2-q4-status-gate-falsification.mjs';
 
 assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
@@ -190,9 +192,10 @@ try {
       && mobilePager[1]?.preflight?.final_page === '2',
     mobile_native_controls_usable: mobileControls.every(item => Object.values(item.identities).every(count => count === 1) && Object.values(item.visible).every(Boolean) && item.filtered_row_ids.length > 0 && item.settings_flyout_visible && item.fullscreen_entered && item.fullscreen_exited && item.pager.count === 1 && item.native_open_focus_visible && /view=entry/.test(item.native_open_href)),
   };
+  const qualificationStatus = evaluateQ4QualificationStatus(flags);
   out = {
     ...out,
-    status: evaluateQ4QualificationStatus(flags),
+    status: qualificationStatus,
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
     flags,
     focus_disposition: focusEvaluation.disposition,
@@ -215,6 +218,7 @@ try {
     native_open_after_poll: navigation,
     polling_statuses: { update: updatePoll.status, add: addPoll.status, remove: removePoll.status },
   };
+  if (q4QualificationRequiresNonzeroExit(qualificationStatus)) failed = true;
 } catch (error) {
   failed = true;
   out = { ...out, execution_status: 'ERROR', error: String(error?.stack || error).slice(0, 12000) };
