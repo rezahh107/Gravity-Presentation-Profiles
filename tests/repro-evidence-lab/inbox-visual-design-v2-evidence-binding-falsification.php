@@ -198,38 +198,24 @@ try {
     assert_test_ids( $rebuilt );
     $results['rebuilt_validation'] = run_php_check( $validator, $dir, $repository_head, true );
 
-    $report = array(
-        'artifact_type' => 'gpp.inbox_visual_design_v2.evidence_binding_falsification',
-        'schema_version' => '1.0.0',
-        'repository_head' => $repository_head,
+    $summary = array(
         'status' => 'PASS',
-        'baseline' => array(
-            'q1_status' => $qualification['qualifications']['q1']['status'],
-            'q1_execution_status' => $qualification['qualifications']['q1']['execution_status'],
-            'standalone_browser_semantic_equality' => true,
-            'qualification_sha256' => $qualification_sha256,
-            'content_digest' => $baseline_digest,
-            'validator_passed' => 0 === $baseline['exit_code'],
-            'canonical_test_id_set_unchanged' => true,
-        ),
-        'falsifications' => array(
-            'qualification_byte_mutation_rejected' => 0 !== $results['qualification_byte_mutation']['exit_code'],
-            'browser_adjunct_divergence_rejected' => 0 !== $results['browser_adjunct_divergence']['exit_code'],
-            'missing_qualification_rejected' => 0 !== $results['missing_qualification']['exit_code'],
-            'stale_head_rejected' => 0 !== $results['stale_head']['exit_code'],
-            'runtime_mismatch_rejected' => 0 !== $results['runtime_mismatch']['exit_code'],
-            'incomplete_capture_rejected_by_builder' => 0 !== $results['incomplete_capture']['exit_code'],
-            'captured_q1_fail_accepted' => 'FAIL' === $qualification['qualifications']['q1']['status'] && 0 === $baseline['exit_code'],
-        ),
-        'rebuild_sensitivity' => array(
-            'original_content_digest' => $baseline_digest,
-            'rebuilt_content_digest' => $rebuilt_digest,
-            'digest_changed' => $rebuilt_digest !== $baseline_digest,
-            'rebuilt_validator_passed' => 0 === $results['rebuilt_validation']['exit_code'],
-            'canonical_test_id_set_unchanged' => true,
-        ),
+        'qualification_sha256' => $qualification_sha256,
+        'baseline_digest' => $baseline_digest,
+        'rebuilt_digest' => $rebuilt_digest,
+        'standalone_browser_semantic_equality' => true,
+        'qualification_byte_mutation_rejected' => 0 !== $results['qualification_byte_mutation']['exit_code'],
+        'browser_adjunct_divergence_rejected' => 0 !== $results['browser_adjunct_divergence']['exit_code'],
+        'missing_qualification_rejected' => 0 !== $results['missing_qualification']['exit_code'],
+        'stale_head_rejected' => 0 !== $results['stale_head']['exit_code'],
+        'runtime_mismatch_rejected' => 0 !== $results['runtime_mismatch']['exit_code'],
+        'incomplete_capture_rejected_by_builder' => 0 !== $results['incomplete_capture']['exit_code'],
+        'captured_q1_fail_accepted' => 'FAIL' === $qualification['qualifications']['q1']['status'] && 0 === $baseline['exit_code'],
+        'rebuild_digest_changed' => $rebuilt_digest !== $baseline_digest,
+        'rebuilt_validator_passed' => 0 === $results['rebuilt_validation']['exit_code'],
+        'canonical_test_id_set_unchanged' => true,
     );
-    write_fixture_json( $source_dir . '/inbox-visual-design-v2-evidence-binding-falsification.json', $report );
+    echo json_encode( $summary, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n";
     echo "PASS Inbox V2 qualification evidence binding falsification qualification_sha256={$qualification_sha256} baseline_digest={$baseline_digest} rebuilt_digest={$rebuilt_digest}\n";
 } finally {
     remove_tree( $temp_root );
