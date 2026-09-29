@@ -1,4 +1,4 @@
-import { evaluateQ2Qualification, evaluateQ4FocusLifecycle } from './inbox-visual-design-v2-contract-evaluation.mjs';
+import { evaluateQ2Qualification, evaluateQ4FocusLifecycle, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(`Inbox V2 contract falsification failed: ${message}`);
@@ -88,6 +88,28 @@ function q4State(rowId = 1) {
   };
 }
 
+function q4Status(focusEvaluation) {
+  return evaluateQ4QualificationStatus({
+    page_state_remains_two: true,
+    pager_state_coherent: true,
+    one_native_pager: true,
+    one_native_grid: true,
+    one_native_search: true,
+    same_native_grid: true,
+    unique_row_identity: true,
+    update_keeps_visible_page_rows: true,
+    add_remove_round_trip_restores_page_rows: true,
+    update_observed: true,
+    add_observed: true,
+    remove_observed: true,
+    native_open_after_poll: true,
+    keyboard_enter_after_poll: true,
+    initial_focus_visible: true,
+    post_poll_open_focus_visible: true,
+    focus_behavior_accounted_for: focusEvaluation.acceptable,
+  });
+}
+
 const preservedStates = {
   before: q4State(1),
   after_update: q4State(1),
@@ -96,21 +118,25 @@ const preservedStates = {
 };
 const q4Preserved = evaluateQ4FocusLifecycle(preservedStates);
 assert(q4Preserved.acceptable === true && q4Preserved.disposition === 'PRESERVED', 'genuine Q4 preservation positive control must remain accepted');
+assert(q4Status(q4Preserved) === 'PASS', 'genuine preservation must keep the full Q4 predicate passing');
 
 const updateLoss = clone(preservedStates);
 updateLoss.after_update.focused = null;
 const q4UpdateLoss = evaluateQ4FocusLifecycle(updateLoss);
 assert(q4UpdateLoss.acceptable === false && q4UpdateLoss.disposition === 'UNBOUNDED_FOCUS_LOSS', 'focus loss after update must not be renamed bounded');
+assert(q4Status(q4UpdateLoss) === 'FAIL', 'focus loss after update must make full Q4 FAIL');
 
 const addLoss = clone(preservedStates);
 addLoss.after_add.focused = { tag: 'BODY', row_id: null, href: null, native_entry_link: false, visible: true, focus_indicator_visible: false };
 const q4AddLoss = evaluateQ4FocusLifecycle(addLoss);
 assert(q4AddLoss.acceptable === false && q4AddLoss.disposition === 'UNBOUNDED_FOCUS_LOSS', 'focus loss after add must fail Q4 focus acceptance');
+assert(q4Status(q4AddLoss) === 'FAIL', 'focus loss after add must make full Q4 FAIL');
 
 const removeLoss = clone(preservedStates);
 removeLoss.after_remove.focused.visible = false;
 const q4RemoveLoss = evaluateQ4FocusLifecycle(removeLoss);
 assert(q4RemoveLoss.acceptable === false && q4RemoveLoss.disposition === 'UNBOUNDED_FOCUS_LOSS', 'focus loss after remove must fail Q4 focus acceptance');
+assert(q4Status(q4RemoveLoss) === 'FAIL', 'focus loss after remove must make full Q4 FAIL');
 
 const boundedMove = clone(preservedStates);
 boundedMove.after_add.focused = nativeFocus(2);
@@ -118,6 +144,7 @@ boundedMove.after_remove.focused = nativeFocus(2);
 const q4BoundedMove = evaluateQ4FocusLifecycle(boundedMove);
 assert(q4BoundedMove.acceptable === true && q4BoundedMove.disposition === 'BOUNDED_NATIVE_FOCUS_CHANGE', 'a bounded focus change must require evidenced valid native focus in every phase');
 assert(q4BoundedMove.changes.length === 1 && q4BoundedMove.changes[0].phase === 'after_add', 'bounded focus change must record the exact phase transition');
+assert(q4Status(q4BoundedMove) === 'PASS', 'only an evidenced bounded native focus transition may remain Q4 PASS');
 
 console.log(JSON.stringify({
   status: 'PASS',
@@ -128,10 +155,10 @@ console.log(JSON.stringify({
     unreadable_persian_direction_alignment: q2UnreadablePersian.status,
   },
   q4: {
-    preserved_positive_control: q4Preserved.disposition,
-    update_focus_loss: q4UpdateLoss.disposition,
-    add_focus_loss: q4AddLoss.disposition,
-    remove_focus_loss: q4RemoveLoss.disposition,
-    evidenced_bounded_native_change: q4BoundedMove.disposition,
+    preserved_positive_control: q4Status(q4Preserved),
+    update_focus_loss: q4Status(q4UpdateLoss),
+    add_focus_loss: q4Status(q4AddLoss),
+    remove_focus_loss: q4Status(q4RemoveLoss),
+    evidenced_bounded_native_change: q4Status(q4BoundedMove),
   },
 }, null, 2));
