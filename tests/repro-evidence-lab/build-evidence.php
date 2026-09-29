@@ -29,6 +29,59 @@ function require_exact_test_ids( $suite, $expected, $label ) {
     sort( $expected_sorted, SORT_STRING );
     if ( count( $ids ) !== count( $unique ) || $unique !== $expected_sorted ) throw new RuntimeException( $label . ' test ID set mismatch.' );
 }
+function require_inbox_v2_qualification_capture( $qualification ) {
+    if ( 'gpp.inbox_visual_design_v2.qualification_batch_1_evidence' !== ( $qualification['artifact_type'] ?? null ) ) {
+        throw new RuntimeException( 'Inbox V2 qualification artifact_type mismatch.' );
+    }
+    if ( '1.0.0' !== ( $qualification['schema_version'] ?? null ) ) {
+        throw new RuntimeException( 'Inbox V2 qualification schema mismatch.' );
+    }
+    if ( 'PROVEN_IN_REPRODUCIBLE_RUNTIME' !== ( $qualification['evidence_ceiling'] ?? null ) ) {
+        throw new RuntimeException( 'Inbox V2 qualification evidence ceiling mismatch.' );
+    }
+    foreach ( array( 'q1', 'q2', 'q4' ) as $id ) {
+        $result = $qualification['qualifications'][ $id ] ?? null;
+        if ( ! is_array( $result ) || 'CAPTURED' !== ( $result['execution_status'] ?? null ) ) {
+            throw new RuntimeException( 'Inbox V2 qualification ' . $id . ' capture incomplete.' );
+        }
+        if ( ! in_array( $result['status'] ?? null, array( 'PASS', 'FAIL', 'NOT_PROVEN' ), true ) ) {
+            throw new RuntimeException( 'Inbox V2 qualification ' . $id . ' disposition is invalid.' );
+        }
+    }
+}
+function require_inbox_v2_qualification_provenance( $qualification, $browser, $runtime, $repository_head ) {
+    $adjunct = $browser['inbox_visual_design_v2_qualification'] ?? null;
+    if ( ! is_array( $adjunct ) ) {
+        throw new RuntimeException( 'Browser results are missing Inbox V2 qualification adjunct.' );
+    }
+    if ( ! hash_equals( hash( 'sha256', canonical_json( $qualification ) ), hash( 'sha256', canonical_json( $adjunct ) ) ) ) {
+        throw new RuntimeException( 'Inbox V2 standalone/browser qualification evidence diverged.' );
+    }
+    require_inbox_v2_qualification_capture( $qualification );
+    if ( ! $repository_head || ! preg_match( '/^[0-9a-f]{40}$/', $repository_head ) ) {
+        throw new RuntimeException( 'Checked-out WU21 repository Head is unavailable.' );
+    }
+    if ( $repository_head !== ( $runtime['repository']['commit_sha'] ?? null ) ) {
+        throw new RuntimeException( 'WU21 runtime repository Head mismatch.' );
+    }
+    if ( $repository_head !== ( $qualification['repository']['exact_head'] ?? null ) ) {
+        throw new RuntimeException( 'Inbox V2 qualification exact_head mismatch.' );
+    }
+    if ( ( $runtime['repository']['full_name'] ?? null ) !== ( $qualification['repository']['full_name'] ?? null ) ) {
+        throw new RuntimeException( 'Inbox V2 qualification repository identity mismatch.' );
+    }
+    $identity_pairs = array(
+        'wordpress' => array( $qualification['runtime']['wordpress'] ?? null, $runtime['wordpress']['version'] ?? null ),
+        'php' => array( $qualification['runtime']['php'] ?? null, $runtime['php']['version'] ?? null ),
+        'gravity_forms' => array( $qualification['runtime']['gravity_forms'] ?? null, $runtime['plugins']['gravity_forms']['runtime_version'] ?? null ),
+        'gravity_flow' => array( $qualification['runtime']['gravity_flow'] ?? null, $runtime['plugins']['gravity_flow']['runtime_version'] ?? null ),
+    );
+    foreach ( $identity_pairs as $label => $pair ) {
+        if ( ! is_string( $pair[0] ) || '' === $pair[0] || $pair[0] !== $pair[1] ) {
+            throw new RuntimeException( 'Inbox V2 qualification runtime identity mismatch: ' . $label );
+        }
+    }
+}
 
 $config = read_json( $repo . '/tests/repro-evidence-lab/lab-config.json' );
 $runtime = read_json( $artifact_dir . '/runtime.json' );
@@ -36,6 +89,14 @@ $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );
 $geometry = read_json( $artifact_dir . '/inbox-card-geometry.json' );
+$qualification_path = $artifact_dir . '/inbox-visual-design-v2-qualification-evidence.json';
+$qualification = read_json( $qualification_path );
+$repository_head = getenv( 'GPP_WU21_REPOSITORY_SHA' );
+require_inbox_v2_qualification_provenance( $qualification, $browser, $runtime, $repository_head );
+$qualification_sha256 = hash_file( 'sha256', $qualification_path );
+if ( false === $qualification_sha256 ) {
+    throw new RuntimeException( 'Unable to hash Inbox V2 qualification evidence.' );
+}
 $visual_diagnostics = wu21_visual_diagnostics_manifest( $artifact_dir );
 $expected_php_ids = array_map( function ( $i ) { return sprintf( 'WU21-PHP-%03d', $i ); }, range( 1, 17 ) );
 $expected_browser_ids = array_map( function ( $i ) { return sprintf( 'WU21-BROWSER-%03d', $i ); }, range( 1, 7 ) );
@@ -128,6 +189,7 @@ $evidence = array(
         'architecture:native-first',
         'geometry:inbox-card-geometry.json-legacy-filename-native-first-content',
         'visual-diagnostics:recursive-json-jsonl-png-sha256-manifest',
+        'inbox-visual-design-v2-qualification-sha256:' . $qualification_sha256,
         'gravity-flow-package-sha256:' . $config['plugins']['gravity_flow']['sha256'],
         'gravity-forms-package-sha256:' . $config['plugins']['gravity_forms']['sha256']
     ),
@@ -139,5 +201,18 @@ $filename = 'wu21-repro-evidence-' . $digest . '.json';
 file_put_contents( $artifact_dir . '/' . $filename, json_encode( $evidence, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n" );
 file_put_contents( $artifact_dir . '/evidence-path.txt', $filename . "\n" );
 file_put_contents( $artifact_dir . '/evidence-digest.txt', $digest . "\n" );
+echo "qualification_evidence_sha256={$qualification_sha256}\n";
 echo "evidence_file={$filename}\n";
 echo "evidence_digest={$digest}\n";
+
+if ( '1' !== getenv( 'WU21_BINDING_FALSIFICATION_ACTIVE' ) ) {
+    putenv( 'WU21_BINDING_FALSIFICATION_ACTIVE=1' );
+    $command = 'php ' . escapeshellarg( __DIR__ . '/inbox-visual-design-v2-evidence-binding-falsification.php' ) . ' 2>&1';
+    $output = array();
+    $exit_code = 0;
+    exec( $command, $output, $exit_code );
+    foreach ( $output as $line ) echo $line . "\n";
+    if ( 0 !== $exit_code ) {
+        throw new RuntimeException( 'Inbox V2 qualification evidence binding falsification failed.' );
+    }
+}

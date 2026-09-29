@@ -10,6 +10,9 @@ on:
       - 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final.html'
       - 'tests/fixtures/owner-visual/PersianGravity-Visual-Reference-Final-vNext.html'
       - 'docs/evidence/WU21_REPRODUCIBLE_SIMULATION.md'
+      - 'docs/evidence/INBOX_VISUAL_DESIGN_V2_QUALIFICATION_BATCH1.md'
+      - 'docs/design/GPP_INBOX_DESIGN_TOOLBOX_V1.1.md'
+      - 'docs/design/GPP_INBOX_VISUAL_DESIGN_V2_CURRENT_OWNER_OVERRIDES.md'
       - 'src/**'
       - 'assets/css/srwf-gravity-flow-inbox.css'
       - 'assets/css/srwf-gravity-flow-inbox-native.css'
@@ -310,6 +313,13 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
 
+      - name: Execute bounded Inbox Visual Design V2 qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-visual-design-v2-qualification.mjs
+          test -s "$WU21_ARTIFACT_DIR/inbox-visual-design-v2-qualification-evidence.json"
+
       - name: Establish pinned Hello Elementor integrated visual host
         shell: bash
         run: |
@@ -488,6 +498,7 @@ jobs:
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
             /tmp/wu21-artifacts/p06-fixture-*.json
+            /tmp/wu21-artifacts/inbox-visual-design-v2-*
             /tmp/wu21-artifacts/integrated-visual-host.json
             /tmp/wu21-artifacts/vazir-font-authority.json
             /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
