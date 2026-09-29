@@ -152,7 +152,8 @@ try {
     $q = read_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
     $q['qualifications']['q1']['flags']['rich_html_rendered'] = ! ( $q['qualifications']['q1']['flags']['rich_html_rendered'] ?? false );
     write_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json', $q );
-    $results['qualification_byte_mutation'] = run_php_check( $validator, $dir, $repository_head, false, 'standalone/browser qualification evidence diverged' );
+    set_browser_adjunct( $dir, $q );
+    $results['qualification_byte_mutation'] = run_php_check( $validator, $dir, $repository_head, false, 'qualification SHA-256 binding mismatch' );
 
     $dir = make_fixture( $source_dir, $temp_root, 'browser-adjunct-divergence' );
     $b = read_fixture_json( $dir . '/browser-results.json' );
