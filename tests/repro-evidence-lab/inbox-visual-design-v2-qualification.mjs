@@ -16,7 +16,7 @@ function wpCliRun(args, options = {}) {
 
 const toolboxPath = path.join(repoRoot, 'docs/design/GPP_INBOX_DESIGN_TOOLBOX_V1.1.md');
 const toolboxSha256 = crypto.createHash('sha256').update(fs.readFileSync(toolboxPath)).digest('hex');
-if (toolboxSha256 !== 'd2b50b51b111455a54090de0497fe68b1904897183eeb08dfa07aac6671ee17b') {
+if (toolboxSha256 !== '271bb2d5ccb76c8b8fab3a12603caddbc8f39a8b4dd82c579a0db7fa93b45f2b') {
   throw new Error(`Toolbox mirror SHA-256 mismatch: ${toolboxSha256}`);
 }
 
