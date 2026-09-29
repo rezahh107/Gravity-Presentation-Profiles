@@ -2,9 +2,9 @@
 /**
  * INBOX_VISUAL_DESIGN_V2 qualification-only Gravity Flow extension.
  *
- * This file is copied into the disposable pinned runtime as an MU plugin only
- * after the existing SRWF journey qualification scenarios finish. It never
- * ships through the production bootstrap and never owns Grid lifecycle/state.
+ * This file is copied into the disposable pinned WU21 runtime only after the
+ * pre-existing native Inbox/P06 qualification has finished. It never ships
+ * through the production bootstrap and never owns Grid lifecycle/state.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
@@ -75,7 +75,10 @@ function gpp_ivd2_q1_inbox_field_value( $value, $form_id, $field_id, $entry ) {
     }
 
     if ( 'IVD2_RAW_Z' === $raw ) {
-        return '<span data-ivd2-rich="unsafe"><strong>IVD2 Visible Alpha</strong></span><img data-ivd2-unsafe-img src="/ivd2-intentionally-missing.png" onerror="window.__GPP_IVD2_UNSAFE=(window.__GPP_IVD2_UNSAFE||0)+1"><svg data-ivd2-unsafe-svg viewBox="0 0 16 16" onload="window.__GPP_IVD2_UNSAFE=(window.__GPP_IVD2_UNSAFE||0)+100"><circle cx="8" cy="8" r="5"></circle></svg>';
+        return '<span data-ivd2-rich="unsafe"><strong>IVD2 Visible Alpha</strong></span>'
+            . '<script data-ivd2-unsafe-script>window.__GPP_IVD2_UNSAFE=(window.__GPP_IVD2_UNSAFE||0)+1000</script>'
+            . '<img data-ivd2-unsafe-img src="/ivd2-intentionally-missing.png" onerror="window.__GPP_IVD2_UNSAFE=(window.__GPP_IVD2_UNSAFE||0)+1">'
+            . '<svg data-ivd2-unsafe-svg viewBox="0 0 16 16" onload="window.__GPP_IVD2_UNSAFE=(window.__GPP_IVD2_UNSAFE||0)+100"><circle cx="8" cy="8" r="5"></circle></svg>';
     }
 
     if ( 'IVD2_RAW_A_UPDATED' === $raw ) {
