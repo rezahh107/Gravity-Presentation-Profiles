@@ -13,7 +13,7 @@ function validate_inbox_v2_qualification_capture( $qualification ) {
     foreach ( array( 'q1', 'q2', 'q4' ) as $id ) {
         $result = $qualification['qualifications'][ $id ] ?? null;
         req( is_array( $result ) && 'CAPTURED' === ( $result['execution_status'] ?? null ), 'Inbox V2 qualification ' . $id . ' capture incomplete' );
-        req( in_array( $result['status'] ?? null, array( 'PASS', 'FAIL' ), true ), 'Inbox V2 qualification ' . $id . ' disposition is invalid' );
+        req( in_array( $result['status'] ?? null, array( 'PASS', 'FAIL', 'NOT_PROVEN' ), true ), 'Inbox V2 qualification ' . $id . ' disposition is invalid' );
     }
 }
 function validate_inbox_v2_qualification_provenance( $qualification, $browser, $runtime, $master, $repository_head, $qualification_sha256 ) {
