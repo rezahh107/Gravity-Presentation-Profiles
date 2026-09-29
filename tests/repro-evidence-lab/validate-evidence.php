@@ -2,13 +2,60 @@
 $repo = dirname( __DIR__, 2 );
 $dir = getenv( 'WU21_ARTIFACT_DIR' );
 require_once __DIR__ . '/visual-diagnostics-manifest.php';
-function rjson( $p ) { $d = json_decode( file_get_contents( $p ), true ); if ( ! is_array( $d ) ) throw new RuntimeException( 'Invalid JSON ' . $p ); return $d; }
+function rjson( $p ) { if ( ! is_file( $p ) ) throw new RuntimeException( 'Missing required evidence input: ' . $p ); $d = json_decode( file_get_contents( $p ), true ); if ( ! is_array( $d ) ) throw new RuntimeException( 'Invalid JSON ' . $p ); return $d; }
 function canon( $v ) { if ( ! is_array( $v ) ) return $v; $list=array_keys($v)===range(0,count($v)-1); if($list)return array_map('canon',$v); ksort($v,SORT_STRING); foreach($v as $k=>$x)$v[$k]=canon($x); return $v; }
 function cj( $v ) { return json_encode( canon( $v ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); }
 function req( $c, $m ) { if ( ! $c ) throw new RuntimeException( $m ); }
+function validate_inbox_v2_qualification_capture( $qualification ) {
+    req( 'gpp.inbox_visual_design_v2.qualification_batch_1_evidence' === ( $qualification['artifact_type'] ?? null ), 'Inbox V2 qualification artifact_type mismatch' );
+    req( '1.0.0' === ( $qualification['schema_version'] ?? null ), 'Inbox V2 qualification schema mismatch' );
+    req( 'PROVEN_IN_REPRODUCIBLE_RUNTIME' === ( $qualification['evidence_ceiling'] ?? null ), 'Inbox V2 qualification evidence ceiling mismatch' );
+    foreach ( array( 'q1', 'q2', 'q4' ) as $id ) {
+        $result = $qualification['qualifications'][ $id ] ?? null;
+        req( is_array( $result ) && 'CAPTURED' === ( $result['execution_status'] ?? null ), 'Inbox V2 qualification ' . $id . ' capture incomplete' );
+        req( in_array( $result['status'] ?? null, array( 'PASS', 'FAIL' ), true ), 'Inbox V2 qualification ' . $id . ' disposition is invalid' );
+    }
+}
+function validate_inbox_v2_qualification_provenance( $qualification, $browser, $runtime, $master, $repository_head, $qualification_sha256 ) {
+    $adjunct = $browser['inbox_visual_design_v2_qualification'] ?? null;
+    req( is_array( $adjunct ), 'Browser results are missing Inbox V2 qualification adjunct' );
+    req(
+        hash_equals( hash( 'sha256', cj( $qualification ) ), hash( 'sha256', cj( $adjunct ) ) ),
+        'Inbox V2 standalone/browser qualification evidence diverged'
+    );
+    validate_inbox_v2_qualification_capture( $qualification );
+    req( is_string( $repository_head ) && 1 === preg_match( '/^[0-9a-f]{40}$/', $repository_head ), 'Checked-out WU21 repository Head is unavailable' );
+    req( $repository_head === ( $runtime['repository']['commit_sha'] ?? null ), 'WU21 runtime repository Head mismatch' );
+    req( $repository_head === ( $master['repository']['commit_sha'] ?? null ), 'Canonical WU21 repository Head mismatch' );
+    req( $repository_head === ( $qualification['repository']['exact_head'] ?? null ), 'Inbox V2 qualification exact_head mismatch' );
+    req( ( $runtime['repository']['full_name'] ?? null ) === ( $qualification['repository']['full_name'] ?? null ), 'Inbox V2 qualification repository identity mismatch' );
+    req( ( $master['repository']['full_name'] ?? null ) === ( $qualification['repository']['full_name'] ?? null ), 'Inbox V2 qualification/master repository identity mismatch' );
+    $identity_sets = array(
+        'wordpress' => array( $qualification['runtime']['wordpress'] ?? null, $runtime['wordpress']['version'] ?? null, $master['environment']['wordpress']['version'] ?? null ),
+        'php' => array( $qualification['runtime']['php'] ?? null, $runtime['php']['version'] ?? null, $master['environment']['php']['version'] ?? null ),
+        'gravity_forms' => array( $qualification['runtime']['gravity_forms'] ?? null, $runtime['plugins']['gravity_forms']['runtime_version'] ?? null, $master['packages']['gravity_forms']['runtime_version'] ?? null ),
+        'gravity_flow' => array( $qualification['runtime']['gravity_flow'] ?? null, $runtime['plugins']['gravity_flow']['runtime_version'] ?? null, $master['packages']['gravity_flow']['runtime_version'] ?? null ),
+    );
+    foreach ( $identity_sets as $label => $values ) {
+        req( is_string( $values[0] ) && '' !== $values[0] && $values[0] === $values[1] && $values[0] === $values[2], 'Inbox V2 qualification runtime identity mismatch: ' . $label );
+    }
+    $prefix = 'inbox-visual-design-v2-qualification-sha256:';
+    $refs = array_values( array_filter( $master['evidence_refs'] ?? array(), function ( $ref ) use ( $prefix ) { return is_string( $ref ) && str_starts_with( $ref, $prefix ); } ) );
+    req( 1 === count( $refs ), 'Canonical WU21 evidence must contain exactly one Inbox V2 qualification hash reference' );
+    req( $prefix . $qualification_sha256 === $refs[0], 'Inbox V2 qualification SHA-256 binding mismatch' );
+}
 $config = rjson( $repo . '/tests/repro-evidence-lab/lab-config.json' );
-$filename = trim( file_get_contents( $dir . '/evidence-path.txt' ) );
+$filename_path = $dir . '/evidence-path.txt';
+req( is_file( $filename_path ), 'Missing evidence-path.txt' );
+$filename = trim( file_get_contents( $filename_path ) );
 $e = rjson( $dir . '/' . $filename );
+$runtime = rjson( $dir . '/runtime.json' );
+$browser = rjson( $dir . '/browser-results.json' );
+$qualification_path = $dir . '/inbox-visual-design-v2-qualification-evidence.json';
+$qualification = rjson( $qualification_path );
+$qualification_sha256 = hash_file( 'sha256', $qualification_path );
+req( false !== $qualification_sha256, 'Unable to hash Inbox V2 qualification evidence' );
+validate_inbox_v2_qualification_provenance( $qualification, $browser, $runtime, $e, getenv( 'GPP_WU21_REPOSITORY_SHA' ), $qualification_sha256 );
 req( 'gpp.reproducible_simulation_evidence' === $e['artifact_type'], 'artifact_type mismatch' );
 req( '1.1.0' === ( $e['schema_version'] ?? null ), 'Evidence schema mismatch' );
 req( 'REPRODUCIBLE_SIMULATION' === $e['environment_class'], 'environment_class mismatch' );
@@ -97,4 +144,4 @@ foreach ( array( 'empty-state-seam.json', 'matrix-j-browser-zoom.json' ) as $leg
 $copy = $e; $actual = $copy['content_digest']['value']; unset( $copy['content_digest'] ); $expected = hash( 'sha256', cj( $copy ) );
 req( hash_equals( $expected, $actual ), 'Content digest mismatch' );
 req( 'wu21-repro-evidence-' . $actual . '.json' === $filename, 'Content-addressed filename mismatch' );
-echo "PASS WU21 Native-First evidence validation digest={$actual}\n";
+echo "PASS WU21 Native-First evidence validation digest={$actual} qualification_sha256={$qualification_sha256}\n";
