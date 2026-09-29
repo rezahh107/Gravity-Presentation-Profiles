@@ -62,6 +62,9 @@ foreach ( array( $entry_a => 'IVD2_RAW_A', $entry_z => 'IVD2_RAW_Z' ) as $entry_
     }
 }
 
+$flow = function_exists( 'gravity_flow' ) ? gravity_flow() : null;
+$flow_version = is_object( $flow ) && method_exists( $flow, 'get_version' ) ? $flow->get_version() : null;
+
 $config = array(
     'schema_version' => '1.0.0',
     'data_class' => 'SYNTHETIC_NON_PII',
@@ -78,7 +81,7 @@ $config = array(
         'wordpress' => get_bloginfo( 'version' ),
         'php' => PHP_VERSION,
         'gravity_forms' => class_exists( 'GFForms' ) ? GFForms::$version : null,
-        'gravity_flow' => function_exists( 'gravity_flow' ) && is_object( gravity_flow() ) ? gravity_flow()->get_version() : null,
+        'gravity_flow' => $flow_version,
     ),
     'mechanism' => array(
         'column_selection' => 'gravityflow_inbox_fields',
