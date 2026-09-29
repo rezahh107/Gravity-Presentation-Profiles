@@ -33,11 +33,21 @@ if (!fs.existsSync(path.join(artifactDir, 'inbox-visual-design-v2-qualification-
   throw new Error('Inbox V2 qualification setup artifact was not produced.');
 }
 
-const qualifierUser = `ivd2_qualifier_${process.pid}`;
-const qualifierPassword = crypto.randomBytes(24).toString('hex');
-wpCliRun(['user', 'create', qualifierUser, `${qualifierUser}@example.invalid`, '--role=administrator', `--user_pass=${qualifierPassword}`]);
+// Reuse the authentic WU21 operator identity. The synthetic tasks are assigned
+// to this user, so creating a separate administrator would change the native
+// assignment/query semantics the qualification is required to preserve.
+const fixtureManifest = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
+const qualifierUser = fixtureManifest.operator?.login;
+const qualifierUserId = Number(fixtureManifest.operator?.id);
+if (!qualifierUser || !Number.isInteger(qualifierUserId) || qualifierUserId <= 0) {
+  throw new Error('WU21 operator identity is unavailable for Inbox V2 qualification.');
+}
+const resolvedQualifierUserId = Number(wpCliRun(['user', 'get', qualifierUser, '--field=ID']));
+if (resolvedQualifierUserId !== qualifierUserId) {
+  throw new Error(`WU21 operator identity mismatch: expected ${qualifierUserId}, got ${resolvedQualifierUserId}`);
+}
 process.env.IVD2_ADMIN_USER = qualifierUser;
-process.env.IVD2_ADMIN_PASSWORD = qualifierPassword;
+process.env.IVD2_ADMIN_PASSWORD = 'wu21-bootstrap-pass-2026';
 
 try {
   await import('./inbox-visual-design-v2-q1-browser.mjs');
@@ -89,7 +99,6 @@ try {
     delete_option('gpp_inbox_visual_design_v2_qualification');
   `], { encoding: 'utf8', env: process.env });
   fs.rmSync(muPath, { force: true });
-  spawnSync('php', [wpCli, `--path=${wpPath}`, 'user', 'delete', qualifierUser, '--yes'], { encoding: 'utf8', env: process.env });
   if (cleanup.status !== 0) {
     throw new Error(`Inbox V2 qualification cleanup failed: ${cleanup.stderr}\n${cleanup.stdout}`);
   }
