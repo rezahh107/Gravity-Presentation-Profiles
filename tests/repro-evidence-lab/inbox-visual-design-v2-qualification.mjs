@@ -51,6 +51,14 @@ try {
   for (const qualification of [evidence.qualifications?.q1, evidence.qualifications?.q2, evidence.qualifications?.q4]) {
     if (qualification?.execution_status !== 'CAPTURED') throw new Error('Inbox V2 qualification capture did not complete.');
   }
+
+  // Keep the canonical WU21 browser result ID set untouched. The uploaded
+  // browser-results.json gains one bounded adjunct so the qualification evidence
+  // survives successful artifact packaging without changing WU21 acceptance.
+  const browserResultsPath = path.join(artifactDir, 'browser-results.json');
+  const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
+  browserResults.inbox_visual_design_v2_qualification = evidence;
+  fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
   const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
     $config = get_option('gpp_inbox_visual_design_v2_qualification');
