@@ -20,3 +20,8 @@ await import('./p06-fixture-bootstrap.mjs');
 if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
   await import('./p06-inbox-asset-reachability-browser-test.mjs');
 }
+
+// Bounded INBOX_VISUAL_DESIGN_V2 evidence reuses this exact WU21 host, Grid,
+// fixtures and polling transport. The qualifier restores its synthetic mutation
+// state and removes its MU probe before the deferred P06/visual-host stages run.
+await import('./inbox-visual-design-v2-qualification.mjs');
