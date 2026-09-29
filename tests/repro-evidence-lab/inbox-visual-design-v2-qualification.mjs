@@ -20,9 +20,6 @@ if (toolboxSha256 !== 'd2b50b51b111455a54090de0497fe68b1904897183eeb08dfa07aac66
   throw new Error(`Toolbox mirror SHA-256 mismatch: ${toolboxSha256}`);
 }
 
-// Reuse the existing WU21 runtime instead of creating a second lab. The probe is
-// copied only into this disposable WordPress instance and is inert until the
-// bounded Q1 setup option is enabled.
 const muDir = path.join(wpPath, 'wp-content/mu-plugins');
 fs.mkdirSync(muDir, { recursive: true });
 fs.copyFileSync(
@@ -35,8 +32,6 @@ if (!fs.existsSync(path.join(artifactDir, 'inbox-visual-design-v2-qualification-
   throw new Error('Inbox V2 qualification setup artifact was not produced.');
 }
 
-// Use an ephemeral browser principal so this qualification does not duplicate a
-// fixed credential in repository source. It exists only in the disposable lab.
 const qualifierUser = `ivd2_qualifier_${process.pid}`;
 const qualifierPassword = crypto.randomBytes(24).toString('hex');
 wpCliRun(['user', 'create', qualifierUser, `${qualifierUser}@example.invalid`, '--role=administrator', `--user_pass=${qualifierPassword}`]);
@@ -44,8 +39,6 @@ process.env.IVD2_ADMIN_USER = qualifierUser;
 process.env.IVD2_ADMIN_PASSWORD = qualifierPassword;
 
 try {
-  // Contract order is fixed: Q1 -> Q2 -> Q4. Q1 disables its qualification-only
-  // Flow filters before Q2/Q4 observe the ordinary native Inbox.
   await import('./inbox-visual-design-v2-q1-browser.mjs');
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
