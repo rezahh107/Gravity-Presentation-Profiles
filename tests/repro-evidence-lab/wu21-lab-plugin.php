@@ -218,3 +218,11 @@ $gpp_wu21_native_baseline_module = WP_PLUGIN_DIR . '/gravity-presentation-profil
 if ( is_file( $gpp_wu21_native_baseline_module ) ) {
     require_once $gpp_wu21_native_baseline_module;
 }
+
+// Load the disabled-by-default INBOX_VISUAL_DESIGN_V2 qualification probe from
+// the same repository-backed disposable lab. Its option gate is enabled only by
+// the bounded Q1 test and it never participates in production bootstrap.
+$gpp_inbox_v2_probe_module = WP_PLUGIN_DIR . '/gravity-presentation-profiles/tests/repro-evidence-lab/inbox-visual-design-v2-lab-probe.php';
+if ( is_file( $gpp_inbox_v2_probe_module ) ) {
+    require_once $gpp_inbox_v2_probe_module;
+}
