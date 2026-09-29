@@ -4,6 +4,8 @@ import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
 
 assertEnv();
+const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
+const syntheticEntryIds = new Set((fixture.entry_ids || []).map(Number));
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const polls = [];
@@ -53,7 +55,8 @@ try {
   const initialLink = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
   const initialFocus = await focusInfo(initialLink);
   const before = await state();
-  const updateId = before.visible_row_ids[0];
+  const updateId = before.visible_row_ids.find(id => syntheticEntryIds.has(Number(id)));
+  if (!updateId) throw new Error('Page 2 contains no WU21 synthetic row suitable for bounded update qualification.');
 
   phase = 'update';
   control('q4-update', { IVD2_ENTRY_ID: String(updateId) });
