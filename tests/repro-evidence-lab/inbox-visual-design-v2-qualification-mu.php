@@ -2,9 +2,10 @@
 /**
  * INBOX_VISUAL_DESIGN_V2 qualification-only Gravity Flow extension.
  *
- * This file is copied into the disposable pinned WU21 runtime only after the
- * pre-existing native Inbox/P06 qualification has finished. It never ships
- * through the production bootstrap and never owns Grid lifecycle/state.
+ * This file is copied into the disposable pinned WU21 runtime only for the
+ * bounded qualification window. It is removed again before deferred P06 and
+ * integrated visual-host stages, never ships through the production bootstrap,
+ * and never owns Grid lifecycle/state.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
