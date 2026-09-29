@@ -204,3 +204,15 @@ file_put_contents( $artifact_dir . '/evidence-digest.txt', $digest . "\n" );
 echo "qualification_evidence_sha256={$qualification_sha256}\n";
 echo "evidence_file={$filename}\n";
 echo "evidence_digest={$digest}\n";
+
+if ( '1' !== getenv( 'WU21_BINDING_FALSIFICATION_ACTIVE' ) ) {
+    putenv( 'WU21_BINDING_FALSIFICATION_ACTIVE=1' );
+    $command = 'php ' . escapeshellarg( __DIR__ . '/inbox-visual-design-v2-evidence-binding-falsification.php' ) . ' 2>&1';
+    $output = array();
+    $exit_code = 0;
+    exec( $command, $output, $exit_code );
+    foreach ( $output as $line ) echo $line . "\n";
+    if ( 0 !== $exit_code ) {
+        throw new RuntimeException( 'Inbox V2 qualification evidence binding falsification failed.' );
+    }
+}
