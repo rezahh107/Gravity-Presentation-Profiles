@@ -44,7 +44,7 @@ function require_inbox_v2_qualification_capture( $qualification ) {
         if ( ! is_array( $result ) || 'CAPTURED' !== ( $result['execution_status'] ?? null ) ) {
             throw new RuntimeException( 'Inbox V2 qualification ' . $id . ' capture incomplete.' );
         }
-        if ( ! in_array( $result['status'] ?? null, array( 'PASS', 'FAIL' ), true ) ) {
+        if ( ! in_array( $result['status'] ?? null, array( 'PASS', 'FAIL', 'NOT_PROVEN' ), true ) ) {
             throw new RuntimeException( 'Inbox V2 qualification ' . $id . ' disposition is invalid.' );
         }
     }
