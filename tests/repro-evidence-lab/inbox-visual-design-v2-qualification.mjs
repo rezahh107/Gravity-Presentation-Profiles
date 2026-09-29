@@ -21,10 +21,11 @@ if (toolboxSha256 !== 'd2b50b51b111455a54090de0497fe68b1904897183eeb08dfa07aac66
 }
 
 const muDir = path.join(wpPath, 'wp-content/mu-plugins');
+const muPath = path.join(muDir, 'inbox-visual-design-v2-qualification-mu.php');
 fs.mkdirSync(muDir, { recursive: true });
 fs.copyFileSync(
   path.join(repoRoot, 'tests/repro-evidence-lab/inbox-visual-design-v2-qualification-mu.php'),
-  path.join(muDir, 'inbox-visual-design-v2-qualification-mu.php'),
+  muPath,
 );
 
 wpCliRun(['eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/inbox-visual-design-v2-qualification-setup.php')]);
@@ -51,5 +52,37 @@ try {
     if (qualification?.execution_status !== 'CAPTURED') throw new Error('Inbox V2 qualification capture did not complete.');
   }
 } finally {
+  const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
+    $config = get_option('gpp_inbox_visual_design_v2_qualification');
+    $manifest = get_option('gpp_wu21_fixture_manifest');
+    foreach (array('gpp_ivd2_q1_added_entry','gpp_ivd2_q4_added_entry') as $option) {
+      $entry_id = (int) get_option($option);
+      if ($entry_id) GFAPI::delete_entry($entry_id);
+      delete_option($option);
+    }
+    $original = get_option('gpp_ivd2_q4_original_field');
+    if (is_array($original) && !empty($original['entry_id']) && !empty($original['field_id'])) {
+      GFAPI::update_entry_field((int)$original['entry_id'], (int)$original['field_id'], (string)$original['value']);
+    }
+    delete_option('gpp_ivd2_q4_original_field');
+    if (is_array($config) && !empty($config['form_id']) && !empty($config['probe_field_id'])) {
+      $probe = (int)$config['probe_field_id'];
+      if (is_array($manifest) && !empty($manifest['entry_records'])) {
+        foreach ($manifest['entry_records'] as $record) {
+          if ((int)$record['form_id'] === (int)$config['form_id']) GFAPI::update_entry_field((int)$record['entry_id'], $probe, '');
+        }
+      }
+      $form = GFAPI::get_form((int)$config['form_id']);
+      if (is_array($form)) {
+        $form['fields'] = array_values(array_filter($form['fields'], static function($field) use ($probe) { return (int)$field->id !== $probe; }));
+        GFAPI::update_form($form);
+      }
+    }
+    delete_option('gpp_inbox_visual_design_v2_qualification');
+  `], { encoding: 'utf8', env: process.env });
+  fs.rmSync(muPath, { force: true });
   spawnSync('php', [wpCli, `--path=${wpPath}`, 'user', 'delete', qualifierUser, '--yes'], { encoding: 'utf8', env: process.env });
+  if (cleanup.status !== 0) {
+    throw new Error(`Inbox V2 qualification cleanup failed: ${cleanup.stderr}\n${cleanup.stdout}`);
+  }
 }
