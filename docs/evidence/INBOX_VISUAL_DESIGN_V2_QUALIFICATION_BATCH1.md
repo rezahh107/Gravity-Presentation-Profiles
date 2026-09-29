@@ -14,6 +14,6 @@ This batch does not establish target-production equivalence, final visual approv
 
 ## Runtime artifact
 
-The exact-head `WU21 Reproducible Evidence Lab` writes `inbox-visual-design-v2-qualification-evidence.json`, bounded Q1/Q2/Q4 JSON, polling evidence, and the Q2 1440px/360px screenshots into the existing WU21 artifact.
+The exact-head `WU21 Reproducible Evidence Lab` captures bounded Q1/Q2/Q4 JSON, polling evidence, and the Q2 1440px/360px screenshots in its existing artifact directory. The compact `inbox-visual-design-v2-qualification-evidence.json` is also embedded as the top-level `inbox_visual_design_v2_qualification` adjunct in the uploaded `browser-results.json`; the canonical WU21 `results` ID set remains unchanged.
 
-Qualification outcomes may legitimately be `PASS`, `FAIL`, or `NOT_PROVEN`; the workflow hard-fails only when the bounded evidence cannot be executed/captured or the canonical Toolbox mirror fails its byte-identity SHA-256 gate.
+Qualification outcomes may legitimately be `PASS`, `FAIL`, or `NOT_PROVEN`; the workflow hard-fails only when the bounded evidence cannot be executed/captured, cleanup cannot restore the synthetic fixture, or the canonical Toolbox mirror fails its byte-identity SHA-256 gate.
