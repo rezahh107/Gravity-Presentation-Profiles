@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -9,12 +10,21 @@ const q1 = read('inbox-visual-design-v2-q1.json');
 const q2 = read('inbox-visual-design-v2-q2.json');
 const q4 = read('inbox-visual-design-v2-q4.json');
 if ([q1,q2,q4].some(q => q.execution_status !== 'CAPTURED')) throw new Error('Qualification browser capture incomplete.');
+const workspace = process.env.GITHUB_WORKSPACE;
+if (!workspace) throw new Error('GITHUB_WORKSPACE required for exact checkout provenance.');
+const exactHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
+if (!/^[0-9a-f]{40}$/.test(exactHead)) throw new Error(`Invalid checked-out repository Head: ${exactHead}`);
 
 const evidence = {
   artifact_type: 'gpp.inbox_visual_design_v2.qualification_batch_1_evidence',
   schema_version: '1.0.0',
   evidence_ceiling: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
-  repository: { full_name: process.env.GITHUB_REPOSITORY, exact_head: process.env.GITHUB_SHA },
+  repository: {
+    full_name: process.env.GITHUB_REPOSITORY,
+    exact_head: exactHead,
+    github_event_sha: process.env.GITHUB_SHA || null,
+    provenance_rule: 'exact_head is git rev-parse HEAD from the checkout already asserted by the workflow; github_event_sha is retained separately because pull_request events may expose a temporary merge ref SHA.',
+  },
   runtime: setup.runtime,
   synthetic_data: setup.data_class,
   qualifications: { q1, q2, q4 },
@@ -24,7 +34,7 @@ const evidence = {
     native_polling_update: Boolean(q4.flags?.update_observed),
     native_polling_add: Boolean(q4.flags?.add_observed),
     native_polling_remove: Boolean(q4.flags?.remove_observed),
-    no_duplicate_state: Boolean(q4.flags?.one_native_pager && q4.flags?.one_native_grid && q4.flags?.one_native_search),
+    no_duplicate_state: Boolean(q4.flags?.one_native_pager && q4.flags?.one_native_grid && q4.flags?.one_native_search && q4.flags?.unique_row_identity),
   },
   target_bindings: {
     student_name: { state: 'NOT_PROVEN', reason: 'Portable student.full_name derivation exists, but current repository target matrix does not prove concrete SRWF first/last field bindings for the target environment.' },
@@ -67,4 +77,4 @@ const evidence = {
   },
 };
 fs.writeFileSync(path.join(dir, 'inbox-visual-design-v2-qualification-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
-console.log(JSON.stringify({ q1: q1.status, q2: q2.status, q4: q4.status, live_refresh: evidence.live_refresh.status }, null, 2));
+console.log(JSON.stringify({ exact_head: exactHead, q1: q1.status, q2: q2.status, q4: q4.status, live_refresh: evidence.live_refresh.status }, null, 2));
