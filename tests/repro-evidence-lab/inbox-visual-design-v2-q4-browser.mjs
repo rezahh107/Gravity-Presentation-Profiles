@@ -41,6 +41,8 @@ async function state() {
 }
 
 function all(flags) { return Object.values(flags).every(Boolean); }
+function sameRows(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+function uniqueRows(ids) { return new Set(ids.map(Number)).size === ids.length; }
 let out = { contract: 'Q4_PAGE2_POLL_FOCUS', execution_status: 'CAPTURED' };
 let failed = false;
 try {
@@ -78,29 +80,43 @@ try {
 
   const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first());
   const focusPreserved = afterUpdate.focused?.href === before.focused?.href && afterUpdate.focused?.row_id === before.focused?.row_id;
+  const focusDisposition = focusPreserved ? 'PRESERVED' : 'BOUNDED_NATIVE_FOCUS_CHANGE';
+  const states = [before, afterUpdate, afterAdd, afterRemove];
   const flags = {
-    page_state_remains_two: [before, afterUpdate, afterAdd, afterRemove].every(item => item.pager.current === '2'),
-    one_native_pager: [before, afterUpdate, afterAdd, afterRemove].every(item => item.pager_count === 1),
-    one_native_grid: [before, afterUpdate, afterAdd, afterRemove].every(item => item.native_grid_count === 1),
-    one_native_search: [before, afterUpdate, afterAdd, afterRemove].every(item => item.search_count === 1),
+    page_state_remains_two: states.every(item => item.pager.current === '2'),
+    pager_state_coherent: states.every(item => item.pager.count === 1 && item.pager.previous_disabled === false),
+    one_native_pager: states.every(item => item.pager_count === 1),
+    one_native_grid: states.every(item => item.native_grid_count === 1),
+    one_native_search: states.every(item => item.search_count === 1),
     same_native_grid: [afterUpdate, afterAdd, afterRemove].every(item => item.grid_marker === 'q4-page2-grid'),
+    unique_row_identity: states.every(item => uniqueRows(item.visible_row_ids)),
+    update_keeps_visible_page_rows: sameRows(before.visible_row_ids, afterUpdate.visible_row_ids) && afterUpdate.visible_row_ids.includes(Number(updateId)),
+    add_remove_round_trip_restores_page_rows: sameRows(afterUpdate.visible_row_ids, afterRemove.visible_row_ids) && !afterRemove.visible_row_ids.includes(addedId),
     update_observed: updatePoll.status === 200,
     add_observed: addPoll.status === 200,
     remove_observed: removePoll.status === 200,
     native_open_after_poll: /view=entry/.test(navigation.url),
+    keyboard_enter_after_poll: /view=entry/.test(navigation.url),
     initial_focus_visible: focusVisible(initialFocus),
+    post_poll_open_focus_visible: focusVisible(navigation.focus),
+    focus_behavior_accounted_for: focusDisposition === 'PRESERVED' || focusDisposition === 'BOUNDED_NATIVE_FOCUS_CHANGE',
   };
   out = {
     ...out,
     status: all(flags) ? 'PASS' : 'FAIL',
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
     flags,
-    focus_disposition: focusPreserved ? 'PRESERVED' : 'BOUNDED_NATIVE_FOCUS_CHANGE',
+    focus_disposition: focusDisposition,
     before,
     after_update: afterUpdate,
     after_add: afterAdd,
     after_remove: afterRemove,
     mutation_ids: { updated_entry_id: updateId, added_then_removed_entry_id: addedId },
+    add_visibility: {
+      visible_on_page_2_after_add: afterAdd.visible_row_ids.includes(addedId),
+      page_2_row_count_before: before.visible_row_ids.length,
+      page_2_row_count_after_add: afterAdd.visible_row_ids.length,
+    },
     native_open_after_poll: navigation,
     polling_statuses: { update: updatePoll.status, add: addPoll.status, remove: removePoll.status },
   };
