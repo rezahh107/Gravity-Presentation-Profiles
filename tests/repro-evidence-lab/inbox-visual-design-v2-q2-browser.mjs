@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, login, waitForGrid, focusVisible, openByEnter, scrollState } from './inbox-visual-design-v2-browser-lib.mjs';
+import { evaluateQ2Qualification } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 assertEnv();
 const browser = await chromium.launch({ headless: true });
@@ -38,6 +39,13 @@ async function capture(width, height, label) {
     const box = node.getBoundingClientRect();
     return { col_id: node.getAttribute('col-id'), text: (node.textContent || '').trim().slice(0, 100), direction: style.direction, text_align: style.textAlign, x: Math.round(box.x), width: Math.round(box.width), right: Math.round(box.right) };
   }));
+  const persianTextSamples = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-cell').evaluateAll(nodes => nodes.map(node => {
+    const text = (node.textContent || '').trim().replace(/\s+/g, ' ');
+    if (!/[\u0600-\u06FF]/u.test(text)) return null;
+    const style = getComputedStyle(node);
+    const box = node.getBoundingClientRect();
+    return { col_id: node.getAttribute('col-id'), text: text.slice(0, 160), direction: style.direction, text_align: style.textAlign, x: Math.round(box.x), width: Math.round(box.width), right: Math.round(box.right) };
+  }).filter(Boolean).slice(0, 20));
   const pager = await page.locator('[data-js="gflow-inbox"] .ag-paging-panel').evaluate(el => {
     const style = getComputedStyle(el);
     return {
@@ -80,6 +88,7 @@ async function capture(width, height, label) {
     root_bounds: rootBounds,
     visual_column_order: columns,
     representative_cells: cells,
+    persian_text_samples: persianTextSamples,
     pager,
     horizontal_scroll: {
       body_before: bodyBefore,
@@ -102,20 +111,21 @@ try {
   await login(page);
   const desktop = await capture(1440, 900, '1440');
   const mobile = await capture(360, 800, '360');
-  const flags = {
-    desktop_native_behavior_usable: desktop.usable,
-    mobile_native_behavior_usable: mobile.usable,
-    desktop_scroll_behavior_observed: desktop.horizontal_scroll.moved_when_available,
-    mobile_scroll_behavior_observed: mobile.horizontal_scroll.moved_when_available,
-    native_open_and_keyboard_focus_preserved: desktop.usable && mobile.usable,
-  };
+  const evaluation = evaluateQ2Qualification(desktop, mobile);
   out = {
     ...out,
-    status: Object.values(flags).every(Boolean) ? 'PASS' : 'FAIL',
+    status: evaluation.status,
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
-    flags,
+    flags: {
+      ...evaluation.required_evaluation_flags,
+      ...evaluation.usability_flags,
+    },
+    contract_evaluation: evaluation,
+    narrower_observation: evaluation.narrower_observation,
     enable_rtl_tested: false,
-    enable_rtl_reason: 'No selected design dependency required enableRtl. Native Grid direction/order/alignment/pager/scroll/Open/focus were observed as-is at both required viewports.',
+    enable_rtl_reason: evaluation.status === 'NOT_PROVEN'
+      ? 'The canonical Q2 Persian-layout requirement was not fully evaluable in this fixture. The lab records the narrower native direction/pager/scroll/focus observation instead of forcing enableRtl or emitting PASS.'
+      : 'No selected design dependency required enableRtl. Native behavior was evaluated against the complete canonical Q2 predicate at both required viewports.',
     desktop_1440: desktop,
     mobile_360: mobile,
   };
