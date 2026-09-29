@@ -76,7 +76,8 @@ async function mobileNativeControls(width, height) {
   await settings.click();
   await page.locator('.gform-flyout--inbox-settings').waitFor({ state: 'visible' });
   const settingsFlyoutVisible = await page.locator('.gform-flyout--inbox-settings').isVisible();
-  await page.keyboard.press('Escape');
+  await page.locator('.gform-flyout--inbox-settings .gform-flyout__close').click();
+  await page.locator('.gform-flyout--inbox-settings').waitFor({ state: 'hidden' });
   await fullscreen.click();
   const fullscreenEntered = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(el => el.classList.contains('gflow-grid--fullscreen'));
   await fullscreen.click();

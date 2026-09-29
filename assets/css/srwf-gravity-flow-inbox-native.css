@@ -39,8 +39,8 @@
     color: var(--gpp-inbox-text-muted);
 }
 
-/* The host-owned entry link remains the only Open/View navigation. */
-.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link {
+/* The host-owned link overlays the native value; paint its cell, not the overlay. */
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="id"] {
     background-color: #eff6ff;
     border-radius: 7px;
     box-shadow: inset 0 0 0 1px #c4d8fa;
@@ -48,7 +48,7 @@
     font-weight: 700;
 }
 
-.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:hover {
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="id"]:hover {
     background-color: #e2efff;
 }
 

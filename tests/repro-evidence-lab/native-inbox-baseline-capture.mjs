@@ -205,6 +205,7 @@ async function measureRuntimeFacts(page) {
       native_presentation: {
         header: paint(document.querySelector(`${s.grid} .ag-header`)),
         form_cell: paint(document.querySelector(`${s.rows} .ag-cell[col-id="form_title"]`)),
+        id_cell: paint(document.querySelector(`${s.rows} .ag-cell[col-id="id"]`)),
         entry_link: paint(document.querySelector(`${s.rows} .gflow-inbox__entry-cell-link`)),
         pager_button: paint(document.querySelector(`${s.pager} .ag-paging-button:not(.ag-disabled)`)),
       },
@@ -510,7 +511,8 @@ function assertModeBoundary(mode, facts, label) {
     assert.equal(facts.gpp_manual_refresh_count, 1, `${label}: ordinary GPP Manual Refresh is unavailable after RAW_NATIVE request.`);
     assert.equal(facts.native_presentation.header?.background_color, 'rgb(243, 246, 251)', `${label}: native header presentation was not applied.`);
     assert.equal(facts.native_presentation.form_cell?.font_weight, '700', `${label}: existing form column lost its primary text hierarchy.`);
-    assert.equal(facts.native_presentation.entry_link?.color, 'rgb(29, 78, 216)', `${label}: native Open link lost its blue action treatment.`);
+    assert.equal(facts.native_presentation.id_cell?.background_color, 'rgb(239, 246, 255)', `${label}: native Open cell lost its blue action treatment.`);
+    assert.equal(facts.native_presentation.entry_link?.background_color, 'rgba(0, 0, 0, 0)', `${label}: native Open overlay hides host-owned cell text.`);
     assert.equal(facts.native_presentation.pager_button?.background_color, 'rgb(240, 246, 255)', `${label}: METHOD B native pager paint was not applied.`);
   }
 }
