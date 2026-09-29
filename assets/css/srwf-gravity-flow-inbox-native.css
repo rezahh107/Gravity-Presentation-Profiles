@@ -1,4 +1,90 @@
-/* Native-first paint safeguards over the authoritative Gravity Flow Inbox. */
+/* Native row and pager presentation over the authoritative Gravity Flow Inbox. */
+
+/* The real column values and saved column layout stay with Gravity Flow. */
+.gflow-inbox.gflow-grid.gflow-common .ag-header {
+    background-color: #f3f6fb;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-header-cell {
+    color: #405477;
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-row {
+    border-color: #e8edf4;
+    transition-property: background-color, border-color;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-row-odd:not(.ag-row-selected) {
+    background-color: #fbfcff;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-row:hover:not(.ag-row-selected) {
+    background-color: #edf4ff;
+}
+
+/* Hierarchy spans existing native columns; no compound value is synthesized. */
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="form_title"] {
+    color: #1d2e4e;
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="workflow_step"] {
+    color: #31415e;
+    font-weight: 600;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="created_by"],
+.gflow-inbox.gflow-grid.gflow-common .ag-cell[col-id="date_created"] {
+    color: var(--gpp-inbox-text-muted);
+}
+
+/* The host-owned entry link remains the only Open/View navigation. */
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link {
+    background-color: #eff6ff;
+    border-radius: 7px;
+    box-shadow: inset 0 0 0 1px #c4d8fa;
+    color: var(--gpp-inbox-accent);
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:hover {
+    background-color: #e2efff;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:focus,
+.gflow-inbox.gflow-grid.gflow-common .gflow-inbox__entry-cell-link:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--gpp-inbox-focus);
+    outline: 3px solid var(--gpp-inbox-focus) !important;
+    outline-offset: -3px;
+}
+
+/* METHOD B: only the native pager's existing text and controls are painted. */
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-panel {
+    background-color: #fbfcff;
+    color: var(--gpp-inbox-text-muted);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-number {
+    color: #25457e;
+    font-weight: 700;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-button {
+    background-color: #f0f6ff;
+    box-shadow: 0 0 0 1px #d0def5;
+    color: var(--gpp-inbox-accent);
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-button:hover:not(.ag-disabled) {
+    background-color: #e2efff;
+    box-shadow: 0 0 0 1px #adc9f3;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-button.ag-disabled {
+    background-color: transparent;
+    box-shadow: none;
+}
 
 /*
  * Gravity Flow owns these controls and applies `transition: all .15s`.
