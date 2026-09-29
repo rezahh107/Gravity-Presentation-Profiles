@@ -9,12 +9,13 @@ export const inboxUrl = `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox`;
 
 if (!artifactDir || !wpPath || !wpCli || !repoRoot) throw new Error('WU21 qualification environment is incomplete.');
 
-export function wpEval(code) {
-  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
-  if (cp.status !== 0) throw new Error(`wp eval failed: ${cp.stderr}\n${cp.stdout}`);
+export function wpControl(action, extra = {}) {
+  const env = { ...process.env, GPP_INBOX_V2_ACTION: action, ...extra };
+  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', `${repoRoot}/tests/repro-evidence-lab/inbox-v2-control.php`], { encoding: 'utf8', env });
+  if (cp.status !== 0) throw new Error(`wp control ${action} failed: ${cp.stderr}\n${cp.stdout}`);
   return cp.stdout.trim();
 }
-export function jsonEval(code) { return JSON.parse(wpEval(code)); }
+export function jsonControl(action, extra = {}) { return JSON.parse(wpControl(action, extra)); }
 export function bounded(value, max = 4000) {
   const text = String(value ?? '');
   return text.length > max ? `${text.slice(0, max)}…` : text;
