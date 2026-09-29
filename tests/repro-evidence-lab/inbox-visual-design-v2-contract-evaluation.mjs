@@ -183,3 +183,7 @@ export function evaluateQ4FocusLifecycle(states) {
     changes,
   };
 }
+
+export function evaluateQ4QualificationStatus(flags) {
+  return Object.values(flags || {}).every(Boolean) ? 'PASS' : 'FAIL';
+}
