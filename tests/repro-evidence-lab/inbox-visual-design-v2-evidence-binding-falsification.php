@@ -187,7 +187,8 @@ try {
     $q['qualifications']['q1']['status'] = 'UNKNOWN';
     write_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json', $q );
     set_browser_adjunct( $dir, $q );
-    $results['invalid_disposition'] = run_php_check( $builder, $dir, $repository_head, false, 'qualification q1 disposition is invalid' );
+    $results['invalid_disposition_builder'] = run_php_check( $builder, $dir, $repository_head, false, 'qualification q1 disposition is invalid' );
+    $results['invalid_disposition_validator'] = run_php_check( $validator, $dir, $repository_head, false, 'qualification q1 disposition is invalid' );
 
     $dir = make_fixture( $source_dir, $temp_root, 'incomplete-capture' );
     $q = read_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
@@ -235,7 +236,8 @@ try {
         'missing_qualification_rejected' => 0 !== $results['missing_qualification']['exit_code'],
         'stale_head_rejected' => 0 !== $results['stale_head']['exit_code'],
         'runtime_mismatch_rejected' => 0 !== $results['runtime_mismatch']['exit_code'],
-        'invalid_disposition_rejected_by_builder' => 0 !== $results['invalid_disposition']['exit_code'],
+        'invalid_disposition_rejected_by_builder' => 0 !== $results['invalid_disposition_builder']['exit_code'],
+        'invalid_disposition_rejected_by_validator' => 0 !== $results['invalid_disposition_validator']['exit_code'],
         'incomplete_capture_rejected_by_builder' => 0 !== $results['incomplete_capture']['exit_code'],
         'canonical_test_id_set_unchanged' => true,
     );
