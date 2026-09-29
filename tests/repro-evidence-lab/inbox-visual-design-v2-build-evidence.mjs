@@ -15,6 +15,7 @@ if (!workspace) throw new Error('GITHUB_WORKSPACE required for exact checkout pr
 const exactHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
 if (!/^[0-9a-f]{40}$/.test(exactHead)) throw new Error(`Invalid checked-out repository Head: ${exactHead}`);
 
+const bindingMatrix = 'docs/visual/SRWF_GRAVITY_FLOW_DATA_ASSET_BINDING_MATRIX_v1.0.0.md';
 const evidence = {
   artifact_type: 'gpp.inbox_visual_design_v2.qualification_batch_1_evidence',
   schema_version: '1.0.0',
@@ -37,11 +38,31 @@ const evidence = {
     no_duplicate_state: Boolean(q4.flags?.one_native_pager && q4.flags?.one_native_grid && q4.flags?.one_native_search && q4.flags?.unique_row_identity),
   },
   target_bindings: {
-    student_name: { state: 'NOT_PROVEN', reason: 'Portable student.full_name derivation exists, but current repository target matrix does not prove concrete SRWF first/last field bindings for the target environment.' },
-    school: { state: 'NOT_PROVEN', reason: 'Current repository target matrix leaves school.name concrete target binding unproven/unbound.' },
-    grade_group: { state: 'NOT_PROVEN', reason: 'Current repository target matrix leaves education.grade_group concrete target binding unproven/unbound.' },
-    identity_semantic_source: { state: 'NOT_PROVEN', reason: 'No current repository evidence proves the authorized target field/value mapping for the semantic icon source.' },
-    workflow_status_source: { state: 'NOT_PROVEN', reason: 'Synthetic runtime proves host workflow/current-step mechanics only; the exact target status meaning/source for a row chip is not established.' },
+    student_name: {
+      state: 'UNBOUND',
+      reason: 'The repository binding matrix defines student.full_name as a presentation derivation from canonical student.first_name + student.last_name, while both concrete target field IDs remain unbound.',
+      source_document: bindingMatrix,
+    },
+    school: {
+      state: 'UNBOUND',
+      reason: 'The repository binding matrix defines school.name and its SRWF source family, but concrete target field IDs and Inbox exposure remain unbound.',
+      source_document: bindingMatrix,
+    },
+    grade_group: {
+      state: 'UNBOUND',
+      reason: 'The repository binding matrix defines education.grade_group from SRWF GRADE_GROUP_SELECTION, but the concrete target field ID remains unbound.',
+      source_document: bindingMatrix,
+    },
+    identity_semantic_source: {
+      state: 'NOT_PROVEN',
+      reason: 'No current repository evidence proves the authorized target field/value mapping for the semantic icon source.',
+      source_document: 'docs/design/GPP_INBOX_DESIGN_TOOLBOX_V1.1.md',
+    },
+    workflow_status_source: {
+      state: 'NOT_PROVEN',
+      reason: 'The repository binding matrix leaves workflow.status target display/configuration not proven; the synthetic runtime proves host workflow/current-step mechanics only and does not establish the target row-chip meaning/source.',
+      source_document: bindingMatrix,
+    },
   },
   persian_gravity_reuse: {
     state: 'REUSED_EXISTING_CONTRACT',
