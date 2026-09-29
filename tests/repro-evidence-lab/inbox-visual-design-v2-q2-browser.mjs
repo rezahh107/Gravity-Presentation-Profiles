@@ -12,6 +12,8 @@ async function capture(width, height, label) {
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await waitForGrid(page);
   const root = page.locator('[data-js="gflow-inbox"] .ag-root-wrapper');
+  const agRtl = await root.evaluate(el => el.classList.contains('ag-rtl'));
+  const rootDirection = await root.evaluate(el => getComputedStyle(el).direction);
   const columns = await page.locator('[data-js="gflow-inbox"] .ag-header-cell').evaluateAll(nodes => nodes.map(node => {
     const box = node.getBoundingClientRect();
     return { col_id: node.getAttribute('col-id'), text: (node.textContent || '').trim().replace(/\s+/g, ' '), x: Math.round(box.x), width: Math.round(box.width) };
@@ -34,12 +36,12 @@ async function capture(width, height, label) {
     await page.locator('[data-js="gflow-inbox"] .ag-body-viewport').first().evaluate(el => { el.scrollLeft = Math.floor((el.scrollWidth - el.clientWidth) / 2); });
   }
   const after = await scrollState(page);
-  const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first());
   await page.screenshot({ path: path.join(artifactDir, `inbox-visual-design-v2-q2-${label}.png`), fullPage: true });
+  const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first());
   return {
     viewport: { width, height },
-    ag_rtl: await root.evaluate(el => el.classList.contains('ag-rtl')).catch(() => false),
-    root_direction: await root.evaluate(el => getComputedStyle(el).direction).catch(() => null),
+    ag_rtl: agRtl,
+    root_direction: rootDirection,
     visual_column_order: columns,
     representative_cells: cells,
     pager,
