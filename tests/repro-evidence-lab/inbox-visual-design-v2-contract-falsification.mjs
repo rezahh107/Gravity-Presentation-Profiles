@@ -48,7 +48,7 @@ function q2Capture(width = 1440) {
 const q2Desktop = q2Capture(1440);
 const q2Mobile = q2Capture(360);
 const q2Positive = evaluateQ2Qualification(q2Desktop, q2Mobile);
-assert(q2Positive.status === 'PASS', 'fully evaluated readable Persian Q2 positive control must PASS');
+assert(q2Positive.status === 'FAIL', 'TEMP NEGATIVE CONTROL: canonical verifier must fail when a required assertion is invalid');
 
 const q2MissingPersian = evaluateQ2Qualification(
   { ...clone(q2Desktop), persian_text_samples: [] },
