@@ -81,6 +81,7 @@ async function mobileNativeControls(width, height) {
   await fullscreen.click();
   const fullscreenEntered = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(el => el.classList.contains('gflow-grid--fullscreen'));
   await fullscreen.click();
+  await page.waitForFunction(() => !document.querySelector('.gflow-inbox.gflow-grid.gflow-common')?.classList.contains('gflow-grid--fullscreen'), null, { timeout: 5000 });
   const fullscreenExited = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(el => !el.classList.contains('gflow-grid--fullscreen'));
   const pager = await pagerState(page);
   const link = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
