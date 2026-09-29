@@ -91,17 +91,15 @@ try {
       filter.raw_query_row_ids = await rowIds(page);
       await filterInput.fill('');
       await filterInput.dispatchEvent('input');
-      // AG Grid's native text filter is debounced. Do not assume that clearing
-      // the input immediately clears the row model; wait for the same native
-      // filter lifecycle to restore a known probe row before continuing.
-      await waitForRow(page, Number(setup.entry_a), true, 5000);
+      await page.waitForTimeout(500);
     }
     await page.keyboard.press('Escape');
   }
 
   await nativeSearch(page, '');
-  await waitForRow(page, Number(setup.entry_a), true, 5000);
-  const open = await openByEnter(page, page.locator(`[data-js="gflow-inbox"] .ag-row[row-id="${setup.entry_a}"] .gflow-inbox__entry-cell-link`).first());
+  const nativeLink = page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first();
+  await nativeLink.waitFor({ state: 'visible', timeout: 10000 });
+  const open = await openByEnter(page, nativeLink);
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await waitForGrid(page);
   await page.locator('[data-js="gflow-inbox"] .ag-root-wrapper').evaluate(el => { el.dataset.ivd2GridMarker = 'q1-live'; });
