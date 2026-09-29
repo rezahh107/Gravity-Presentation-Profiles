@@ -125,6 +125,10 @@ try {
   out = { ...out, execution_status: 'ERROR', error: String(error?.stack || error).slice(0, 12000) };
   await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-q4-error.png'), fullPage: true }).catch(() => {});
 } finally {
+  try { control('q4-restore'); } catch (error) {
+    failed = true;
+    out = { ...out, execution_status: 'ERROR', restore_error: String(error?.stack || error).slice(0, 12000) };
+  }
   fs.writeFileSync(path.join(artifactDir, 'inbox-visual-design-v2-q4.json'), JSON.stringify(out, null, 2) + '\n');
   fs.writeFileSync(path.join(artifactDir, 'inbox-visual-design-v2-q4-polling.json'), JSON.stringify(polls, null, 2) + '\n');
   await browser.close();
