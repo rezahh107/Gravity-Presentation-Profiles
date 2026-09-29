@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
-import { evaluateQ4FocusLifecycle } from './inbox-visual-design-v2-contract-evaluation.mjs';
+import { evaluateQ4FocusLifecycle, evaluateQ4QualificationStatus } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
@@ -41,7 +41,6 @@ async function state() {
   };
 }
 
-function all(flags) { return Object.values(flags).every(Boolean); }
 function sameRows(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function uniqueRows(ids) { return new Set(ids.map(Number)).size === ids.length; }
 let out = { contract: 'Q4_PAGE2_POLL_FOCUS', execution_status: 'CAPTURED' };
@@ -108,7 +107,7 @@ try {
   };
   out = {
     ...out,
-    status: all(flags) ? 'PASS' : 'FAIL',
+    status: evaluateQ4QualificationStatus(flags),
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
     flags,
     focus_disposition: focusEvaluation.disposition,
