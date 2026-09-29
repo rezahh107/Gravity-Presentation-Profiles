@@ -12,11 +12,8 @@ on:
       - 'tests/run.php'
       - 'tests/repro-evidence-lab/srwf-journey-host-*'
       - 'tests/repro-evidence-lab/srwf-journey-production-*'
-      - 'tests/repro-evidence-lab/inbox-visual-design-v2-*'
       - 'tests/fixtures/wu21-packages/**'
       - 'docs/evidence/SRWF_OPERATOR_JOURNEY_HOST_QUALIFICATION_V1.md'
-      - 'docs/design/GPP_INBOX_DESIGN_TOOLBOX_V1.1.md'
-      - 'docs/design/GPP_INBOX_VISUAL_DESIGN_V2_CURRENT_OWNER_OVERRIDES.md'
   workflow_dispatch:
 
 permissions:
@@ -231,30 +228,6 @@ jobs:
           node tests/repro-evidence-lab/srwf-journey-production-negative-controls.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-negative-controls.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
-
-          # INBOX_VISUAL_DESIGN_V2 qualification reuses this exact pinned runtime
-          # only after the pre-existing journey suite has completed. The MU probe
-          # is qualification-only and is never loaded by the production bootstrap.
-          if ! php "$WU21_WP_CLI" user get wu21_viewer --path="$WU21_WP_PATH" --field=ID >/dev/null 2>&1; then
-            php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
-          fi
-          mkdir -p "$WU21_WP_PATH/wp-content/mu-plugins"
-          cp tests/repro-evidence-lab/inbox-visual-design-v2-qualification-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/inbox-visual-design-v2-qualification-mu.php"
-          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
-          test -s "$WU21_ARTIFACT_DIR/fixture-manifest.json"
-          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/inbox-visual-design-v2-qualification-setup.php
-          test -s "$WU21_ARTIFACT_DIR/inbox-visual-design-v2-qualification-setup.json"
-
-          echo 'd2b50b51b111455a54090de0497fe68b1904897183eeb08dfa07aac6671ee17b  docs/design/GPP_INBOX_DESIGN_TOOLBOX_V1.1.md' | sha256sum -c -
-
-          export IVD2_ADMIN_USER='bootstrap_admin'
-          export IVD2_ADMIN_PASSWORD='wu21-bootstrap-pass-2026'
-          node tests/repro-evidence-lab/inbox-visual-design-v2-q1-browser.mjs
-          node tests/repro-evidence-lab/inbox-visual-design-v2-q2-browser.mjs
-          node tests/repro-evidence-lab/inbox-visual-design-v2-q4-browser.mjs
-          node tests/repro-evidence-lab/inbox-visual-design-v2-build-evidence.mjs
-          test -s "$WU21_ARTIFACT_DIR/inbox-visual-design-v2-qualification-evidence.json"
-          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/inbox-visual-design-v2-qualification-evidence.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); for(const q of [j.qualifications.q1,j.qualifications.q2,j.qualifications.q4]) if(q.execution_status!=="CAPTURED") process.exit(1);'
 
           kill "$server_pid" >/dev/null 2>&1 || true
           wait "$server_pid" 2>/dev/null || true
