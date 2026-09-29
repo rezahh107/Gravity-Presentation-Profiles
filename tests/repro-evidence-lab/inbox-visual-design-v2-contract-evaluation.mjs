@@ -19,6 +19,11 @@ function orderedByX(items) {
     && items.every((item, index) => index === 0 || Number(items[index - 1].x) <= Number(item.x));
 }
 
+function readablePersianCell(cell) {
+  const align = String(cell?.text_align || '').toLowerCase();
+  return cell?.direction === 'rtl' && (align === 'right' || align === 'start');
+}
+
 export function q2ViewportEvaluation(capture) {
   const columns = Array.isArray(capture?.visual_column_order) ? capture.visual_column_order : [];
   const cells = Array.isArray(capture?.representative_cells) ? capture.representative_cells : [];
@@ -47,6 +52,7 @@ export function q2ViewportEvaluation(capture) {
   const persianContentObserved = persianCells.length > 0;
   const persianLayoutReadabilityEvaluated = persianContentObserved
     && persianCells.every(cell => finite(cell?.width) && Number(cell.width) > 0 && isDirection(cell?.direction) && typeof cell?.text_align === 'string' && cell.text_align.length > 0);
+  const persianLayoutReadable = persianLayoutReadabilityEvaluated && persianCells.every(readablePersianCell);
 
   const nativeControlsUsable = bool(capture?.usable)
     && pagerChildren.length > 0
@@ -61,6 +67,7 @@ export function q2ViewportEvaluation(capture) {
     keyboard_focus_evaluated: keyboardFocusEvaluated,
     persian_content_observed: persianContentObserved,
     persian_layout_readability_evaluated: persianLayoutReadabilityEvaluated,
+    persian_layout_readable: persianLayoutReadable,
     native_controls_usable: nativeControlsUsable,
     persian_sample_count: persianCells.length,
   };
@@ -85,8 +92,8 @@ export function evaluateQ2Qualification(desktop, mobile) {
     desktop_scroll_behavior_observed: bool(desktop?.horizontal_scroll?.moved_when_available),
     mobile_scroll_behavior_observed: bool(mobile?.horizontal_scroll?.moved_when_available),
     native_open_and_keyboard_focus_preserved: bool(desktop?.usable) && bool(mobile?.usable),
-    persian_layout_and_native_controls_usable: desktopEval.persian_layout_readability_evaluated
-      && mobileEval.persian_layout_readability_evaluated
+    persian_layout_and_native_controls_usable: desktopEval.persian_layout_readable
+      && mobileEval.persian_layout_readable
       && desktopEval.native_controls_usable
       && mobileEval.native_controls_usable,
   };
