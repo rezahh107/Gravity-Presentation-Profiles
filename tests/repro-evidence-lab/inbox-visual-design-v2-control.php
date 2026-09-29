@@ -103,12 +103,36 @@ if ( 'q4-update' === $action ) {
     if ( ! $field_id ) {
         throw new RuntimeException( 'Unable to resolve synthetic school field for Q4 update.' );
     }
+    update_option(
+        'gpp_ivd2_q4_original_field',
+        array(
+            'entry_id' => $target_id,
+            'field_id' => $field_id,
+            'value' => isset( $entry[ (string) $field_id ] ) ? (string) $entry[ (string) $field_id ] : '',
+        ),
+        false
+    );
     $token = 'IVD2_Q4_UPDATED_' . $target_id;
     $result = GFAPI::update_entry_field( $target_id, $field_id, $token );
     if ( is_wp_error( $result ) || false === $result ) {
         throw new RuntimeException( is_wp_error( $result ) ? $result->get_error_message() : 'Q4 update failed.' );
     }
     echo $token;
+    return;
+}
+
+if ( 'q4-restore' === $action ) {
+    $original = get_option( 'gpp_ivd2_q4_original_field' );
+    if ( ! is_array( $original ) || empty( $original['entry_id'] ) || empty( $original['field_id'] ) ) {
+        echo 'no-op';
+        return;
+    }
+    $result = GFAPI::update_entry_field( (int) $original['entry_id'], (int) $original['field_id'], (string) $original['value'] );
+    if ( is_wp_error( $result ) || false === $result ) {
+        throw new RuntimeException( is_wp_error( $result ) ? $result->get_error_message() : 'Q4 restore failed.' );
+    }
+    delete_option( 'gpp_ivd2_q4_original_field' );
+    echo 'restored';
     return;
 }
 
