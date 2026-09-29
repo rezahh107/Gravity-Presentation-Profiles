@@ -20,8 +20,3 @@ await import('./p06-fixture-bootstrap.mjs');
 if (process.env.GPP_DEFER_P06_QUALIFICATION !== '1') {
   await import('./p06-inbox-asset-reachability-browser-test.mjs');
 }
-
-// Bounded INBOX_VISUAL_DESIGN_V2 evidence only. This reuses the same WU21 host,
-// native Grid, synthetic fixtures and polling transport; it does not alter
-// production Inbox presentation or create a second lab.
-await import('./inbox-visual-design-v2-qualification.mjs');
