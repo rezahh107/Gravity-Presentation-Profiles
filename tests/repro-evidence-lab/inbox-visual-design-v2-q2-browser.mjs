@@ -38,6 +38,13 @@ async function capture(width, height, label) {
   const after = await scrollState(page);
   await page.screenshot({ path: path.join(artifactDir, `inbox-visual-design-v2-q2-${label}.png`), fullPage: true });
   const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first());
+  const observationsValid = columns.length > 0
+    && cells.length > 0
+    && pager.children.length > 0
+    && Number.isFinite(before.client_width)
+    && Number.isFinite(before.scroll_width)
+    && before.scroll_width >= before.client_width
+    && Number.isFinite(after.scroll_left);
   return {
     viewport: { width, height },
     ag_rtl: agRtl,
@@ -47,8 +54,11 @@ async function capture(width, height, label) {
     pager,
     horizontal_scroll_before: before,
     horizontal_scroll_after: after,
+    horizontal_scroll_present: before.scroll_width > before.client_width,
+    horizontal_scroll_moved_when_available: before.scroll_width <= before.client_width || after.scroll_left !== before.scroll_left,
     navigation,
-    usable: focusVisible(navigation.focus) && /view=entry/.test(navigation.url),
+    observations_valid: observationsValid,
+    usable: observationsValid && focusVisible(navigation.focus) && /view=entry/.test(navigation.url),
   };
 }
 
@@ -58,12 +68,20 @@ try {
   await login(page);
   const desktop = await capture(1440, 900, '1440');
   const mobile = await capture(360, 800, '360');
+  const flags = {
+    desktop_native_behavior_usable: desktop.usable,
+    mobile_native_behavior_usable: mobile.usable,
+    desktop_scroll_behavior_observed: desktop.horizontal_scroll_moved_when_available,
+    mobile_scroll_behavior_observed: mobile.horizontal_scroll_moved_when_available,
+    native_open_and_keyboard_focus_preserved: desktop.usable && mobile.usable,
+  };
   out = {
     ...out,
-    status: desktop.usable && mobile.usable ? 'PASS' : 'FAIL',
+    status: Object.values(flags).every(Boolean) ? 'PASS' : 'FAIL',
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
+    flags,
     enable_rtl_tested: false,
-    enable_rtl_reason: 'Native Grid remained operable/readable without forcing enableRtl; no selected design dependency required the option.',
+    enable_rtl_reason: 'No selected design dependency required enableRtl. Native Grid direction/order/alignment/pager/scroll/Open/focus were observed as-is at both required viewports.',
     desktop_1440: desktop,
     mobile_360: mobile,
   };
