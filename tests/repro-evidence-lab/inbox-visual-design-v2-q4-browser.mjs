@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { artifactDir, inboxUrl, assertEnv, control, login, waitForGrid, rowIds, focusInfo, focusVisible, openByEnter, pagerState, scrollState, activeElementState } from './inbox-visual-design-v2-browser-lib.mjs';
+import { evaluateQ4FocusLifecycle } from './inbox-visual-design-v2-contract-evaluation.mjs';
 
 assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
@@ -78,9 +79,13 @@ try {
   await page.waitForTimeout(300);
   const afterRemove = await state();
 
+  const focusEvaluation = evaluateQ4FocusLifecycle({
+    before,
+    after_update: afterUpdate,
+    after_add: afterAdd,
+    after_remove: afterRemove,
+  });
   const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first());
-  const focusPreserved = afterUpdate.focused?.href === before.focused?.href && afterUpdate.focused?.row_id === before.focused?.row_id;
-  const focusDisposition = focusPreserved ? 'PRESERVED' : 'BOUNDED_NATIVE_FOCUS_CHANGE';
   const states = [before, afterUpdate, afterAdd, afterRemove];
   const flags = {
     page_state_remains_two: states.every(item => item.pager.current === '2'),
@@ -99,14 +104,15 @@ try {
     keyboard_enter_after_poll: /view=entry/.test(navigation.url),
     initial_focus_visible: focusVisible(initialFocus),
     post_poll_open_focus_visible: focusVisible(navigation.focus),
-    focus_behavior_accounted_for: focusDisposition === 'PRESERVED' || focusDisposition === 'BOUNDED_NATIVE_FOCUS_CHANGE',
+    focus_behavior_accounted_for: focusEvaluation.acceptable,
   };
   out = {
     ...out,
     status: all(flags) ? 'PASS' : 'FAIL',
     evidence_class: 'PROVEN_IN_REPRODUCIBLE_RUNTIME',
     flags,
-    focus_disposition: focusDisposition,
+    focus_disposition: focusEvaluation.disposition,
+    focus_evidence: focusEvaluation,
     before,
     after_update: afterUpdate,
     after_add: afterAdd,
