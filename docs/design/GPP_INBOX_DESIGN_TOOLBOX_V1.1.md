@@ -2,6 +2,8 @@
 
 **State:** `READY_FOR_BOUNDED_DESIGN` (definition in §11). This is a reusable design contract, not runtime or implementation proof. Source paths refer to the `gravityflow/` root of the inspected ZIP. `NOT_PROVEN` is an active limit, not an invitation to infer an implementation.
 
+**Lifecycle boundary:** v1.1 is the **pre-qualification design baseline**. Statements in this document that describe Q1/Q2/Q4 as future, `NOT_PROVEN`, or not yet executed record the state when v1.1 was authored; they are not the current disposition source after qualification work. Current consumers MUST read `docs/evidence/INBOX_VISUAL_DESIGN_V2_QUALIFICATION_BATCH1.md` together with the exact-Head WU21 `inbox-visual-design-v2-qualification-evidence.json` for current Q1/Q2/Q4 execution/dispositions. `Q3_GEOMETRY_ON_DEMAND` remains `NOT_EXECUTED_BY_CONTRACT` unless separately executed by an explicitly authorized later task.
+
 ## 1. Baseline and `EVIDENCE_SOURCE_REGISTRY`
 
 | Source | Closure / scope | Evidence ceiling |
@@ -39,7 +41,7 @@ Row direction: **Native Row + Card-Derived Visual Hierarchy**: semantic cue, pro
 The following atomic records use the complete schema. Semicolons within a cell distinguish source anchors; `PUBLISHED_AG_25_2_0_REFERENCE` has the exact limited meaning in §1. No active Submitter, Due Date, Approval Actions, Enterprise or unrelated Grid API feature is added.
 
 | tool_id | category | capability | design_purpose | flow_uses | verified_access_path | candidate_access_path | verified_by | selector_anchors | selector_stability | source_path | live_refresh_interaction | state_owner | design_status | current_scope | decision_reason | implementation_note | runtime_qualification_policy | qualification_contract | upgrade_risk | schema_binding_dependency |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | ID02 | IDENTITY | Existing field value text | Name and facts | YES | FLOW_VALUE_PATH | NOT_APPLICABLE | EXACT_PLUGIN_SOURCE | NOT_APPLICABLE | NOT_APPLICABLE | Task::get_column_value():494–522 | ROW_UPDATE_TRANSACTION | FLOW | ADMITTED | NATIVE_ROW_DESIGN | Flow serializes values | Preserve data and link semantics | NO | NOT_APPLICABLE | MEDIUM | NOT_APPLICABLE |
 | ID03 | IDENTITY | Human-readable display value | Legible labels/dates | YES | FLOW_VALUE_PATH | NOT_APPLICABLE | EXACT_PLUGIN_SOURCE | NOT_APPLICABLE | NOT_APPLICABLE | Task::column_config_map():214–240; JS module 2410 it | ROW_UPDATE_TRANSACTION | FLOW | ADMITTED | NATIVE_ROW_DESIGN | displayKey distinguishes display/raw | Do not rewrite raw value | NO | NOT_APPLICABLE | MEDIUM | NOT_APPLICABLE |
 | ID04 | IDENTITY | Existing secondary field text | School/grade context if bound | PARTIAL | FLOW_VALUE_PATH | NOT_APPLICABLE | DERIVED_FROM_SOURCE | NOT_APPLICABLE | NOT_APPLICABLE | Task::get_column_value():494–522 | ROW_UPDATE_TRANSACTION | FLOW | ADMITTED | NATIVE_ROW_DESIGN | Generic text display works | Target fields separately NOT_PROVEN | NO | NOT_APPLICABLE | MEDIUM | SRWF_SCHOOL_GRADE |
@@ -118,7 +120,9 @@ Generic text/display capabilities above do not establish that the target SRWF fo
 
 `PROVEN | NOT_PROVEN | STALE` are binding states. A future proof changes only the affected binding and tools, subject to Q1 for rich presentation.
 
-## 7. Qualification contracts (defined, **not executed**)
+## 7. Qualification contracts (baseline definitions; execution tracked separately)
+
+The contracts below are the v1.1 definitions that governed later qualification. Their wording is retained as the baseline contract; current execution/disposition is external exact-Head evidence as described in the lifecycle boundary above. PR #108 executes/requalifies Q1, Q2 and Q4. Q3 remains `NOT_EXECUTED_BY_CONTRACT`.
 
 - **`Q1_HTML_CELL_VALUE_PATH` — `FIRST`, `YES_NOW`.** One bounded automated probe for ID05/06/10/11: inject controlled benign and unsafe markup through the existing Flow value path; observe render vs escape/strip/transform and unsafe-markup constraint; verify native Open/link, keyboard/focus, raw/data semantics; observe one Live Refresh `update` and one `add` transaction. **Pass** only if bounded rich content survives Flow lifecycle with safe handling and intact raw semantics, link, focus, add/update, without renderer registry or DOM patch loop. **Fail** if required markup is escaped/stripped, unsafe content is not constrained, link/focus/raw semantics break, or takeover/recurring patching is needed. A pass on rendering alone does not prove target schema bindings.
 - **`Q2_RTL_NATIVE_BEHAVIOR` — `ACTIVE`, `YES_NOW`.** Observe `.ag-rtl` presence, visual ordering/alignment, native pager direction/order, scroll and keyboard/focus at 1440px and a representative 360px. Test `enableRtl` only if needed. **Pass** if Persian layout and native controls are readable and usable with intact pager/scroll/focus. Record a bounded defect otherwise; do not force a design dependency on `enableRtl`.
@@ -156,6 +160,8 @@ Unrelated GPP CSS changes alone do not stale the host baseline. A newly proven f
 
 ## 10. Decision-material `NOT_PROVEN`
 
+The following list records the unresolved state at the v1.1 pre-qualification baseline. For current Q1/Q2/Q4 status, use the current exact-Head qualification evidence rather than treating this historical list as current execution state.
+
 1. Q1 rich value/HTML/SVG handling for compound identity and month/status, including unsafe markup, native link/focus and add/update; target school/grade, icon-semantic, date/month and status bindings are separately `NOT_PROVEN`.
 2. Q2 native RTL direction, pager/scroll and focus in the target browser; Q4 page-2 polling, visible rows and focus.
 3. Q3 only for selected geometry: saved widths, flex/maxWidth, row/empty height, CSS min-height, domLayout, overflow, mobile and fullscreen as relevant.
@@ -164,8 +170,8 @@ Unrelated GPP CSS changes alone do not stale the host baseline. A newly proven f
 
 ## 11. `LLM_PROJECT_MANAGER_USAGE` and readiness
 
-> Treat v1.1 as a version-bound design envelope. Recheck Host, Product Authority and Target Schema Binding freshness. Use only `DESIGN_TOOLS` for active mechanisms; `HOST_INVARIANTS` are rely-on/preserve-only and never a grant to duplicate state or lifecycle. Carry Owner locks independently of technical evidence. Use conditional tools only with named dependencies; never use quarantined/rejected routes or qualify quarantined routes without explicit Owner reopening. For compound identity/icon/month/status, Q1 is first; Q2 and Q4 remain active bounded future qualifications; Q3 only if a selected design depends on specific geometry. Design native row and native pagination presentation only; upper-page presentation is frozen and Sort/Filter are out of scope. Do not infer runtime from source, AG bundle identity from version strings, or Grid API access from published AG documentation. Mark unlisted needs `NOT_PROVEN` or `REQUIRES_OWNER_REOPEN` and request the smallest pertinent evidence.
+> Treat v1.1 as a version-bound **pre-qualification** design envelope. Recheck Host, Product Authority and Target Schema Binding freshness. Use only `DESIGN_TOOLS` for active mechanisms; `HOST_INVARIANTS` are rely-on/preserve-only and never a grant to duplicate state or lifecycle. Carry Owner locks independently of technical evidence. Use conditional tools only with named dependencies; never use quarantined/rejected routes or qualify quarantined routes without explicit Owner reopening. For Q1/Q2/Q4, consult `docs/evidence/INBOX_VISUAL_DESIGN_V2_QUALIFICATION_BATCH1.md` and the current exact-Head WU21 qualification evidence; do not infer their current execution state from this baseline. Q3 remains on-demand and unexecuted unless a selected design and explicit task authorize it. Design native row and native pagination presentation only; upper-page presentation is frozen and Sort/Filter are out of scope. Do not infer runtime from source, AG bundle identity from version strings, or Grid API access from published AG documentation. Mark unlisted needs `NOT_PROVEN` or `REQUIRES_OWNER_REOPEN` and request the smallest pertinent evidence.
 
-`READY_FOR_BOUNDED_DESIGN` means an LLM can propose a design within admitted/conditional limits while preserving all `NOT_PROVEN` and qualification gates. It does **not** mean production-ready, implemented, runtime-qualified or that conditional tools work. Q1–Q4 have not been executed and no production code has changed.
+`READY_FOR_BOUNDED_DESIGN` means an LLM can propose a design within admitted/conditional limits while preserving all `NOT_PROVEN` and qualification gates. It does **not** mean production-ready, implemented, runtime-qualified or that conditional tools work. At the v1.1 baseline, Q1–Q4 had not been executed. PR #108 subsequently executes/requalifies Q1/Q2/Q4; their current dispositions are exact-Head evidence external to this baseline, while Q3 remains `NOT_EXECUTED_BY_CONTRACT`. No production implementation state should be inferred from this baseline.
 
 GPP_INBOX_DESIGN_TOOLBOX_READY_FOR_BOUNDED_DESIGN
