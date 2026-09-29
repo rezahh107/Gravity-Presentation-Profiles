@@ -126,10 +126,13 @@ $qualification_path = $source_dir . '/inbox-visual-design-v2-qualification-evide
 $qualification = read_fixture_json( $qualification_path );
 $browser = read_fixture_json( $source_dir . '/browser-results.json' );
 $master = master_evidence( $source_dir );
+$baseline_filename = trim( file_get_contents( $source_dir . '/evidence-path.txt' ) );
 $qualification_sha256 = hash_file( 'sha256', $qualification_path );
 assert_test( false !== $qualification_sha256, 'Unable to hash baseline qualification evidence.' );
 assert_test( 'FAIL' === ( $qualification['qualifications']['q1']['status'] ?? null ), 'Expected captured Q1 FAIL disposition was not preserved.' );
 assert_test( 'CAPTURED' === ( $qualification['qualifications']['q1']['execution_status'] ?? null ), 'Baseline Q1 capture is incomplete.' );
+assert_test( 'PASS' === ( $qualification['qualifications']['q2']['status'] ?? null ), 'Expected captured Q2 PASS disposition was not preserved.' );
+assert_test( 'CAPTURED' === ( $qualification['qualifications']['q2']['execution_status'] ?? null ), 'Baseline Q2 capture is incomplete.' );
 assert_test(
     hash_equals(
         hash( 'sha256', canonical_fixture_json( $qualification ) ),
@@ -179,6 +182,13 @@ try {
     set_browser_adjunct( $dir, $q );
     $results['runtime_mismatch'] = run_php_check( $validator, $dir, $repository_head, false, 'runtime identity mismatch: gravity_flow' );
 
+    $dir = make_fixture( $source_dir, $temp_root, 'invalid-disposition' );
+    $q = read_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
+    $q['qualifications']['q1']['status'] = 'UNKNOWN';
+    write_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json', $q );
+    set_browser_adjunct( $dir, $q );
+    $results['invalid_disposition'] = run_php_check( $builder, $dir, $repository_head, false, 'qualification q1 disposition is invalid' );
+
     $dir = make_fixture( $source_dir, $temp_root, 'incomplete-capture' );
     $q = read_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
     $q['qualifications']['q1']['execution_status'] = 'NOT_CAPTURED';
@@ -186,37 +196,51 @@ try {
     set_browser_adjunct( $dir, $q );
     $results['incomplete_capture'] = run_php_check( $builder, $dir, $repository_head, false, 'qualification q1 capture incomplete' );
 
-    $dir = make_fixture( $source_dir, $temp_root, 'rebuild-sensitivity' );
+    $dir = make_fixture( $source_dir, $temp_root, 'captured-not-proven' );
     $q = read_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
-    $q['repository']['provenance_rule'] .= ' Falsification fixture rebuild-sensitivity marker.';
+    $q['qualifications']['q1']['status'] = 'NOT_PROVEN';
     write_fixture_json( $dir . '/inbox-visual-design-v2-qualification-evidence.json', $q );
     set_browser_adjunct( $dir, $q );
-    $results['rebuild'] = run_php_check( $builder, $dir, $repository_head, true );
-    $rebuilt = master_evidence( $dir );
-    $rebuilt_digest = $rebuilt['content_digest']['value'] ?? null;
-    assert_test( is_string( $rebuilt_digest ) && $rebuilt_digest !== $baseline_digest, 'Rebuilding after a qualification evidence change did not change the canonical content digest.' );
-    assert_test_ids( $rebuilt );
-    $results['rebuilt_validation'] = run_php_check( $validator, $dir, $repository_head, true );
+    $not_proven_qualification_sha256 = hash_file( 'sha256', $dir . '/inbox-visual-design-v2-qualification-evidence.json' );
+    assert_test( false !== $not_proven_qualification_sha256 && $not_proven_qualification_sha256 !== $qualification_sha256, 'NOT_PROVEN qualification mutation did not change qualification SHA-256.' );
+    $results['not_proven_rebuild'] = run_php_check( $builder, $dir, $repository_head, true );
+    $not_proven_master = master_evidence( $dir );
+    $not_proven_digest = $not_proven_master['content_digest']['value'] ?? null;
+    $not_proven_filename = trim( file_get_contents( $dir . '/evidence-path.txt' ) );
+    assert_test( is_string( $not_proven_digest ) && $not_proven_digest !== $baseline_digest, 'Rebuilding CAPTURED+NOT_PROVEN evidence did not change the canonical content digest.' );
+    assert_test( $not_proven_filename !== $baseline_filename, 'Rebuilding CAPTURED+NOT_PROVEN evidence did not change the content-addressed filename.' );
+    assert_test( 'wu21-repro-evidence-' . $not_proven_digest . '.json' === $not_proven_filename, 'CAPTURED+NOT_PROVEN rebuild filename is not content-addressed by the rebuilt digest.' );
+    assert_test(
+        in_array( 'inbox-visual-design-v2-qualification-sha256:' . $not_proven_qualification_sha256, $not_proven_master['evidence_refs'] ?? array(), true ),
+        'CAPTURED+NOT_PROVEN rebuilt master does not bind its qualification SHA-256.'
+    );
+    assert_test_ids( $not_proven_master );
+    $results['not_proven_validation'] = run_php_check( $validator, $dir, $repository_head, true );
 
     $summary = array(
         'status' => 'PASS',
         'qualification_sha256' => $qualification_sha256,
         'baseline_digest' => $baseline_digest,
-        'rebuilt_digest' => $rebuilt_digest,
         'standalone_browser_semantic_equality' => true,
+        'baseline_q1_fail_accepted' => 'FAIL' === $qualification['qualifications']['q1']['status'] && 0 === $baseline['exit_code'],
+        'baseline_q2_pass_accepted' => 'PASS' === $qualification['qualifications']['q2']['status'] && 0 === $baseline['exit_code'],
+        'captured_not_proven_accepted' => 0 === $results['not_proven_rebuild']['exit_code'] && 0 === $results['not_proven_validation']['exit_code'],
+        'not_proven_qualification_sha256' => $not_proven_qualification_sha256,
+        'not_proven_digest' => $not_proven_digest,
+        'not_proven_content_addressed_filename' => $not_proven_filename,
+        'not_proven_rebuild_digest_changed' => $not_proven_digest !== $baseline_digest,
+        'not_proven_rebuild_filename_changed' => $not_proven_filename !== $baseline_filename,
         'qualification_byte_mutation_rejected' => 0 !== $results['qualification_byte_mutation']['exit_code'],
         'browser_adjunct_divergence_rejected' => 0 !== $results['browser_adjunct_divergence']['exit_code'],
         'missing_qualification_rejected' => 0 !== $results['missing_qualification']['exit_code'],
         'stale_head_rejected' => 0 !== $results['stale_head']['exit_code'],
         'runtime_mismatch_rejected' => 0 !== $results['runtime_mismatch']['exit_code'],
+        'invalid_disposition_rejected_by_builder' => 0 !== $results['invalid_disposition']['exit_code'],
         'incomplete_capture_rejected_by_builder' => 0 !== $results['incomplete_capture']['exit_code'],
-        'captured_q1_fail_accepted' => 'FAIL' === $qualification['qualifications']['q1']['status'] && 0 === $baseline['exit_code'],
-        'rebuild_digest_changed' => $rebuilt_digest !== $baseline_digest,
-        'rebuilt_validator_passed' => 0 === $results['rebuilt_validation']['exit_code'],
         'canonical_test_id_set_unchanged' => true,
     );
     echo json_encode( $summary, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n";
-    echo "PASS Inbox V2 qualification evidence binding falsification qualification_sha256={$qualification_sha256} baseline_digest={$baseline_digest} rebuilt_digest={$rebuilt_digest}\n";
+    echo "PASS Inbox V2 qualification disposition/provenance falsification qualification_sha256={$qualification_sha256} baseline_digest={$baseline_digest} not_proven_sha256={$not_proven_qualification_sha256} not_proven_digest={$not_proven_digest}\n";
 } finally {
     remove_tree( $temp_root );
 }
