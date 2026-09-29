@@ -69,6 +69,7 @@ try {
   }
   const rawOrder = [Number(setup.entry_a), Number(setup.entry_z)];
   const displayOrder = [Number(setup.entry_z), Number(setup.entry_a)];
+  const probeSortedRows = sortedRows.filter(id => rawOrder.includes(Number(id)));
 
   await nativeSearch(page, '');
   const filter = { available: false, display_query_row_ids: [], raw_query_row_ids: [] };
@@ -118,8 +119,8 @@ try {
     raw_preserved: setup.raw_readback[String(setup.entry_a)] === 'IVD2_RAW_A' && setup.raw_readback[String(setup.entry_z)] === 'IVD2_RAW_Z',
     search_raw_matches: searchRaw.includes(Number(setup.entry_a)),
     search_display_matches: searchDisplay.includes(Number(setup.entry_a)),
-    sort_matches_raw: JSON.stringify(sortedRows) === JSON.stringify(rawOrder),
-    sort_matches_display: JSON.stringify(sortedRows) === JSON.stringify(displayOrder),
+    sort_matches_raw: JSON.stringify(probeSortedRows) === JSON.stringify(rawOrder),
+    sort_matches_display: JSON.stringify(probeSortedRows) === JSON.stringify(displayOrder),
     filter_available: filter.available,
     filter_raw_matches: filter.raw_query_row_ids.includes(Number(setup.entry_z)),
     filter_display_matches: filter.display_query_row_ids.includes(Number(setup.entry_z)),
@@ -147,7 +148,7 @@ try {
     html_observation: html,
     raw_and_query_semantics: semantics,
     search_observation: { raw_query_row_ids: searchRaw, display_only_query_row_ids: searchDisplay },
-    sort_observation: { aria_sort: ariaSort, observed_row_ids: sortedRows, raw_expected: rawOrder, display_expected: displayOrder },
+    sort_observation: { aria_sort: ariaSort, all_observed_row_ids: sortedRows, probe_row_ids: probeSortedRows, raw_expected: rawOrder, display_expected: displayOrder },
     filter_observation: filter,
     native_interaction: open,
     live_refresh: { update_poll_status: updatePoll.status, add_poll_status: addPoll.status, added_entry_id: addedId, grid_marker_after_update: updateMarker, grid_marker_after_add: addMarker },
