@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const baseUrl = process.env.WU21_BASE_URL;
+const user = process.env.IVD2_ADMIN_USER;
+const password = process.env.IVD2_ADMIN_PASSWORD;
+if (!baseUrl || !user || !password) throw new Error('Qualification browser credentials are unavailable.');
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
+await page.fill('#user_login', user);
+await page.fill('#user_pass', password);
+await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
+await browser.close();
