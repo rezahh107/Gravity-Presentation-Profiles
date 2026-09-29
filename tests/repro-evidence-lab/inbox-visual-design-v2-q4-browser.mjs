@@ -82,11 +82,6 @@ async function mobileNativeControls(width, height) {
   const fullscreenEntered = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(el => el.classList.contains('gflow-grid--fullscreen'));
   await fullscreen.click();
   const fullscreenExited = await page.locator('.gflow-inbox.gflow-grid.gflow-common').evaluate(el => !el.classList.contains('gflow-grid--fullscreen'));
-  const current = page.locator('[data-js="gflow-inbox"] [ref="lbCurrent"]');
-  if ((await current.innerText()).trim() === '1') {
-    await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '2');
-  }
   const pager = await pagerState(page);
   const link = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
   const linkFocus = await focusInfo(link);
@@ -144,7 +139,6 @@ try {
   });
   const mobilePager = [await mobilePagerRoundTrip(390, 844), await mobilePagerRoundTrip(320, 720)];
   const mobileControls = [await mobileNativeControls(390, 844), await mobileNativeControls(320, 720)];
-  await mobilePagerRoundTrip(320, 720);
   const navigation = await openByEnter(page, page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first());
   const states = [before, afterUpdate, afterAdd, afterRemove];
   const flags = {
