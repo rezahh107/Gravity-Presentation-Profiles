@@ -137,7 +137,7 @@ $before = array(
     'status' => 'وضعیت',
     'date_created' => 'تاریخ ثبت',
 );
-$after = InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => 101 ) );
+$after = InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) );
 gpp_assert_same(
     array( 'id', '1', '3', '6', 'date_created' ),
     array_map( 'strval', array_keys( $after ) ),
@@ -190,14 +190,19 @@ gpp_assert_same(
     InboxTableHeaderPresentation::filterColumns( $before, array() ),
     'A generic multi-form Inbox must remain native when no authoritative form context selects one header mapping.'
 );
-$scoped = InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => '101' ) );
+$scoped = InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => '101' ) );
 gpp_assert_same( array_values( $after ), array_values( $scoped ), 'Native form-scoped Inbox args should select only the matching authoritative binding.' );
+gpp_assert_same(
+    $before,
+    InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => '101' ) ),
+    'Shortcode attribute naming must not be mistaken for the native Inbox hook form_id contract.'
+);
 
 $missing_id = $before;
 unset( $missing_id['id'] );
-gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array( 'form' => 101 ) ), 'If native Open/ID disappears, header projection must fail closed.' );
+gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array( 'form_id' => 101 ) ), 'If native Open/ID disappears, header projection must fail closed.' );
 
 gpp_header_set_configs( array() );
-gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => 101 ) ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
+gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
 
 echo "INBOX_TABLE_HEADER_PRESENTATION_PASS\n";
