@@ -48,20 +48,9 @@ echo wp_json_encode(array('page_id' => (int)$page_id, 'url' => get_permalink($pa
     const gridElement = document.querySelector('[data-js="gflow-inbox"][data-grid-id]');
     const gridId = gridElement?.getAttribute('data-grid-id') || null;
     const options = gridId ? window.gflow_config?.grids?.[gridId]?.grid_options : null;
-    const scripts = Array.from(document.scripts)
-      .map(script => script.src || '')
-      .filter(src => src.includes('gravity-flow-inbox-column-order-contract'));
-    const contracts = Array.isArray(window.gppSrwfInboxColumnOrderContracts)
-      ? window.gppSrwfInboxColumnOrderContracts.map(item => ({
-          gridId: item?.gridId ?? null,
-          physicalColumnIds: Array.isArray(item?.physicalColumnIds) ? item.physicalColumnIds.map(String) : null,
-        }))
-      : window.gppSrwfInboxColumnOrderContracts ?? null;
 
     return {
       grid_id: gridId,
-      contracts,
-      contract_script_srcs: scripts,
       gflow_config_present: Boolean(window.gflow_config),
       grid_config_present: Boolean(gridId && window.gflow_config?.grids?.[gridId]),
       grid_options_present: Boolean(options),
