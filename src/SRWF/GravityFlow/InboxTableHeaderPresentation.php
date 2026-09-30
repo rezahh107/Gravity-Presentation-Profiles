@@ -146,17 +146,17 @@ final class InboxTableHeaderPresentation {
     }
 
     private static function configurationForColumns( $args ) {
+        $form_id = self::formIdFromArgs( $args );
+        if ( null === $form_id ) {
+            return null;
+        }
+
         $configurations = self::configurations();
         if ( ! $configurations ) {
             return null;
         }
 
-        $form_id = self::formIdFromArgs( $args );
-        if ( null !== $form_id ) {
-            return isset( $configurations[ $form_id ] ) ? $configurations[ $form_id ] : null;
-        }
-
-        return 1 === count( $configurations ) ? reset( $configurations ) : null;
+        return isset( $configurations[ $form_id ] ) ? $configurations[ $form_id ] : null;
     }
 
     private static function configurationForForm( $form_id ) {
