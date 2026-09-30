@@ -26,6 +26,7 @@ final class GPP_WU21_Native_Inbox_Baseline_Mode {
         }
 
         $presentation = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxPresentationAdapter';
+        $header       = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxTableHeaderPresentation';
         $refresh      = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxManualRefreshControl';
         $block_bridge = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxBlockCompositionBridge';
 
@@ -33,6 +34,11 @@ final class GPP_WU21_Native_Inbox_Baseline_Mode {
             remove_filter( 'gravityflow_shortcode_inbox', array( $presentation, 'filterShortcodeInbox' ), 20 );
             remove_filter( 'render_block', array( $presentation, 'filterFrontendBlock' ), 20 );
             remove_action( 'wp_enqueue_scripts', array( $presentation, 'enqueueStyles' ), 20 );
+        }
+
+        if ( class_exists( $header ) ) {
+            remove_filter( 'gravityflow_columns_inbox_table', array( $header, 'filterColumns' ), PHP_INT_MAX );
+            remove_filter( 'gravityflow_inbox_field_value', array( $header, 'filterFieldValue' ), PHP_INT_MAX );
         }
 
         if ( class_exists( $refresh ) ) {
