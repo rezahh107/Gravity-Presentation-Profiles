@@ -7,7 +7,6 @@ import {
   artifactDir,
   wpCli,
   wpPath,
-  repoRoot,
   assertEnv,
   login,
   waitForGrid,
@@ -63,6 +62,10 @@ async function headerPhysicalIds(page) {
   return headers.sort((a, b) => a.x - b.x).map(item => item.id);
 }
 
+async function gridRootClass(page) {
+  return page.locator('[data-js="gflow-inbox"] .ag-root-wrapper').first().getAttribute('class');
+}
+
 async function exactGridId(page) {
   const ids = await page.locator('[data-js="gflow-inbox"][data-grid-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-grid-id')).filter(Boolean));
   assert.equal(ids.length, 1, `Expected one native Inbox Grid ID, found ${ids.length}.`);
@@ -100,7 +103,7 @@ function writeQualificationMuPlugin(pageId) {
 +        return $config;
 +    }
 +    $candidate = sanitize_key((string) $_GET['wu21_column_state_candidate']);
-+    if (!in_array($candidate, array('suppress_movable','lock_position'), true) || !is_array($config) || empty($config['grids']) || !is_array($config['grids'])) {
++    if (!in_array($candidate, array('suppress_movable','lock_position','enable_rtl'), true) || !is_array($config) || empty($config['grids']) || !is_array($config['grids'])) {
 +        return $config;
 +    }
 +    foreach ($config['grids'] as $grid_id => &$grid_config) {
@@ -108,15 +111,20 @@ function writeQualificationMuPlugin(pageId) {
 +        $ids = array_map(static function($def) { return isset($def['field']) ? (string) $def['field'] : ''; }, $grid_config['grid_options']['columnDefs']);
 +        $expected = ${JSON.stringify(expectedPhysicalIds)};
 +        if ($ids !== $expected) continue;
-+        foreach ($grid_config['grid_options']['columnDefs'] as &$def) {
-+            if ($candidate === 'suppress_movable') $def['suppressMovable'] = true;
-+            if ($candidate === 'lock_position') $def['lockPosition'] = true;
++        if ($candidate === 'enable_rtl') {
++            $grid_config['grid_options']['enableRtl'] = true;
++        } else {
++            foreach ($grid_config['grid_options']['columnDefs'] as &$def) {
++                if ($candidate === 'suppress_movable') $def['suppressMovable'] = true;
++                if ($candidate === 'lock_position') $def['lockPosition'] = true;
++            }
++            unset($def);
 +        }
-+        unset($def);
 +        file_put_contents('${logPath}', wp_json_encode(array(
 +            'candidate'=>$candidate,
 +            'grid_id'=>(string)$grid_id,
 +            'column_ids'=>$ids,
++            'enable_rtl'=>isset($grid_config['grid_options']['enableRtl']) ? (bool)$grid_config['grid_options']['enableRtl'] : null,
 +            'column_defs'=>$grid_config['grid_options']['columnDefs'],
 +        ), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)."\\n", FILE_APPEND|LOCK_EX);
 +    }
@@ -136,7 +144,7 @@ async function exerciseCandidate(context, baseUrl, candidate) {
   await waitForRows(page);
   const gridId = await exactGridId(page);
   const cleanOrder = await headerPhysicalIds(page);
-  assert.deepEqual(cleanOrder, expectedPhysicalIds, `${candidate}: clean order differs from server-admitted contract.`);
+  const cleanRootClass = await gridRootClass(page);
 
   const authentic = await captureAuthenticState(page, gridId);
   const stale = reorderAuthenticState(authentic, stalePhysicalIds);
@@ -145,11 +153,12 @@ async function exerciseCandidate(context, baseUrl, candidate) {
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
   const firstReload = await headerPhysicalIds(page);
+  const firstRootClass = await gridRootClass(page);
   const firstPersistedRaw = await page.evaluate(id => localStorage.getItem(id), gridId);
   const firstPersisted = firstPersistedRaw ? JSON.parse(firstPersistedRaw).map(item => String(item.colId)) : null;
 
   // Trigger the host's own persistence again; do not fabricate state between
-  // repaired first reload and the closure reload.
+  // the first reload and the closure reload.
   await nativeSearch(page, 'WU21-A-');
   await nativeSearch(page, '');
   await page.waitForTimeout(300);
@@ -159,22 +168,35 @@ async function exerciseCandidate(context, baseUrl, candidate) {
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
   const secondReload = await headerPhysicalIds(page);
+  const secondRootClass = await gridRootClass(page);
 
   const result = {
     candidate,
     grid_id: gridId,
     clean_order: cleanOrder,
+    clean_root_class: cleanRootClass,
+    preserves_clean_contract: JSON.stringify(cleanOrder) === JSON.stringify(expectedPhysicalIds),
     authentic_state_ids: authentic.map(item => String(item.colId)),
     stale_state_ids: stale.map(item => String(item.colId)),
     first_reload_order: firstReload,
+    first_root_class: firstRootClass,
     first_persisted_ids: firstPersisted,
     host_repersisted_ids: repersisted,
     second_reload_order: secondReload,
+    second_root_class: secondRootClass,
     closes_first_reload: JSON.stringify(firstReload) === JSON.stringify(expectedPhysicalIds),
     closes_subsequent_reload: JSON.stringify(secondReload) === JSON.stringify(expectedPhysicalIds),
   };
   await page.close();
   return result;
+}
+
+async function clearCandidateState(context, baseUrl) {
+  const cleanupPage = await context.newPage();
+  await cleanupPage.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  const candidateGridId = await exactGridId(cleanupPage);
+  await cleanupPage.evaluate(id => localStorage.removeItem(id), candidateGridId);
+  await cleanupPage.close();
 }
 
 let browser = null;
@@ -191,19 +213,10 @@ try {
   await loginPage.close();
 
   const suppressMovable = await exerciseCandidate(context, pageInfo.url, 'suppress_movable');
-  // Candidate runs must not inherit each other's exact Grid state.
-  await context.clearCookies();
-  const relogin = await context.newPage();
-  await login(relogin);
-  await relogin.close();
-  // Same authenticated user/page produces the same exact Grid ID, so remove
-  // only that test Grid state before the independent lockPosition candidate.
-  const cleanupPage = await context.newPage();
-  await cleanupPage.goto(pageInfo.url, { waitUntil: 'domcontentloaded' });
-  const candidateGridId = await exactGridId(cleanupPage);
-  await cleanupPage.evaluate(id => localStorage.removeItem(id), candidateGridId);
-  await cleanupPage.close();
+  await clearCandidateState(context, pageInfo.url);
   const lockPosition = await exerciseCandidate(context, pageInfo.url, 'lock_position');
+  await clearCandidateState(context, pageInfo.url);
+  const enableRtl = await exerciseCandidate(context, pageInfo.url, 'enable_rtl');
 
   const configLogPath = path.join(artifactDir, 'inbox-column-state-seam-config.jsonl');
   const configRecords = fs.existsSync(configLogPath)
@@ -221,16 +234,17 @@ try {
     candidates: {
       suppress_movable: suppressMovable,
       lock_position: lockPosition,
+      enable_rtl: enableRtl,
     },
     config_filter_records: configRecords,
     interpretation: {
-      candidate_is_admissible_only_if_first_and_subsequent_reload_close: true,
+      candidate_is_admissible_only_if_clean_and_first_and_subsequent_reload_close: true,
       no_candidate_is_selected_by_this_probe: true,
-      note: 'This test-only probe evaluates AG Grid-native ColDef constraints delivered through the exact Gravity Flow 3.1.0 shared Grid config filter. Supported/public classification is decided separately from runtime efficacy.',
+      note: 'This test-only probe evaluates AG Grid-native pre-construction options delivered through the exact Gravity Flow 3.1.0 shared Grid config filter. Supported/public classification is decided separately from runtime efficacy.',
     },
   };
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
-  console.log(`INBOX_COLUMN_STATE_SEAM_QUALIFICATION_CAPTURED ${JSON.stringify({ suppress_movable: suppressMovable, lock_position: lockPosition })}`);
+  console.log(`INBOX_COLUMN_STATE_SEAM_QUALIFICATION_CAPTURED ${JSON.stringify({ suppress_movable: suppressMovable, lock_position: lockPosition, enable_rtl: enableRtl })}`);
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (fs.existsSync(muPath)) fs.unlinkSync(muPath);
