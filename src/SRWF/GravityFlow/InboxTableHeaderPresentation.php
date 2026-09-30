@@ -20,8 +20,9 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 final class InboxTableHeaderPresentation {
     const SURFACE = 'gravity_flow.inbox';
 
-    private static $configuration_loaded = false;
-    private static $configuration = null;
+    private static $configurations_loaded = false;
+    private static $configurations = array();
+    private static $active_form_id = null;
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) ) {
@@ -35,21 +36,23 @@ final class InboxTableHeaderPresentation {
     }
 
     public static function resetRuntimeCache() {
-        self::$configuration_loaded = false;
-        self::$configuration = null;
+        self::$configurations_loaded = false;
+        self::$configurations = array();
+        self::$active_form_id = null;
     }
 
     public static function filterColumns( $columns, $args = array() ) {
-        unset( $args );
-
         if ( ! is_array( $columns ) ) {
             return $columns;
         }
 
-        $configuration = self::configuration();
+        self::$active_form_id = null;
+        $configuration = self::configurationForColumns( $args );
         if ( null === $configuration || ! array_key_exists( 'id', $columns ) || ! array_key_exists( 'date_created', $columns ) ) {
             return $columns;
         }
+
+        self::$active_form_id = $configuration['form_id'];
 
         return array(
             'id' => self::label( 'عملیات' ),
@@ -61,8 +64,8 @@ final class InboxTableHeaderPresentation {
     }
 
     public static function filterFieldValue( $value, $form_id, $field_id, $entry ) {
-        $configuration = self::configuration();
-        if ( null === $configuration || (string) $configuration['form_id'] !== (string) $form_id || ! is_array( $entry ) ) {
+        $configuration = self::configurationForForm( $form_id );
+        if ( null === $configuration || (string) self::$active_form_id !== (string) $form_id || ! is_array( $entry ) ) {
             return $value;
         }
 
@@ -134,19 +137,42 @@ final class InboxTableHeaderPresentation {
         return function_exists( '__' ) ? __( $text, 'gravity-presentation-profiles' ) : $text;
     }
 
-    private static function configuration() {
-        if ( self::$configuration_loaded ) {
-            return self::$configuration;
+    private static function configurationForColumns( $args ) {
+        $configurations = self::configurations();
+        if ( ! $configurations ) {
+            return null;
         }
 
-        self::$configuration_loaded = true;
+        $form_id = self::formIdFromArgs( $args );
+        if ( null !== $form_id ) {
+            return isset( $configurations[ $form_id ] ) ? $configurations[ $form_id ] : null;
+        }
+
+        return 1 === count( $configurations ) ? reset( $configurations ) : null;
+    }
+
+    private static function configurationForForm( $form_id ) {
+        $form_id = (int) $form_id;
+        if ( $form_id < 1 ) {
+            return null;
+        }
+        $configurations = self::configurations();
+        return isset( $configurations[ $form_id ] ) ? $configurations[ $form_id ] : null;
+    }
+
+    private static function configurations() {
+        if ( self::$configurations_loaded ) {
+            return self::$configurations;
+        }
+
+        self::$configurations_loaded = true;
 
         try {
             $visual = new VisualPackageLifecycle(
                 new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME )
             );
             if ( null === $visual->resolve( self::SURFACE ) ) {
-                return null;
+                return self::$configurations;
             }
 
             $bindings = new BindingSetLifecycle(
@@ -154,24 +180,47 @@ final class InboxTableHeaderPresentation {
                 new EvidenceReferenceGate( array() )
             );
 
-            $candidates = array();
             foreach ( self::activeBindingSets( $bindings->snapshot() ) as $binding_set ) {
                 $configuration = self::configurationFromBindingSet( $binding_set );
-                if ( null !== $configuration ) {
-                    $candidates[] = $configuration;
+                if ( null === $configuration ) {
+                    continue;
                 }
+                $form_id = (int) $configuration['form_id'];
+                if ( isset( self::$configurations[ $form_id ] ) ) {
+                    // More than one active table-wide binding for one form is
+                    // ambiguous; fail that form closed rather than pick one.
+                    self::$configurations[ $form_id ] = null;
+                    continue;
+                }
+                self::$configurations[ $form_id ] = $configuration;
             }
 
-            if ( 1 !== count( $candidates ) ) {
-                return null;
-            }
-
-            self::$configuration = $candidates[0];
+            self::$configurations = array_filter( self::$configurations, static function ( $configuration ) {
+                return is_array( $configuration );
+            } );
         } catch ( \Throwable $exception ) {
-            self::$configuration = null;
+            self::$configurations = array();
         }
 
-        return self::$configuration;
+        return self::$configurations;
+    }
+
+    private static function formIdFromArgs( $args ) {
+        if ( ! is_array( $args ) || ! array_key_exists( 'form', $args ) ) {
+            return null;
+        }
+
+        $form = $args['form'];
+        if ( is_array( $form ) ) {
+            $form = array_values( array_filter( array_map( 'intval', $form ) ) );
+            return 1 === count( $form ) ? $form[0] : null;
+        }
+
+        if ( ! is_scalar( $form ) ) {
+            return null;
+        }
+        $form_id = (int) $form;
+        return $form_id > 0 ? $form_id : null;
     }
 
     private static function configurationFromBindingSet( $binding_set ) {
