@@ -319,6 +319,9 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/inbox-visual-design-v2-qualification.mjs
           test -s "$WU21_ARTIFACT_DIR/inbox-visual-design-v2-qualification-evidence.json"
+          test -s "$WU21_ARTIFACT_DIR/inbox-table-header-evidence.json"
+          test -s "$WU21_ARTIFACT_DIR/inbox-table-header-before.png"
+          test -s "$WU21_ARTIFACT_DIR/inbox-table-header-after.png"
 
       - name: Establish pinned Hello Elementor integrated visual host
         shell: bash
@@ -499,6 +502,9 @@ jobs:
             /tmp/wu21-artifacts/pr4-*.png
             /tmp/wu21-artifacts/p06-fixture-*.json
             /tmp/wu21-artifacts/inbox-visual-design-v2-*
+            /tmp/wu21-artifacts/inbox-table-header-evidence.json
+            /tmp/wu21-artifacts/inbox-table-header-before.png
+            /tmp/wu21-artifacts/inbox-table-header-after.png
             /tmp/wu21-artifacts/integrated-visual-host.json
             /tmp/wu21-artifacts/vazir-font-authority.json
             /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
