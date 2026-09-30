@@ -70,7 +70,7 @@ try {
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
   await import('./inbox-table-header-browser.mjs');
-  await import('./inbox-column-state-contract-browser.mjs');
+  await import('./inbox-column-state-contract-browser-v2.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
