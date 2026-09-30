@@ -26,6 +26,29 @@ function gpp_ivd2_q1_active() {
 }
 
 /**
+ * Q1 qualifies Gravity Flow's host rich-value path with a temporary probe
+ * column. The production SRWF header projection intentionally removes every
+ * non-target column, so leave that final projection out of Q1's disposable
+ * capability window. Q1 still exercises the real Gravity Flow/AG Grid table,
+ * field selection, search/sort/filter semantics, polling and entry navigation.
+ * The option is disabled before Q2/Q4 and the real header qualification.
+ */
+function gpp_ivd2_q1_detach_final_header_projection() {
+    if ( ! gpp_ivd2_q1_active() ) {
+        return;
+    }
+
+    $header = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxTableHeaderPresentation';
+    if ( ! class_exists( $header ) ) {
+        return;
+    }
+
+    remove_filter( 'gravityflow_columns_inbox_table', array( $header, 'filterColumns' ), PHP_INT_MAX );
+    remove_filter( 'gravityflow_inbox_field_value', array( $header, 'filterFieldValue' ), PHP_INT_MAX );
+}
+add_action( 'gform_loaded', 'gpp_ivd2_q1_detach_final_header_projection', 100 );
+
+/**
  * Restrict only the controlled Q1 window to one synthetic form so the documented
  * admin field-column seam has one unambiguous field schema. Q2/Q4 run after this
  * option is disabled and therefore observe the ordinary multi-form native Inbox.
