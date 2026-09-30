@@ -87,13 +87,16 @@ function gpp_header_config_from_binding( $binding ) {
     return $method->invoke( null, $binding );
 }
 
-function gpp_header_set_config( $config ) {
-    $loaded = new ReflectionProperty( InboxTableHeaderPresentation::class, 'configuration_loaded' );
+function gpp_header_set_configs( $configs ) {
+    $loaded = new ReflectionProperty( InboxTableHeaderPresentation::class, 'configurations_loaded' );
     $loaded->setAccessible( true );
     $loaded->setValue( null, true );
-    $property = new ReflectionProperty( InboxTableHeaderPresentation::class, 'configuration' );
+    $property = new ReflectionProperty( InboxTableHeaderPresentation::class, 'configurations' );
     $property->setAccessible( true );
-    $property->setValue( null, $config );
+    $property->setValue( null, $configs );
+    $active = new ReflectionProperty( InboxTableHeaderPresentation::class, 'active_form_id' );
+    $active->setAccessible( true );
+    $active->setValue( null, null );
 }
 
 InboxTableHeaderPresentation::register();
@@ -125,7 +128,7 @@ $entry_specific = $binding;
 $entry_specific['context']['entry_source_ref'] = array( 'type' => 'gravity_forms.entry', 'entry_id' => 88 );
 gpp_assert_same( null, gpp_header_config_from_binding( $entry_specific ), 'A table-wide header must not be derived from one entry-specific binding context.' );
 
-gpp_header_set_config( $config );
+gpp_header_set_configs( array( 101 => $config ) );
 $before = array(
     'form_title' => 'فرم',
     'workflow_step' => 'مرحله',
@@ -134,7 +137,7 @@ $before = array(
     'status' => 'وضعیت',
     'date_created' => 'تاریخ ثبت',
 );
-$after = InboxTableHeaderPresentation::filterColumns( $before, array() );
+$after = InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => 101 ) );
 gpp_assert_same(
     array( 'id', '1', '3', '6', 'date_created' ),
     array_map( 'strval', array_keys( $after ) ),
@@ -179,11 +182,22 @@ gpp_assert_same(
     'Rows from another form must not receive SRWF field-value composition.'
 );
 
+$second = $config;
+$second['form_id'] = 202;
+gpp_header_set_configs( array( 101 => $config, 202 => $second ) );
+gpp_assert_same(
+    $before,
+    InboxTableHeaderPresentation::filterColumns( $before, array() ),
+    'A generic multi-form Inbox must remain native when no authoritative form context selects one header mapping.'
+);
+$scoped = InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => '101' ) );
+gpp_assert_same( array_values( $after ), array_values( $scoped ), 'Native form-scoped Inbox args should select only the matching authoritative binding.' );
+
 $missing_id = $before;
 unset( $missing_id['id'] );
-gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array() ), 'If native Open/ID disappears, header projection must fail closed.' );
+gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array( 'form' => 101 ) ), 'If native Open/ID disappears, header projection must fail closed.' );
 
-gpp_header_set_config( null );
-gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array() ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
+gpp_header_set_configs( array() );
+gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array( 'form' => 101 ) ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
 
 echo "INBOX_TABLE_HEADER_PRESENTATION_PASS\n";
