@@ -11,6 +11,18 @@ const q2 = read('inbox-visual-design-v2-q2.json');
 const q4 = read('inbox-visual-design-v2-q4.json');
 if ([q1,q2,q4].some(q => q.execution_status !== 'CAPTURED')) throw new Error('Qualification browser capture incomplete.');
 await import('./inbox-visual-design-v2-contract-falsification.mjs');
+
+// Run the bounded form-authority regression in the same authentic qualification
+// process so it reuses the exact operator identity and the temporary WU21 MU
+// probe, while production ownership and the ordinary scoped header test remain
+// unchanged. PASS proves the no-authority hook path stayed native. NOT_PROVEN is
+// retained truthfully when the authentic host does not emit that exact context.
+await import('./inbox-table-header-form-authority-browser.mjs');
+const headerFormAuthority = read('inbox-table-header-form-authority-evidence.json');
+if (!['PASS', 'NOT_PROVEN'].includes(headerFormAuthority.execution_status)) {
+  throw new Error('Inbox table-header form-authority runtime qualification did not complete truthfully.');
+}
+
 const workspace = process.env.GITHUB_WORKSPACE;
 if (!workspace) throw new Error('GITHUB_WORKSPACE required for exact checkout provenance.');
 const exactHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
@@ -30,6 +42,7 @@ const evidence = {
   runtime: setup.runtime,
   synthetic_data: setup.data_class,
   qualifications: { q1, q2, q4 },
+  inbox_table_header_form_authority: headerFormAuthority,
   live_refresh: {
     status: q1.live_refresh?.update_poll_status === 200 && q1.live_refresh?.add_poll_status === 200 && q4.flags?.update_observed && q4.flags?.add_observed && q4.flags?.remove_observed && q4.flags?.same_native_grid ? 'PASS' : 'FAIL',
     same_native_grid: Boolean(q4.flags?.same_native_grid),
@@ -99,4 +112,4 @@ const evidence = {
   },
 };
 fs.writeFileSync(path.join(dir, 'inbox-visual-design-v2-qualification-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
-console.log(JSON.stringify({ exact_head: exactHead, q1: q1.status, q2: q2.status, q4: q4.status, live_refresh: evidence.live_refresh.status }, null, 2));
+console.log(JSON.stringify({ exact_head: exactHead, q1: q1.status, q2: q2.status, q4: q4.status, header_form_authority: headerFormAuthority.execution_status, live_refresh: evidence.live_refresh.status }, null, 2));

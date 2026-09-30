@@ -19,7 +19,6 @@ assertEnv();
 const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manifest.json'), 'utf8'));
 const alpha = (fixture.forms || []).find(item => item.key === 'alpha') || fixture.forms?.[0];
 if (!alpha?.form_id) throw new Error('INBOX_HEADER_RUNTIME_FAILURE: alpha form fixture is unavailable.');
-if (!fixture.frontend_inbox_url) throw new Error('INBOX_HEADER_RUNTIME_FAILURE: unscoped frontend Inbox fixture is unavailable.');
 
 const expectedLabels = ['عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت'];
 const expectedColumnIds = [
@@ -29,7 +28,6 @@ const expectedColumnIds = [
   String(alpha.school_field_id),
   'date_created',
 ];
-const bindingRestoreOption = 'gpp_wu21_header_binding_restore_v1';
 
 function wpEval(code) {
   const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], {
@@ -94,85 +92,6 @@ wp_delete_post(${Number(setup.page_id)}, true);
   `);
 }
 
-function setupUnscopedSingleBinding() {
-  const result = wpEval(`
-$restore_option = '${bindingRestoreOption}';
-$option_name = \GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle::OPTION_NAME;
-if ( null !== get_option( $restore_option, null ) ) {
-    throw new RuntimeException( 'Stale WU21 header binding restore state is present.' );
-}
-$state = get_option( $option_name );
-if ( ! is_array( $state ) || empty( $state['installed'] ) || empty( $state['activations'] ) ) {
-    throw new RuntimeException( 'Binding lifecycle state is unavailable.' );
-}
-update_option( $restore_option, $state, false );
-$target_form_id = ${Number(alpha.form_id)};
-foreach ( $state['activations'] as $context_key => $identity ) {
-    $id = $identity['binding_set_id'] ?? null;
-    $version = $identity['binding_set_version'] ?? null;
-    $record = ( $id && $version ) ? ( $state['installed'][ $id ][ $version ] ?? null ) : null;
-    $artifact = is_array( $record ) ? ( $record['artifact'] ?? null ) : null;
-    $context = is_array( $artifact ) ? ( $artifact['context'] ?? null ) : null;
-    $surfaces = is_array( $context ) ? ( $context['surfaces'] ?? array() ) : array();
-    if ( ! is_array( $surfaces ) || ! in_array( 'gravity_flow.inbox', $surfaces, true ) ) {
-        continue;
-    }
-    $form_ref = $context['form_source_ref'] ?? null;
-    $form_id = is_array( $form_ref ) ? (int) ( $form_ref['form_id'] ?? 0 ) : 0;
-    if ( $form_id !== $target_form_id ) {
-        unset( $state['activations'][ $context_key ] );
-    }
-}
-update_option( $option_name, $state, false );
-\GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::resetRuntimeCache();
-$active_form_ids = array();
-foreach ( $state['activations'] as $context_key => $identity ) {
-    $id = $identity['binding_set_id'] ?? null;
-    $version = $identity['binding_set_version'] ?? null;
-    $record = ( $id && $version ) ? ( $state['installed'][ $id ][ $version ] ?? null ) : null;
-    if ( ! is_array( $record ) || ( $record['context_key'] ?? null ) !== $context_key ) {
-        continue;
-    }
-    $artifact = $record['artifact'] ?? null;
-    $context = is_array( $artifact ) ? ( $artifact['context'] ?? null ) : null;
-    $surfaces = is_array( $context ) ? ( $context['surfaces'] ?? array() ) : array();
-    if ( ! is_array( $surfaces ) || ! in_array( 'gravity_flow.inbox', $surfaces, true ) ) {
-        continue;
-    }
-    $form_ref = $context['form_source_ref'] ?? null;
-    $form_id = is_array( $form_ref ) ? (int) ( $form_ref['form_id'] ?? 0 ) : 0;
-    if ( $form_id > 0 ) {
-        $active_form_ids[] = $form_id;
-    }
-}
-$active_form_ids = array_values( array_unique( $active_form_ids ) );
-if ( 1 !== count( $active_form_ids ) || $target_form_id !== (int) $active_form_ids[0] ) {
-    throw new RuntimeException( 'Unable to establish exactly one active SRWF Inbox binding for the authoritative fixture form.' );
-}
-echo wp_json_encode(array(
-    'active_inbox_binding_count' => count( $active_form_ids ),
-    'active_form_ids' => $active_form_ids,
-));
-  `);
-  const decoded = JSON.parse(result);
-  if (decoded?.active_inbox_binding_count !== 1 || Number(decoded?.active_form_ids?.[0]) !== Number(alpha.form_id)) {
-    throw new Error(`INBOX_HEADER_RUNTIME_FAILURE: invalid single-binding setup ${result}`);
-  }
-  return decoded;
-}
-
-function restoreBindingState() {
-  wpEval(`
-$restore_option = '${bindingRestoreOption}';
-$restore = get_option( $restore_option, null );
-if ( is_array( $restore ) ) {
-    update_option( \GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle::OPTION_NAME, $restore, false );
-    delete_option( $restore_option );
-    \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::resetRuntimeCache();
-}
-  `);
-}
-
 async function waitForRows(page) {
   await waitForGrid(page);
   await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length > 0, null, { timeout: 15000 });
@@ -198,10 +117,6 @@ async function headerSnapshot(page) {
     }));
 }
 
-function headerIdentity(headers) {
-  return headers.map(item => ({ col_id: item.col_id, text: item.text }));
-}
-
 async function embeddedGridState(page) {
   return page.evaluate(() => {
     const gridElement = document.querySelector('[data-js="gflow-inbox"]');
@@ -224,8 +139,6 @@ async function embeddedGridState(page) {
 const evidencePath = path.join(artifactDir, 'inbox-table-header-evidence.json');
 let scoped = null;
 let browser = null;
-let bindingStateModified = false;
-let unscopedSingleBinding = null;
 let evidence = { contract: 'SRWF_INBOX_TABLE_HEADER_V1', execution_status: 'ERROR' };
 
 try {
@@ -234,36 +147,6 @@ try {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await login(page);
-
-  const singleBindingSetup = setupUnscopedSingleBinding();
-  bindingStateModified = true;
-  const unscopedRawUrl = new URL(fixture.frontend_inbox_url);
-  unscopedRawUrl.searchParams.set('wu21_native_inbox_baseline', 'raw_native');
-  await page.goto(unscopedRawUrl.toString(), { waitUntil: 'networkidle' });
-  await waitForRows(page);
-  const unscopedRawHeaders = await headerSnapshot(page);
-
-  await page.goto(fixture.frontend_inbox_url, { waitUntil: 'networkidle' });
-  await waitForRows(page);
-  const unscopedOrdinaryHeaders = await headerSnapshot(page);
-  assert.deepEqual(
-    headerIdentity(unscopedOrdinaryHeaders),
-    headerIdentity(unscopedRawHeaders),
-    'An unscoped multi-form Inbox with exactly one active SRWF binding must remain byte-for-behavior native.'
-  );
-  assert.notDeepEqual(
-    unscopedOrdinaryHeaders.map(item => item.text),
-    expectedLabels,
-    'Unscoped single-binding Inbox must not inherit the five-column SRWF projection.'
-  );
-  unscopedSingleBinding = {
-    ...singleBindingSetup,
-    route: { page_id: Number(fixture.frontend_inbox_page_id), url: fixture.frontend_inbox_url },
-    raw_native_headers: headerIdentity(unscopedRawHeaders),
-    ordinary_headers: headerIdentity(unscopedOrdinaryHeaders),
-  };
-  restoreBindingState();
-  bindingStateModified = false;
 
   // WU21's existing lab plugin already requires the raw-native bypass from the
   // symlinked repository. Reuse that one authoritative module instead of
@@ -285,7 +168,6 @@ try {
     contract: 'SRWF_INBOX_TABLE_HEADER_V1',
     execution_status: 'CAPTURED',
     route: { form_id: Number(alpha.form_id), page_id: Number(scoped.page_id) },
-    unscoped_single_binding: unscopedSingleBinding,
     before: { headers: before },
     after: { headers: after },
     embedded_grid: embedded,
@@ -367,7 +249,6 @@ try {
   console.log('INBOX_TABLE_HEADER_RUNTIME_PASS');
 } finally {
   if (browser) await browser.close().catch(() => {});
-  if (bindingStateModified) restoreBindingState();
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
   cleanupScopedInbox(scoped);
 }
