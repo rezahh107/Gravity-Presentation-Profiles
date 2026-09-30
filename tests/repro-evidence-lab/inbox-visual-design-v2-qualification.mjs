@@ -59,6 +59,7 @@ try {
   await import('./inbox-visual-design-v2-q1-browser.mjs');
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
+  await import('./inbox-table-header-browser.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
@@ -68,12 +69,18 @@ try {
     if (qualification?.execution_status !== 'CAPTURED') throw new Error('Inbox V2 qualification capture did not complete.');
   }
 
+  const headerEvidencePath = path.join(artifactDir, 'inbox-table-header-evidence.json');
+  if (!fs.existsSync(headerEvidencePath)) throw new Error('Inbox table-header runtime evidence was not produced.');
+  const headerEvidence = JSON.parse(fs.readFileSync(headerEvidencePath, 'utf8'));
+  if (headerEvidence.execution_status !== 'PASS') throw new Error('Inbox table-header runtime qualification did not pass.');
+
   // Keep the canonical WU21 browser result ID set untouched. The uploaded
-  // browser-results.json gains one bounded adjunct so the qualification evidence
+  // browser-results.json gains bounded adjuncts so qualification evidence
   // survives successful artifact packaging without changing WU21 acceptance.
   const browserResultsPath = path.join(artifactDir, 'browser-results.json');
   const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
   browserResults.inbox_visual_design_v2_qualification = evidence;
+  browserResults.inbox_table_header_qualification = headerEvidence;
   fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
   const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
