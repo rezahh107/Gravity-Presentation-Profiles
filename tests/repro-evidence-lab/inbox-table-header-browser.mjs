@@ -117,6 +117,25 @@ async function headerSnapshot(page) {
     }));
 }
 
+async function embeddedGridState(page) {
+  return page.evaluate(() => {
+    const gridElement = document.querySelector('[data-js="gflow-inbox"]');
+    const gridId = gridElement?.dataset?.gridId || 'inbox_default';
+    const gridConfig = window.gflow_config?.grids?.[gridId]?.grid_options;
+    return {
+      grid_id: gridId,
+      column_defs: Array.isArray(gridConfig?.columnDefs)
+        ? gridConfig.columnDefs.map(column => ({
+            field: column.field ?? null,
+            display_key: column.displayKey ?? null,
+            compare_type: column.compareType ?? null,
+          }))
+        : null,
+      rows: Array.isArray(gridConfig?.rowData) ? gridConfig.rowData : null,
+    };
+  });
+}
+
 const evidencePath = path.join(artifactDir, 'inbox-table-header-evidence.json');
 let scoped = null;
 let browser = null;
@@ -142,7 +161,18 @@ try {
   await page.goto(scoped.url, { waitUntil: 'networkidle' });
   await waitForRows(page);
   const after = await headerSnapshot(page);
+  const embedded = await embeddedGridState(page);
   await page.screenshot({ path: path.join(artifactDir, 'inbox-table-header-after.png'), fullPage: true });
+
+  evidence = {
+    contract: 'SRWF_INBOX_TABLE_HEADER_V1',
+    execution_status: 'CAPTURED',
+    route: { form_id: Number(alpha.form_id), page_id: Number(scoped.page_id) },
+    before: { headers: before },
+    after: { headers: after },
+    embedded_grid: embedded,
+    expected: { labels: expectedLabels, column_ids: expectedColumnIds },
+  };
 
   assert.deepEqual(after.map(item => item.text), expectedLabels, 'Rendered header labels differ from the bounded Owner contract.');
   assert.deepEqual(after.map(item => item.col_id), expectedColumnIds, 'Rendered native AG Grid column IDs are not in the expected logical order.');
@@ -152,17 +182,28 @@ try {
   }
   assert.equal(after.some(item => item.text.includes('\uFFFD')), false, 'Persian header text contains replacement characters.');
 
+  assert.equal(Array.isArray(embedded.column_defs), true, 'Native AG Grid column definitions were not exposed by Gravity Flow.');
+  assert.equal(Array.isArray(embedded.rows), true, 'Native AG Grid row data were not exposed by Gravity Flow.');
+  const dateColumn = embedded.column_defs.find(column => column.field === 'date_created');
+  assert.equal(dateColumn?.display_key, 'date_created_human_readable', 'Native Submitted column lost Gravity Flow\'s qualified display identity.');
+
   const firstAddedId = Number(scoped.entry_ids[0]);
   const searched = await nativeSearch(page, 'HDR-A-000');
   assert.equal(searched.includes(firstAddedId), true, 'Native Inbox search did not retain the expected scoped row.');
-  const searchedRow = page.locator(`[data-js="gflow-inbox"] .ag-row[row-id="${firstAddedId}"]`);
+  const searchedRow = page.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${firstAddedId}"]`).first();
   await searchedRow.waitFor({ state: 'visible', timeout: 10000 });
   const studentText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.first_name_field_id}"]`).innerText()).trim();
   const nationalText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.national_id_field_id}"]`).innerText()).trim();
   const schoolGradeText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.school_field_id}"]`).innerText()).trim();
+  const dateText = (await searchedRow.locator('.ag-cell[col-id="date_created"]').innerText()).trim();
+  const embeddedRow = embedded.rows.find(row => Number(row.id) === firstAddedId);
   assert.equal(studentText, 'Header First 00 Header Last 00', 'Student-name plain-text composition is not authoritative.');
   assert.equal(nationalText, 'HDR-A-000', 'National-ID native field value changed unexpectedly.');
   assert.equal(schoolGradeText, 'مدرسه آزمون هدر 00 — پایه آزمون هدر 00', 'School/grade plain-text composition is not authoritative.');
+  assert.equal(typeof embeddedRow?.date_created, 'number', 'Native date_created raw compare value is unavailable.');
+  assert.equal(typeof embeddedRow?.date_created_human_readable, 'string', 'Native date_created display value is unavailable.');
+  assert.notEqual(embeddedRow?.date_created_human_readable, '', 'Native date_created display value is empty.');
+  assert.equal(dateText, embeddedRow.date_created_human_readable, 'Submitted cell must display Gravity Flow\'s native human-readable value rather than a fabricated value.');
 
   await nativeSearch(page, '');
   await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 10000 });
@@ -191,14 +232,16 @@ try {
   assert.match(openedUrl, /view=entry/, 'Native entry-open navigation did not reach Entry Detail.');
 
   evidence = {
-    contract: 'SRWF_INBOX_TABLE_HEADER_V1',
+    ...evidence,
     execution_status: 'PASS',
-    route: { form_id: Number(alpha.form_id), page_id: Number(scoped.page_id) },
-    before: { headers: before },
-    after: { headers: after },
-    expected: { labels: expectedLabels, column_ids: expectedColumnIds },
     search: { query: 'HDR-A-000', matched_row_ids: searched, expected_entry_id: firstAddedId },
-    row_values: { student_name: studentText, national_id: nationalText, school_grade: schoolGradeText },
+    row_values: {
+      student_name: studentText,
+      national_id: nationalText,
+      school_grade: schoolGradeText,
+      date_created_display: dateText,
+      date_created_raw: embeddedRow.date_created,
+    },
     pagination: { page_1: pagerBefore, page_2: pagerPage2, round_trip: pagerRoundTrip },
     entry_open: { href: openHref, opened_url: openedUrl },
   };
