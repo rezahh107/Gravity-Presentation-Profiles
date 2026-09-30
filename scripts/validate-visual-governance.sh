@@ -218,4 +218,10 @@ if grep -Eq 'claim_role:[[:space:]]*CANONICAL' "$MANIFEST"; then
   fail 'unsupported canonical source: visual reference claims canonical authority'
 fi
 
+# Production Inbox paint requires its admitted, Inbox-only successor authority.
+# The registration-only mutation fixtures omit the plugin root and remain scoped.
+if [[ -f "$ROOT/gravity-presentation-profiles.php" ]]; then
+  php "$(dirname "${BASH_SOURCE[0]}")/validate-inbox-v2-authority.php" "$ROOT" --self-test
+fi
+
 printf 'VISUAL_GOVERNANCE_PASS\n'

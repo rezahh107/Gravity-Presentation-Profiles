@@ -143,6 +143,11 @@ async function measureRuntimeFacts(page) {
     };
     const direction = (el) => el ? getComputedStyle(el).direction : null;
     const pagingCurrent = document.querySelector(`${s.pager} [ref="lbCurrent"]`)?.textContent?.trim() ?? null;
+    const paint = (el) => {
+      if (!el) return null;
+      const style = getComputedStyle(el);
+      return { background_color: style.backgroundColor, color: style.color, font_weight: style.fontWeight, box_shadow: style.boxShadow };
+    };
     const styles = [...document.querySelectorAll('link[rel="stylesheet"],style')].map(el => ({
       id: el.id || null,
       href: el.tagName === 'LINK' ? el.href : null,
@@ -196,6 +201,13 @@ async function measureRuntimeFacts(page) {
         current_page_text: pagingCurrent,
         aria_row_count: grid?.getAttribute('aria-rowcount') ?? null,
         aria_col_count: grid?.getAttribute('aria-colcount') ?? null,
+      },
+      native_presentation: {
+        header: paint(document.querySelector(`${s.grid} .ag-header`)),
+        form_cell: paint(document.querySelector(`${s.rows} .ag-cell[col-id="form_title"]`)),
+        id_cell: paint(document.querySelector(`${s.rows} .ag-cell[col-id="id"]`)),
+        entry_link: paint(document.querySelector(`${s.rows} .gflow-inbox__entry-cell-link`)),
+        pager_button: paint(document.querySelector(`${s.pager} .ag-paging-button:not(.ag-disabled)`)),
       },
     };
   }, selectors);
@@ -497,6 +509,11 @@ function assertModeBoundary(mode, facts, label) {
   } else {
     assert.equal(facts.gpp_surface_count, 1, `${label}: ordinary Native-First GPP surface is unavailable after RAW_NATIVE request.`);
     assert.equal(facts.gpp_manual_refresh_count, 1, `${label}: ordinary GPP Manual Refresh is unavailable after RAW_NATIVE request.`);
+    assert.equal(facts.native_presentation.header?.background_color, 'rgb(243, 246, 251)', `${label}: native header presentation was not applied.`);
+    assert.equal(facts.native_presentation.form_cell?.font_weight, '700', `${label}: existing form column lost its primary text hierarchy.`);
+    assert.equal(facts.native_presentation.id_cell?.background_color, 'rgb(239, 246, 255)', `${label}: native Open cell lost its blue action treatment.`);
+    assert.equal(facts.native_presentation.entry_link?.background_color, 'rgba(0, 0, 0, 0)', `${label}: native Open overlay hides host-owned cell text.`);
+    assert.equal(facts.native_presentation.pager_button?.background_color, 'rgb(240, 246, 255)', `${label}: METHOD B native pager paint was not applied.`);
   }
 }
 
@@ -524,7 +541,7 @@ async function captureMode({ page, scenario, mode, zoomEvidence, navigate = true
   assertModeBoundary(mode, runtimeFacts, `${scenario.id}/${mode}`);
 
   const screenshotName = `${scenario.id}__${mode}.png`;
-  await page.screenshot({ path: path.join(outputRoot, screenshotName), fullPage: false });
+  await page.screenshot({ path: path.join(outputRoot, screenshotName), fullPage: scenario.kind === 'viewport' });
   const settings = await captureSettingsFacts(page, runtimeFacts);
   assertSettingsFactsProven(settings, `${scenario.id}/${mode}`);
   const browserIdentity = await page.evaluate(() => ({ user_agent: navigator.userAgent, platform: navigator.platform }));

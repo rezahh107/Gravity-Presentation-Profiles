@@ -70,9 +70,25 @@ surface_profile_resolution_v1: SHARED_DEFAULTS_PER_SURFACE
 reserved_extension_seam_v1: INERT
 ```
 
-This contract binds the corrected owner Handoff plus the immutable final HTML/PDF evidence identities, records the scoped D-17 print-path supersession, preserves `OD-001..OD-034`, and remains the locked visual/print authority for later operational-surface work.
+This contract binds the corrected owner Handoff plus the immutable final HTML/PDF evidence identities, records the scoped D-17 print-path supersession, and preserves `OD-001..OD-034` as WU15 history. Its Inbox-specific card composition is superseded by the admitted Inbox V2 successor below; its Entry Detail and A4 print authority remains unchanged.
 
 The admitted HTML/PDF remain visual/behavior evidence, not production runtime architecture. WU15 adds no Gravity Flow adapter, print renderer, selector/hook/API claim, field-permission claim, workflow behavior, or production surface implementation.
+
+### Current SRWF Inbox V2 successor authority
+
+The admitted current Inbox-only Visual/UX Contract in this PR Head is:
+
+- [`SRWF_INBOX_V2_VISUAL_UX_CONTRACT_v1.0.0.md`](SRWF_INBOX_V2_VISUAL_UX_CONTRACT_v1.0.0.md)
+
+It supersedes only the WU15 Inbox-specific composition (§4.3 where conflicting, §5, and OD-004–OD-008), not Entry Detail, A4 print, font constraints, or six-surface accounting. The exact Owner-approved 1440 PNG is bound there by repository path, Drive ID, inspected byte length and SHA-256. Current authority is native Gravity Flow/AG Grid rows plus METHOD B native pager **presentation-only**. Q1 rich HTML is not admitted; Q2 Persian-cell readability and target bindings retain their documented `NOT_PROVEN`/`UNBOUND` limits. Exact-Head WU21 evidence, not this admission alone, establishes runtime behavior.
+
+```yaml
+inbox_v2_visual_ux_contract: OWNER_LOCKED__ADMITTED_IN_PR_HEAD
+historical_wu15_inbox_card_composition: SUPERSEDED_FOR_INBOX_V2_ONLY
+runtime_golden: NOT_ACTIVATED
+approved_visual_contract: NOT_ACTIVATED
+target_production_pixel_fidelity: NOT_PROVEN
+```
 
 ### WU16 semantic-binding / data / asset evidence
 
