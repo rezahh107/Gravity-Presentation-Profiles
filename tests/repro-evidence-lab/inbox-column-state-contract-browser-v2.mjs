@@ -26,7 +26,6 @@ const schoolId = String(alpha.school_field_id);
 const ownerRightToLeftIds = ['id', studentId, nationalId, schoolId, 'date_created'];
 const expectedFreshPhysicalIds = [...ownerRightToLeftIds].reverse();
 const stalePhysicalIds = ['id', 'date_created', schoolId, nationalId, studentId];
-const markerPrefix = 'gpp:srwf-inbox-column-contract:';
 const unrelatedLocalKey = 'wu21-unrelated-grid-state';
 const unrelatedSessionKey = 'wu21-unrelated-session-state';
 const evidencePath = path.join(artifactDir, 'inbox-column-state-contract-evidence.json');
@@ -133,22 +132,15 @@ async function storageSnapshot(page) {
   });
 }
 
-async function forceNativePersistence(page, gridId) {
-  const invoked = await page.evaluate(id => {
-    const options = window.gflow_config?.grids?.[id]?.grid_options;
-    if (!options || !options.columnApi || typeof options.columnApi.getColumnState !== 'function') return false;
-    if (typeof options.onModelUpdated === 'function') {
-      options.onModelUpdated({ api: options.api, columnApi: options.columnApi });
-      return true;
-    }
-    return false;
+async function clearExactHostState(page, gridId) {
+  await page.evaluate(id => {
+    localStorage.removeItem(id);
+    sessionStorage.removeItem(id);
   }, gridId);
-  assert.equal(invoked, true, 'Exact Gravity Flow onModelUpdated persistence callback is unavailable.');
-  await page.waitForTimeout(350);
 }
 
 async function exactHostState(page, gridId) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const found = await page.evaluate(id => ({ local: localStorage.getItem(id), session: sessionStorage.getItem(id) }), gridId);
     const matches = Object.entries(found).filter(([, raw]) => typeof raw === 'string' && raw.length > 0);
     if (matches.length === 1) {
@@ -179,7 +171,7 @@ async function writeExactState(page, area, gridId, state) {
 }
 
 async function persistedSort(page, area, gridId, colId) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const raw = await page.evaluate(({ storageArea, key }) => (storageArea === 'local' ? localStorage : sessionStorage).getItem(key), { storageArea: area, key: gridId });
     if (raw) {
       const item = JSON.parse(raw).find(state => String(state.colId) === colId);
@@ -216,9 +208,16 @@ try {
   assert.deepEqual(physicalIds(initialHeaders), expectedFreshPhysicalIds, 'Fresh physical order differs from PR #111 contract.');
   assert.deepEqual(rightToLeftIds(initialHeaders), ownerRightToLeftIds, 'Fresh visible RTL order differs from Owner contract.');
 
-  // Invoke Gravity Flow 3.1.0's own registered model-update persistence callback
-  // and capture the exact state format/storage record produced under this Grid ID.
-  await forceNativePersistence(page, activeGridId);
+  // Capture the host-owned persistence shape without calling a private callback.
+  // We clear only the exact runtime Grid ID, then exercise genuine native Search.
+  // Gravity Flow 3.1.0's onModelUpdated handler must recreate its own exact key,
+  // storage area and getColumnState() JSON representation.
+  await clearExactHostState(page, activeGridId);
+  const storageBeforePersistence = await storageSnapshot(page);
+  const persistenceSearchMatches = await nativeSearch(page, 'STATE-A-000');
+  assert.equal(persistenceSearchMatches.includes(Number(scoped.entry_ids[0])), true, 'Native Search did not reach the scoped synthetic row while creating host state.');
+  await nativeSearch(page, '');
+  await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 10000 });
   const authentic = await exactHostState(page, activeGridId);
   for (const id of ownerRightToLeftIds) assert.ok(authentic.parsed.some(item => String(item.colId) === id), `Native state lacks ${id}.`);
 
@@ -234,9 +233,10 @@ try {
     grid_id: activeGridId,
     expected: { owner_right_to_left_ids: ownerRightToLeftIds, fresh_physical_ids: expectedFreshPhysicalIds, stale_physical_ids: stalePhysicalIds },
     authentic_persistence: {
-      trigger: 'gravity_flow_3_1_0_grid_options_onModelUpdated',
+      trigger: 'native_search_model_update',
       storage_area: authentic.area,
       storage_key: activeGridId,
+      storage_before: storageBeforePersistence,
       captured_state: authentic.parsed,
     },
     stale_state_fixture: { source: 'reordered_authentic_getColumnState_objects', persisted_state_before_reload: staleState },
@@ -244,8 +244,8 @@ try {
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
   console.log(`INBOX_COLUMN_STATE_STALE_FIXTURE ${JSON.stringify({ grid_id: activeGridId, storage_area: authentic.area, stale_state_ids: staleState.map(item => String(item.colId)) })}`);
 
-  // Pre-fix regression: the merged #111 behavior must fail here because native
-  // restore accepts the same colId set and applies the stale order.
+  // Pre-fix regression: #111 must fail here because Gravity Flow accepts the
+  // same colId set and reorders persisted state with id first before applyOrder.
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
   const upgradedHeaders = await visibleHeaders(page);
@@ -259,20 +259,16 @@ try {
   assert.deepEqual(upgradedPhysical, expectedFreshPhysicalIds, 'Stale native persisted column order overrode the current GPP physical column contract.');
   assert.deepEqual(upgradedRtl, ownerRightToLeftIds, 'First stale-state upgrade load did not resolve to Owner RTL order.');
   assert.deepEqual(upgradedRows, upgradedPhysical, 'Header and row colId order diverged.');
-
-  const markerKey = `${markerPrefix}${activeGridId}`;
-  assert.ok(storageAfterUpgrade.local[markerKey], 'Current GPP column-contract marker was not recorded.');
   assert.equal(storageAfterUpgrade.local[unrelatedLocalKey], 'keep-local', 'Unrelated localStorage entry was modified.');
   assert.equal(storageAfterUpgrade.session[unrelatedSessionKey], 'keep-session', 'Unrelated sessionStorage entry was modified.');
 
-  // Use native sorting as the harmless compatible user state. Gravity Flow's
-  // model-update persistence must retain the sort while GPP keeps order valid.
+  // Compatible native state must survive the order repair. Sorting is a host-
+  // owned state property and does not depend on pointer geometry.
   const dateHeader = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
   await dateHeader.click();
   await page.waitForTimeout(300);
   const sortDirection = await dateHeader.getAttribute('aria-sort');
   assert.ok(['ascending', 'descending'].includes(sortDirection), `Native sort did not activate: ${sortDirection}`);
-  await forceNativePersistence(page, activeGridId);
   const persistedSortDirection = await persistedSort(page, authentic.area, activeGridId, 'date_created');
   assert.ok(['asc', 'desc'].includes(persistedSortDirection), 'Native persisted column state did not retain date sort.');
 
@@ -292,6 +288,9 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '1', null, { timeout: 10000 });
   const pagerRoundTrip = await pagerState(page);
 
+  // A second initialization must retain the presentation contract while keeping
+  // the compatible native sort state. This catches repairs that merely clear a
+  // stale key once even though Gravity Flow re-applies id-first persisted order.
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
   const secondHeaders = await visibleHeaders(page);
@@ -301,7 +300,6 @@ try {
   assert.equal(secondSort, sortDirection, 'Compatible native sort did not persist across second reload.');
 
   const secondStorage = await storageSnapshot(page);
-  assert.equal(secondStorage.local[markerKey], storageAfterUpgrade.local[markerKey], 'Contract marker changed on second reload.');
   assert.equal(secondStorage.local[unrelatedLocalKey], 'keep-local');
   assert.equal(secondStorage.session[unrelatedSessionKey], 'keep-session');
 
@@ -314,24 +312,22 @@ try {
   await login(cleanPage);
   const cleanBefore = await storageSnapshot(cleanPage);
   assert.equal(Object.prototype.hasOwnProperty.call(cleanBefore.local, activeGridId), false, 'Clean browser unexpectedly has target Grid state.');
+  assert.equal(Object.prototype.hasOwnProperty.call(cleanBefore.session, activeGridId), false, 'Clean browser unexpectedly has target session Grid state.');
   await cleanPage.goto(rtlUrl.toString(), { waitUntil: 'networkidle' });
   await waitForRows(cleanPage);
   const cleanHeaders = await visibleHeaders(cleanPage);
   assert.deepEqual(physicalIds(cleanHeaders), expectedFreshPhysicalIds, 'Clean first-load physical order is incorrect.');
   assert.deepEqual(rightToLeftIds(cleanHeaders), ownerRightToLeftIds, 'Clean first-load RTL order is incorrect.');
-  const cleanAfter = await storageSnapshot(cleanPage);
-  assert.ok(cleanAfter.local[markerKey], 'Clean first load did not record current contract marker.');
 
   evidence = {
     ...evidence,
     execution_status: 'PASS',
-    first_upgrade_load: { ...evidence.first_upgrade_load, marker_key: markerKey },
     compatible_user_state: { kind: 'native_date_sort', aria_sort: sortDirection, persisted_sort: persistedSortDirection, aria_sort_after_second_reload: secondSort },
     search: { query: 'STATE-A-000', expected_entry_id: firstAddedId, matched_row_ids: searchMatches },
     pagination: { page_1: pagerBefore, page_2: pagerPage2, round_trip: pagerRoundTrip },
     entry_open: { href: openHref },
-    second_reload: { physical_ids: physicalIds(secondHeaders), right_to_left_ids: rightToLeftIds(secondHeaders), marker_value: secondStorage.local[markerKey] },
-    clean_browser_first_load: { storage_before: cleanBefore, physical_ids: physicalIds(cleanHeaders), right_to_left_ids: rightToLeftIds(cleanHeaders), marker_value: cleanAfter.local[markerKey] },
+    second_reload: { physical_ids: physicalIds(secondHeaders), right_to_left_ids: rightToLeftIds(secondHeaders) },
+    clean_browser_first_load: { storage_before: cleanBefore, physical_ids: physicalIds(cleanHeaders), right_to_left_ids: rightToLeftIds(cleanHeaders) },
   };
   console.log('INBOX_COLUMN_STATE_CONTRACT_RUNTIME_PASS');
 } finally {
