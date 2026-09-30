@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const GPP_IVD2_OPTION = 'gpp_inbox_visual_design_v2_qualification';
+const GPP_WU21_HEADER_AUTHORITY_QUERY = 'wu21_header_authority_probe';
+const GPP_WU21_HEADER_AUTHORITY_OPTION = 'gpp_wu21_header_authority_probe_results';
 
 function gpp_ivd2_q1_config() {
     $config = get_option( GPP_IVD2_OPTION, array() );
@@ -24,6 +26,29 @@ function gpp_ivd2_q1_active() {
         && ! empty( $config['form_id'] )
         && ! empty( $config['probe_field_id'] );
 }
+
+/**
+ * Q1 qualifies Gravity Flow's host rich-value path with a temporary probe
+ * column. The production SRWF header projection intentionally removes every
+ * non-target column, so leave that final projection out of Q1's disposable
+ * capability window. Q1 still exercises the real Gravity Flow/AG Grid table,
+ * field selection, search/sort/filter semantics, polling and entry navigation.
+ * The option is disabled before Q2/Q4 and the real header qualification.
+ */
+function gpp_ivd2_q1_detach_final_header_projection() {
+    if ( ! gpp_ivd2_q1_active() ) {
+        return;
+    }
+
+    $header = 'GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxTableHeaderPresentation';
+    if ( ! class_exists( $header ) ) {
+        return;
+    }
+
+    remove_filter( 'gravityflow_columns_inbox_table', array( $header, 'filterColumns' ), PHP_INT_MAX );
+    remove_filter( 'gravityflow_inbox_field_value', array( $header, 'filterFieldValue' ), PHP_INT_MAX );
+}
+add_action( 'gform_loaded', 'gpp_ivd2_q1_detach_final_header_projection', 100 );
 
 /**
  * Restrict only the controlled Q1 window to one synthetic form so the documented
@@ -93,3 +118,69 @@ function gpp_ivd2_q1_inbox_field_value( $value, $form_id, $field_id, $entry ) {
     return $value;
 }
 add_filter( 'gravityflow_inbox_field_value', 'gpp_ivd2_q1_inbox_field_value', 1000, 4 );
+
+/**
+ * Qualification-only form-authority probe.
+ *
+ * Register after production GPP has registered so the PHP_INT_MAX capture runs
+ * after InboxTableHeaderPresentation::filterColumns(). The PHP_INT_MIN capture
+ * records Gravity Flow's native column input before any presentation filter.
+ * This observes the exact native hook contract without deriving authority from
+ * shortcode, DOM, row or Grid state.
+ */
+function gpp_wu21_header_authority_probe_enabled() {
+    return ! is_admin()
+        && isset( $_GET[ GPP_WU21_HEADER_AUTHORITY_QUERY ] )
+        && '1' === sanitize_key( wp_unslash( $_GET[ GPP_WU21_HEADER_AUTHORITY_QUERY ] ) );
+}
+
+function gpp_wu21_header_authority_form_arg( $args ) {
+    if ( ! is_array( $args ) || ! array_key_exists( 'form_id', $args ) ) {
+        return array( 'present' => false, 'value' => null );
+    }
+
+    $value = $args['form_id'];
+    if ( is_array( $value ) ) {
+        return array( 'present' => true, 'value' => array_values( $value ) );
+    }
+    if ( is_scalar( $value ) || null === $value ) {
+        return array( 'present' => true, 'value' => $value );
+    }
+
+    return array( 'present' => true, 'value' => '__NON_SCALAR__' );
+}
+
+function gpp_wu21_header_authority_capture_before( $columns, $args ) {
+    $GLOBALS['gpp_wu21_header_authority_before_queue'][] = array(
+        'columns' => $columns,
+        'form_id' => gpp_wu21_header_authority_form_arg( $args ),
+    );
+    return $columns;
+}
+
+function gpp_wu21_header_authority_capture_after( $columns, $args ) {
+    $before = ! empty( $GLOBALS['gpp_wu21_header_authority_before_queue'] )
+        ? array_shift( $GLOBALS['gpp_wu21_header_authority_before_queue'] )
+        : array( 'columns' => null, 'form_id' => null );
+    $events = get_option( GPP_WU21_HEADER_AUTHORITY_OPTION, array() );
+    $events = is_array( $events ) ? $events : array();
+    $events[] = array(
+        'before_columns' => $before['columns'],
+        'after_columns' => $columns,
+        'before_form_id' => $before['form_id'],
+        'after_form_id' => gpp_wu21_header_authority_form_arg( $args ),
+    );
+    update_option( GPP_WU21_HEADER_AUTHORITY_OPTION, $events, false );
+    return $columns;
+}
+
+function gpp_wu21_header_authority_register_probe() {
+    if ( ! gpp_wu21_header_authority_probe_enabled() ) {
+        return;
+    }
+
+    $GLOBALS['gpp_wu21_header_authority_before_queue'] = array();
+    add_filter( 'gravityflow_columns_inbox_table', 'gpp_wu21_header_authority_capture_before', PHP_INT_MIN, 2 );
+    add_filter( 'gravityflow_columns_inbox_table', 'gpp_wu21_header_authority_capture_after', PHP_INT_MAX, 2 );
+}
+add_action( 'gform_loaded', 'gpp_wu21_header_authority_register_probe', 100 );
