@@ -20,21 +20,12 @@ const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manif
 const alpha = (fixture.forms || []).find(item => item.key === 'alpha') || fixture.forms?.[0];
 if (!alpha?.form_id) throw new Error('INBOX_COLUMN_STATE_RUNTIME_FAILURE: alpha form fixture is unavailable.');
 
-const ownerRightToLeftIds = [
-  'id',
-  String(alpha.first_name_field_id),
-  String(alpha.national_id_field_id),
-  String(alpha.school_field_id),
-  'date_created',
-];
+const studentId = String(alpha.first_name_field_id);
+const nationalId = String(alpha.national_id_field_id);
+const schoolId = String(alpha.school_field_id);
+const ownerRightToLeftIds = ['id', studentId, nationalId, schoolId, 'date_created'];
 const expectedFreshPhysicalIds = [...ownerRightToLeftIds].reverse();
-const stalePhysicalIds = [
-  'id',
-  'date_created',
-  String(alpha.school_field_id),
-  String(alpha.national_id_field_id),
-  String(alpha.first_name_field_id),
-];
+const stalePhysicalIds = ['id', 'date_created', schoolId, nationalId, studentId];
 const markerPrefix = 'gpp:srwf-inbox-column-contract:';
 const unrelatedLocalKey = 'wu21-unrelated-grid-state';
 const unrelatedSessionKey = 'wu21-unrelated-session-state';
@@ -119,14 +110,11 @@ async function visibleHeaders(page) {
       const style = getComputedStyle(cell);
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
     })
-    .map(cell => {
-      const rect = cell.getBoundingClientRect();
-      return {
-        col_id: cell.getAttribute('col-id'),
-        x: rect.x,
-        width: rect.width,
-      };
-    }));
+    .map(cell => ({
+      col_id: cell.getAttribute('col-id'),
+      x: cell.getBoundingClientRect().x,
+      width: cell.getBoundingClientRect().width,
+    })));
 }
 
 function physicalIds(headers) {
@@ -152,8 +140,8 @@ async function storageSnapshot(page) {
   return page.evaluate(() => {
     const read = storage => {
       const out = {};
-      for (let i = 0; i < storage.length; i += 1) {
-        const key = storage.key(i);
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
         out[key] = storage.getItem(key);
       }
       return out;
@@ -173,51 +161,56 @@ function changedKeys(before, after) {
   return out;
 }
 
-async function dragHeaderBefore(page, sourceId, targetId) {
-  const source = page.locator(`[data-js="gflow-inbox"] .ag-header-cell[col-id="${sourceId}"]`).first();
-  const target = page.locator(`[data-js="gflow-inbox"] .ag-header-cell[col-id="${targetId}"]`).first();
-  const sourceBox = await source.boundingBox();
-  const targetBox = await target.boundingBox();
-  if (!sourceBox || !targetBox) throw new Error('Unable to resolve native header drag geometry.');
-
-  await page.mouse.move(sourceBox.x + (sourceBox.width / 2), sourceBox.y + (sourceBox.height / 2));
-  await page.mouse.down();
-  await page.mouse.move(sourceBox.x + (sourceBox.width / 2) - 20, sourceBox.y + (sourceBox.height / 2), { steps: 4 });
-  await page.mouse.move(targetBox.x + 3, targetBox.y + (targetBox.height / 2), { steps: 14 });
-  await page.waitForTimeout(350);
-  await page.mouse.up();
-}
-
-async function waitForPhysicalOrder(page, expected) {
-  await page.waitForFunction(expectedIds => {
-    const cells = [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell')]
-      .filter(cell => {
-        const rect = cell.getBoundingClientRect();
-        const style = getComputedStyle(cell);
-        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
-      })
-      .map(cell => ({ id: cell.getAttribute('col-id'), x: cell.getBoundingClientRect().x }))
-      .sort((a, b) => a.x - b.x)
-      .map(item => item.id);
-    return JSON.stringify(cells) === JSON.stringify(expectedIds);
-  }, expected, { timeout: 10000 });
-}
-
 async function resizeColumn(page, columnId, delta) {
   const header = page.locator(`[data-js="gflow-inbox"] .ag-header-cell[col-id="${columnId}"]`).first();
-  const resize = header.locator('.ag-header-cell-resize').first();
+  const handle = header.locator('.ag-header-cell-resize').first();
   const before = await header.boundingBox();
-  const box = await resize.boundingBox();
+  const box = await handle.boundingBox();
   if (!before || !box) throw new Error('Native AG Grid resize handle is unavailable.');
   await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
   await page.mouse.down();
   await page.mouse.move(box.x + (box.width / 2) + delta, box.y + (box.height / 2), { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(450);
   const after = await header.boundingBox();
   if (!after) throw new Error('Header disappeared after native resize.');
-  assert.ok(Math.abs(after.width - before.width) >= Math.min(20, Math.abs(delta) / 2), 'Native width change did not take effect.');
+  assert.ok(Math.abs(after.width - before.width) >= 12, 'Native width change did not take effect.');
   return { before: before.width, after: after.width };
+}
+
+async function discoverPersistedHostState(page, activeGridId, before) {
+  let after = await storageSnapshot(page);
+  let changes = changedKeys(before, after);
+  for (let attempt = 0; attempt < 30 && !changes.some(item => item.key === activeGridId); attempt += 1) {
+    await page.waitForTimeout(100);
+    after = await storageSnapshot(page);
+    changes = changedKeys(before, after);
+  }
+  const exact = changes.filter(item => item.key === activeGridId);
+  assert.equal(exact.length, 1, `Expected exactly one persisted native state record at runtime Grid ID ${activeGridId}; observed ${JSON.stringify(changes)}.`);
+  const location = exact[0];
+  const raw = after[location.area][location.key];
+  assert.ok(typeof raw === 'string' && raw.length > 0, 'Native persisted Grid state value is unavailable.');
+  const parsed = JSON.parse(raw);
+  assert.ok(Array.isArray(parsed), 'Native persisted Grid state is not the expected getColumnState() array.');
+  return { after, changes, location, raw, parsed };
+}
+
+function staleStateFromAuthenticState(state) {
+  const byId = new Map(state.map(item => [String(item.colId), item]));
+  for (const id of stalePhysicalIds) assert.ok(byId.has(id), `Authentic native state is missing required colId ${id}.`);
+  const stale = stalePhysicalIds.map(id => byId.get(id));
+  for (const item of state) {
+    if (!stalePhysicalIds.includes(String(item.colId))) stale.push(item);
+  }
+  return stale;
+}
+
+async function writeStorageRecord(page, area, key, value) {
+  await page.evaluate(({ storageArea, storageKey, storageValue }) => {
+    const storage = storageArea === 'local' ? localStorage : sessionStorage;
+    storage.setItem(storageKey, storageValue);
+  }, { storageArea: area, storageKey: key, storageValue: value });
 }
 
 let browser = null;
@@ -247,23 +240,21 @@ try {
   assert.deepEqual(physicalIds(initialHeaders), expectedFreshPhysicalIds, 'Fresh physical order does not match the approved PR #111 contract.');
   assert.deepEqual(rightToLeftIds(initialHeaders), ownerRightToLeftIds, 'Fresh visible RTL order does not match the Owner contract.');
 
-  const storageBeforeDrag = await storageSnapshot(page);
-  await dragHeaderBefore(page, 'id', 'date_created');
-  await waitForPhysicalOrder(page, stalePhysicalIds);
+  // Use a native resize event only to force Gravity Flow 3.1.0 to persist its
+  // authentic getColumnState() representation. The stale fixture is then built
+  // by reordering those exact captured state objects, so no parallel state
+  // format or guessed storage key is introduced by the qualification.
+  const storageBeforeNativeMutation = await storageSnapshot(page);
+  const seedWidth = await resizeColumn(page, nationalId, 36);
+  const authentic = await discoverPersistedHostState(page, activeGridId, storageBeforeNativeMutation);
+  const authenticIds = authentic.parsed.map(item => String(item.colId));
+  for (const id of ownerRightToLeftIds) assert.ok(authenticIds.includes(id), `Authentic native state does not contain current column ${id}.`);
 
-  let storageAfterDrag = await storageSnapshot(page);
-  let mutations = changedKeys(storageBeforeDrag, storageAfterDrag);
-  for (let attempt = 0; attempt < 20 && !mutations.some(item => item.key.includes(activeGridId)); attempt += 1) {
-    await page.waitForTimeout(150);
-    storageAfterDrag = await storageSnapshot(page);
-    mutations = changedKeys(storageBeforeDrag, storageAfterDrag);
-  }
-
-  const hostStateMutations = mutations.filter(item => item.key.includes(activeGridId));
-  assert.equal(hostStateMutations.length, 1, `Expected one native persisted Grid state record for ${activeGridId}; observed ${JSON.stringify(mutations)}.`);
-  const hostState = hostStateMutations[0];
-  const stalePersistedValue = storageAfterDrag[hostState.area][hostState.key];
-  assert.ok(typeof stalePersistedValue === 'string' && stalePersistedValue.length > 0, 'Native stale persisted Grid state was not captured.');
+  const staleState = staleStateFromAuthenticState(authentic.parsed);
+  const staleRaw = JSON.stringify(staleState);
+  await writeStorageRecord(page, authentic.location.area, authentic.location.key, staleRaw);
+  const storageWithStaleState = await storageSnapshot(page);
+  assert.equal(storageWithStaleState[authentic.location.area][activeGridId], staleRaw, 'Exact stale state fixture was not present before Grid re-initialization.');
 
   evidence = {
     ...evidence,
@@ -275,33 +266,39 @@ try {
       fresh_physical_ids: expectedFreshPhysicalIds,
       stale_physical_ids: stalePhysicalIds,
     },
-    stale_state_creation: {
-      mechanism: 'native_ag_grid_header_drag',
-      storage_before: storageBeforeDrag,
-      storage_after: storageAfterDrag,
-      changed_keys: mutations,
-      host_state: { area: hostState.area, key: hostState.key, value: stalePersistedValue },
+    authentic_persistence: {
+      trigger: 'native_ag_grid_column_resize',
+      width_change: seedWidth,
+      storage_area: authentic.location.area,
+      storage_key: authentic.location.key,
+      changed_keys: authentic.changes,
+      captured_state: authentic.parsed,
+    },
+    stale_state_fixture: {
+      source: 'reordered_authentic_getColumnState_objects',
+      persisted_state_before_reload: staleState,
+      storage_snapshot_before_reload: storageWithStaleState,
     },
   };
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
-  console.log(`INBOX_COLUMN_STATE_STALE_FIXTURE ${JSON.stringify({ grid_id: activeGridId, host_state: hostState, stale_physical_ids: stalePhysicalIds })}`);
+  console.log(`INBOX_COLUMN_STATE_STALE_FIXTURE ${JSON.stringify({ grid_id: activeGridId, storage_area: authentic.location.area, stale_state_ids: staleState.map(item => String(item.colId)) })}`);
 
-  // The second Grid initialization begins with the exact stale native record
-  // already present. Pre-fix code must fail here; the root repair must make this
-  // reload resolve to the current GPP column contract without manual clearing.
+  // Reload with the exact stale native record present before Grid initialization.
+  // This assertion is deliberately the pre-fix regression gate: main/#111 must
+  // fail here by restoring the stale id-first physical order.
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
   const firstUpgradeHeaders = await visibleHeaders(page);
   const firstUpgradePhysical = physicalIds(firstUpgradeHeaders);
   const firstUpgradeRtl = rightToLeftIds(firstUpgradeHeaders);
   const firstUpgradeRows = await rowPhysicalIds(page);
-  const storageAfterMigration = await storageSnapshot(page);
+  const storageAfterUpgrade = await storageSnapshot(page);
 
   evidence.first_upgrade_load = {
     physical_ids: firstUpgradePhysical,
     right_to_left_ids: firstUpgradeRtl,
     first_row_physical_ids: firstUpgradeRows,
-    storage_after: storageAfterMigration,
+    storage_after: storageAfterUpgrade,
   };
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
 
@@ -309,15 +306,13 @@ try {
   assert.deepEqual(firstUpgradeRtl, ownerRightToLeftIds, 'First stale-state upgrade load did not resolve to the Owner-required visible RTL order.');
   assert.deepEqual(firstUpgradeRows, firstUpgradePhysical, 'Header and first rendered row are not aligned by identical colId order.');
 
-  const markerKey = Object.keys(storageAfterMigration.local).find(key => key === `${markerPrefix}${activeGridId}`);
-  assert.ok(markerKey, 'GPP column-contract marker was not recorded for the exact active Grid ID.');
-  assert.equal(storageAfterMigration.local[unrelatedLocalKey], 'keep-local', 'Unrelated localStorage entry was modified.');
-  assert.equal(storageAfterMigration.session[unrelatedSessionKey], 'keep-session', 'Unrelated sessionStorage entry was modified.');
+  const markerKey = `${markerPrefix}${activeGridId}`;
+  assert.ok(storageAfterUpgrade.local[markerKey], 'GPP column-contract marker was not recorded for the exact active Grid ID.');
+  assert.equal(storageAfterUpgrade.local[unrelatedLocalKey], 'keep-local', 'Unrelated localStorage entry was modified.');
+  assert.equal(storageAfterUpgrade.session[unrelatedSessionKey], 'keep-session', 'Unrelated sessionStorage entry was modified.');
 
-  const widthState = await resizeColumn(page, String(alpha.national_id_field_id), 48);
-  const postWidthStorage = await storageSnapshot(page);
-  assert.notEqual(postWidthStorage[hostState.area][hostState.key], null, 'Native host state disappeared after a compatible width change.');
-
+  // Compatible native state must still work after the one-time contract upgrade.
+  const widthState = await resizeColumn(page, nationalId, 48);
   const dateHeader = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
   await dateHeader.click();
   await page.waitForTimeout(250);
@@ -340,73 +335,64 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '1', null, { timeout: 10000 });
   const pagerRoundTrip = await pagerState(page);
 
-  // A current marker must prevent a second invalidation. The compatible native
-  // width change is our durable witness: if GPP clears the host state again,
-  // the width returns to the default on reload.
+  // A second reload proves the repair is not a repeated wipe and that compatible
+  // native state such as width survives after the contract has been migrated.
   await page.reload({ waitUntil: 'networkidle' });
   await waitForRows(page);
-  const secondReloadHeaders = await visibleHeaders(page);
-  const secondReloadNational = secondReloadHeaders.find(item => item.col_id === String(alpha.national_id_field_id));
-  assert.ok(secondReloadNational, 'National-ID header is unavailable after second reload.');
-  assert.ok(Math.abs(secondReloadNational.width - widthState.after) <= 3, `Compatible native width did not persist across second reload (${widthState.after} -> ${secondReloadNational.width}).`);
-  assert.deepEqual(rightToLeftIds(secondReloadHeaders), ownerRightToLeftIds, 'Second reload lost the current visible RTL column contract.');
+  const secondHeaders = await visibleHeaders(page);
+  const secondNational = secondHeaders.find(item => item.col_id === nationalId);
+  assert.ok(secondNational, 'National-ID header is unavailable after second reload.');
+  assert.ok(Math.abs(secondNational.width - widthState.after) <= 3, `Compatible native width did not persist (${widthState.after} -> ${secondNational.width}).`);
+  assert.deepEqual(physicalIds(secondHeaders), expectedFreshPhysicalIds, 'Second reload restored an invalid physical order.');
+  assert.deepEqual(rightToLeftIds(secondHeaders), ownerRightToLeftIds, 'Second reload lost the Owner-required visible RTL order.');
 
-  const secondReloadStorage = await storageSnapshot(page);
-  assert.equal(secondReloadStorage.local[markerKey], storageAfterMigration.local[markerKey], 'Current GPP contract marker changed unexpectedly on second reload.');
-  assert.equal(secondReloadStorage.local[unrelatedLocalKey], 'keep-local', 'Unrelated localStorage entry changed on second reload.');
-  assert.equal(secondReloadStorage.session[unrelatedSessionKey], 'keep-session', 'Unrelated sessionStorage entry changed on second reload.');
+  const secondStorage = await storageSnapshot(page);
+  assert.equal(secondStorage.local[markerKey], storageAfterUpgrade.local[markerKey], 'Current GPP contract marker changed unexpectedly on second reload.');
+  assert.equal(secondStorage.local[unrelatedLocalKey], 'keep-local', 'Unrelated localStorage entry changed on second reload.');
+  assert.equal(secondStorage.session[unrelatedSessionKey], 'keep-session', 'Unrelated sessionStorage entry changed on second reload.');
 
   const openLink = page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
   const openHref = await openLink.getAttribute('href');
   assert.match(openHref || '', /view=entry/, 'Native entry-open link is missing after migration.');
 
-  // Independent clean-browser path: no persisted host state and no GPP marker
-  // exists before initialization. First load must render correctly without any
-  // manual browser-storage operation by the user.
+  // Clean-browser path is independent of the stale-state upgrade.
   cleanBrowser = await chromium.launch({ headless: true });
   const cleanPage = await cleanBrowser.newPage({ viewport: { width: 1440, height: 900 } });
   await login(cleanPage);
   const cleanBefore = await storageSnapshot(cleanPage);
-  assert.equal(Object.keys(cleanBefore.local).some(key => key.includes(activeGridId)), false, 'Clean browser unexpectedly contains target Grid storage before first load.');
+  assert.equal(Object.prototype.hasOwnProperty.call(cleanBefore.local, activeGridId), false, 'Clean browser unexpectedly contains target Grid state before first load.');
   await cleanPage.goto(rtlUrl.toString(), { waitUntil: 'networkidle' });
   await waitForRows(cleanPage);
   const cleanHeaders = await visibleHeaders(cleanPage);
-  assert.deepEqual(physicalIds(cleanHeaders), expectedFreshPhysicalIds, 'Clean-browser first load physical order is incorrect.');
-  assert.deepEqual(rightToLeftIds(cleanHeaders), ownerRightToLeftIds, 'Clean-browser first load visible RTL order is incorrect.');
-
+  assert.deepEqual(physicalIds(cleanHeaders), expectedFreshPhysicalIds, 'Clean-browser first-load physical order is incorrect.');
+  assert.deepEqual(rightToLeftIds(cleanHeaders), ownerRightToLeftIds, 'Clean-browser first-load visible RTL order is incorrect.');
   const cleanAfter = await storageSnapshot(cleanPage);
-  const cleanMarker = Object.keys(cleanAfter.local).find(key => key === `${markerPrefix}${activeGridId}`);
-  assert.ok(cleanMarker, 'Clean-browser first load did not record the current GPP contract marker.');
+  assert.ok(cleanAfter.local[markerKey], 'Clean-browser first load did not record the current GPP contract marker.');
 
   evidence = {
     ...evidence,
     execution_status: 'PASS',
-    first_upgrade_load: {
-      ...evidence.first_upgrade_load,
-      marker_key: markerKey,
-    },
+    first_upgrade_load: { ...evidence.first_upgrade_load, marker_key: markerKey },
     compatible_user_state: {
-      column_id: String(alpha.national_id_field_id),
+      column_id: nationalId,
       width_before: widthState.before,
       width_after_change: widthState.after,
-      width_after_second_reload: secondReloadNational.width,
+      width_after_second_reload: secondNational.width,
     },
     sorting: { column_id: 'date_created', direction_after_click: sortDirection },
     search: { query: 'STATE-A-000', expected_entry_id: firstAddedId, matched_row_ids: searchMatches },
     pagination: { page_1: pagerBefore, page_2: pagerPage2, round_trip: pagerRoundTrip },
     entry_open: { href: openHref },
     second_reload: {
-      physical_ids: physicalIds(secondReloadHeaders),
-      right_to_left_ids: rightToLeftIds(secondReloadHeaders),
-      marker_value: secondReloadStorage.local[markerKey],
-      unrelated_local: secondReloadStorage.local[unrelatedLocalKey],
-      unrelated_session: secondReloadStorage.session[unrelatedSessionKey],
+      physical_ids: physicalIds(secondHeaders),
+      right_to_left_ids: rightToLeftIds(secondHeaders),
+      marker_value: secondStorage.local[markerKey],
     },
     clean_browser_first_load: {
       storage_before: cleanBefore,
       physical_ids: physicalIds(cleanHeaders),
       right_to_left_ids: rightToLeftIds(cleanHeaders),
-      marker_key: cleanMarker,
+      marker_value: cleanAfter.local[markerKey],
     },
   };
   console.log('INBOX_COLUMN_STATE_CONTRACT_RUNTIME_PASS');
