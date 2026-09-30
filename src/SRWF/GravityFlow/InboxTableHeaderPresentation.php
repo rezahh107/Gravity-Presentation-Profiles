@@ -19,10 +19,13 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
  */
 final class InboxTableHeaderPresentation {
     const SURFACE = 'gravity_flow.inbox';
+    const COLUMN_ORDER_SCRIPT_HANDLE = 'gpp-srwf-gravity-flow-inbox-column-order-contract';
+    const COLUMN_ORDER_SCRIPT_PATH = 'assets/js/gravity-flow-inbox-column-order-contract.js';
 
     private static $configurations_loaded = false;
     private static $configurations = array();
     private static $active_form_id = null;
+    private static $column_order_contracts = array();
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) ) {
@@ -39,6 +42,7 @@ final class InboxTableHeaderPresentation {
         self::$configurations_loaded = false;
         self::$configurations = array();
         self::$active_form_id = null;
+        self::$column_order_contracts = array();
     }
 
     public static function filterColumns( $columns, $args = array() ) {
@@ -55,8 +59,6 @@ final class InboxTableHeaderPresentation {
             return $columns;
         }
 
-        self::$active_form_id = $configuration['form_id'];
-
         $visible = array(
             'id' => self::label( 'عملیات' ),
             $configuration['column_keys']['student_name'] => self::label( 'نام دانش‌آموز' ),
@@ -68,11 +70,22 @@ final class InboxTableHeaderPresentation {
         // Gravity Flow's current native Inbox Grid remains physically LTR even
         // when the surrounding WordPress presentation is RTL. The column hook
         // therefore needs the inverse physical sequence on RTL requests so the
-        // visible right-to-left order matches the Owner contract. This stays on
-        // Flow's existing column seam and does not create Grid/DOM order state.
-        if ( function_exists( 'is_rtl' ) && is_rtl() ) {
+        // visible right-to-left order matches the Owner contract. Gravity Flow
+        // 3.1.0 can subsequently restore a compatible persisted column state
+        // with `id` moved to the physical front, so bind this exact projected
+        // order to the exact native Grid ID for a post-restore reconciliation.
+        $is_rtl = function_exists( 'is_rtl' ) && is_rtl();
+        if ( $is_rtl ) {
             $visible = array_reverse( $visible, true );
+            if ( ! self::bindColumnOrderContract( $args, array_keys( $visible ) ) ) {
+                // Without an exact host Grid identity and the bounded runtime
+                // reconciler, the persisted-state path can violate the Owner
+                // order. Leave the native host columns untouched instead.
+                return $columns;
+            }
         }
+
+        self::$active_form_id = $configuration['form_id'];
 
         // Gravity Flow 3.1.0 keeps the raw date_created compare value and its
         // human-readable display value as separate column identities. Preserve
@@ -155,6 +168,110 @@ final class InboxTableHeaderPresentation {
 
     private static function label( $text ) {
         return function_exists( '__' ) ? __( $text, 'gravity-presentation-profiles' ) : $text;
+    }
+
+    private static function bindColumnOrderContract( $args, $physical_column_ids ) {
+        $grid_id = self::gridIdFromArgs( $args );
+        if ( null === $grid_id ) {
+            return false;
+        }
+
+        $physical_column_ids = array_values( array_map( 'strval', $physical_column_ids ) );
+        if ( ! $physical_column_ids || count( array_unique( $physical_column_ids, SORT_STRING ) ) !== count( $physical_column_ids ) ) {
+            return false;
+        }
+
+        if ( array_key_exists( $grid_id, self::$column_order_contracts ) ) {
+            return self::$column_order_contracts[ $grid_id ] === $physical_column_ids;
+        }
+
+        if ( ! self::enqueueColumnOrderContract( $grid_id, $physical_column_ids ) ) {
+            return false;
+        }
+
+        self::$column_order_contracts[ $grid_id ] = $physical_column_ids;
+        return true;
+    }
+
+    private static function gridIdFromArgs( $args ) {
+        if ( ! is_array( $args ) || ! class_exists( 'Gravity_Flow' ) ) {
+            return null;
+        }
+
+        $provider_class = 'Gravity_Flow\\Gravity_Flow\\Inbox\\Inbox_Service_Provider';
+        if ( ! class_exists( $provider_class ) || ! defined( $provider_class . '::TASK_MODEL' ) ) {
+            return null;
+        }
+
+        try {
+            $gravity_flow = \Gravity_Flow::get_instance();
+            if ( ! is_object( $gravity_flow ) || ! method_exists( $gravity_flow, 'container' ) ) {
+                return null;
+            }
+
+            $container = $gravity_flow->container();
+            if ( ! is_object( $container ) || ! method_exists( $container, 'get' ) ) {
+                return null;
+            }
+
+            $task_model = $container->get( constant( $provider_class . '::TASK_MODEL' ) );
+            if ( ! is_object( $task_model ) || ! method_exists( $task_model, 'get_unique_grid_id_from_args' ) ) {
+                return null;
+            }
+
+            $grid_id = $task_model->get_unique_grid_id_from_args( $args );
+            if ( ! is_scalar( $grid_id ) ) {
+                return null;
+            }
+
+            $grid_id = trim( (string) $grid_id );
+            return '' === $grid_id ? null : $grid_id;
+        } catch ( \Throwable $exception ) {
+            return null;
+        }
+    }
+
+    private static function enqueueColumnOrderContract( $grid_id, $physical_column_ids ) {
+        if ( ! defined( 'GPP_PLUGIN_FILE' )
+            || ! function_exists( 'plugins_url' )
+            || ! function_exists( 'wp_enqueue_script' )
+            || ! function_exists( 'wp_add_inline_script' ) ) {
+            return false;
+        }
+
+        $absolute_path = dirname( GPP_PLUGIN_FILE ) . '/' . self::COLUMN_ORDER_SCRIPT_PATH;
+        if ( ! is_file( $absolute_path ) ) {
+            return false;
+        }
+
+        $hash = hash_file( 'sha256', $absolute_path );
+        if ( ! is_string( $hash ) || '' === $hash ) {
+            return false;
+        }
+
+        $payload = array(
+            'gridId' => $grid_id,
+            'physicalColumnIds' => $physical_column_ids,
+        );
+        $json = function_exists( 'wp_json_encode' )
+            ? wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+            : json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+        if ( ! is_string( $json ) || '' === $json ) {
+            return false;
+        }
+
+        wp_enqueue_script(
+            self::COLUMN_ORDER_SCRIPT_HANDLE,
+            plugins_url( self::COLUMN_ORDER_SCRIPT_PATH, GPP_PLUGIN_FILE ),
+            array(),
+            substr( $hash, 0, 16 ),
+            true
+        );
+
+        $inline = 'window.gppSrwfInboxColumnOrderContracts=window.gppSrwfInboxColumnOrderContracts||[];'
+            . 'window.gppSrwfInboxColumnOrderContracts.push(' . $json . ');';
+
+        return false !== wp_add_inline_script( self::COLUMN_ORDER_SCRIPT_HANDLE, $inline, 'before' );
     }
 
     private static function configurationForColumns( $args ) {
