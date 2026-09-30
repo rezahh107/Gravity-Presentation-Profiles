@@ -194,7 +194,7 @@ final class InboxTableHeaderPresentation {
                     continue;
                 }
                 $form_id = (int) $configuration['form_id'];
-                if ( isset( self::$configurations[ $form_id ] ) ) {
+                if ( array_key_exists( $form_id, self::$configurations ) ) {
                     // More than one active table-wide binding for one form is
                     // ambiguous; fail that form closed rather than pick one.
                     self::$configurations[ $form_id ] = null;
