@@ -136,17 +136,23 @@ $before = array(
     'created_by' => 'ارسال‌کننده',
     'status' => 'وضعیت',
     'date_created' => 'تاریخ ثبت',
+    'date_created_human_readable' => 'نمایش تاریخ ثبت',
 );
 $after = InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) );
 gpp_assert_same(
-    array( 'id', '1', '3', '6', 'date_created' ),
+    array( 'id', '1', '3', '6', 'date_created', 'date_created_human_readable' ),
     array_map( 'strval', array_keys( $after ) ),
-    'Visible native Inbox columns must be exactly the Owner-requested five in logical order.'
+    'Header projection must keep the five visible Owner columns plus Gravity Flow native date display companion in host order.'
 );
 gpp_assert_same(
     array( 'عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت' ),
-    array_values( $after ),
+    array_values( array_slice( $after, 0, 5, true ) ),
     'Visible Persian header labels must match the requested contract exactly.'
+);
+gpp_assert_same(
+    'نمایش تاریخ ثبت',
+    $after['date_created_human_readable'],
+    'Gravity Flow native Submitted display companion must be preserved unchanged.'
 );
 foreach ( array( 'status', 'workflow_step', 'created_by', 'form_title' ) as $removed ) {
     gpp_assert_true( ! array_key_exists( $removed, $after ), 'Non-target native column remained visible: ' . $removed );
@@ -177,6 +183,11 @@ gpp_assert_same(
     'National-ID native value must remain host-owned and unchanged.'
 );
 gpp_assert_same(
+    'native submitted display',
+    InboxTableHeaderPresentation::filterFieldValue( 'native submitted display', 101, 'date_created_human_readable', $entry ),
+    'Submitted display value must remain host-owned and unchanged.'
+);
+gpp_assert_same(
     'unchanged',
     InboxTableHeaderPresentation::filterFieldValue( 'unchanged', 999, 1, $entry ),
     'Rows from another form must not receive SRWF field-value composition.'
@@ -201,6 +212,10 @@ gpp_assert_same(
 $missing_id = $before;
 unset( $missing_id['id'] );
 gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array( 'form_id' => 101 ) ), 'If native Open/ID disappears, header projection must fail closed.' );
+
+$missing_date_display = $before;
+unset( $missing_date_display['date_created_human_readable'] );
+gpp_assert_same( $missing_date_display, InboxTableHeaderPresentation::filterColumns( $missing_date_display, array( 'form_id' => 101 ) ), 'If native Submitted display companion disappears, header projection must fail closed.' );
 
 gpp_header_set_configs( array() );
 gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
