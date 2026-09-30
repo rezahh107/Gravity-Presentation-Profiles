@@ -20,14 +20,16 @@ const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manif
 const alpha = (fixture.forms || []).find(item => item.key === 'alpha') || fixture.forms?.[0];
 if (!alpha?.form_id) throw new Error('INBOX_HEADER_RUNTIME_FAILURE: alpha form fixture is unavailable.');
 
-const expectedLabels = ['عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت'];
-const expectedColumnIds = [
+const expectedRightToLeftLabels = ['عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت'];
+const expectedRightToLeftColumnIds = [
   'id',
   String(alpha.first_name_field_id),
   String(alpha.national_id_field_id),
   String(alpha.school_field_id),
   'date_created',
 ];
+const expectedPhysicalRtlLabels = [...expectedRightToLeftLabels].reverse();
+const expectedPhysicalRtlColumnIds = [...expectedRightToLeftColumnIds].reverse();
 
 function wpEval(code) {
   const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], {
@@ -117,13 +119,30 @@ async function headerSnapshot(page) {
     }));
 }
 
+function leftToRight(headers) {
+  return [...headers].sort((a, b) => a.x - b.x);
+}
+
+function rightToLeft(headers) {
+  return [...headers].sort((a, b) => b.x - a.x);
+}
+
+async function visibleRowIds(page) {
+  return page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows
+    .map(row => Number(row.getAttribute('row-id')))
+    .filter(Number.isFinite));
+}
+
 async function embeddedGridState(page) {
   return page.evaluate(() => {
     const gridElement = document.querySelector('[data-js="gflow-inbox"]');
     const gridId = gridElement?.dataset?.gridId || 'inbox_default';
     const gridConfig = window.gflow_config?.grids?.[gridId]?.grid_options;
+    const root = gridElement?.querySelector('.ag-root-wrapper');
     return {
       grid_id: gridId,
+      ag_rtl: Boolean(root?.classList.contains('ag-rtl')),
+      root_direction: root ? getComputedStyle(root).direction : null,
       column_defs: Array.isArray(gridConfig?.columnDefs)
         ? gridConfig.columnDefs.map(column => ({
             field: column.field ?? null,
@@ -158,24 +177,50 @@ try {
   const before = await headerSnapshot(page);
   await page.screenshot({ path: path.join(artifactDir, 'inbox-table-header-before.png'), fullPage: true });
 
+  // Non-RTL control: the existing physical order must remain unchanged.
   await page.goto(scoped.url, { waitUntil: 'networkidle' });
   await waitForRows(page);
+  const ltrControl = leftToRight(await headerSnapshot(page));
+  assert.deepEqual(ltrControl.map(item => item.text), expectedRightToLeftLabels, 'Non-RTL physical header order changed unexpectedly.');
+  assert.deepEqual(ltrControl.map(item => item.col_id), expectedRightToLeftColumnIds, 'Non-RTL native column IDs changed unexpectedly.');
+
+  // Qualification-only request signal makes WordPress is_rtl() truthful while
+  // leaving the native Gravity Flow/AG Grid direction/state untouched.
+  const rtlUrl = new URL(scoped.url);
+  rtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  await page.goto(rtlUrl.toString(), { waitUntil: 'networkidle' });
+  await waitForRows(page);
   const after = await headerSnapshot(page);
+  const afterLeftToRight = leftToRight(after);
+  const afterRightToLeft = rightToLeft(after);
   const embedded = await embeddedGridState(page);
   await page.screenshot({ path: path.join(artifactDir, 'inbox-table-header-after.png'), fullPage: true });
 
   evidence = {
     contract: 'SRWF_INBOX_TABLE_HEADER_V1',
     execution_status: 'CAPTURED',
-    route: { form_id: Number(alpha.form_id), page_id: Number(scoped.page_id) },
+    route: { form_id: Number(alpha.form_id), page_id: Number(scoped.page_id), rtl_probe: true },
     before: { headers: before },
-    after: { headers: after },
+    ltr_control: { headers_left_to_right: ltrControl },
+    after: {
+      headers: after,
+      headers_left_to_right: afterLeftToRight,
+      headers_right_to_left: afterRightToLeft,
+    },
     embedded_grid: embedded,
-    expected: { labels: expectedLabels, column_ids: expectedColumnIds },
+    expected: {
+      right_to_left_labels: expectedRightToLeftLabels,
+      right_to_left_column_ids: expectedRightToLeftColumnIds,
+      physical_left_to_right_labels_on_rtl: expectedPhysicalRtlLabels,
+      physical_left_to_right_column_ids_on_rtl: expectedPhysicalRtlColumnIds,
+    },
   };
 
-  assert.deepEqual(after.map(item => item.text), expectedLabels, 'Rendered header labels differ from the bounded Owner contract.');
-  assert.deepEqual(after.map(item => item.col_id), expectedColumnIds, 'Rendered native AG Grid column IDs are not in the expected logical order.');
+  assert.equal(embedded.ag_rtl, false, 'RTL repair must not enable or take ownership of AG Grid RTL state.');
+  assert.deepEqual(afterLeftToRight.map(item => item.text), expectedPhysicalRtlLabels, 'RTL physical left-to-right order is not the required inverse sequence.');
+  assert.deepEqual(afterLeftToRight.map(item => item.col_id), expectedPhysicalRtlColumnIds, 'RTL physical native column IDs are not the required inverse sequence.');
+  assert.deepEqual(afterRightToLeft.map(item => item.text), expectedRightToLeftLabels, 'Rendered visible right-to-left order differs from the Owner contract.');
+  assert.deepEqual(afterRightToLeft.map(item => item.col_id), expectedRightToLeftColumnIds, 'Rendered right-to-left native column identities differ from the Owner contract.');
   assert.equal(after.length, 5, 'Exactly five visible native header cells are required.');
   for (const removed of ['وضعیت', 'مرحله', 'ارسال‌کننده']) {
     assert.equal(after.some(item => item.text === removed), false, `Removed header is still visible: ${removed}`);
@@ -186,6 +231,20 @@ try {
   assert.equal(Array.isArray(embedded.rows), true, 'Native AG Grid row data were not exposed by Gravity Flow.');
   const dateColumn = embedded.column_defs.find(column => column.field === 'date_created');
   assert.equal(dateColumn?.display_key, 'date_created_human_readable', 'Native Submitted column lost Gravity Flow\'s qualified display identity.');
+
+  const dateHeader = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
+  await dateHeader.click();
+  await page.waitForTimeout(250);
+  const sortFirst = await dateHeader.getAttribute('aria-sort');
+  const sortRowsFirst = await visibleRowIds(page);
+  await dateHeader.click();
+  await page.waitForTimeout(250);
+  const sortSecond = await dateHeader.getAttribute('aria-sort');
+  const sortRowsSecond = await visibleRowIds(page);
+  assert.ok(['ascending', 'descending'].includes(sortFirst), `Native date sort did not activate: ${sortFirst}`);
+  assert.ok(['ascending', 'descending'].includes(sortSecond), `Native date sort did not cycle: ${sortSecond}`);
+  assert.notEqual(sortFirst, sortSecond, 'Native date sort direction did not change on the second header activation.');
+  assert.notDeepEqual(sortRowsFirst, sortRowsSecond, 'Native date sort did not change the visible row order.');
 
   const firstAddedId = Number(scoped.entry_ids[0]);
   const searched = await nativeSearch(page, 'HDR-A-000');
@@ -234,6 +293,13 @@ try {
   evidence = {
     ...evidence,
     execution_status: 'PASS',
+    sorting: {
+      column_id: 'date_created',
+      first_direction: sortFirst,
+      second_direction: sortSecond,
+      first_row_ids: sortRowsFirst,
+      second_row_ids: sortRowsSecond,
+    },
     search: { query: 'HDR-A-000', matched_row_ids: searched, expected_entry_id: firstAddedId },
     row_values: {
       student_name: studentText,
