@@ -246,9 +246,15 @@ namespace {
 
     $asset_source = file_get_contents( $asset_path );
     gpp_assert_true( is_string( $asset_source ), 'RTL order reconciler source must be readable.' );
-    gpp_assert_true( false === strpos( $asset_source, 'localStorage' ), 'Production reconciler must not inspect or mutate localStorage.' );
+    gpp_assert_true(
+        false !== strpos( $asset_source, 'window.localStorage.getItem(gridId)' ),
+        'Production reconciler may observe only the exact host Grid persistence key needed to detect native restore.'
+    );
     gpp_assert_true( false === strpos( $asset_source, 'sessionStorage' ), 'Production reconciler must not inspect or mutate sessionStorage.' );
+    gpp_assert_true( false === strpos( $asset_source, 'setItem' ), 'Production reconciler must not write browser persistence records.' );
     gpp_assert_true( false === strpos( $asset_source, 'removeItem' ), 'Production reconciler must not delete browser persistence records.' );
+    gpp_assert_true( false === strpos( $asset_source, '.clear(' ), 'Production reconciler must not clear browser persistence.' );
+    gpp_assert_true( false !== strpos( $asset_source, 'sameIdentities(stateIds, physicalColumnIds)' ), 'Persisted state observation must require the exact current column identity set.' );
     gpp_assert_true( false !== strpos( $asset_source, 'getColumnState' ), 'Production reconciler must reuse native AG Grid column state.' );
     gpp_assert_true( false !== strpos( $asset_source, 'applyColumnState' ), 'Production reconciler must reconcile through native AG Grid column state API.' );
     gpp_assert_true( false !== strpos( $asset_source, 'applyOrder: true' ), 'Production reconciler must change only native state order.' );
