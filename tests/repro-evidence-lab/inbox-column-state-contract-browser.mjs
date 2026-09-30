@@ -161,6 +161,13 @@ function changedKeys(before, after) {
   return out;
 }
 
+async function removeExactHostState(page, activeGridId) {
+  await page.evaluate(gridIdValue => {
+    localStorage.removeItem(gridIdValue);
+    sessionStorage.removeItem(gridIdValue);
+  }, activeGridId);
+}
+
 async function resizeColumn(page, columnId, delta) {
   const header = page.locator(`[data-js="gflow-inbox"] .ag-header-cell[col-id="${columnId}"]`).first();
   const handle = header.locator('.ag-header-cell-resize').first();
@@ -240,12 +247,15 @@ try {
   assert.deepEqual(physicalIds(initialHeaders), expectedFreshPhysicalIds, 'Fresh physical order does not match the approved PR #111 contract.');
   assert.deepEqual(rightToLeftIds(initialHeaders), ownerRightToLeftIds, 'Fresh visible RTL order does not match the Owner contract.');
 
-  // Use a native resize event only to force Gravity Flow 3.1.0 to persist its
-  // authentic getColumnState() representation. The stale fixture is then built
-  // by reordering those exact captured state objects, so no parallel state
-  // format or guessed storage key is introduced by the qualification.
+  // Gravity Flow 3.1.0 persists getColumnState() on native onModelUpdated.
+  // Remove only the exact runtime Grid ID in this qualification, then exercise
+  // native Search to force the host to recreate its own key, storage area and
+  // JSON representation. No pattern scan or parallel state format is used.
+  await removeExactHostState(page, activeGridId);
   const storageBeforeNativeMutation = await storageSnapshot(page);
-  const seedWidth = await resizeColumn(page, nationalId, 36);
+  await nativeSearch(page, 'STATE-A-000');
+  await nativeSearch(page, '');
+  await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 10000 });
   const authentic = await discoverPersistedHostState(page, activeGridId, storageBeforeNativeMutation);
   const authenticIds = authentic.parsed.map(item => String(item.colId));
   for (const id of ownerRightToLeftIds) assert.ok(authenticIds.includes(id), `Authentic native state does not contain current column ${id}.`);
@@ -267,8 +277,7 @@ try {
       stale_physical_ids: stalePhysicalIds,
     },
     authentic_persistence: {
-      trigger: 'native_ag_grid_column_resize',
-      width_change: seedWidth,
+      trigger: 'native_ag_grid_model_update_via_search',
       storage_area: authentic.location.area,
       storage_key: authentic.location.key,
       changed_keys: authentic.changes,
