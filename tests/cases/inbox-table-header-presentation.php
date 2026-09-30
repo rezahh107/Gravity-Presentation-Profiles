@@ -4,6 +4,7 @@ require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/../../src/Autoloader.php';
 
 $GLOBALS['gpp_filters'] = array();
+$GLOBALS['gpp_header_options'] = array();
 
 function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
     $GLOBALS['gpp_filters'][] = array( $hook, $callback, $priority, $accepted_args );
@@ -17,6 +18,10 @@ function __( $text, $domain = null ) {
 function wp_strip_all_tags( $text, $remove_breaks = false ) {
     $text = strip_tags( (string) $text );
     return $remove_breaks ? preg_replace( '/[\r\n\t ]+/', ' ', $text ) : $text;
+}
+
+function get_option( $name, $default = false ) {
+    return array_key_exists( $name, $GLOBALS['gpp_header_options'] ) ? $GLOBALS['gpp_header_options'][ $name ] : $default;
 }
 
 final class GppInboxHeaderFakeField {
@@ -38,6 +43,9 @@ final class GFAPI {
 }
 
 use GravityPresentationProfiles\Autoloader;
+use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
+use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
+use GravityPresentationProfiles\Core\Portable\CanonicalJson;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeEvidence;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
 
@@ -67,7 +75,12 @@ function gpp_header_binding_set() {
         'runtime_claims' => array(),
     );
 
-    foreach ( $bindings as $binding ) {
+    return gpp_header_refresh_claims( $artifact );
+}
+
+function gpp_header_refresh_claims( $artifact ) {
+    $artifact['runtime_claims'] = array();
+    foreach ( $artifact['bindings'] as $binding ) {
         $artifact['runtime_claims'][] = array(
             'semantic_slot_key' => $binding['semantic_slot_key'],
             'claim' => 'availability',
@@ -216,6 +229,57 @@ gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $miss
 $missing_date_display = $before;
 unset( $missing_date_display['date_created_human_readable'] );
 gpp_assert_same( $missing_date_display, InboxTableHeaderPresentation::filterColumns( $missing_date_display, array( 'form_id' => 101 ) ), 'If native Submitted display companion disappears, header projection must fail closed.' );
+
+$installed = array();
+$activations = array();
+$surface_sets = array(
+    array( 'gravity_flow.inbox' ),
+    array( 'gravity_flow.inbox', 'gravity_flow.entry_detail' ),
+    array( 'gravity_flow.inbox', 'gravity_flow.print' ),
+);
+foreach ( $surface_sets as $index => $surfaces ) {
+    $candidate = gpp_header_binding_set();
+    $candidate['binding_set_id'] = 'gpp.header.ambiguous.' . ( $index + 1 );
+    $candidate['context']['surfaces'] = $surfaces;
+    $candidate = gpp_header_refresh_claims( $candidate );
+    $context_key = CanonicalJson::hash( $candidate['context'] );
+    $installed[ $candidate['binding_set_id'] ][ $candidate['binding_set_version'] ] = array(
+        'context_key' => $context_key,
+        'artifact' => $candidate,
+    );
+    $activations[ $context_key ] = array(
+        'binding_set_id' => $candidate['binding_set_id'],
+        'binding_set_version' => $candidate['binding_set_version'],
+    );
+}
+$GLOBALS['gpp_header_options'][ VisualPackageLifecycle::OPTION_NAME ] = array(
+    'revision' => 0,
+    'installed' => array(),
+    'activations' => array(
+        InboxTableHeaderPresentation::SURFACE => array(
+            'package_id' => 'gpp.header.visual.fixture',
+            'package_version' => '1.0.0',
+            'profile_id' => 'gpp.header.visual.profile',
+        ),
+    ),
+    'audit_seq' => 0,
+    'audit' => array(),
+);
+$GLOBALS['gpp_header_options'][ BindingSetLifecycle::OPTION_NAME ] = array(
+    'revision' => 0,
+    'installed' => $installed,
+    'activations' => $activations,
+    'audit_seq' => 0,
+    'audit' => array(),
+);
+InboxTableHeaderPresentation::resetRuntimeCache();
+$configuration_reader = new ReflectionMethod( InboxTableHeaderPresentation::class, 'configurations' );
+$configuration_reader->setAccessible( true );
+gpp_assert_same(
+    array(),
+    $configuration_reader->invoke( null ),
+    'Any number of simultaneously active table-wide contexts for one form must remain ambiguous and fail closed.'
+);
 
 gpp_header_set_configs( array() );
 gpp_assert_same( $before, InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) ), 'Unresolved binding configuration must preserve the native Inbox unchanged.' );
