@@ -15,6 +15,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPres
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityForms\GtbCoexistenceGuard;
 use GravityPresentationProfiles\SRWF\GravityForms\JalaliValidationAssociation;
@@ -66,6 +67,7 @@ final class Bootstrap {
         // registered only after Gravity Forms has loaded successfully.
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
+        InboxTableHeaderPresentation::register();
         InboxBlockCompositionBridge::register();
         EntryDetailJourneyPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
