@@ -92,3 +92,7 @@ echo wp_json_encode(array('page_id' => (int)$page_id, 'url' => get_permalink($pa
   if (browser) await browser.close().catch(() => {});
   if (pageId) wpEval(`wp_delete_post(${pageId}, true);`);
 }
+
+// Run the bounded test-only ColDef candidates before the canonical stale-state
+// regression. This does not alter production behavior or relax that regression.
+await import('./inbox-column-state-seam-qualification.mjs');
