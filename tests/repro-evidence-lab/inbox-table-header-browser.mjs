@@ -5,7 +5,6 @@ import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import {
   artifactDir,
-  repoRoot,
   wpCli,
   wpPath,
   assertEnv,
@@ -118,8 +117,6 @@ async function headerSnapshot(page) {
     }));
 }
 
-const baselineMuPath = path.join(wpPath, 'wp-content/mu-plugins/wu21-native-inbox-baseline-mode.php');
-const baselineMuSource = path.join(repoRoot, 'tests/repro-evidence-lab/wu21-native-inbox-baseline-mode.php');
 const evidencePath = path.join(artifactDir, 'inbox-table-header-evidence.json');
 let scoped = null;
 let browser = null;
@@ -127,12 +124,14 @@ let evidence = { contract: 'SRWF_INBOX_TABLE_HEADER_V1', execution_status: 'ERRO
 
 try {
   scoped = setupScopedInbox();
-  fs.copyFileSync(baselineMuSource, baselineMuPath);
 
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await login(page);
 
+  // WU21's existing lab plugin already requires the raw-native bypass from the
+  // symlinked repository. Reuse that one authoritative module instead of
+  // copying the same class into mu-plugins a second time.
   const rawUrl = new URL(scoped.url);
   rawUrl.searchParams.set('wu21_native_inbox_baseline', 'raw_native');
   await page.goto(rawUrl.toString(), { waitUntil: 'networkidle' });
@@ -208,6 +207,5 @@ try {
 } finally {
   if (browser) await browser.close().catch(() => {});
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
-  fs.rmSync(baselineMuPath, { force: true });
   cleanupScopedInbox(scoped);
 }
