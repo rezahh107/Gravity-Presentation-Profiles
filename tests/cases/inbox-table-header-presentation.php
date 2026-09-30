@@ -151,6 +151,16 @@ $before = array(
     'date_created' => 'تاریخ ثبت',
     'date_created_human_readable' => 'نمایش تاریخ ثبت',
 );
+gpp_assert_same(
+    $before,
+    InboxTableHeaderPresentation::filterColumns( $before, array() ),
+    'A single active SRWF configuration is not authoritative form context; an unscoped native Inbox must remain unchanged.'
+);
+gpp_assert_same(
+    $before,
+    InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 202 ) ),
+    'A nonmatching authoritative form_id must preserve the native Inbox unchanged.'
+);
 $after = InboxTableHeaderPresentation::filterColumns( $before, array( 'form_id' => 101 ) );
 gpp_assert_same(
     array( 'id', '1', '3', '6', 'date_created', 'date_created_human_readable' ),
@@ -225,6 +235,10 @@ gpp_assert_same(
 $missing_id = $before;
 unset( $missing_id['id'] );
 gpp_assert_same( $missing_id, InboxTableHeaderPresentation::filterColumns( $missing_id, array( 'form_id' => 101 ) ), 'If native Open/ID disappears, header projection must fail closed.' );
+
+$missing_date = $before;
+unset( $missing_date['date_created'] );
+gpp_assert_same( $missing_date, InboxTableHeaderPresentation::filterColumns( $missing_date, array( 'form_id' => 101 ) ), 'If native Submitted raw date identity disappears, header projection must fail closed.' );
 
 $missing_date_display = $before;
 unset( $missing_date_display['date_created_human_readable'] );
