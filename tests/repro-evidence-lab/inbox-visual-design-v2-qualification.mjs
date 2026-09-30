@@ -39,6 +39,16 @@ if (!fs.existsSync(path.join(artifactDir, 'inbox-visual-design-v2-qualification-
   throw new Error('Inbox V2 qualification setup artifact was not produced.');
 }
 
+// Record the exact Gravity Flow 3.1.0 source path that implements Grid-state
+// persistence before exercising the browser upgrade path. Source evidence and
+// executed browser evidence remain separate artifacts.
+const sourceEvidenceLog = wpCliRun(['eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/inbox-column-state-source-evidence.php')]);
+console.log(sourceEvidenceLog);
+const sourceEvidencePath = path.join(artifactDir, 'inbox-column-state-source-evidence.json');
+if (!fs.existsSync(sourceEvidencePath)) {
+  throw new Error('Inbox column-state source evidence was not produced.');
+}
+
 // Reuse the authentic WU21 operator identity. The synthetic tasks are assigned
 // to this user, so creating a separate administrator would change the native
 // assignment/query semantics the qualification is required to preserve.
@@ -60,6 +70,7 @@ try {
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
   await import('./inbox-table-header-browser.mjs');
+  await import('./inbox-column-state-contract-browser.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
@@ -74,6 +85,12 @@ try {
   const headerEvidence = JSON.parse(fs.readFileSync(headerEvidencePath, 'utf8'));
   if (headerEvidence.execution_status !== 'PASS') throw new Error('Inbox table-header runtime qualification did not pass.');
 
+  const columnStateEvidencePath = path.join(artifactDir, 'inbox-column-state-contract-evidence.json');
+  if (!fs.existsSync(columnStateEvidencePath)) throw new Error('Inbox column-state runtime evidence was not produced.');
+  const columnStateEvidence = JSON.parse(fs.readFileSync(columnStateEvidencePath, 'utf8'));
+  if (columnStateEvidence.execution_status !== 'PASS') throw new Error('Inbox column-state runtime qualification did not pass.');
+  const sourceEvidence = JSON.parse(fs.readFileSync(sourceEvidencePath, 'utf8'));
+
   // Keep the canonical WU21 browser result ID set untouched. The uploaded
   // browser-results.json gains bounded adjuncts so qualification evidence
   // survives successful artifact packaging without changing WU21 acceptance.
@@ -81,6 +98,8 @@ try {
   const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
   browserResults.inbox_visual_design_v2_qualification = evidence;
   browserResults.inbox_table_header_qualification = headerEvidence;
+  browserResults.inbox_column_state_contract_qualification = columnStateEvidence;
+  browserResults.inbox_column_state_source_evidence = sourceEvidence;
   fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
   const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
