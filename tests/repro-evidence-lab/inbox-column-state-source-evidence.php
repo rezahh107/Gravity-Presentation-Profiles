@@ -13,28 +13,53 @@ if ( ! is_string( $flow_source ) || '' === $flow_source || ! is_dir( $flow_sourc
     throw new RuntimeException( 'Exact Gravity Flow source directory is unavailable.' );
 }
 
-function gpp_wu21_persistence_snippet( $content, $needle, $radius = 260 ) {
+function gpp_wu21_persistence_snippet( $content, $needle, $radius = 340 ) {
     $offset = strpos( $content, $needle );
     if ( false === $offset ) {
         return null;
     }
 
-    $start = max( 0, $offset - $radius );
+    $start  = max( 0, $offset - $radius );
     $length = min( strlen( $content ) - $start, strlen( $needle ) + ( 2 * $radius ) );
     return substr( $content, $start, $length );
 }
 
+function gpp_wu21_method_source( $content, $method_name ) {
+    $needle = 'function ' . $method_name;
+    $start  = strpos( $content, $needle );
+    if ( false === $start ) {
+        return null;
+    }
+
+    $brace = strpos( $content, '{', $start );
+    if ( false === $brace ) {
+        return null;
+    }
+
+    $depth = 0;
+    $len   = strlen( $content );
+    for ( $index = $brace; $index < $len; $index++ ) {
+        if ( '{' === $content[ $index ] ) {
+            $depth++;
+        } elseif ( '}' === $content[ $index ] ) {
+            $depth--;
+            if ( 0 === $depth ) {
+                return substr( $content, $start, $index - $start + 1 );
+            }
+        }
+    }
+
+    return null;
+}
+
 $js_markers = array(
+    'gridMutationEvents',
     'localStorage',
-    'sessionStorage',
-    'getItem',
-    'setItem',
-    'removeItem',
     'getColumnState',
     'applyColumnState',
-    'columnState',
-    'gridId',
-    'grid_id',
+    'columnDefs.map',
+    'sizeColumnsToFit',
+    'data-grid-id',
 );
 
 $source_files = array();
@@ -62,10 +87,10 @@ foreach ( $js_paths as $path ) {
 
     if ( $hits ) {
         $source_files[] = array(
-            'path' => ltrim( str_replace( $flow_source, '', $path ), '/' ),
-            'sha256' => hash_file( 'sha256', $path ),
+            'path'       => ltrim( str_replace( $flow_source, '', $path ), '/' ),
+            'sha256'     => hash_file( 'sha256', $path ),
             'size_bytes' => filesize( $path ),
-            'hits' => $hits,
+            'hits'       => $hits,
         );
     }
 }
@@ -75,7 +100,13 @@ $php_candidates = array(
     'includes/pages/class-inbox.php',
     'includes/inbox/models/class-task.php',
 );
-$php_markers = array( 'data-grid-id', 'grid_id', 'gflow_config', 'grid_options', 'gravityflow_js_config_shared' );
+$php_markers = array(
+    'data-grid-id',
+    'get_unique_grid_id_from_args',
+    'gravityflow_inbox_args',
+    'add_args_for_shortcode',
+    'gravityflow_js_config_shared',
+);
 foreach ( $php_candidates as $relative ) {
     $path = $flow_source . '/' . $relative;
     if ( ! is_file( $path ) ) {
@@ -87,16 +118,26 @@ foreach ( $php_candidates as $relative ) {
     }
     $hits = array();
     foreach ( $php_markers as $marker ) {
-        $snippet = gpp_wu21_persistence_snippet( $content, $marker );
+        $snippet = gpp_wu21_persistence_snippet( $content, $marker, 700 );
         if ( null !== $snippet ) {
             $hits[ $marker ] = $snippet;
         }
     }
-    if ( $hits ) {
+
+    $methods = array();
+    foreach ( array( 'get_unique_grid_id_from_args', 'get_args', 'add_args_for_shortcode' ) as $method ) {
+        $method_source = gpp_wu21_method_source( $content, $method );
+        if ( null !== $method_source ) {
+            $methods[ $method ] = $method_source;
+        }
+    }
+
+    if ( $hits || $methods ) {
         $php_evidence[] = array(
-            'path' => $relative,
-            'sha256' => hash_file( 'sha256', $path ),
-            'hits' => $hits,
+            'path'    => $relative,
+            'sha256'  => hash_file( 'sha256', $path ),
+            'hits'    => $hits,
+            'methods' => $methods,
         );
     }
 }
@@ -107,15 +148,15 @@ $plugin_header = get_file_data(
 );
 
 $evidence = array(
-    'contract' => 'SRWF_INBOX_COLUMN_STATE_SOURCE_V1',
+    'contract'         => 'SRWF_INBOX_COLUMN_STATE_SOURCE_V1',
     'execution_status' => 'CAPTURED',
-    'gravity_flow' => array(
-        'version' => isset( $plugin_header['Version'] ) ? $plugin_header['Version'] : null,
+    'gravity_flow'     => array(
+        'version'        => isset( $plugin_header['Version'] ) ? $plugin_header['Version'] : null,
         'package_sha256' => getenv( 'WU21_FLOW_SHA256' ) ?: null,
-        'source_root' => $flow_source,
+        'source_root'    => $flow_source,
     ),
     'javascript_sources' => $source_files,
-    'php_sources' => $php_evidence,
+    'php_sources'        => $php_evidence,
 );
 
 file_put_contents(
@@ -124,7 +165,7 @@ file_put_contents(
 );
 
 echo 'INBOX_COLUMN_STATE_SOURCE_EVIDENCE_CAPTURED ' . wp_json_encode( array(
-    'gravity_flow' => $evidence['gravity_flow'],
+    'gravity_flow'            => $evidence['gravity_flow'],
     'javascript_source_count' => count( $source_files ),
-    'php_source_count' => count( $php_evidence ),
+    'php_source_count'        => count( $php_evidence ),
 ), JSON_UNESCAPED_SLASHES ) . PHP_EOL;
