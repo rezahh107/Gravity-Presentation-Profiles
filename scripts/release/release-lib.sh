@@ -118,6 +118,7 @@ assets/css/srwf-gravity-flow-inbox.css
 assets/css/srwf-gravity-flow-entry-detail.css
 assets/css/srwf-gravity-flow-print-dossier.css
 assets/js/gravity-flow-inbox-manual-refresh.js
+assets/js/gravity-flow-inbox-column-order-contract.js
 profiles/srwf/registration/profile.css
 profiles/srwf/registration/profile-package-v1.1.json
 profiles/srwf/operations/operations-package-v1.json
