@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 const GPP_IVD2_OPTION = 'gpp_inbox_visual_design_v2_qualification';
 const GPP_WU21_HEADER_AUTHORITY_QUERY = 'wu21_header_authority_probe';
 const GPP_WU21_HEADER_AUTHORITY_OPTION = 'gpp_wu21_header_authority_probe_results';
+const GPP_WU21_HEADER_RTL_QUERY = 'wu21_header_rtl_probe';
 
 function gpp_ivd2_q1_config() {
     $config = get_option( GPP_IVD2_OPTION, array() );
@@ -118,6 +119,32 @@ function gpp_ivd2_q1_inbox_field_value( $value, $form_id, $field_id, $entry ) {
     return $value;
 }
 add_filter( 'gravityflow_inbox_field_value', 'gpp_ivd2_q1_inbox_field_value', 1000, 4 );
+
+/**
+ * Qualification-only RTL request probe.
+ *
+ * The WU21 fixture intentionally runs in an LTR WordPress locale. On this one
+ * query-qualified request, switch only WordPress's presentation-direction
+ * signal before shortcode rendering so production GPP sees the same is_rtl()
+ * contract as an RTL Owner site. AG Grid itself is not reconfigured or patched.
+ */
+function gpp_wu21_header_rtl_probe_enabled() {
+    return ! is_admin()
+        && isset( $_GET[ GPP_WU21_HEADER_RTL_QUERY ] )
+        && '1' === sanitize_key( wp_unslash( $_GET[ GPP_WU21_HEADER_RTL_QUERY ] ) );
+}
+
+function gpp_wu21_header_rtl_apply_wordpress_direction() {
+    if ( ! gpp_wu21_header_rtl_probe_enabled() ) {
+        return;
+    }
+
+    global $wp_locale;
+    if ( is_object( $wp_locale ) ) {
+        $wp_locale->text_direction = 'rtl';
+    }
+}
+add_action( 'wp', 'gpp_wu21_header_rtl_apply_wordpress_direction', PHP_INT_MIN );
 
 /**
  * Qualification-only form-authority probe.

@@ -57,18 +57,30 @@ final class InboxTableHeaderPresentation {
 
         self::$active_form_id = $configuration['form_id'];
 
-        return array(
+        $visible = array(
             'id' => self::label( 'عملیات' ),
             $configuration['column_keys']['student_name'] => self::label( 'نام دانش‌آموز' ),
             $configuration['column_keys']['national_id'] => self::label( 'کد ملی' ),
             $configuration['column_keys']['school_grade'] => self::label( 'مدرسه و پایه' ),
             'date_created' => self::label( 'تاریخ و ساعت ثبت' ),
-            // Gravity Flow 3.1.0 keeps the raw date_created compare value and
-            // its human-readable display value as separate column identities.
-            // Preserve the host-owned hidden companion so the visible native
-            // date column retains its displayKey without GPP formatting dates.
-            'date_created_human_readable' => $columns['date_created_human_readable'],
         );
+
+        // Gravity Flow's current native Inbox Grid remains physically LTR even
+        // when the surrounding WordPress presentation is RTL. The column hook
+        // therefore needs the inverse physical sequence on RTL requests so the
+        // visible right-to-left order matches the Owner contract. This stays on
+        // Flow's existing column seam and does not create Grid/DOM order state.
+        if ( function_exists( 'is_rtl' ) && is_rtl() ) {
+            $visible = array_reverse( $visible, true );
+        }
+
+        // Gravity Flow 3.1.0 keeps the raw date_created compare value and its
+        // human-readable display value as separate column identities. Preserve
+        // the host-owned hidden companion so the visible native date column
+        // retains its displayKey without GPP formatting dates.
+        $visible['date_created_human_readable'] = $columns['date_created_human_readable'];
+
+        return $visible;
     }
 
     public static function filterFieldValue( $value, $form_id, $field_id, $entry ) {
