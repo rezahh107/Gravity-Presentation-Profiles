@@ -39,6 +39,7 @@ $cases = array(
     'package-lifecycle-deactivation.php',
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
+    'inbox-table-header-presentation.php',
     'inbox-manual-refresh.php',
     'inbox-package-authority.php',
     'inbox-production-activation.php',
