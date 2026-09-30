@@ -12,10 +12,10 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
  *
  * Gravity Flow remains authoritative for the table, query, row identity,
  * search, pagination, navigation and lifecycle. This adapter uses only the
- * native Inbox column/value filters to select, order and label five columns.
- * Two labels require a combined semantic; those values are composed as plain
- * text from already-PROVEN Gravity Forms field bindings and never introduce a
- * renderer, parallel data source or HTML cell contract.
+ * native Inbox column/value filters to select, order and label five visible
+ * columns. Two labels require a combined semantic; those values are composed
+ * as plain text from already-PROVEN Gravity Forms field bindings and never
+ * introduce a renderer, parallel data source or HTML cell contract.
  */
 final class InboxTableHeaderPresentation {
     const SURFACE = 'gravity_flow.inbox';
@@ -48,7 +48,10 @@ final class InboxTableHeaderPresentation {
 
         self::$active_form_id = null;
         $configuration = self::configurationForColumns( $args );
-        if ( null === $configuration || ! array_key_exists( 'id', $columns ) || ! array_key_exists( 'date_created', $columns ) ) {
+        if ( null === $configuration
+            || ! array_key_exists( 'id', $columns )
+            || ! array_key_exists( 'date_created', $columns )
+            || ! array_key_exists( 'date_created_human_readable', $columns ) ) {
             return $columns;
         }
 
@@ -60,6 +63,11 @@ final class InboxTableHeaderPresentation {
             $configuration['column_keys']['national_id'] => self::label( 'کد ملی' ),
             $configuration['column_keys']['school_grade'] => self::label( 'مدرسه و پایه' ),
             'date_created' => self::label( 'تاریخ و ساعت ثبت' ),
+            // Gravity Flow 3.1.0 keeps the raw date_created compare value and
+            // its human-readable display value as separate column identities.
+            // Preserve the host-owned hidden companion so the visible native
+            // date column retains its displayKey without GPP formatting dates.
+            'date_created_human_readable' => $columns['date_created_human_readable'],
         );
     }
 
