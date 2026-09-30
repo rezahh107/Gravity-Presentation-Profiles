@@ -206,20 +206,20 @@ final class InboxTableHeaderPresentation {
     }
 
     private static function formIdFromArgs( $args ) {
-        if ( ! is_array( $args ) || ! array_key_exists( 'form', $args ) ) {
+        if ( ! is_array( $args ) || ! array_key_exists( 'form_id', $args ) ) {
             return null;
         }
 
-        $form = $args['form'];
-        if ( is_array( $form ) ) {
-            $form = array_values( array_filter( array_map( 'intval', $form ) ) );
-            return 1 === count( $form ) ? $form[0] : null;
+        $form_id = $args['form_id'];
+        if ( is_array( $form_id ) ) {
+            $form_id = array_values( array_filter( array_map( 'intval', $form_id ) ) );
+            return 1 === count( $form_id ) ? $form_id[0] : null;
         }
 
-        if ( ! is_scalar( $form ) ) {
+        if ( ! is_scalar( $form_id ) ) {
             return null;
         }
-        $form_id = (int) $form;
+        $form_id = (int) $form_id;
         return $form_id > 0 ? $form_id : null;
     }
 
