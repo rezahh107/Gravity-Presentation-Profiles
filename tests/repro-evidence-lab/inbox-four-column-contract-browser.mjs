@@ -68,7 +68,7 @@ try {
   await page.goto(fiveUrl.toString(),{waitUntil:'networkidle'}); await waitRows(page,20);
   const fiveGrid=await gridId(page), fiveHeaders=await headers(page), op=fiveHeaders.find(x=>x.id==='id');
   assert.equal(op?.text,'عملیات');
-  const idCell=page.locator('[data-js="gflow-inbox"] .ag-row').first().locator('.ag-cell[col-id="id"]').first();
+  const idCell=page.locator('[data-js="gflow-inbox"] .ag-row .ag-cell[col-id="id"]').first();
   await idCell.waitFor({state:'visible'}); const idText=await idCell.innerText();
   const idAnchor=idCell.locator('a[href*="view=entry"]').first();
   const idHref=await idAnchor.count()?await idAnchor.getAttribute('href'):null;
