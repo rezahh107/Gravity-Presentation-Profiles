@@ -211,3 +211,57 @@ function gpp_wu21_header_authority_register_probe() {
     add_filter( 'gravityflow_columns_inbox_table', 'gpp_wu21_header_authority_capture_after', PHP_INT_MAX, 2 );
 }
 add_action( 'gform_loaded', 'gpp_wu21_header_authority_register_probe', 100 );
+
+const GPP_WU21_FOUR_COLUMN_QUERY = 'wu21_four_column_probe';
+const GPP_WU21_FOUR_COLUMN_FORM_QUERY = 'wu21_four_column_form';
+
+function gpp_wu21_four_column_probe_form_id() {
+    $form_id = (int) get_option( 'gpp_wu21_four_column_form_id', 0 );
+    return $form_id > 0 ? $form_id : null;
+}
+
+function gpp_wu21_four_column_probe_enabled() {
+    return ! is_admin() && null !== gpp_wu21_four_column_probe_form_id();
+}
+
+/**
+ * Qualification-only four-column projection.
+ *
+ * This deliberately uses the same documented Gravity Flow column filter that
+ * production GPP already owns. It removes the active Operations/id identity
+ * from the actual native column contract; it does not hide a DOM node and does
+ * not touch Grid state or browser persistence.
+ */
+function gpp_wu21_four_column_remove_id( $columns, $args ) {
+    if ( ! gpp_wu21_four_column_probe_enabled() ) {
+        return $columns;
+    }
+
+    $target_form_id = gpp_wu21_four_column_probe_form_id();
+    $hook_form_id = is_array( $args ) && isset( $args['form_id'] ) ? (int) $args['form_id'] : 0;
+    if ( null === $target_form_id || $hook_form_id !== $target_form_id ) {
+        return $columns;
+    }
+
+    if ( array_key_exists( 'id', $columns ) ) {
+        unset( $columns['id'] );
+    }
+
+    return $columns;
+}
+
+function gpp_wu21_four_column_register_probe() {
+    if ( ! gpp_wu21_four_column_probe_enabled() ) {
+        return;
+    }
+
+    // The target form ID is stored in the disposable qualification runtime so
+    // the same supported column-definition filter remains active for Gravity
+    // Flow's AJAX refresh requests; those requests do not carry the browser's
+    // initial query-string probe parameters.
+    // GPP's production filter is PHP_INT_MAX. Registering this capture on the
+    // same hook after plugin bootstrap makes the test-only omission the final
+    // column-definition result without changing production code.
+    add_filter( 'gravityflow_columns_inbox_table', 'gpp_wu21_four_column_remove_id', PHP_INT_MAX, 2 );
+}
+add_action( 'gform_loaded', 'gpp_wu21_four_column_register_probe', 100 );

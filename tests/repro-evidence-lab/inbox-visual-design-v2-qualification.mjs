@@ -60,6 +60,7 @@ try {
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
   await import('./inbox-table-header-browser.mjs');
+  await import('./inbox-four-column-contract-qualification.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
@@ -68,6 +69,11 @@ try {
   for (const qualification of [evidence.qualifications?.q1, evidence.qualifications?.q2, evidence.qualifications?.q4]) {
     if (qualification?.execution_status !== 'CAPTURED') throw new Error('Inbox V2 qualification capture did not complete.');
   }
+
+  const fourColumnEvidencePath = path.join(artifactDir, 'inbox-four-column-contract-evidence.json');
+  if (!fs.existsSync(fourColumnEvidencePath)) throw new Error('Inbox four-column qualification evidence was not produced.');
+  const fourColumnEvidence = JSON.parse(fs.readFileSync(fourColumnEvidencePath, 'utf8'));
+  if (fourColumnEvidence.execution_status !== 'PASS') throw new Error('Inbox four-column qualification did not complete.');
 
   const headerEvidencePath = path.join(artifactDir, 'inbox-table-header-evidence.json');
   if (!fs.existsSync(headerEvidencePath)) throw new Error('Inbox table-header runtime evidence was not produced.');
@@ -80,6 +86,7 @@ try {
   const browserResultsPath = path.join(artifactDir, 'browser-results.json');
   const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
   browserResults.inbox_visual_design_v2_qualification = evidence;
+  browserResults.inbox_four_column_contract_qualification = fourColumnEvidence;
   browserResults.inbox_table_header_qualification = headerEvidence;
   fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
