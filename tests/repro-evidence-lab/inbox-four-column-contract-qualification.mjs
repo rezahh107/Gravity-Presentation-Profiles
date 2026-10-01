@@ -43,7 +43,7 @@ function wpEval(code) {
 
 function setFourColumnProjection(enabled) {
   wpEval(enabled
-    ? 'update_option("gpp_wu21_four_column_form_id",' + formId + ',false);'
+    ? 'update_option("gpp_wu21_four_column_form_id",' + Number(alpha.form_id) + ',false);'
     : 'delete_option("gpp_wu21_four_column_form_id");'
   );
 }
