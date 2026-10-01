@@ -128,6 +128,15 @@ function staleFrom(state){
   return out;
 }
 
+async function waitPersisted(page,id,predicate){
+  for(let i=0;i<60;i++){
+    const state=await gridState(page,id);
+    if(predicate(state)) return state;
+    await page.waitForTimeout(100);
+  }
+  throw new Error('Native persisted state did not reach the required contract.');
+}
+
 async function writeState(page,area,id,state){
   await page.evaluate(function(v){(v.area==='local'?localStorage:sessionStorage).setItem(v.id,JSON.stringify(v.state));},{area:area,id:id,state:state});
 }
@@ -251,7 +260,7 @@ try{
   assert.deepEqual(first.row,fourPhysicalIds,'First four-column header/body colId alignment failed.');
 
   const nativeMatches=await persistThroughSearch(a,'FOUR-A-001');
-  const newState=await gridState(a,gridA);
+  const newState=await waitPersisted(a,gridA,function(state){return state.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;}).join('|')===fourPhysicalIds.join('|');});
   const newVisible=newState.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;});
   assert.deepEqual(newVisible,fourPhysicalIds,'Gravity Flow did not naturally persist the four-column state after historical-state fallback.');
   assert.ok(nativeMatches.length>0,'Native Search did not execute while recreating four-column state.');
@@ -261,7 +270,7 @@ try{
   await a.waitForTimeout(350);
   const sortDirection=await dateHeader.getAttribute('aria-sort');
   assert.ok(['ascending','descending'].includes(sortDirection),'Native date sort did not activate.');
-  const sortedState=await gridState(a,gridA);
+  const sortedState=await waitPersisted(a,gridA,function(state){var d=state.parsed.find(function(x){return String(x.colId)===dateId;});return ['asc','desc'].includes(d?.sort);});
   const dateState=sortedState.parsed.find(function(x){return String(x.colId)===dateId;});
   assert.ok(['asc','desc'].includes(dateState?.sort),'Native date sort was not persisted.');
 
