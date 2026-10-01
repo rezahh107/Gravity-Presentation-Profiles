@@ -193,7 +193,16 @@ function sourceEvidence(root){
     for(const f of files){const c=fs.readFileSync(f,'utf8'),i=c.indexOf(needle);if(i>=0){return {path:path.relative(root,f).replaceAll(path.sep,'/'),line:c.slice(0,i).split('\n').length,sha256:crypto.createHash('sha256').update(c).digest('hex'),needle,snippet:c.slice(Math.max(0,i-250),Math.min(c.length,i+needle.length+450))};}}
     return null;
   }
-  const needles=['id_column','gflow-inbox__entry-cell-link','gravityflow_entry_url_inbox_table','gravityflow_entry_link_inbox_table','get_unique_grid_id_from_args','getColumnState','applyColumnState'];
+  const needles=[
+    'get_table_header_defs',
+    '"id"===t.colId',
+    'gflow-inbox__entry-cell-link',
+    'gravityflow_entry_url_inbox_table',
+    'gravityflow_entry_link_inbox_table',
+    'get_unique_grid_id_from_args',
+    'getColumnState',
+    'applyColumnState',
+  ];
   return Object.fromEntries(needles.map(function(n){return [n,find(n)];}));
 }
 
