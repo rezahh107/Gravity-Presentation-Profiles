@@ -155,7 +155,7 @@ try {
   assert(page1.current === '1' && Number(page1.total) >= 2, `Multiple-page precondition failed: ${JSON.stringify({ current: page1.current, total: page1.total })}`);
   assert(page1.controls.btFirst.ag_disabled && page1.controls.btPrevious.ag_disabled, 'First/Previous must be host-disabled on Page 1.');
   assert(!page1.controls.btNext.ag_disabled && !page1.controls.btLast.ag_disabled, 'Next/Last must be host-enabled on Page 1.');
-  await page.screenshot({ path: path.join(artifactDir, 'inbox-native-pager-after-desktop-page1.png'), fullPage: true });
+  await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-after-desktop-page1.png'), fullPage: true });
 
   await page.locator(`${ROOT} [ref="btPrevious"]`).focus();
   await page.keyboard.press('Tab');
@@ -172,7 +172,7 @@ try {
   assertPresentation(page2);
   assert(page2.controls.btNext.ag_disabled && page2.controls.btLast.ag_disabled, 'Next/Last must be host-disabled on last page.');
   assert(!page2.controls.btFirst.ag_disabled && !page2.controls.btPrevious.ag_disabled, 'First/Previous must be host-enabled on last page.');
-  await page.screenshot({ path: path.join(artifactDir, 'inbox-native-pager-after-desktop-page2-last.png'), fullPage: true });
+  await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-after-desktop-page2-last.png'), fullPage: true });
 
   const previous = page.locator(`${ROOT} [ref="btPrevious"]`);
   const previousFocus = await focusInfo(previous);
@@ -191,7 +191,7 @@ try {
   assertControls(mobile);
   assert(mobileContainment.all_children_contained, `Native pager clips at 390px: ${JSON.stringify(mobileContainment)}`);
   assert(mobileContainment.document_horizontal_overflow_px === 0, `Document overflows horizontally at 390px: ${JSON.stringify(mobileContainment)}`);
-  await page.screenshot({ path: path.join(artifactDir, 'inbox-native-pager-after-mobile-390.png'), fullPage: true });
+  await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-after-mobile-390.png'), fullPage: true });
 
   await nativeSearch(page, 'WU21 Alpha Form');
   await page.waitForFunction(() => {
@@ -239,7 +239,7 @@ try {
 } catch (error) {
   failed = true;
   out = { ...out, execution_status: 'ERROR', result: 'NATIVE_PAGER_PRESENTATION_NEEDS_REPAIR', error: String(error?.stack || error).slice(0, 12000) };
-  await page.screenshot({ path: path.join(artifactDir, 'inbox-native-pager-repair-error.png'), fullPage: true }).catch(() => {});
+  await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-repair-error.png'), fullPage: true }).catch(() => {});
 } finally {
   fs.writeFileSync(path.join(artifactDir, 'inbox-native-pager-repair.json'), JSON.stringify(out, null, 2) + '\n');
   await browser.close();
