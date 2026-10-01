@@ -287,8 +287,32 @@ try {
     'The first native five-column persistence did not retain the physical column contract.'
   );
 
-  // The next reload exercises the known host restore path. No storage is touched
-  // by the test between reloads.
+  // Q4 requires an authentic persisted five-column state with the known
+  // conflicting order. Gravity Flow's current runtime may write the clean
+  // physical order on this first native persistence, so the qualification
+  // preserves that authentic state object in full and changes only its array
+  // sequence as a deterministic test fixture. No properties are invented and
+  // the target state is not cleared after seeding.
+  const authenticFiveState = fiveStateBeforeReload.storage_state;
+  const conflictingFiveState = [
+    authenticFiveState.find(item => String(item.colId) === 'id'),
+    ...authenticFiveState.filter(item => String(item.colId) !== 'id'),
+  ];
+  assert.equal(conflictingFiveState.length, authenticFiveState.length, 'Conflicting five-column fixture lost a persisted state object.');
+  assert.equal(conflictingFiveState.every(Boolean), true, 'Conflicting five-column fixture contains an invalid state object.');
+  await page.evaluate(
+    ({ gridId, state }) => window.localStorage.setItem(gridId, JSON.stringify(state)),
+    { gridId: fiveStateBeforeReload.grid_id, state: conflictingFiveState },
+  );
+  const seededHistorical = await gridSnapshot(page);
+  assert.deepEqual(
+    seededHistorical.storage_state.map(item => String(item.colId)),
+    ['id', 'date_created', String(schoolField), String(nationalField), String(firstField)],
+    'Historical five-column state was not seeded with the required conflicting order.'
+  );
+
+  // The next reload exercises Gravity Flow's authentic restore path against the
+  // captured host state. No storage is cleared after seeding.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForRows(page);
   const fiveAfterRestore = await gridSnapshot(page);
@@ -296,7 +320,12 @@ try {
   assert.deepEqual(
     fiveAfterRestore.storage_state.map(item => String(item.colId)),
     ['id', 'date_created', String(schoolField), String(nationalField), String(firstField)],
-    'Exact five-column host restore did not reproduce the known id-first persisted state.'
+    'Exact five-column host restore did not preserve the seeded id-first state.'
+  );
+  assert.deepEqual(
+    fiveAfterRestoreHeaders.map(c => c.col_id),
+    ['id', 'date_created', String(schoolField), String(nationalField), String(firstField)],
+    'The reproduced five-column stale state did not manifest as the known id-first physical order.'
   );
 
   // Q3/Q4: remove id only from the actual supported column-definition seam, with
