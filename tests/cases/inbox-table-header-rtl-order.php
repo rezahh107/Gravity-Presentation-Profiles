@@ -53,12 +53,20 @@ $native = array(
     'date_created_human_readable' => 'نمایش تاریخ ثبت',
 );
 
-$owner_right_to_left = array(
+$ltr_physical_labels = array(
     'عملیات',
     'نام دانش‌آموز',
     'کد ملی',
     'مدرسه و پایه',
     'تاریخ و ساعت ثبت',
+);
+
+$owner_right_to_left = array(
+    'نام دانش‌آموز',
+    'کد ملی',
+    'مدرسه و پایه',
+    'تاریخ و ساعت ثبت',
+    'عملیات',
 );
 
 gpp_rtl_header_set_configuration();
@@ -69,7 +77,7 @@ gpp_assert_same(
     'LTR requests must retain the existing physical native column sequence.'
 );
 gpp_assert_same(
-    $owner_right_to_left,
+    $ltr_physical_labels,
     array_values( array_slice( $ltr, 0, 5, true ) ),
     'LTR control must retain the five existing labels unchanged.'
 );
@@ -78,9 +86,9 @@ $GLOBALS['gpp_test_is_rtl'] = true;
 gpp_rtl_header_set_configuration();
 $rtl = InboxTableHeaderPresentation::filterColumns( $native, array( 'form_id' => 101 ) );
 gpp_assert_same(
-    array( 'date_created', '6', '3', '1', 'id', 'date_created_human_readable' ),
+    array( 'id', 'date_created', '6', '3', '1', 'date_created_human_readable' ),
     array_map( 'strval', array_keys( $rtl ) ),
-    'RTL requests must reverse only the five visible physical columns for the native LTR Grid.'
+    'RTL requests must keep native id first and reverse only the four informational columns.'
 );
 gpp_assert_same(
     array_reverse( $owner_right_to_left ),
@@ -98,7 +106,7 @@ gpp_assert_same(
     'RTL ordering must preserve the native hidden date display companion unchanged.'
 );
 gpp_assert_same(
-    array( 'date_created', '6', '3', '1', 'id' ),
+    array( 'id', 'date_created', '6', '3', '1' ),
     array_map( 'strval', array_keys( array_slice( $rtl, 0, 5, true ) ) ),
     'RTL ordering must keep exactly the same five visible column identities.'
 );

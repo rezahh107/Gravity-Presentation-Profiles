@@ -20,13 +20,21 @@ const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manif
 const alpha = (fixture.forms || []).find(item => item.key === 'alpha') || fixture.forms?.[0];
 if (!alpha?.form_id) throw new Error('INBOX_HEADER_RUNTIME_FAILURE: alpha form fixture is unavailable.');
 
-const expectedRightToLeftLabels = ['عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت'];
-const expectedRightToLeftColumnIds = [
+const expectedLtrPhysicalLabels = ['عملیات', 'نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت'];
+const expectedLtrPhysicalColumnIds = [
   'id',
   String(alpha.first_name_field_id),
   String(alpha.national_id_field_id),
   String(alpha.school_field_id),
   'date_created',
+];
+const expectedRightToLeftLabels = ['نام دانش‌آموز', 'کد ملی', 'مدرسه و پایه', 'تاریخ و ساعت ثبت', 'عملیات'];
+const expectedRightToLeftColumnIds = [
+  String(alpha.first_name_field_id),
+  String(alpha.national_id_field_id),
+  String(alpha.school_field_id),
+  'date_created',
+  'id',
 ];
 const expectedPhysicalRtlLabels = [...expectedRightToLeftLabels].reverse();
 const expectedPhysicalRtlColumnIds = [...expectedRightToLeftColumnIds].reverse();
@@ -181,8 +189,8 @@ try {
   await page.goto(scoped.url, { waitUntil: 'networkidle' });
   await waitForRows(page);
   const ltrControl = leftToRight(await headerSnapshot(page));
-  assert.deepEqual(ltrControl.map(item => item.text), expectedRightToLeftLabels, 'Non-RTL physical header order changed unexpectedly.');
-  assert.deepEqual(ltrControl.map(item => item.col_id), expectedRightToLeftColumnIds, 'Non-RTL native column IDs changed unexpectedly.');
+  assert.deepEqual(ltrControl.map(item => item.text), expectedLtrPhysicalLabels, 'Non-RTL physical header order changed unexpectedly.');
+  assert.deepEqual(ltrControl.map(item => item.col_id), expectedLtrPhysicalColumnIds, 'Non-RTL native column IDs changed unexpectedly.');
 
   // Qualification-only request signal makes WordPress is_rtl() truthful while
   // leaving the native Gravity Flow/AG Grid direction/state untouched.
@@ -209,6 +217,8 @@ try {
     },
     embedded_grid: embedded,
     expected: {
+      ltr_physical_labels: expectedLtrPhysicalLabels,
+      ltr_physical_column_ids: expectedLtrPhysicalColumnIds,
       right_to_left_labels: expectedRightToLeftLabels,
       right_to_left_column_ids: expectedRightToLeftColumnIds,
       physical_left_to_right_labels_on_rtl: expectedPhysicalRtlLabels,
