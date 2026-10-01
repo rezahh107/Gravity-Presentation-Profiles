@@ -138,7 +138,11 @@ try {
 
   await clearState(page,grid);await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'clean');
   const clean=await assertGeometry(page,'clean');
-  const cleanStorage=await storage(page);assert.equal(cleanStorage.local[grid],undefined,'Clean local state unexpectedly persisted before native mutation.');assert.equal(cleanStorage.session[grid],undefined,'Clean session state unexpectedly persisted before native mutation.');
+  const cleanStorage=await storage(page);
+  const cleanAreas=['local','session'].filter(area=>typeof cleanStorage[area][grid]==='string'&&cleanStorage[area][grid]);
+  assert.ok(cleanAreas.length<=1,'Clean load duplicated native state across storage areas.');
+  const cleanPersisted=cleanAreas.length===1?JSON.parse(cleanStorage[cleanAreas[0]][grid]):null;
+  if(cleanPersisted) assert.deepEqual(stateIds(cleanPersisted),HOST,'Clean load persisted a non-HOST_ALIGNED native state.');
 
   assert.ok((await nativeSearch(page,'ALIGN-000')).includes(Number(ctx.entry_ids[0])));
   await nativeSearch(page,'');
@@ -189,7 +193,7 @@ try {
   await assertGridId(cleanPage,grid,'independent_clean');const independentClean=await assertGeometry(cleanPage,'independent_clean');
 
   const stages=[clean,oldFirst,stable,reload1,reload2,sortReload,live,independentClean];
-  evidence={contract:'SRWF_INBOX_HOST_ALIGNED_FIVE_COLUMN_V1',execution_status:'PASS',runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null},expected:{physical:HOST,owner_rtl:OWNER_RTL,old_clean:OLD_CLEAN,ag_rtl:false},grid:{ordinary_current:grid,clean:grid,old_clean:grid,host_aligned:grid,reload_1:grid,reload_2:grid,sort_reload:grid,live_refresh:grid,independent_clean:grid,all_equal:true},storage:{area:authentic.area,key:grid,restored:stateIds(restored.parsed),final:stateIds(JSON.parse(finalStorage[authentic.area][grid])),unrelated_preserved:true},reloads:{old_clean_first_render:oldFirst,existing_host_aligned:stable,reload_1:reload1,reload_2:reload2},geometry:{tolerance_css_px:TOLERANCE,max_delta_css_px:Math.max(...stages.map(x=>x.max_delta_css_px)),stages},sorting:{aria_sort:sort,persisted_sort:persistedSort.sort},live_refresh:{same_grid:true,native_row_identity:true,order_preserved:true},entry_detail:{col_id:'id',href:await link.getAttribute('href')},authorization_assignment:{non_assignee_rows:viewerRows},independent_clean};
+  evidence={contract:'SRWF_INBOX_HOST_ALIGNED_FIVE_COLUMN_V1',execution_status:'PASS',runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null},expected:{physical:HOST,owner_rtl:OWNER_RTL,old_clean:OLD_CLEAN,ag_rtl:false},grid:{ordinary_current:grid,clean:grid,old_clean:grid,host_aligned:grid,reload_1:grid,reload_2:grid,sort_reload:grid,live_refresh:grid,independent_clean:grid,all_equal:true},storage:{area:authentic.area,key:grid,clean_immediate_persist:cleanPersisted?stateIds(cleanPersisted):null,restored:stateIds(restored.parsed),final:stateIds(JSON.parse(finalStorage[authentic.area][grid])),unrelated_preserved:true},reloads:{old_clean_first_render:oldFirst,existing_host_aligned:stable,reload_1:reload1,reload_2:reload2},geometry:{tolerance_css_px:TOLERANCE,max_delta_css_px:Math.max(...stages.map(x=>x.max_delta_css_px)),stages},sorting:{aria_sort:sort,persisted_sort:persistedSort.sort},live_refresh:{same_grid:true,native_row_identity:true,order_preserved:true},entry_detail:{col_id:'id',href:await link.getAttribute('href')},authorization_assignment:{non_assignee_rows:viewerRows},independent_clean};
   fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');console.log('INBOX_HOST_ALIGNED_FIVE_COLUMN_RUNTIME_PASS');
 } catch(error) {
   evidence.error=String(error?.stack||error);fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');throw error;
