@@ -204,7 +204,10 @@ async function firstRowId(page) {
 async function collectAllRowIds(page) {
   const ids = [];
   while (true) {
-    ids.push(...await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id')))));
+    ids.push(...await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => {
+      const cell = r.querySelector('[col-id="${nationalField}"]');
+      return (cell?.textContent || '').replace(/\\s+/g, ' ').trim();
+    }).filter(Boolean)));
     const state = await pagerState(page);
     if (state.next_disabled) break;
     await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
@@ -223,7 +226,7 @@ async function collectAllRowIds(page) {
       { timeout: 10000 },
     );
   }
-  return [...new Set(ids)].sort((a, b) => a - b);
+  return [...new Set(ids)].sort();
 }
 
 
