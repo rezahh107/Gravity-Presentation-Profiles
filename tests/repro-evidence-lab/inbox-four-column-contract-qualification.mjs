@@ -139,6 +139,20 @@ async function persistThroughSearch(page,query){
   return matches;
 }
 
+async function updateLive(entryId){
+  const code='GFAPI::update_entry_field(' + Number(entryId) + ',' + Number(alpha.first_name_field_id) + ',"Four Live Updated");';
+  wpEval(code);
+}
+
+async function waitLiveText(page, entryId){
+  for(let i=0;i<90;i++){
+    const value=await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="' + entryId + '"] .ag-cell[col-id="' + studentId + '"]').first().innerText().catch(function(){return '';});
+    if(value.includes('Four Live Updated')) return value;
+    await page.waitForTimeout(500);
+  }
+  throw new Error('Native Live Refresh did not propagate the updated student value for row-id '+entryId);
+}
+
 async function addLive(){
   const code='$f='+Number(alpha.form_id)+';$u='+Number(fixture.operator?.id||0)+';$a='+Number(alpha.first_name_field_id)+';$l='+Number(alpha.last_name_field_id)+';$n='+Number(alpha.national_id_field_id)+';$g='+Number(alpha.grade_group_field_id)+';$s='+Number(alpha.school_field_id)+';$p='+Number(alpha.photo_field_id)+';$e=array("form_id"=>$f,"created_by"=>$u,(string)$a=>"Four Live First",(string)$l=>"Four Live Last",(string)$n=>"FOUR-LIVE-001",(string)$g=>"پایه زنده",(string)$s=>"مدرسه زنده",(string)$p=>"");$id=GFAPI::add_entry($e);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());(new Gravity_Flow_API($f))->process_workflow($id);echo (int)$id;';
   return Number(wpEval(code));
@@ -226,6 +240,7 @@ try{
   assert.equal(historical[authentic.area][gridA],JSON.stringify(stale),'Historical stale state was not seeded exactly.');
 
   const first=await fourColumnLoad(a,four);
+  const firstUpgradeStorage=await storage(a);
   assert.deepEqual(first.physical,fourPhysicalIds,'Historical five-column state still changed first four-column order.');
   assert.deepEqual(first.rtl,fourRightToLeftIds,'Historical five-column state still changed first four-column RTL order.');
   assert.deepEqual(first.row,fourPhysicalIds,'First four-column header/body colId alignment failed.');
@@ -286,6 +301,8 @@ try{
 
   const liveId=await addLive();
   await waitRow(a,liveId,true);
+  await updateLive(liveId);
+  const liveUpdatedValue=await waitLiveText(a,liveId);
   await wpEval('GFAPI::delete_entry(' + liveId + ');');
   await waitRow(a,liveId,false);
 
@@ -310,6 +327,10 @@ try{
       await a.keyboard.press('Enter');
       await a.waitForTimeout(700);
       navigation.keyboard_enter_navigated=/view=entry/.test(a.url());
+      if(navigation.keyboard_enter_navigated){
+        await a.goBack({waitUntil:'networkidle'});
+        await waitRows(a,20);
+      }
     }
   }
 
