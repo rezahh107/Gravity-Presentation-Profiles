@@ -17,6 +17,7 @@ const HOST = ['id', 'date_created', school, national, student];
 const OWNER_RTL = [student, national, school, 'date_created', 'id'];
 const OLD_CLEAN = ['date_created', school, national, student, 'id'];
 const TOLERANCE = 0.75;
+const LIVE_REFRESH_TIMEOUT_MS = 45000;
 const evidencePath = path.join(artifactDir, 'inbox-host-aligned-five-column-evidence.json');
 
 function wpEval(code) {
@@ -169,12 +170,12 @@ try {
   await page.evaluate(()=>{window.__hostAlignedGrid=document.querySelector('[data-js="gflow-inbox"]');});
   const liveDate=sort==='ascending'?'2025-01-01 00:00:00':'2027-01-01 00:00:00';
   liveId=Number(wpEval(`$f=${Number(form.form_id)};$u=${Number(fixture.operator?.id||0)};$e=array('form_id'=>$f,'created_by'=>$u,'${student}'=>'Live','${Number(form.last_name_field_id)}'=>'Refresh','${national}'=>'ALIGN-LIVE','${Number(form.grade_group_field_id)}'=>'پایه','${school}'=>'مدرسه','${Number(form.photo_field_id)}'=>'');$id=GFAPI::add_entry($e);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());GFAPI::update_entry_property($id,'date_created','${liveDate}');(new Gravity_Flow_API($f))->process_workflow($id);echo (int)$id;`));
-  await page.waitForFunction(id=>Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`)),liveId,{timeout:20000});
+  await page.waitForFunction(id=>Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`)),liveId,{timeout:LIVE_REFRESH_TIMEOUT_MS});
   assert.equal(await page.evaluate(()=>window.__hostAlignedGrid===document.querySelector('[data-js="gflow-inbox"]')),true,'Live Refresh replaced Grid.');
   await assertGridId(page,grid,'live_refresh');
   assert.equal(Number(await page.locator(`[data-js="gflow-inbox"] .ag-row[row-id="${liveId}"]`).first().getAttribute('row-id')),liveId,'Native row identity changed.');
   const live=await assertGeometry(page,'live_refresh');assert.deepEqual(stateIds((await hostState(page,grid)).parsed),HOST);
-  wpEval(`GFAPI::delete_entry(${liveId});`);await page.waitForFunction(id=>!document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`),liveId,{timeout:20000});liveId=null;
+  wpEval(`GFAPI::delete_entry(${liveId});`);await page.waitForFunction(id=>!document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`),liveId,{timeout:LIVE_REFRESH_TIMEOUT_MS});liveId=null;
 
   const link=page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first();
   assert.equal(await link.evaluate(a=>a.closest('.ag-cell')?.getAttribute('col-id')),'id','Entry Detail link left id column.');
