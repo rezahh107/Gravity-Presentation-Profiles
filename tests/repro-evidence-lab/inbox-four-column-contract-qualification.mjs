@@ -240,9 +240,13 @@ try{
   assert.deepEqual(fiveResult.physical,fivePhysicalIds,'Five-column control did not reproduce PR #111 physical order.');
   assert.deepEqual(fiveResult.rtl,fiveRightToLeftIds,'Five-column control did not reproduce Owner RTL order.');
   const gridA=fiveResult.grid_id;
+  const idHeader=fiveResult.headers.find(function(h){return String(h.id)==='id';});
+  assert.ok(idHeader,'Five-column control did not expose the id column header.');
+  assert.equal(idHeader.text,'عملیات','The current SRWF id column is not labelled عملیات at runtime.');
   const fiveEntryLink=await a.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
   const fiveEntryHref=await fiveEntryLink.getAttribute('href');
   const fiveEntryColId=await fiveEntryLink.evaluate(function(link){return link.closest('.ag-cell')?.getAttribute('col-id')||null;});
+  const fiveEntryClass=await fiveEntryLink.getAttribute('class');
   assert.ok(fourPhysicalIds.includes(String(fiveEntryColId)),'Native Entry Detail link is not hosted by one of the surviving four columns.');
   assert.notEqual(fiveEntryColId,'id','Native Entry Detail navigation must not depend on the Operations/id column.');
   assert.match(fiveEntryHref||'',/view=entry/,'Native Entry Detail URL is missing from the surviving link cell.');
@@ -372,7 +376,7 @@ try{
     : 'NAVIGATION_IMPACT_REQUIRES_OWNER_DECISION';
   evidence.results={
     clean_browser:{grid_id:cleanGridId,physical:cleanResult.physical,rtl:cleanResult.rtl,row:firstNonNull(cleanResult.row),defs:cleanResult.config.defs},
-    operations_mapping:{id_column:'id',header:'عملیات',five_column_physical:fiveResult.physical,entry_link:{href:fiveEntryHref,col_id:fiveEntryColId,native:true},operations_is_entry_link_owner:false,entry_links_before_removal:'native Gravity Flow Entry Detail link'},
+    operations_mapping:{id_column:'id',header:'عملیات',five_column_physical:fiveResult.physical,entry_link:{href:fiveEntryHref,col_id:fiveEntryColId,class_name:fiveEntryClass,native:true},operations_is_entry_link_owner:false,entry_links_before_removal:'native Gravity Flow Entry Detail link'},
     historical_state:{grid_id:gridA,storage_area:authentic.area,authentic_ids:authentic.parsed.map(function(x){return String(x.colId);}),stale_ids:stale.map(function(x){return String(x.colId);}),stale_properties_preserved:true,first_upgrade: first.physical,first_upgrade_rtl:first.rtl,first_upgrade_rows:first.row,storage_after_first_upgrade:firstUpgradeStorage[authentic.area]?.[gridA]||null,new_native_state:newVisible},
     reloads:{first:first.physical,second:second.physical,first_rtl:first.rtl,second_rtl:second.rtl},
     native_persistence:{sort_before:sortDirection,sort_after:sortAfter,persisted_sort:dateState.sort},
