@@ -231,6 +231,11 @@ try{
   assert.deepEqual(fiveResult.physical,fivePhysicalIds,'Five-column control did not reproduce PR #111 physical order.');
   assert.deepEqual(fiveResult.rtl,fiveRightToLeftIds,'Five-column control did not reproduce Owner RTL order.');
   const gridA=fiveResult.grid_id;
+  const fiveEntryLink=await a.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row .gflow-inbox__entry-cell-link').first();
+  const fiveEntryHref=await fiveEntryLink.getAttribute('href');
+  const fiveEntryColId=await fiveEntryLink.evaluate(function(link){return link.closest('.ag-cell')?.getAttribute('col-id')||null;});
+  assert.equal(fiveEntryColId,'id','Operations/id column is not the native Entry Detail link cell.');
+  assert.match(fiveEntryHref||'',/view=entry/,'Operations/id column does not carry the native Entry Detail URL.');
   const unrelatedBefore=await storage(a);
   await persistThroughSearch(a,'FOUR-A-000');
   const authentic=await gridState(a,gridA);
@@ -357,13 +362,13 @@ try{
     : 'NAVIGATION_IMPACT_REQUIRES_OWNER_DECISION';
   evidence.results={
     clean_browser:{grid_id:cleanGridId,physical:cleanResult.physical,rtl:cleanResult.rtl,row:firstNonNull(cleanResult.row),defs:cleanResult.config.defs},
-    operations_mapping:{id_column:'id',header:'عملیات',five_column_physical:fiveResult.physical,entry_links_before_removal:'captured from id control'},
-    historical_state:{grid_id:gridA,storage_area:authentic.area,authentic_ids:authentic.parsed.map(function(x){return String(x.colId);}),stale_ids:stale.map(function(x){return String(x.colId);}),stale_properties_preserved:true,first_upgrade: first.physical,first_upgrade_rtl:first.rtl,first_upgrade_rows:first.row,new_native_state:newVisible},
+    operations_mapping:{id_column:'id',header:'عملیات',five_column_physical:fiveResult.physical,entry_link:{href:fiveEntryHref,col_id:fiveEntryColId,native:true},entry_links_before_removal:'native Gravity Flow Entry Detail link'},
+    historical_state:{grid_id:gridA,storage_area:authentic.area,authentic_ids:authentic.parsed.map(function(x){return String(x.colId);}),stale_ids:stale.map(function(x){return String(x.colId);}),stale_properties_preserved:true,first_upgrade: first.physical,first_upgrade_rtl:first.rtl,first_upgrade_rows:first.row,storage_after_first_upgrade:firstUpgradeStorage[authentic.area]?.[gridA]||null,new_native_state:newVisible},
     reloads:{first:first.physical,second:second.physical,first_rtl:first.rtl,second_rtl:second.rtl},
     native_persistence:{sort_before:sortDirection,sort_after:sortAfter,persisted_sort:dateState.sort},
     search:{query:'FOUR-A-000',matches:searchMatches},
     pagination:{page1:pager1,page2:pager2,round_trip:pagerRound},
-    live_refresh:{added_removed_id:liveId,native:true},
+    live_refresh:{added_removed_id:liveId,updated_value:liveUpdatedValue,native:true},
     grid_isolation:{grid_a:gridA,grid_b:gridB,distinct:gridA!==gridB,grid_b_unchanged:bAfterRaw===bBefore.raw},
     storage_isolation:{local_before:isoBefore.local[unrelatedLocalKey],local_after:isoAfter.local[unrelatedLocalKey],session_before:isoBefore.session[unrelatedSessionKey],session_after:isoAfter.session[unrelatedSessionKey]},
     navigation:navigation,
