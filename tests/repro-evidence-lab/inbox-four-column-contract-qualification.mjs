@@ -41,6 +41,13 @@ function wpEval(code) {
   return result.stdout.trim();
 }
 
+function setFourColumnProjection(enabled) {
+  wpEval(enabled
+    ? 'update_option("gpp_wu21_four_column_form_id",' + formId + ',false);'
+    : 'delete_option("gpp_wu21_four_column_form_id");'
+  );
+}
+
 function setupScopedInbox() {
   const code =
     '$form_id=' + Number(alpha.form_id) + ';' +
@@ -58,7 +65,6 @@ function setupScopedInbox() {
       'GFAPI::update_entry_property($id,"date_created",gmdate("Y-m-d H:i:s",strtotime("2026-03-15 00:00:00 UTC")+$i));' +
       '(new Gravity_Flow_API($form_id))->process_workflow($id); $ids[]=(int)$id;' +
     '}' +
-    'update_option("gpp_wu21_four_column_form_id",$form_id,false);' +
     '$a=wp_insert_post(array("post_title"=>"WU21 Four Column A","post_status"=>"publish","post_type"=>"page","post_content"=>"[gravityflow page=\\"inbox\\" form=\\"" . $form_id . "\\"]"),true);' +
     '$b=wp_insert_post(array("post_title"=>"WU21 Four Column B","post_status"=>"publish","post_type"=>"page","post_content"=>"[gravityflow page=\\"inbox\\" form=\\"" . $form_id . "\\"]"),true);' +
     'if(is_wp_error($a)||is_wp_error($b)) throw new RuntimeException("page setup failed");' +
@@ -204,6 +210,7 @@ try{
   const clean=await browser.newContext({viewport:{width:1440,height:900}});
   const cleanPage=await clean.newPage();
   await login(cleanPage);
+  setFourColumnProjection(true);
   const four=new URL(setup.page_a_url);
   four.searchParams.set('wu21_header_rtl_probe','1');
   four.searchParams.set('wu21_four_column_probe','1');
@@ -235,6 +242,9 @@ try{
   const stateCtx=await browser.newContext({viewport:{width:1440,height:900}});
   const a=await stateCtx.newPage();
   await login(a);
+  // Control: first exercise the authentic five-column contract with the
+  // qualification projection disabled, then enable removal on the same Grid ID.
+  setFourColumnProjection(false);
   const fiveUrl=new URL(setup.page_a_url);
   fiveUrl.searchParams.set('wu21_header_rtl_probe','1');
   const fiveResult=await fourColumnLoad(a,fiveUrl);
@@ -259,6 +269,7 @@ try{
   const historical=await storage(a);
   assert.equal(historical[authentic.area][gridA],JSON.stringify(stale),'Historical stale state was not seeded exactly.');
 
+  setFourColumnProjection(true);
   const first=await fourColumnLoad(a,four);
   const firstUpgradeStorage=await storage(a);
   assert.deepEqual(first.physical,fourPhysicalIds,'Historical five-column state still changed first four-column order.');
