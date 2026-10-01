@@ -25,7 +25,7 @@ function setupPage() {
     '$form=' + Number(form.form_id) + ';$uid=' + Number(fixture.operator?.id || 0) + ';' +
     '$content=\'[gravityflow page="inbox" form="\'.$form.\'"]\';$p=wp_insert_post(array("post_title"=>"WU21 Four Column","post_status"=>"publish","post_type"=>"page","post_content"=>$content),true);' +
     'if(is_wp_error($p))throw new RuntimeException($p->get_error_message());$ids=array();' +
-    'for($i=0;$i<10;$i++){ $e=array("form_id"=>$form,"created_by"=>$uid,"' + sid + '"=>"Four ".sprintf("%02d",$i),"' +
+    'for($i=0;$i<25;$i++){ $e=array("form_id"=>$form,"created_by"=>$uid,"' + sid + '"=>"Four ".sprintf("%02d",$i),"' +
     form.last_name_field_id + '"=>"Student ".sprintf("%02d",$i),"' + nid + '"=>sprintf("FOUR-%03d",$i),"' +
     form.grade_group_field_id + '"=>"پایه ".sprintf("%02d",$i),"' + school + '"=>"مدرسه ".sprintf("%02d",$i),"' +
     form.photo_field_id + '"=>"");$id=GFAPI::add_entry($e);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());' +
