@@ -96,6 +96,7 @@ jobs:
           php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='wu21-synthetic-viewer-2026'
           php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" option update WPLANG fa_IR --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" rewrite structure "$WU21_PERMALINK_STRUCTURE" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
           php "$WU21_WP_CLI" rewrite structure "$WU21_PERMALINK_STRUCTURE" --path="$WU21_WP_PATH"
