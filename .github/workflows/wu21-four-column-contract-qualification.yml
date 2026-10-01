@@ -1,0 +1,181 @@
+name: WU21 Four-Column Contract Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/repro-evidence-lab/**'
+      - '.github/workflows/wu21-four-column-contract-qualification.yml'
+      - 'gravity-presentation-profiles.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  four-column:
+    name: Exact-Head four-column persisted-state qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-wu21-root
+          MARIADB_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-wu21-root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      WU21_WP_PATH: /tmp/wu21-wordpress
+      WU21_ARTIFACT_DIR: /tmp/wu21-artifacts
+      WU21_PACKAGE_DIR: /tmp/wu21-packages
+      WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
+      WU21_GF_ZIP: /tmp/wu21-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      WU21_FLOW_ZIP: /tmp/wu21-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+      WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU21_FLOW_SHA256: ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404
+      WU21_GF_SIZE: '5300290'
+      WU21_FLOW_SIZE: '2603034'
+      WU21_WP_CLI: /tmp/wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+      WU21_PERMALINK_STRUCTURE: '/%postname%/'
+      IVD2_ADMIN_USER: bootstrap_admin
+      IVD2_ADMIN_PASSWORD: wu21-bootstrap-pass-2026
+
+    steps:
+      - name: Checkout exact pull-request Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert exact repository identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          echo "GPP_WU21_REPOSITORY_SHA=$actual" >> "$GITHUB_ENV"
+          test "$actual" = "$expected"
+          mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.34'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Run repository PHP regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          php tests/run.php
+
+      - name: Install exact WP-CLI and WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          mkdir -p "$WU21_WP_PATH"
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-wu21-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='WU21 Four Column Qualification' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
+          test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
+          php "$WU21_WP_CLI" rewrite structure "$WU21_PERMALINK_STRUCTURE" --path="$WU21_WP_PATH"
+
+      - name: Verify and install pinned Gravity packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="$GITHUB_WORKSPACE/$WU21_PACKAGE_FIXTURE_DIR"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU21_GF_ZIP"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU21_FLOW_ZIP"
+          echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
+          echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
+          unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\\.1\\.1\\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\\.1\\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+
+      - name: Activate exact plugins and test-only lab adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          mkdir -p "$WU21_WP_PATH/wp-content/mu-plugins"
+          cp tests/repro-evidence-lab/wu21-lab-plugin.php "$WU21_WP_PATH/wp-content/mu-plugins/wu21-lab-plugin.php"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+
+      - name: Create synthetic workflow fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
+          test -s "$WU21_ARTIFACT_DIR/fixture-manifest.json"
+
+      - name: Capture exact runtime identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/capture-runtime.php
+          test -s "$WU21_ARTIFACT_DIR/runtime.json"
+
+      - name: Start ephemeral WordPress HTTP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/wu21-four-column-wp.log 2>&1 &
+          echo $! >/tmp/wu21-four-column-wp.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wu21-four-column-wp.log >&2
+          exit 1
+
+      - name: Set up exact Node and Playwright
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install exact Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node -e "const a=require('playwright/package.json').version;if(a!=='1.55.0')process.exit(1);console.log('playwright@'+a)"
+
+      - name: Execute four-column qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-four-column-contract-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/inbox-four-column-contract-evidence.json"
+
+      - name: Upload exact-head qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wu21-four-column-qualification-${{ github.sha }}
+          path: |
+            /tmp/wu21-artifacts/runtime.json
+            /tmp/wu21-artifacts/fixture-manifest.json
+            /tmp/wu21-artifacts/inbox-four-column-contract-evidence.json
+            /tmp/wu21-four-column-wp.log
+          if-no-files-found: warn
+          retention-days: 30
