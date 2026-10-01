@@ -58,6 +58,7 @@ function setupScopedInbox() {
       'GFAPI::update_entry_property($id,"date_created",gmdate("Y-m-d H:i:s",strtotime("2026-03-15 00:00:00 UTC")+$i));' +
       '(new Gravity_Flow_API($form_id))->process_workflow($id); $ids[]=(int)$id;' +
     '}' +
+    'update_option("gpp_wu21_four_column_form_id",$form_id,false);' +
     '$a=wp_insert_post(array("post_title"=>"WU21 Four Column A","post_status"=>"publish","post_type"=>"page","post_content"=>"[gravityflow page=\\"inbox\\" form=\\"" . $form_id . "\\"]"),true);' +
     '$b=wp_insert_post(array("post_title"=>"WU21 Four Column B","post_status"=>"publish","post_type"=>"page","post_content"=>"[gravityflow page=\\"inbox\\" form=\\"" . $form_id . "\\"]"),true);' +
     'if(is_wp_error($a)||is_wp_error($b)) throw new RuntimeException("page setup failed");' +
@@ -70,7 +71,7 @@ function setupScopedInbox() {
 function cleanup(setup) {
   if (!setup) return;
   const ids = JSON.stringify((setup.entry_ids || []).map(Number));
-  wpEval('foreach(json_decode(' + JSON.stringify(ids) + ',true) as $id){GFAPI::delete_entry((int)$id);}wp_delete_post(' + Number(setup.page_a_id) + ',true);wp_delete_post(' + Number(setup.page_b_id) + ',true);');
+  wpEval('delete_option("gpp_wu21_four_column_form_id");foreach(json_decode(' + JSON.stringify(ids) + ',true) as $id){GFAPI::delete_entry((int)$id);}wp_delete_post(' + Number(setup.page_a_id) + ',true);wp_delete_post(' + Number(setup.page_b_id) + ',true);');
 }
 
 async function waitRows(page, min = 1) {
@@ -265,6 +266,8 @@ try{
   assert.deepEqual(first.row,fourPhysicalIds,'First four-column header/body colId alignment failed.');
 
   const nativeMatches=await persistThroughSearch(a,'FOUR-A-001');
+  const afterSearchHeaders=await headers(a);
+  assert.deepEqual(physical(afterSearchHeaders),fourPhysicalIds,'Native AJAX refresh restored the removed id column or changed the four-column order.');
   const newState=await waitPersisted(a,gridA,function(state){return state.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;}).join('|')===fourPhysicalIds.join('|');});
   const newVisible=newState.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;});
   assert.deepEqual(newVisible,fourPhysicalIds,'Gravity Flow did not naturally persist the four-column state after historical-state fallback.');
