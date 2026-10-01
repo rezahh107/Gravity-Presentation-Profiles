@@ -12,7 +12,6 @@ if (!form?.form_id) throw new Error('FOUR_COLUMN_FAILURE: alpha fixture unavaila
 const sid = String(form.first_name_field_id), nid = String(form.national_id_field_id), school = String(form.school_field_id);
 const FIVE = ['date_created', school, nid, sid, 'id'];
 const FOUR = ['date_created', school, nid, sid];
-const probe = 'wu21_four_column_contract';
 const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-four-column-contract-evidence.json');
 
 function wpEval(code) {
@@ -189,7 +188,7 @@ try {
 } finally {
   if(browser)await browser.close().catch(()=>{});
   if(muPath&&fs.existsSync(muPath))fs.unlinkSync(muPath);
-  try{wpEval("delete_option('gpp_wu21_four_column_args_seen');");}catch{}
+  try{wpEval("delete_option('gpp_wu21_four_column_form_id');");}catch{}
   cleanup();
   fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');
 }
