@@ -6,6 +6,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-01
+
 ### Fixed
 
 - Restored bounded native Gravity Flow / AG Grid Inbox pager presentation: only the host `aria-hidden="true"` row-range summary is visually suppressed, the native page summary remains visible, and native First/Last controls remain reachable but visually secondary to Previous/Next, without replacing native pagination state, Search, Live Refresh, keyboard behavior, or Entry Detail navigation.
