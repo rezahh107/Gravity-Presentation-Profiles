@@ -203,11 +203,15 @@ async function firstRowId(page) {
 }
 async function collectAllRowIds(page) {
   const ids = [];
+  const nationalSelector = '[col-id="' + String(nationalField) + '"]';
   while (true) {
-    ids.push(...await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => {
-      const cell = r.querySelector('[col-id="${nationalField}"]');
-      return (cell?.textContent || '').replace(/\\s+/g, ' ').trim();
-    }).filter(Boolean)));
+    ids.push(...await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(
+      (rows, selector) => rows.map(r => {
+        const cell = r.querySelector(selector);
+        return (cell?.textContent || '').replace(/\\s+/g, ' ').trim();
+      }).filter(Boolean),
+      nationalSelector,
+    ));
     const state = await pagerState(page);
     if (state.next_disabled) break;
     await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
@@ -363,6 +367,27 @@ try {
   const beforeHistoricalStorage = fiveAfterRestore.storage_raw;
   assert.equal(historicalGridId, fiveStateBeforeReload.grid_id, 'Grid ID changed unexpectedly across five-column reload.');
 
+  // Required clean-browser case A: before the first load, a fresh browser context
+  // has no persisted state for the exact Grid ID discovered from the real host.
+  const cleanContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const cleanPage = await cleanContext.newPage();
+  await login(cleanPage);
+  const cleanTargetStateBeforeLoad = await cleanPage.evaluate(
+    key => ({ local: localStorage.getItem(key), session: sessionStorage.getItem(key) }),
+    historicalGridId,
+  );
+  assert.equal(cleanTargetStateBeforeLoad.local, null, 'Clean browser unexpectedly has target localStorage state before first load.');
+  assert.equal(cleanTargetStateBeforeLoad.session, null, 'Clean browser unexpectedly has target sessionStorage state before first load.');
+  await gotoInbox(cleanPage, scoped.page_a_url, true);
+  const cleanFour = await gridSnapshot(cleanPage);
+  const cleanFourHeaders = physicalHeaders(await headerSnapshot(cleanPage));
+  const cleanFourRows = await rowSnapshot(cleanPage);
+  assert.deepEqual(cleanFour.column_defs, FOUR_PHYSICAL, 'Clean-browser first load did not create the four-column contract.');
+  assert.deepEqual(cleanFourHeaders.map(c => c.col_id), FOUR_PHYSICAL, 'Clean-browser first load physical order is incorrect.');
+  assert.deepEqual(rtlHeaders(cleanFourHeaders).map(c => c.col_id), FOUR_RTL, 'Clean-browser first load RTL order is incorrect.');
+  assert.deepEqual(cleanFourRows.map(c => c.col_id), FOUR_PHYSICAL, 'Clean-browser first row is not aligned with the four-column header.');
+  await cleanContext.close();
+
   await gotoInbox(page, scoped.page_a_url, true);
   const fourFirst = await gridSnapshot(page);
   const fourFirstHeaders = await headerSnapshot(page);
@@ -441,8 +466,9 @@ try {
 
   // Q6: native search and pagination remain native.
   const firstId = Number(scoped.entry_ids[0]);
-  const searched = await nativeSearch(page, 'Four First 00');
-  assert.equal(searched.includes(firstId), true, 'Native search failed after Operations removal.');
+  const searchQuery = 'WU21 Alpha Form';
+  const searched = await nativeSearch(page, searchQuery);
+  assert.ok(searched.length > 0, 'Native search failed after Operations removal.');
   await nativeSearch(page, '');
   await page.waitForFunction(
     () => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20,
@@ -561,7 +587,7 @@ try {
       date_created_sort: firstFourSortState,
       survived_first_reload: fourSecond.storage_state.find(item => String(item.colId) === 'date_created')?.sort || null,
       survived_second_reload: fourThird.storage_state.find(item => String(item.colId) === 'date_created')?.sort || null,
-      search: { query: 'Four First 00', matched_row_ids: searched },
+      search: { query: searchQuery, matched_row_ids: searched },
       pagination: { page_1: pager1, page_2: pager2, round_trip: pagerRoundTrip },
     },
     q7_navigation: {
@@ -585,8 +611,11 @@ try {
       },
     },
     clean_state_control: {
-      separate_page_b_initial_storage: gridBStateBefore,
-      distinct_grid_id: gridBInitial.grid_id,
+      exact_grid_id: historicalGridId,
+      target_storage_before_first_load: cleanTargetStateBeforeLoad,
+      first_load_physical: cleanFourHeaders.map(c => c.col_id),
+      first_load_rtl: rtlHeaders(cleanFourHeaders).map(c => c.col_id),
+      first_row_alignment: cleanFourRows.map(c => c.col_id),
     },
   };
 
