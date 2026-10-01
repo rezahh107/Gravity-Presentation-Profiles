@@ -96,6 +96,8 @@ try {
   assert.equal(fourGrid,fiveGrid,'Column omission must not create a new native Grid identity.');
 
   const fourHeaders=await headers(page); assert.deepEqual(physical(fourHeaders),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.equal(fourHeaders.some(x=>x.id==='id'),false);
+  assert.equal(await page.locator('.gflow-inbox.gflow-grid.gflow-common').count(),1,'Four-column contract must retain exactly one native Gravity Flow Grid.');
+  assert.equal(await page.locator('[data-gpp-replacement-inbox],.gpp-custom-inbox-app,.gpp-inbox-card,[col-id="gpp_case_card"]').count(),0,'Four-column qualification must not introduce a replacement Grid/card presentation.');
   const historicalAfter=await readState(page,fourGrid); assert.ok(historicalAfter);
   assert.deepEqual(stateIds(historicalAfter),stale.map(x=>String(x.colId)),'Gravity Flow must not apply the incompatible five-column state to the four-column contract.');
 
