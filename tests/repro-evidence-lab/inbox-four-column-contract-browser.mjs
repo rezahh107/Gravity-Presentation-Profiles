@@ -144,6 +144,10 @@ try {
   };
   fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');
   console.log('INBOX_FOUR_COLUMN_CONTRACT_' + evidence.execution_status);
+} catch (error) {
+  evidence.error = String(error?.stack || error);
+  fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
+  throw error;
 } finally {
   if(browser)await browser.close().catch(()=>{});
   if(muPath&&fs.existsSync(muPath))fs.unlinkSync(muPath);
