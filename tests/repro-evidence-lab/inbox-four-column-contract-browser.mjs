@@ -352,9 +352,10 @@ try {
     : (Array.isArray(fourFirst.storage_state) && fourFirst.storage_state.map(item => String(item.colId)).join('|') === FOUR_PHYSICAL.join('|')
       ? 'new_four_column_state_created_natively'
       : 'other_native_storage_transition');
+  const fourRowIds = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id'))));
   assert.deepEqual(
-    baselineRowIds,
-    await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id')))),
+    [...fourRowIds].sort((a, b) => a - b),
+    [...baselineRowIds].sort((a, b) => a - b),
     'Removing id changed the native query/assignment row set.'
   );
 
