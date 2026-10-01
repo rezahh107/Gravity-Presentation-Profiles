@@ -66,8 +66,8 @@
 
 /*
  * The row-range summary is redundant for the current operator journey. Keep the
- * host node and text in the DOM/accessibility tree, and preserve its native
- * allocation, but remove it from visual competition with the page summary.
+ * host node/text and native allocation intact; the pinned host already marks
+ * this summary aria-hidden, so GPP only removes it from visual competition.
  */
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-row-summary-panel {
     opacity: 0;
