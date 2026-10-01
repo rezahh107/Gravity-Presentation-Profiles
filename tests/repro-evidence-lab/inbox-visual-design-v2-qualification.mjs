@@ -61,6 +61,7 @@ try {
   await import('./inbox-visual-design-v2-q4-browser.mjs');
   await import('./inbox-table-header-browser.mjs');
   await import('./inbox-native-pager-presentation-browser.mjs');
+  await import('./inbox-native-pager-repair-browser.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
@@ -80,6 +81,13 @@ try {
   const pagerEvidence = JSON.parse(fs.readFileSync(pagerEvidencePath, 'utf8'));
   if (pagerEvidence.execution_status !== 'CAPTURED') throw new Error('Native Inbox pager presentation capture did not complete.');
 
+  const pagerRepairPath = path.join(artifactDir, 'inbox-native-pager-repair.json');
+  if (!fs.existsSync(pagerRepairPath)) throw new Error('Native Inbox pager repair evidence was not produced.');
+  const pagerRepair = JSON.parse(fs.readFileSync(pagerRepairPath, 'utf8'));
+  if (pagerRepair.execution_status !== 'CAPTURED' || pagerRepair.result !== 'NATIVE_PAGER_PRESENTATION_QUALIFIED') {
+    throw new Error(`Native Inbox pager repair qualification failed: ${JSON.stringify(pagerRepair)}`);
+  }
+
   // Keep the canonical WU21 browser result ID set untouched. The uploaded
   // browser-results.json gains bounded adjuncts so qualification evidence
   // survives successful artifact packaging without changing WU21 acceptance.
@@ -88,6 +96,7 @@ try {
   browserResults.inbox_visual_design_v2_qualification = evidence;
   browserResults.inbox_table_header_qualification = headerEvidence;
   browserResults.inbox_native_pager_presentation = pagerEvidence;
+  browserResults.inbox_native_pager_repair = pagerRepair;
   fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
   const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
