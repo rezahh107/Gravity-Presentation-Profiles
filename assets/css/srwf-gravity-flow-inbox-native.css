@@ -64,6 +64,20 @@
     color: var(--gpp-inbox-text-muted);
 }
 
+/*
+ * The row-range summary is redundant for the current operator journey. Keep the
+ * host node and text in the DOM/accessibility tree, and preserve its native
+ * allocation, but remove it from visual competition with the page summary.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-row-summary-panel {
+    opacity: 0;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel {
+    color: var(--gpp-inbox-text);
+    font-weight: 600;
+}
+
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-number {
     color: #25457e;
     font-weight: 700;
@@ -78,6 +92,14 @@
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button:hover:not(.ag-disabled) {
     background-color: #e2efff;
     box-shadow: 0 0 0 1px #adc9f3;
+}
+
+/* First/Last stay native and reachable, but Previous/Next carry the visual emphasis. */
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel [ref="btFirst"],
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel [ref="btLast"] {
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--gpp-inbox-text-muted);
 }
 
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button.ag-disabled {
