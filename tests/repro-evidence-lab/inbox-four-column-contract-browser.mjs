@@ -451,7 +451,12 @@ try {
   await pageB.waitForTimeout(700);
   const gridBAfterSort = await gridSnapshot(pageB);
   assert.deepEqual(gridBAfterSort.storage_state.map(item => String(item.colId)), FOUR_PHYSICAL, 'Second Grid did not persist its own four-column state.');
-  const pageAFourUrl = new URL(scoped.page_a_url);\n  pageAFourUrl.searchParams.set('wu21_four_column_rtl', '1');\n  pageAFourUrl.searchParams.set('wu21_header_rtl_probe', '1');\n  pageAFourUrl.searchParams.set('wu21_four_column', '1');\n  pageAFourUrl.searchParams.set('wu21_four_column_form', String(formId));\n  await page.goto(pageAFourUrl.toString(), { waitUntil: 'networkidle' });
+  const pageAFourUrl = new URL(scoped.page_a_url);
+  pageAFourUrl.searchParams.set('wu21_four_column_rtl', '1');
+  pageAFourUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  pageAFourUrl.searchParams.set('wu21_four_column', '1');
+  pageAFourUrl.searchParams.set('wu21_four_column_form', String(formId));
+  await page.goto(pageAFourUrl.toString(), { waitUntil: 'networkidle' });
   await waitForRows(page);
   const gridAAfterB = await gridSnapshot(page);
   assert.deepEqual(gridAAfterB.storage_state.map(item => String(item.colId)), FOUR_PHYSICAL, 'Grid A state changed after Grid B interaction.');
@@ -487,7 +492,8 @@ try {
       grid_id: historicalGridId,
       before_four_column_storage: historicalState,
       conflicting_order: historicalState.map(item => String(item.colId)),
-      after_four_column_fallback_storage: fourFirst.storage_state,\n      historical_storage_outcome: historicalStorageOutcome,
+      after_four_column_fallback_storage: fourFirst.storage_state,
+      historical_storage_outcome: historicalStorageOutcome,
       old_storage_preserved_without_manual_clear: true,
       fresh_four_column_state_created_after_native_sort: fourPersisted.storage_state,
     },
