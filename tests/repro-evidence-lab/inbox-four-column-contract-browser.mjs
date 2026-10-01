@@ -441,7 +441,7 @@ try {
 
   // Q6: native search and pagination remain native.
   const firstId = Number(scoped.entry_ids[0]);
-  const searched = await nativeSearch(page, 'FOUR-000');
+  const searched = await nativeSearch(page, 'Four First 00');
   assert.equal(searched.includes(firstId), true, 'Native search failed after Operations removal.');
   await nativeSearch(page, '');
   await page.waitForFunction(
@@ -561,7 +561,7 @@ try {
       date_created_sort: firstFourSortState,
       survived_first_reload: fourSecond.storage_state.find(item => String(item.colId) === 'date_created')?.sort || null,
       survived_second_reload: fourThird.storage_state.find(item => String(item.colId) === 'date_created')?.sort || null,
-      search: { query: 'FOUR-000', matched_row_ids: searched },
+      search: { query: 'Four First 00', matched_row_ids: searched },
       pagination: { page_1: pager1, page_2: pager2, round_trip: pagerRoundTrip },
     },
     q7_navigation: {
