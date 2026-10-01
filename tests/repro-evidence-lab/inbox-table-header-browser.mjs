@@ -318,3 +318,5 @@ try {
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
   cleanupScopedInbox(scoped);
 }
+
+await import('./inbox-four-column-contract-browser.mjs');
