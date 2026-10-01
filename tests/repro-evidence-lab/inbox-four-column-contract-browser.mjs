@@ -466,9 +466,9 @@ try {
 
   // Q6: native search and pagination remain native.
   const firstId = Number(scoped.entry_ids[0]);
-  const searchQuery = 'WU21 Alpha Form';
+  const searchQuery = 'FOUR-000';
   const searched = await nativeSearch(page, searchQuery);
-  assert.ok(searched.length > 0, 'Native search failed after Operations removal.');
+  assert.equal(searched.length, 1, 'Native search did not isolate the expected four-column national-ID row.');
   await nativeSearch(page, '');
   await page.waitForFunction(
     () => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20,
