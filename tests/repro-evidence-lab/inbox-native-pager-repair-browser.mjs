@@ -72,7 +72,7 @@ async function nativeFacts() {
     );
 
     return {
-      pager_count: document.querySelectorAll(`${ROOT} .ag-paging-panel`).length,
+      pager_count: document.querySelectorAll('[data-js="gflow-inbox"] .ag-paging-panel').length,
       custom_pager_count: document.querySelectorAll('[data-gpp-pagination], .gpp-pagination, .gpp-pager').length,
       panel: describe(panel),
       direct_children: [...panel.children].map(describe),
