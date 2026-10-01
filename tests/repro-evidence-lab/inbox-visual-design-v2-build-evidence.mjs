@@ -12,6 +12,16 @@ const q4 = read('inbox-visual-design-v2-q4.json');
 if ([q1,q2,q4].some(q => q.execution_status !== 'CAPTURED')) throw new Error('Qualification browser capture incomplete.');
 await import('./inbox-visual-design-v2-contract-falsification.mjs');
 
+// Verify the selected host-aligned five-column production contract on the exact
+// checked-out Head while the qualification-only RTL request probe is present.
+// This test does not reorder the Grid; it exercises production PHP plus native
+// Gravity Flow persistence, reload, geometry, Live Refresh and assignment paths.
+await import('./inbox-host-aligned-five-column-browser.mjs');
+const hostAlignedFiveColumn = read('inbox-host-aligned-five-column-evidence.json');
+if (hostAlignedFiveColumn.execution_status !== 'PASS') {
+  throw new Error('Host-aligned five-column runtime qualification did not pass.');
+}
+
 // Run the bounded form-authority regression in the same authentic qualification
 // process so it reuses the exact operator identity and the temporary WU21 MU
 // probe, while production ownership and the ordinary scoped header test remain
@@ -42,6 +52,7 @@ const evidence = {
   runtime: setup.runtime,
   synthetic_data: setup.data_class,
   qualifications: { q1, q2, q4 },
+  inbox_host_aligned_five_column: hostAlignedFiveColumn,
   inbox_table_header_form_authority: headerFormAuthority,
   live_refresh: {
     status: q1.live_refresh?.update_poll_status === 200 && q1.live_refresh?.add_poll_status === 200 && q4.flags?.update_observed && q4.flags?.add_observed && q4.flags?.remove_observed && q4.flags?.same_native_grid ? 'PASS' : 'FAIL',
@@ -112,4 +123,4 @@ const evidence = {
   },
 };
 fs.writeFileSync(path.join(dir, 'inbox-visual-design-v2-qualification-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
-console.log(JSON.stringify({ exact_head: exactHead, q1: q1.status, q2: q2.status, q4: q4.status, header_form_authority: headerFormAuthority.execution_status, live_refresh: evidence.live_refresh.status }, null, 2));
+console.log(JSON.stringify({ exact_head: exactHead, q1: q1.status, q2: q2.status, q4: q4.status, host_aligned_five_column: hostAlignedFiveColumn.execution_status, header_form_authority: headerFormAuthority.execution_status, live_refresh: evidence.live_refresh.status }, null, 2));
