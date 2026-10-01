@@ -259,6 +259,17 @@ async function removeLiveEntry(id) {
   wpEval(`GFAPI::delete_entry(${Number(id)});`);
 }
 
+function wpControl(action) {
+  const env = { ...process.env, WU21_CONTROL: action };
+  const cp = spawnSync(
+    'php',
+    [wpCli, `--path=${wpPath}`, 'eval-file', path.join(repoRoot, 'tests/repro-evidence-lab/runtime-control.php')],
+    { env, encoding: 'utf8' },
+  );
+  if (cp.status !== 0) throw new Error(`WP control ${action} failed: ${cp.stderr}\\n${cp.stdout}`);
+  return cp.stdout.trim();
+}
+
 async function gotoInbox(page, url, fourColumn = false) {
   const target = new URL(url);
   target.searchParams.set('wu21_four_column_rtl', '1');
@@ -267,6 +278,14 @@ async function gotoInbox(page, url, fourColumn = false) {
     target.searchParams.set('wu21_four_column', '1');
     target.searchParams.set('wu21_four_column_form', String(formId));
   }
+  await page.goto(target.toString(), { waitUntil: 'domcontentloaded' });
+  await waitForRows(page);
+}
+
+async function gotoAdminInbox(page, fourColumn = false) {
+  const target = new URL(`${process.env.WU21_BASE_URL || 'http://127.0.0.1:8080'}/wp-admin/admin.php?page=gravityflow-inbox`);
+  target.searchParams.set('wu21_four_column', fourColumn ? '1' : '0');
+  target.searchParams.set('wu21_four_column_form', String(formId));
   await page.goto(target.toString(), { waitUntil: 'domcontentloaded' });
   await waitForRows(page);
 }
@@ -487,18 +506,38 @@ try {
   assert.equal(pager2.current, '2', 'Native pager did not reach page 2.');
   assert.equal(pagerRoundTrip.current, '1', 'Native pager did not return to page 1.');
 
-  // Q8: native Live Refresh must still add and remove rows without a replacement Grid.
-  const liveId = await addLiveEntry();
+  // Q8: exercise the same four-column contract on the native Gravity Flow
+  // admin Inbox lifecycle, where the existing WU21 Live Refresh qualification is
+  // already known to reach the host polling route.
+  await gotoAdminInbox(page, true);
+  const adminFour = await gridSnapshot(page);
+  assert.deepEqual(adminFour.column_defs, FOUR_PHYSICAL, 'Admin native Inbox did not receive the four-column contract.');
+  assert.deepEqual(physicalHeaders(await headerSnapshot(page)).map(c => c.col_id), FOUR_PHYSICAL, 'Admin four-column physical order is incorrect.');
+
+  const adminSearch = await nativeSearch(page, 'WU21 Alpha Form');
+  assert.ok(adminSearch.length > 0, 'Native admin Search failed with the four-column contract.');
+  await nativeSearch(page, '');
+  await waitForRows(page);
+  const adminPager = await pagerState(page);
+  assert.equal(adminPager.current, '1');
+  assert.equal(adminPager.next_disabled, false);
+  await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '2', null, { timeout: 10000 });
+  const adminPager2 = await pagerState(page);
+  await page.locator('[data-js="gflow-inbox"] [ref="btPrevious"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '1', null, { timeout: 10000 });
+
+  const liveId = Number(wpControl('add'));
   await page.waitForFunction(
     id => Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`)),
     liveId,
-    { timeout: 30000 }
+    { timeout: 45000 }
   );
-  await removeLiveEntry(liveId);
+  wpControl('remove');
   await page.waitForFunction(
     id => !document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`),
     liveId,
-    { timeout: 30000 }
+    { timeout: 45000 }
   );
   const nativeWrappers = await page.locator('[data-js="gflow-inbox"]').count();
   const replacementTables = await page.locator('[data-gpp-replacement-grid], [data-gpp-custom-grid]').count();
