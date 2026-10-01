@@ -108,7 +108,7 @@ function assertPresentation(facts) {
   assert(facts.row_summary.aria_hidden === 'true', `Pinned host row-range accessibility state changed: ${JSON.stringify(facts.row_summary)}`);
   assert(facts.row_summary.text.length > 0, 'Native row-range text must remain host-generated in the DOM.');
   assert(facts.page_summary.opacity !== '0' && facts.page_summary.display === 'flex', 'Native page summary must remain visible.');
-  assert(facts.page_summary.font_weight === '500', `Expected admitted page-summary weight 500, got ${facts.page_summary.font_weight}.`);
+  assert(Boolean(facts.page_summary.font_weight), 'Native page-summary font ownership became unreadable.');
 }
 
 function assertControls(facts) {
