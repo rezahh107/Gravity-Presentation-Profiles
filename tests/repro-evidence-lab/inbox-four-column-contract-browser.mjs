@@ -201,6 +201,31 @@ async function sentinelSnapshot(page) {
 async function firstRowId(page) {
   return page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').first().getAttribute('row-id');
 }
+async function collectAllRowIds(page) {
+  const ids = [];
+  while (true) {
+    ids.push(...await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id')))));
+    const state = await pagerState(page);
+    if (state.next_disabled) break;
+    await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
+    await page.waitForFunction(
+      previous => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() !== previous,
+      state.current,
+      { timeout: 10000 },
+    );
+  }
+  while ((await pagerState(page)).current !== '1') {
+    const state = await pagerState(page);
+    await page.locator('[data-js="gflow-inbox"] [ref="btPrevious"]').click();
+    await page.waitForFunction(
+      previous => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() !== previous,
+      state.current,
+      { timeout: 10000 },
+    );
+  }
+  return [...new Set(ids)].sort((a, b) => a - b);
+}
+
 
 async function addLiveEntry() {
   return Number(wpEval(`
@@ -273,7 +298,7 @@ try {
   assert.equal(fiveGrid.ag_rtl, false, 'Native Grid unexpectedly entered AG Grid RTL mode.');
   assert.equal(fiveGrid.root_direction, 'rtl', 'The qualification RTL request did not establish the surrounding RTL direction.');
 
-  const baselineRowIds = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id'))));
+  const baselineRowIds = await collectAllRowIds(page);
 
   // Capture an authentic host state. A native sort is enough to force Gravity Flow
   // to persist the complete state object without fabricating its properties.
@@ -352,12 +377,8 @@ try {
     : (Array.isArray(fourFirst.storage_state) && fourFirst.storage_state.map(item => String(item.colId)).join('|') === FOUR_PHYSICAL.join('|')
       ? 'new_four_column_state_created_natively'
       : 'other_native_storage_transition');
-  const fourRowIds = await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id'))));
-  assert.deepEqual(
-    [...fourRowIds].sort((a, b) => a - b),
-    [...baselineRowIds].sort((a, b) => a - b),
-    'Removing id changed the native query/assignment row set.'
-  );
+  const fourRowIds = await collectAllRowIds(page);
+  assert.deepEqual(fourRowIds, baselineRowIds, 'Removing id changed the native query/assignment row set.');
 
   // The host has now rejected the incompatible five-column state by identity set.
   // A normal native sort must be able to write a fresh four-column state without
