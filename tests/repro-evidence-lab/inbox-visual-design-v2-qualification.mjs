@@ -60,6 +60,7 @@ try {
   await import('./inbox-visual-design-v2-q2-browser.mjs');
   await import('./inbox-visual-design-v2-q4-browser.mjs');
   await import('./inbox-table-header-browser.mjs');
+  await import('./inbox-native-pager-presentation-regression.mjs');
   await import('./inbox-visual-design-v2-build-evidence.mjs');
 
   const evidencePath = path.join(artifactDir, 'inbox-visual-design-v2-qualification-evidence.json');
@@ -74,6 +75,13 @@ try {
   const headerEvidence = JSON.parse(fs.readFileSync(headerEvidencePath, 'utf8'));
   if (headerEvidence.execution_status !== 'PASS') throw new Error('Inbox table-header runtime qualification did not pass.');
 
+  const pagerEvidencePath = path.join(artifactDir, 'inbox-native-pager-presentation-regression.json');
+  if (!fs.existsSync(pagerEvidencePath)) throw new Error('Native Inbox pager regression evidence was not produced.');
+  const pagerEvidence = JSON.parse(fs.readFileSync(pagerEvidencePath, 'utf8'));
+  if (pagerEvidence.execution_status !== 'CAPTURED' || pagerEvidence.result !== 'NATIVE_PAGER_PRESENTATION_REGRESSION_CLOSED') {
+    throw new Error(`Native Inbox pager presentation regression remains open: ${JSON.stringify(pagerEvidence)}`);
+  }
+
   // Keep the canonical WU21 browser result ID set untouched. The uploaded
   // browser-results.json gains bounded adjuncts so qualification evidence
   // survives successful artifact packaging without changing WU21 acceptance.
@@ -81,6 +89,7 @@ try {
   const browserResults = JSON.parse(fs.readFileSync(browserResultsPath, 'utf8'));
   browserResults.inbox_visual_design_v2_qualification = evidence;
   browserResults.inbox_table_header_qualification = headerEvidence;
+  browserResults.inbox_native_pager_presentation_regression = pagerEvidence;
   fs.writeFileSync(browserResultsPath, JSON.stringify(browserResults, null, 2) + '\n');
 } finally {
   const cleanup = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', `
