@@ -6,6 +6,10 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored bounded native Gravity Flow / AG Grid Inbox pager presentation: only the host `aria-hidden="true"` row-range summary is visually suppressed, the native page summary remains visible, and native First/Last controls remain reachable but visually secondary to Previous/Next, without replacing native pagination state, Search, Live Refresh, keyboard behavior, or Entry Detail navigation.
+
 ## [0.3.0] - 2026-10-01
 
 ### Added
@@ -82,7 +86,7 @@ The project intends to follow Semantic Versioning once production releases begin
 - `BoundHostValueReader` now passes Gravity Forms' `get_value_entry_detail()` arguments in their documented positions; the entry array was previously passed where the currency code belongs.
 - Print option selection is driven by the active binding set's declared option map rather than raw choice values assumed by the adapter.
 - Print setup and model-resolution failures report distinct reasons (`print_surface_not_activated`, `activated_package_unresolved`, `semantic_package_unusable`, `required_asset_missing`, `required_asset_modified`, `runtime_exception`) instead of collapsing into `profile_not_active`.
-- Explicit binding repair or unmap also drops a Print option map that described the previous source's raw values, alongside the runtime proof it invalidates.
+- Explicit binding repair or unmap also drops a Print option map that described the previous source's raw values, alongside the runtime proof it invalidated.
 - Inbox and Entry Detail presentation assets use content-derived cache identities where needed so installing new plugin bytes cannot silently retain stale visual CSS under an unchanged development plugin version.
 - Entry Detail now separates page-fatal structural admission from per-semantic completeness: ordinary unmapped, stale or mapped-empty facts degrade locally instead of suppressing the whole dossier, while Gravity Flow-hidden facts remain host-governed and omitted.
 - Entry Detail presentation is primarily read-only during Review; editing/correction remains a native Gravity Flow concern, with native workflow controls, authorization, validation, transition state and history preserved as host authority.
