@@ -288,10 +288,18 @@ try{
   const nativeMatches=await persistThroughSearch(a,'FOUR-A-001');
   const afterSearchHeaders=await headers(a);
   assert.deepEqual(physical(afterSearchHeaders),fourPhysicalIds,'Native AJAX refresh restored the removed id column or changed the four-column order.');
-  const newState=await waitPersisted(a,gridA,function(state){return state.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;}).join('|')===fourPhysicalIds.join('|');});
-  const newVisible=newState.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;});
-  assert.deepEqual(newVisible,fourPhysicalIds,'Gravity Flow did not naturally persist the four-column state after historical-state fallback.');
-  assert.ok(nativeMatches.length>0,'Native Search did not execute while recreating four-column state.');
+  const fallbackSnapshot=await gridSnapshot(a);
+  const fallbackVisibleState=Array.isArray(fallbackSnapshot.storage_state)
+    ? fallbackSnapshot.storage_state.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;})
+    : null;
+  if (fallbackVisibleState) {
+    assert.deepEqual(
+      fallbackVisibleState,
+      staleFivePhysicalIds,
+      'Historical five-column state was unexpectedly rewritten before a native column-state persistence event.'
+    );
+  }
+  assert.ok(nativeMatches.length>0,'Native Search did not execute during the four-column fallback path.');
 
   const dateHeader=a.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();
   await dateHeader.click();
@@ -301,6 +309,9 @@ try{
   const sortedState=await waitPersisted(a,gridA,function(state){var d=state.parsed.find(function(x){return String(x.colId)===dateId;});return ['asc','desc'].includes(d?.sort);});
   const dateState=sortedState.parsed.find(function(x){return String(x.colId)===dateId;});
   assert.ok(['asc','desc'].includes(dateState?.sort),'Native date sort was not persisted.');
+  const newState=sortedState;
+  const newVisible=newState.parsed.map(function(x){return String(x.colId);}).filter(function(id){return id!==hiddenDateId;});
+  assert.deepEqual(newVisible,fourPhysicalIds,'Native column-state persistence after sort did not contain exactly the four active identities.');
 
   const second=await fourColumnLoad(a,four);
   assert.deepEqual(second.physical,fourPhysicalIds,'Second reload changed four-column physical order.');
@@ -400,7 +411,7 @@ try{
   evidence.results={
     clean_browser:{grid_id:cleanGridId,physical:cleanResult.physical,rtl:cleanResult.rtl,row:firstNonNull(cleanResult.row),defs:cleanResult.config.defs},
     operations_mapping:{id_column:'id',header:'عملیات',five_column_physical:fiveResult.physical,entry_link:{href:fiveEntryHref,col_id:fiveEntryColId,class_name:fiveEntryClass,native:true},operations_is_entry_link_owner:false,entry_links_before_removal:'native Gravity Flow Entry Detail link'},
-    historical_state:{grid_id:gridA,storage_area:authentic.area,authentic_ids:authentic.parsed.map(function(x){return String(x.colId);}),stale_ids:stale.map(function(x){return String(x.colId);}),stale_properties_preserved:true,first_upgrade: first.physical,first_upgrade_rtl:first.rtl,first_upgrade_rows:first.row,storage_after_first_upgrade:firstUpgradeStorage[authentic.area]?.[gridA]||null,new_native_state:newVisible},
+    historical_state:{grid_id:gridA,storage_area:authentic.area,authentic_ids:authentic.parsed.map(function(x){return String(x.colId);}),stale_ids:stale.map(function(x){return String(x.colId);}),stale_properties_preserved:true,first_upgrade: first.physical,first_upgrade_rtl:first.rtl,first_upgrade_rows:first.row,storage_after_first_upgrade:firstUpgradeStorage[authentic.area]?.[gridA]||null,storage_after_fallback:fallbackSnapshot.storage_state,historical_fallback_visible_state:fallbackVisibleState,native_four_column_state_after_sort:newState.parsed,new_native_state:newVisible},
     reloads:{first:first.physical,second:second.physical,first_rtl:first.rtl,second_rtl:second.rtl},
     native_persistence:{sort_before:sortDirection,sort_after:sortAfter,persisted_sort:dateState.sort},
     search:{query:'FOUR-A-000',matches:searchMatches},
