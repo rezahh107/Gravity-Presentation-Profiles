@@ -6,9 +6,29 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+### Added
+
+- SRWF registration-operator journey presentation on native Gravity Flow Entry Detail: authoritative Approved/Rejected result presentation after fresh host read-back, same-operator correction orientation around native Revert → User Input → Review, and a canonical `بازگشت به کارهای من` route without replacing Gravity Flow confirmation, authorization, assignment, validation, or workflow mutation.
+- Bounded native five-column SRWF Inbox projection when one authoritative form context and current PROVEN bindings are available. The final Owner-facing RTL order is `نام دانش‌آموز | کد ملی | مدرسه و پایه | تاریخ و ساعت ثبت | عملیات`; ambiguous or unsupported contexts fail closed to the native table.
+- Optional PersianGravity Jalali presentation through the qualified public provider facade for proven host/system Gregorian date seams, with native date presentation retained when the provider/capability/result is unavailable or unqualified.
+
+### Changed
+
+- SRWF Inbox presentation is now Native-First: Gravity Flow / AG Grid retain the native Search, Settings, Fullscreen, rows/cells, sorting/filtering, pagination, Live Refresh, persisted Grid state, keyboard/navigation and Entry Detail routing, while GPP owns only the bounded page shell, manual document-reload utility, column/value presentation admitted above, and scoped paint/focus treatment. The earlier Card Mode transformation and viewport-breakout ownership are retired.
+- Inbox presentation now consumes the real host width and aligns with the Entry Detail visual family without introducing a replacement Grid/pager or private Grid-state mechanism.
+- Entry Detail asset delivery is gated by qualified request reachability; progressive-enhancement JavaScript is queued only after successful dossier admission. The dossier now shrinks to its actual host content box, and Full Width workflow guidance fails closed when the required native host update capability is unavailable.
+- Print dossier CSS is delivered through Gravity Flow's native Print stylesheet seam with content-derived cache identity; Gravity Flow continues to own Print document construction, fresh authorization and browser Print dispatch.
+- GPP lifecycle-changing Gravity Forms plugin-settings actions now participate atomically in the native Settings transaction: validation runs against an isolated preview and canonical state commits only after the complete host settings validation succeeds.
+- Gravity Forms presentation assets use content-derived cache identities, while Inbox/Entry Detail asset reachability is narrowed to authentic supported render/request seams so unrelated pages and inert shortcode text do not receive admitted presentation assets.
+
 ### Fixed
 
+- Failed admitted `pgr_jalali_date` controls now receive a fail-closed programmatic association to Gravity Forms' existing validation-message node while preserving ordinary help/description relationships and native validation ownership.
 - Release ZIP smoke now derives the local wp-cli server bind host and port from the validated `GPP_RELEASE_BASE_URL`, preventing configured post-publication endpoints such as `http://127.0.0.1:8091` from drifting from the actual server endpoint.
+
+### Upgrade notes
+
+- Browsers/workstations carrying pre-migration persisted Gravity Flow / AG Grid Inbox state may require one manual site-data reset after upgrading to this Host-aligned Inbox. This is a one-time migration allowance; normal Search, Search clearing, browser close/reopen and later visits remain host-owned and are expected to stay stable without repeated resets. GPP does not introduce a parallel Grid-state migration/store to avoid that reset.
 
 ## [0.2.0] - 2026-09-20
 
