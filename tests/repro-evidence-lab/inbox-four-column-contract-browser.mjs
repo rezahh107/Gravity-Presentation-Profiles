@@ -235,7 +235,7 @@ async function gotoInbox(page, url, fourColumn = false) {
     target.searchParams.set('wu21_four_column', '1');
     target.searchParams.set('wu21_four_column_form', String(formId));
   }
-  await page.goto(target.toString(), { waitUntil: 'networkidle' });
+  await page.goto(target.toString(), { waitUntil: 'domcontentloaded' });
   await waitForRows(page);
 }
 
@@ -289,7 +289,7 @@ try {
 
   // The next reload exercises the known host restore path. No storage is touched
   // by the test between reloads.
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForRows(page);
   const fiveAfterRestore = await gridSnapshot(page);
   const fiveAfterRestoreHeaders = physicalHeaders(await headerSnapshot(page));
@@ -347,7 +347,7 @@ try {
   const unrelatedBefore = await sentinelSnapshot(page);
 
   // First repaired reload.
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForRows(page);
   const fourSecond = await gridSnapshot(page);
   const fourSecondHeaders = await headerSnapshot(page);
@@ -369,7 +369,7 @@ try {
   );
 
   // Second/subsequent reload: this is the defect-class closure gate.
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForRows(page);
   const fourThird = await gridSnapshot(page);
   const fourThirdHeaders = await headerSnapshot(page);
@@ -456,7 +456,7 @@ try {
   pageAFourUrl.searchParams.set('wu21_header_rtl_probe', '1');
   pageAFourUrl.searchParams.set('wu21_four_column', '1');
   pageAFourUrl.searchParams.set('wu21_four_column_form', String(formId));
-  await page.goto(pageAFourUrl.toString(), { waitUntil: 'networkidle' });
+  await page.goto(pageAFourUrl.toString(), { waitUntil: 'domcontentloaded' });
   await waitForRows(page);
   const gridAAfterB = await gridSnapshot(page);
   assert.deepEqual(gridAAfterB.storage_state.map(item => String(item.colId)), FOUR_PHYSICAL, 'Grid A state changed after Grid B interaction.');
