@@ -108,8 +108,8 @@ jobs:
           echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
           unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
           unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
-          grep -q '^Version: 3\\.1\\.1\\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
-          grep -q '^Version: 3\\.1\\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+          grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
 
       - name: Activate exact plugins and test-only lab adapter
         shell: bash
