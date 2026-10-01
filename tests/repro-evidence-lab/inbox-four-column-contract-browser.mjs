@@ -24,19 +24,19 @@ function setupPage() {
   return JSON.parse(wpEval(
     '$form=' + Number(form.form_id) + ';$uid=' + Number(fixture.operator?.id || 0) + ';' +
     '$content=\'[gravityflow page="inbox" form="\'.$form.\'"]\';$p=wp_insert_post(array("post_title"=>"WU21 Four Column","post_status"=>"publish","post_type"=>"page","post_content"=>$content),true);' +
-    'if(is_wp_error($p))throw new RuntimeException($p->get_error_message());$ids=array();' +
+    'if(is_wp_error($p))throw new RuntimeException($p->get_error_message());$p2=wp_insert_post(array("post_title"=>"WU21 Four Column Secondary","post_status"=>"publish","post_type"=>"page","post_content"=>$content),true);if(is_wp_error($p2))throw new RuntimeException($p2->get_error_message());$ids=array();' +
     'for($i=0;$i<25;$i++){ $e=array("form_id"=>$form,"created_by"=>$uid,"' + sid + '"=>"Four ".sprintf("%02d",$i),"' +
     form.last_name_field_id + '"=>"Student ".sprintf("%02d",$i),"' + nid + '"=>sprintf("FOUR-%03d",$i),"' +
     form.grade_group_field_id + '"=>"پایه ".sprintf("%02d",$i),"' + school + '"=>"مدرسه ".sprintf("%02d",$i),"' +
     form.photo_field_id + '"=>"");$id=GFAPI::add_entry($e);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());' +
     'GFAPI::update_entry_property($id,"date_created",gmdate("Y-m-d H:i:s",strtotime("2026-04-01 00:00:00 UTC")+$i));' +
     '(new Gravity_Flow_API($form))->process_workflow($id);$ids[]=(int)$id;}' +
-    'echo wp_json_encode(array("page_id"=>(int)$p,"url"=>get_permalink($p),"entry_ids"=>$ids));'
+    'echo wp_json_encode(array("page_id"=>(int)$p,"url"=>get_permalink($p),"page2_id"=>(int)$p2,"url2"=>get_permalink($p2),"entry_ids"=>$ids));'
   ));
 }
 function cleanup(setup) {
   if (!setup) return;
-  try { wpEval("foreach(json_decode('" + JSON.stringify(setup.entry_ids) + "',true) as $id)GFAPI::delete_entry((int)$id);wp_delete_post(" + Number(setup.page_id) + ",true);"); } catch {}
+  try { wpEval("foreach(json_decode('" + JSON.stringify(setup.entry_ids) + "',true) as $id)GFAPI::delete_entry((int)$id);wp_delete_post(" + Number(setup.page_id) + ",true);wp_delete_post(" + Number(setup.page2_id) + ",true);"); } catch {}
 }
 const headers = page => page.locator('[data-js="gflow-inbox"] .ag-header-cell').evaluateAll(c => c
   .filter(x => { const r=x.getBoundingClientRect(),s=getComputedStyle(x); return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'; })
@@ -75,6 +75,10 @@ try {
   const idHref=await idAnchor.count()?await idAnchor.getAttribute('href'):null;
   assert.ok(idText.length>0,'Operations/id cell is empty.');
   assert.ok(idHref||idCell,'Operations/id cell must exist as a native active cell.');
+  await Promise.all([page.waitForURL(/view=entry/),idCell.click()]);
+  const idNavigationUrl=page.url();
+  assert.match(idNavigationUrl,/view=entry.*id=/,'Operations/id cell did not open native Entry Detail.');
+  await page.goBack({waitUntil:'networkidle'}); await waitRows(page,20);
   const genericLink=page.locator('[data-js="gflow-inbox"] .ag-row .gflow-inbox__entry-cell-link').first();
   const genericHref=await genericLink.count()?await genericLink.getAttribute('href'):null;
   const genericCol=await genericLink.count()?await genericLink.evaluate(function(link){return link.closest('.ag-cell')?.getAttribute('col-id')||null;}):null;
@@ -96,6 +100,7 @@ try {
   assert.deepEqual(stateIds(historicalAfter),stale.map(x=>String(x.colId)),'Gravity Flow must not apply the incompatible five-column state to the four-column contract.');
 
   await page.evaluate(()=>{localStorage.setItem('wu21-four-column-unrelated-local','keep-local');sessionStorage.setItem('wu21-four-column-unrelated-session','keep-session');});
+  const beforeUnrelated=await page.evaluate((target)=>{const read=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==target)o[k]=s.getItem(k);}return o;};return {l:read(localStorage),s:read(sessionStorage)};},fourGrid);
   await nativeSearch(page,'FOUR-000'); await nativeSearch(page,''); await page.waitForTimeout(500);
 
   const sort=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first(); await sort.click(); await page.waitForTimeout(300);
@@ -113,7 +118,6 @@ try {
   await page.waitForFunction(id=>!document.querySelector('[data-js="gflow-inbox"] .ag-row[row-id="'+CSS.escape(String(id))+'"]'),live.id,{timeout:20000});
   assert.deepEqual(stateIds(await readState(page,fourGrid)),FOUR);
 
-  const beforeUnrelated=await page.evaluate((target)=>{const read=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==target)o[k]=s.getItem(k);}return o;};return {l:read(localStorage),s:read(sessionStorage)};},fourGrid);
   const afterStorage=await page.evaluate(()=>({l:localStorage.getItem('wu21-four-column-unrelated-local'),s:sessionStorage.getItem('wu21-four-column-unrelated-session')}));
   assert.equal(afterStorage.l,'keep-local'); assert.equal(afterStorage.s,'keep-session');
   const afterUnrelated=await page.evaluate((target)=>{const read=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==target)o[k]=s.getItem(k);}return o;};return {l:read(localStorage),s:read(sessionStorage)};},fourGrid);
@@ -123,6 +127,16 @@ try {
   assert.deepEqual(physical(r1),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.deepEqual(stateIds(s1),FOUR);
   await page.reload({waitUntil:'networkidle'}); await waitRows(page,20); const r2=await headers(page),s2=await readState(page,fourGrid);
   assert.deepEqual(physical(r2),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.deepEqual(stateIds(s2),FOUR);
+
+  const isolated=await browser.newPage({viewport:{width:1440,height:900}}); await login(isolated);
+  await isolated.goto(setup.url2+'?wu21_rtl_probe=1',{waitUntil:'networkidle'}); await waitRows(isolated,20);
+  const gridB=await gridId(isolated); assert.notEqual(gridB,fourGrid,'Independent Inbox page must receive a distinct native Grid ID.');
+  assert.deepEqual(physical(await headers(isolated)),FOUR); assert.deepEqual(await rowCols(isolated),FOUR);
+  const sortB=isolated.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first(); await sortB.click(); await isolated.waitForTimeout(300);
+  const stateB=await readState(isolated,gridB); assert.ok(stateB); assert.deepEqual(stateIds(stateB),FOUR);
+  await page.reload({waitUntil:'networkidle'}); await waitRows(page,20); assert.equal(await gridId(page),fourGrid); assert.deepEqual(stateIds(await readState(page,fourGrid)),FOUR);
+  await isolated.reload({waitUntil:'networkidle'}); await waitRows(isolated,20); assert.equal(await gridId(isolated),gridB); assert.deepEqual(stateIds(await readState(isolated,gridB)),FOUR);
+  await isolated.close();
 
   const survivingCell=page.locator('[data-js="gflow-inbox"] .ag-row').first().locator('.ag-cell[col-id="'+sid+'"]').first();
   await survivingCell.waitFor({state:'visible'});
@@ -154,14 +168,14 @@ try {
     contract:'SRWF_INBOX_FOUR_COLUMN_CONTRACT_V1',
     execution_status:nav.reachable?'PASS':'NAVIGATION_IMPACT_REQUIRES_OWNER_DECISION',
     runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null,gravity_forms_version:'3.1.1.1'},
-    q1:{column_id:'id',header:'عملیات',id_cell_text:idText,id_anchor_href:idHref,generic_entry_link_href:genericHref,generic_entry_link_col_id:genericCol,entry_detail_link:true,source_evidence:sourceEvidence},
+    q1:{column_id:'id',header:'عملیات',id_cell_text:idText,id_anchor_href:idHref,generic_entry_link_href:genericHref,generic_entry_link_col_id:genericCol,id_navigation_url:idNavigationUrl,entry_detail_link:true,source_evidence:sourceEvidence},
     q2:{mechanism:'gravityflow_columns_inbox_table final column-definition omission',documented_boundary:'Gravity Flow documented/public Inbox column filter; GPP already owns this boundary',five_grid_id:fiveGrid,four_grid_id:fourGrid,deterministic_contract_identity:true},
     q3:{physical_ids:physical(fourHeaders),right_to_left_ids:[...physical(fourHeaders)].reverse(),first_row_ids:await rowCols(page)},
     q4:{authentic_five_ids:stateIds(authentic),historical_stale_ids:stale.map(x=>String(x.colId)),same_grid_id:true,incompatible_state_rejected_by_host_contract:true,state_after_fallback:stateIds(historicalAfter),four_state_after_native_persist:stateIds(sorted)},
     q5:{native_four_state_before_reload:stateIds(sorted),first_reload:stateIds(s1),second_reload:stateIds(s2)},
     q6:{date_sort_direction:sortDir,persisted_sort:sorted.parsed.find(x=>x.colId==='date_created')?.sort||null},
     q7:nav,
-    q8:{search:true,pagination:{page1:p1,page2:p2,round_trip:pr},live_refresh:{added:true,visible_row_count:liveRows,removed:true},form_scope:true,non_assignee_viewer_rows:viewerRows},
+    q8:{search:true,pagination:{page1:p1,page2:p2,round_trip:pr},live_refresh:{added:true,visible_row_count:liveRows,removed:true},form_scope:true,non_assignee_viewer_rows:viewerRows,grid_isolation:{grid_a:fourGrid,grid_b:gridB,independent_state:true}},
     clean_state:{grid_id:fourGrid,physical_ids:FOUR,persisted_state:null}
   };
   fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');
