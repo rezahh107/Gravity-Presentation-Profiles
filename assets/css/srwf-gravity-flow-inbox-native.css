@@ -64,6 +64,19 @@
     color: var(--gpp-inbox-text-muted);
 }
 
+/*
+ * Gravity Flow 3.1.0 / AG Grid 25.2.0 already marks this duplicate row-range
+ * summary aria-hidden. Preserve its native DOM, text, and allocation; suppress
+ * only that exact accessibility-qualified host state from visual competition.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-row-summary-panel[aria-hidden="true"] {
+    opacity: 0;
+}
+
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel {
+    color: var(--gpp-inbox-text);
+}
+
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-number {
     color: #25457e;
     font-weight: 700;
@@ -78,6 +91,14 @@
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button:hover:not(.ag-disabled) {
     background-color: #e2efff;
     box-shadow: 0 0 0 1px #adc9f3;
+}
+
+/* First/Last stay native and reachable; Previous/Next carry the visual emphasis. */
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel [ref="btFirst"],
+.gflow-inbox.gflow-grid.gflow-common .ag-paging-page-summary-panel [ref="btLast"] {
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--gpp-inbox-text-muted);
 }
 
 .gflow-inbox.gflow-grid.gflow-common .ag-paging-button.ag-disabled {
