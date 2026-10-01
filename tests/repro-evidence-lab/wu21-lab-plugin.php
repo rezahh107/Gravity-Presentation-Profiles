@@ -219,6 +219,22 @@ add_shortcode( 'gpp_wu21_elementor_inbox', 'gpp_wu21_elementor_inbox_content' );
  * omit the active id column from the actual Grid column contract. No DOM,
  * browser storage, Grid API or production state is touched.
  */
+
+function gpp_wu21_four_column_rtl_probe() {
+    if ( is_admin()
+        || ! isset( $_GET['wu21_four_column_rtl'] )
+        || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column_rtl'] ) )
+    ) {
+        return;
+    }
+
+    global $wp_locale;
+    if ( is_object( $wp_locale ) ) {
+        $wp_locale->text_direction = 'rtl';
+    }
+}
+add_action( 'wp', 'gpp_wu21_four_column_rtl_probe', PHP_INT_MIN );
+
 function gpp_wu21_four_column_qualification_enabled( $args = null ) {
     if ( is_admin() || ! isset( $_GET['wu21_four_column'] ) || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column'] ) ) ) {
         return false;
