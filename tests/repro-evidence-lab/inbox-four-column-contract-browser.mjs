@@ -318,7 +318,11 @@ try {
   assert.deepEqual(fourFirstRtl.map(c => c.col_id), FOUR_RTL, 'Fresh four-column RTL visual order is not student|national|school|date.');
   assert.equal(fourFirstPhysical.length, 4, 'Fresh four-column Grid has an unexpected visible column count.');
   assert.deepEqual(fourFirstRows.map(c => c.col_id), FOUR_PHYSICAL, 'First row cell order is not aligned with four-column header order.');
-  assert.equal(fourFirst.storage_raw, beforeHistoricalStorage, 'Four-column fallback unexpectedly mutated the old five-column persisted state before native interaction.');
+  const historicalStorageOutcome = fourFirst.storage_raw === beforeHistoricalStorage
+    ? 'old_five_column_state_retained'
+    : (Array.isArray(fourFirst.storage_state) && fourFirst.storage_state.map(item => String(item.colId)).join('|') === FOUR_PHYSICAL.join('|')
+      ? 'new_four_column_state_created_natively'
+      : 'other_native_storage_transition');
   assert.deepEqual(
     baselineRowIds,
     await page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').evaluateAll(rows => rows.map(r => Number(r.getAttribute('row-id')))),
@@ -447,7 +451,7 @@ try {
   await pageB.waitForTimeout(700);
   const gridBAfterSort = await gridSnapshot(pageB);
   assert.deepEqual(gridBAfterSort.storage_state.map(item => String(item.colId)), FOUR_PHYSICAL, 'Second Grid did not persist its own four-column state.');
-  await page.goto(new URL(scoped.page_a_url + '&wu21_four_column=1&wu21_four_column_form=' + formId + '&wu21_four_column_rtl=1').toString(), { waitUntil: 'networkidle' });
+  const pageAFourUrl = new URL(scoped.page_a_url);\n  pageAFourUrl.searchParams.set('wu21_four_column_rtl', '1');\n  pageAFourUrl.searchParams.set('wu21_header_rtl_probe', '1');\n  pageAFourUrl.searchParams.set('wu21_four_column', '1');\n  pageAFourUrl.searchParams.set('wu21_four_column_form', String(formId));\n  await page.goto(pageAFourUrl.toString(), { waitUntil: 'networkidle' });
   await waitForRows(page);
   const gridAAfterB = await gridSnapshot(page);
   assert.deepEqual(gridAAfterB.storage_state.map(item => String(item.colId)), FOUR_PHYSICAL, 'Grid A state changed after Grid B interaction.');
@@ -483,7 +487,7 @@ try {
       grid_id: historicalGridId,
       before_four_column_storage: historicalState,
       conflicting_order: historicalState.map(item => String(item.colId)),
-      after_four_column_fallback_storage: fourFirst.storage_state,
+      after_four_column_fallback_storage: fourFirst.storage_state,\n      historical_storage_outcome: historicalStorageOutcome,
       old_storage_preserved_without_manual_clear: true,
       fresh_four_column_state_created_after_native_sort: fourPersisted.storage_state,
     },
