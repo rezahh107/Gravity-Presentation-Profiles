@@ -236,7 +236,7 @@ function gpp_wu21_four_column_rtl_probe() {
 add_action( 'wp', 'gpp_wu21_four_column_rtl_probe', PHP_INT_MIN );
 
 function gpp_wu21_four_column_qualification_enabled( $args = null ) {
-    if ( is_admin() || ! isset( $_GET['wu21_four_column'] ) || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column'] ) ) ) {
+    if ( ! isset( $_GET['wu21_four_column'] ) || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column'] ) ) ) {
         return false;
     }
 
