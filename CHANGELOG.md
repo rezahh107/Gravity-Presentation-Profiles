@@ -6,6 +6,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-01
+
 ### Added
 
 - SRWF registration-operator journey presentation on native Gravity Flow Entry Detail: authoritative Approved/Rejected result presentation after fresh host read-back, same-operator correction orientation around native Revert → User Input → Review, and a canonical `بازگشت به کارهای من` route without replacing Gravity Flow confirmation, authorization, assignment, validation, or workflow mutation.
