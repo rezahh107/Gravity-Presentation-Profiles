@@ -215,19 +215,13 @@ add_action( 'gform_loaded', 'gpp_wu21_header_authority_register_probe', 100 );
 const GPP_WU21_FOUR_COLUMN_QUERY = 'wu21_four_column_probe';
 const GPP_WU21_FOUR_COLUMN_FORM_QUERY = 'wu21_four_column_form';
 
-function gpp_wu21_four_column_probe_enabled() {
-    return ! is_admin()
-        && isset( $_GET[ GPP_WU21_FOUR_COLUMN_QUERY ] )
-        && '1' === sanitize_key( wp_unslash( $_GET[ GPP_WU21_FOUR_COLUMN_QUERY ] ) );
+function gpp_wu21_four_column_probe_form_id() {
+    $form_id = (int) get_option( 'gpp_wu21_four_column_form_id', 0 );
+    return $form_id > 0 ? $form_id : null;
 }
 
-function gpp_wu21_four_column_probe_form_id() {
-    if ( ! isset( $_GET[ GPP_WU21_FOUR_COLUMN_FORM_QUERY ] ) ) {
-        return null;
-    }
-
-    $form_id = (int) sanitize_key( wp_unslash( $_GET[ GPP_WU21_FOUR_COLUMN_FORM_QUERY ] ) );
-    return $form_id > 0 ? $form_id : null;
+function gpp_wu21_four_column_probe_enabled() {
+    return ! is_admin() && null !== gpp_wu21_four_column_probe_form_id();
 }
 
 /**
@@ -261,6 +255,10 @@ function gpp_wu21_four_column_register_probe() {
         return;
     }
 
+    // The target form ID is stored in the disposable qualification runtime so
+    // the same supported column-definition filter remains active for Gravity
+    // Flow's AJAX refresh requests; those requests do not carry the browser's
+    // initial query-string probe parameters.
     // GPP's production filter is PHP_INT_MAX. Registering this capture on the
     // same hook after plugin bootstrap makes the test-only omission the final
     // column-definition result without changing production code.
