@@ -31,6 +31,51 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function transparentBackground(color) {
+  const normalized = String(color || '').replace(/\s+/g, '').toLowerCase();
+  return normalized === 'transparent'
+    || /^rgba\([^,]+,[^,]+,[^,]+,0(?:\.0+)?\)$/.test(normalized)
+    || /^color\(.+\/0(?:\.0+)?\)$/.test(normalized);
+}
+
+function noBoxShadow(shadow) {
+  return !shadow || shadow === 'none';
+}
+
+function hierarchyFacts(deemphasized, emphasized) {
+  const deemphasizedBackgroundTransparent = transparentBackground(deemphasized.background_color);
+  const deemphasizedBoxShadowNone = noBoxShadow(deemphasized.box_shadow);
+  const emphasizedBackgroundTransparent = transparentBackground(emphasized.background_color);
+  const emphasizedBoxShadowNone = noBoxShadow(emphasized.box_shadow);
+  return {
+    deemphasized_background_transparent: deemphasizedBackgroundTransparent,
+    deemphasized_box_shadow_none: deemphasizedBoxShadowNone,
+    emphasized_retains_paint: !emphasizedBackgroundTransparent || !emphasizedBoxShadowNone,
+    presentation_classes_differ: deemphasized.background_color !== emphasized.background_color
+      || deemphasized.box_shadow !== emphasized.box_shadow
+      || deemphasized.color !== emphasized.color,
+    deemphasized: {
+      background_color: deemphasized.background_color,
+      box_shadow: deemphasized.box_shadow,
+      color: deemphasized.color,
+    },
+    emphasized: {
+      background_color: emphasized.background_color,
+      box_shadow: emphasized.box_shadow,
+      color: emphasized.color,
+    },
+  };
+}
+
+function assertDeemphasizedRelativeTo(deemphasized, emphasized, label) {
+  const hierarchy = hierarchyFacts(deemphasized, emphasized);
+  assert(hierarchy.deemphasized_background_transparent, `${label}: First/Last background must remain transparent: ${JSON.stringify(hierarchy)}`);
+  assert(hierarchy.deemphasized_box_shadow_none, `${label}: First/Last box-shadow must remain none: ${JSON.stringify(hierarchy)}`);
+  assert(hierarchy.emphasized_retains_paint, `${label}: enabled Previous/Next lost its materially emphasized paint: ${JSON.stringify(hierarchy)}`);
+  assert(hierarchy.presentation_classes_differ, `${label}: First/Last is no longer visually distinct from enabled Previous/Next: ${JSON.stringify(hierarchy)}`);
+  return hierarchy;
+}
+
 async function nativeFacts() {
   return page.locator(PAGER).first().evaluate(panel => {
     const describe = el => {
@@ -53,6 +98,7 @@ async function nativeFacts() {
         font_weight: style.fontWeight,
         background_color: style.backgroundColor,
         box_shadow: style.boxShadow,
+        color: style.color,
         rect: {
           left: rect.left,
           right: rect.right,
@@ -120,6 +166,74 @@ function assertControls(facts) {
   }
 }
 
+async function temporarilyRemoveFirstLastDeemphasisRule() {
+  return page.evaluate(() => {
+    for (const [sheetIndex, sheet] of [...document.styleSheets].entries()) {
+      let rules;
+      try {
+        rules = [...sheet.cssRules];
+      } catch {
+        continue;
+      }
+      const ruleIndex = rules.findIndex(rule => typeof rule.selectorText === 'string'
+        && rule.selectorText.includes('[ref="btFirst"]')
+        && rule.selectorText.includes('[ref="btLast"]'));
+      if (ruleIndex === -1) continue;
+      const rule = rules[ruleIndex];
+      const removed = {
+        sheet_index: sheetIndex,
+        rule_index: ruleIndex,
+        selector: rule.selectorText,
+        css_text: rule.cssText,
+        href: sheet.href,
+      };
+      sheet.deleteRule(ruleIndex);
+      return removed;
+    }
+    throw new Error('First/Last de-emphasis CSS rule was not found in the loaded same-origin stylesheets.');
+  });
+}
+
+async function restoreFirstLastDeemphasisRule(removed) {
+  return page.evaluate(({ sheetIndex, ruleIndex, cssText }) => {
+    const sheet = document.styleSheets[sheetIndex];
+    if (!sheet) throw new Error(`Cannot restore removed pager rule; stylesheet index ${sheetIndex} is unavailable.`);
+    sheet.insertRule(cssText, Math.min(ruleIndex, sheet.cssRules.length));
+    return true;
+  }, { sheetIndex: removed.sheet_index, ruleIndex: removed.rule_index, cssText: removed.css_text });
+}
+
+async function proveHierarchyPredicateDiscriminates() {
+  const removedRule = await temporarilyRemoveFirstLastDeemphasisRule();
+  let mutatedFacts;
+  let predicateFailure = null;
+  try {
+    mutatedFacts = await nativeFacts();
+    try {
+      assertDeemphasizedRelativeTo(mutatedFacts.controls.btLast, mutatedFacts.controls.btNext, 'Negative control Page 1 Last vs Next');
+    } catch (error) {
+      predicateFailure = String(error?.message || error);
+    }
+    assert(Boolean(predicateFailure), `Negative control failed to falsify the presentation hierarchy: ${JSON.stringify(hierarchyFacts(mutatedFacts.controls.btLast, mutatedFacts.controls.btNext))}`);
+  } finally {
+    await restoreFirstLastDeemphasisRule(removedRule);
+  }
+
+  const restoredFacts = await nativeFacts();
+  const restoredHierarchy = assertDeemphasizedRelativeTo(restoredFacts.controls.btLast, restoredFacts.controls.btNext, 'Restored Page 1 Last vs Next');
+  return {
+    method: 'TEMPORARY_BROWSER_CSSOM_RULE_REMOVAL',
+    removed_rule: {
+      selector: removedRule.selector,
+      href: removedRule.href,
+    },
+    predicate_failed_when_rule_removed: true,
+    failure_message: predicateFailure,
+    mutated_hierarchy: hierarchyFacts(mutatedFacts.controls.btLast, mutatedFacts.controls.btNext),
+    restored_hierarchy: restoredHierarchy,
+  };
+}
+
 async function containment() {
   return page.locator(PAGER).first().evaluate(panel => {
     const p = panel.getBoundingClientRect();
@@ -155,6 +269,11 @@ try {
   assert(page1.current === '1' && Number(page1.total) >= 2, `Multiple-page precondition failed: ${JSON.stringify({ current: page1.current, total: page1.total })}`);
   assert(page1.controls.btFirst.ag_disabled && page1.controls.btPrevious.ag_disabled, 'First/Previous must be host-disabled on Page 1.');
   assert(!page1.controls.btNext.ag_disabled && !page1.controls.btLast.ag_disabled, 'Next/Last must be host-enabled on Page 1.');
+  const page1Hierarchy = assertDeemphasizedRelativeTo(page1.controls.btLast, page1.controls.btNext, 'Page 1 enabled Last vs Next');
+  const negativeControl = await proveHierarchyPredicateDiscriminates();
+  const last = page.locator(`${ROOT} [ref="btLast"]`);
+  const lastFocus = await focusInfo(last);
+  assert(focusVisible(lastFocus), `Enabled native Last focus indicator is not visible: ${JSON.stringify(lastFocus)}`);
   await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-after-desktop-page1.png'), fullPage: true });
 
   await page.locator(`${ROOT} [ref="btPrevious"]`).focus();
@@ -172,6 +291,10 @@ try {
   assertPresentation(page2);
   assert(page2.controls.btNext.ag_disabled && page2.controls.btLast.ag_disabled, 'Next/Last must be host-disabled on last page.');
   assert(!page2.controls.btFirst.ag_disabled && !page2.controls.btPrevious.ag_disabled, 'First/Previous must be host-enabled on last page.');
+  const lastPageHierarchy = assertDeemphasizedRelativeTo(page2.controls.btFirst, page2.controls.btPrevious, 'Last page enabled First vs Previous');
+  const first = page.locator(`${ROOT} [ref="btFirst"]`);
+  const firstFocus = await focusInfo(first);
+  assert(focusVisible(firstFocus), `Enabled native First focus indicator is not visible: ${JSON.stringify(firstFocus)}`);
   await page.screenshot({ path: path.join(artifactDir, 'inbox-visual-design-v2-native-pager-after-desktop-page2-last.png'), fullPage: true });
 
   const previous = page.locator(`${ROOT} [ref="btPrevious"]`);
@@ -230,8 +353,19 @@ try {
     result: 'NATIVE_PAGER_PRESENTATION_QUALIFIED',
     desktop_page_1: page1,
     desktop_page_2_last: page2,
+    presentation_hierarchy: {
+      page_1_enabled_last_vs_next: page1Hierarchy,
+      last_page_enabled_first_vs_previous: lastPageHierarchy,
+      negative_control: negativeControl,
+    },
     page_round_trip: { page_1_to_2_via_enter: true, page_2_to_1_via_space: true, final: roundTrip },
-    keyboard: { tab_target: tabTarget, next_focus_visible: focusVisible(nextFocus), previous_focus_visible: focusVisible(previousFocus) },
+    keyboard: {
+      tab_target: tabTarget,
+      next_focus_visible: focusVisible(nextFocus),
+      previous_focus_visible: focusVisible(previousFocus),
+      enabled_last_focus_visible: focusVisible(lastFocus),
+      enabled_first_focus_visible: focusVisible(firstFocus),
+    },
     mobile_390: { facts: mobile, containment: mobileContainment },
     single_page: { facts: singlePage, containment: singleContainment },
     live_refresh_reused: liveRefresh,
