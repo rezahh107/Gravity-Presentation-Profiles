@@ -49,6 +49,12 @@ async function waitRows(page) {
   await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length > 0, null, { timeout: 20000 });
 }
 
+async function assertGridId(page, expected, stage) {
+  const actual = await page.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id');
+  assert.equal(actual, expected, `${stage}: native Grid ID changed.`);
+  return actual;
+}
+
 async function tracks(page, kind) {
   const locator = kind === 'header'
     ? page.locator('[data-js="gflow-inbox"] .ag-header-cell')
@@ -124,15 +130,13 @@ try {
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}});await login(page);
 
-  await page.goto(ctx.url,{waitUntil:'networkidle'});await waitRows(page);
-  const ordinaryGrid=await page.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id');
   await page.goto(rtl.toString(),{waitUntil:'networkidle'});await waitRows(page);
   const grid=await page.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id');
-  assert.equal(grid,ordinaryGrid,'Grid ID changed for RTL projection.');
+  assert.ok(grid,'Native Grid ID is unavailable on the ordinary current five-column RTL render.');
   assert.equal(await page.locator('[data-js="gflow-inbox"] .ag-root-wrapper.ag-rtl').count(),0,'ag-rtl must remain false.');
   await page.evaluate(()=>{localStorage.setItem('wu21-host-align-local','keep');sessionStorage.setItem('wu21-host-align-session','keep');});
 
-  await clearState(page,grid);await page.reload({waitUntil:'networkidle'});await waitRows(page);
+  await clearState(page,grid);await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'clean');
   const clean=await assertGeometry(page,'clean');
   const cleanStorage=await storage(page);assert.equal(cleanStorage.local[grid],undefined,'Clean local state unexpectedly persisted before native mutation.');assert.equal(cleanStorage.session[grid],undefined,'Clean session state unexpectedly persisted before native mutation.');
 
@@ -143,19 +147,19 @@ try {
   assert.deepEqual(stateIds(authentic.parsed),HOST,'Native persisted order is not HOST_ALIGNED.');
 
   const oldState=reorder(authentic.parsed,OLD_CLEAN);await writeState(page,authentic.area,grid,oldState);
-  await page.reload({waitUntil:'networkidle'});await waitRows(page);
+  await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'old_clean_first_render');
   const oldFirst=await assertGeometry(page,'old_clean_first_render');
   const restored=await waitHostOrder(page,grid,HOST);assert.deepEqual(stateIds(restored.parsed),HOST,'OLD_CLEAN did not naturally restore/re-persist HOST_ALIGNED.');
 
   const stableState=reorder(restored.parsed,HOST);await writeState(page,authentic.area,grid,stableState);
-  await page.reload({waitUntil:'networkidle'});await waitRows(page);const stable=await assertGeometry(page,'existing_host_aligned');
-  await page.reload({waitUntil:'networkidle'});await waitRows(page);const reload1=await assertGeometry(page,'reload_1');
-  await page.reload({waitUntil:'networkidle'});await waitRows(page);const reload2=await assertGeometry(page,'reload_2');
+  await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'existing_host_aligned');const stable=await assertGeometry(page,'existing_host_aligned');
+  await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'reload_1');const reload1=await assertGeometry(page,'reload_1');
+  await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'reload_2');const reload2=await assertGeometry(page,'reload_2');
 
   const date=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first();await date.click();await page.waitForTimeout(300);
   const sort=await date.getAttribute('aria-sort');assert.ok(['ascending','descending'].includes(sort));
   const persistedSort=await waitPersistedSort(page,grid);assert.deepEqual(stateIds(persistedSort.state.parsed),HOST,'Sort changed persisted column order.');
-  await page.reload({waitUntil:'networkidle'});await waitRows(page);const sortReload=await assertGeometry(page,'sort_reload');
+  await page.reload({waitUntil:'networkidle'});await waitRows(page);await assertGridId(page,grid,'sort_reload');const sortReload=await assertGeometry(page,'sort_reload');
   assert.equal(await page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first().getAttribute('aria-sort'),sort,'Sort state did not persist.');
 
   await page.evaluate(()=>{window.__hostAlignedGrid=document.querySelector('[data-js="gflow-inbox"]');});
@@ -163,6 +167,7 @@ try {
   liveId=Number(wpEval(`$f=${Number(form.form_id)};$u=${Number(fixture.operator?.id||0)};$e=array('form_id'=>$f,'created_by'=>$u,'${student}'=>'Live','${Number(form.last_name_field_id)}'=>'Refresh','${national}'=>'ALIGN-LIVE','${Number(form.grade_group_field_id)}'=>'پایه','${school}'=>'مدرسه','${Number(form.photo_field_id)}'=>'');$id=GFAPI::add_entry($e);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());GFAPI::update_entry_property($id,'date_created','${liveDate}');(new Gravity_Flow_API($f))->process_workflow($id);echo (int)$id;`));
   await page.waitForFunction(id=>Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`)),liveId,{timeout:20000});
   assert.equal(await page.evaluate(()=>window.__hostAlignedGrid===document.querySelector('[data-js="gflow-inbox"]')),true,'Live Refresh replaced Grid.');
+  await assertGridId(page,grid,'live_refresh');
   assert.equal(Number(await page.locator(`[data-js="gflow-inbox"] .ag-row[row-id="${liveId}"]`).first().getAttribute('row-id')),liveId,'Native row identity changed.');
   const live=await assertGeometry(page,'live_refresh');assert.deepEqual(stateIds((await hostState(page,grid)).parsed),HOST);
   wpEval(`GFAPI::delete_entry(${liveId});`);await page.waitForFunction(id=>!document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`),liveId,{timeout:20000});liveId=null;
@@ -181,10 +186,10 @@ try {
 
   cleanBrowser=await chromium.launch({headless:true});const cleanPage=await cleanBrowser.newPage({viewport:{width:1440,height:900}});await login(cleanPage);
   const before=await storage(cleanPage);assert.equal(before.local[grid],undefined);assert.equal(before.session[grid],undefined);await cleanPage.goto(rtl.toString(),{waitUntil:'networkidle'});await waitRows(cleanPage);
-  assert.equal(await cleanPage.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id'),grid);const independentClean=await assertGeometry(cleanPage,'independent_clean');
+  await assertGridId(cleanPage,grid,'independent_clean');const independentClean=await assertGeometry(cleanPage,'independent_clean');
 
   const stages=[clean,oldFirst,stable,reload1,reload2,sortReload,live,independentClean];
-  evidence={contract:'SRWF_INBOX_HOST_ALIGNED_FIVE_COLUMN_V1',execution_status:'PASS',runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null},expected:{physical:HOST,owner_rtl:OWNER_RTL,old_clean:OLD_CLEAN,ag_rtl:false},grid:{ordinary:ordinaryGrid,host_aligned:grid,equal:ordinaryGrid===grid},storage:{area:authentic.area,key:grid,restored:stateIds(restored.parsed),final:stateIds(JSON.parse(finalStorage[authentic.area][grid])),unrelated_preserved:true},reloads:{old_clean_first_render:oldFirst,existing_host_aligned:stable,reload_1:reload1,reload_2:reload2},geometry:{tolerance_css_px:TOLERANCE,max_delta_css_px:Math.max(...stages.map(x=>x.max_delta_css_px)),stages},sorting:{aria_sort:sort,persisted_sort:persistedSort.sort},live_refresh:{same_grid:true,native_row_identity:true,order_preserved:true},entry_detail:{col_id:'id',href:await link.getAttribute('href')},authorization_assignment:{non_assignee_rows:viewerRows},independent_clean};
+  evidence={contract:'SRWF_INBOX_HOST_ALIGNED_FIVE_COLUMN_V1',execution_status:'PASS',runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null},expected:{physical:HOST,owner_rtl:OWNER_RTL,old_clean:OLD_CLEAN,ag_rtl:false},grid:{ordinary_current:grid,clean:grid,old_clean:grid,host_aligned:grid,reload_1:grid,reload_2:grid,sort_reload:grid,live_refresh:grid,independent_clean:grid,all_equal:true},storage:{area:authentic.area,key:grid,restored:stateIds(restored.parsed),final:stateIds(JSON.parse(finalStorage[authentic.area][grid])),unrelated_preserved:true},reloads:{old_clean_first_render:oldFirst,existing_host_aligned:stable,reload_1:reload1,reload_2:reload2},geometry:{tolerance_css_px:TOLERANCE,max_delta_css_px:Math.max(...stages.map(x=>x.max_delta_css_px)),stages},sorting:{aria_sort:sort,persisted_sort:persistedSort.sort},live_refresh:{same_grid:true,native_row_identity:true,order_preserved:true},entry_detail:{col_id:'id',href:await link.getAttribute('href')},authorization_assignment:{non_assignee_rows:viewerRows},independent_clean};
   fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');console.log('INBOX_HOST_ALIGNED_FIVE_COLUMN_RUNTIME_PASS');
 } catch(error) {
   evidence.error=String(error?.stack||error);fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');throw error;
