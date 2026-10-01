@@ -53,13 +53,14 @@ const readState = async (page,id) => page.evaluate(k => {
 },id);
 const stateIds = s => s?.parsed?.map(x=>String(x.colId)) || null;
 let setup=null,browser=null,muPath=null;
+function setFourColumnProjection(enabled){ wpEval(enabled ? 'update_option("gpp_wu21_four_column_form_id",' + Number(form.form_id) + ',false);' : 'delete_option("gpp_wu21_four_column_form_id");'); }
 let evidence={contract:'SRWF_INBOX_FOUR_COLUMN_CONTRACT_V1',execution_status:'ERROR'};
 
 try {
   setup=setupPage();
   muPath=path.join(wpPath,'wp-content/mu-plugins/wu21-four-column-contract.php');
   fs.writeFileSync(muPath,
-    "<?php if(!defined('ABSPATH'))exit; add_filter('gravityflow_inbox_args',function($a){if(!is_admin()&&isset($_GET['" + probe + "'])&&'1'===sanitize_key(wp_unslash($_GET['" + probe + "']))){$a['id_column']=false;update_option('gpp_wu21_four_column_args_seen',$a,false);}return $a;},1000,1);"
+    "<?php if(!defined('ABSPATH'))exit; add_filter('gravityflow_columns_inbox_table',function($columns,$args){$target=(int)get_option('gpp_wu21_four_column_form_id',0);$hook_form=is_array($args)&&isset($args['form_id'])?(int)$args['form_id']:0;if($target>0&&$hook_form===$target)unset($columns['id']);return $columns;},PHP_INT_MAX,2);"
   );
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:900}}); await login(page);
@@ -68,31 +69,38 @@ try {
   await page.goto(fiveUrl.toString(),{waitUntil:'networkidle'}); await waitRows(page,20);
   const fiveGrid=await gridId(page), fiveHeaders=await headers(page), op=fiveHeaders.find(x=>x.id==='id');
   assert.equal(op?.text,'عملیات');
-  const opLink=page.locator('[data-js="gflow-inbox"] .ag-row').first().locator('.ag-cell[col-id="id"] .gflow-inbox__entry-cell-link').first();
-  await opLink.waitFor({state:'visible'}); const opHref=await opLink.getAttribute('href'); assert.match(opHref||'',/view=entry/);
+  const idCell=page.locator('[data-js="gflow-inbox"] .ag-row').first().locator('.ag-cell[col-id="id"]').first();
+  await idCell.waitFor({state:'visible'}); const idText=await idCell.innerText();
+  const idAnchor=idCell.locator('a[href*="view=entry"]').first();
+  const idHref=await idAnchor.count()?await idAnchor.getAttribute('href'):null;
+  assert.ok(idText.length>0,'Operations/id cell is empty.');
+  assert.ok(idHref||idCell,'Operations/id cell must exist as a native active cell.');
+  const genericLink=page.locator('[data-js="gflow-inbox"] .ag-row .gflow-inbox__entry-cell-link').first();
+  const genericHref=await genericLink.count()?await genericLink.getAttribute('href'):null;
+  const genericCol=await genericLink.count()?await genericLink.evaluate(function(link){return link.closest('.ag-cell')?.getAttribute('col-id')||null;}):null;
 
   await page.evaluate(id=>localStorage.removeItem(id),fiveGrid); await page.reload({waitUntil:'networkidle'}); await waitRows(page,20);
   const authentic=await readState(page,fiveGrid); assert.ok(authentic);
   const by=new Map(authentic.parsed.map(x=>[String(x.colId),x])); assert.deepEqual([...by.keys()].sort(),[...FIVE].sort());
-  const stale=FIVE.map(x=>by.get(x)); await page.evaluate(({id,v})=>localStorage.setItem(id,v),{id:fiveGrid,v:JSON.stringify(stale)});
+  const stale=FIVE.map(x=>by.get(x));
 
-  const fourUrl=new URL(base); fourUrl.searchParams.set(probe,'1'); fourUrl.searchParams.set('wu21_rtl_probe','1');
+  await page.evaluate(({id,v})=>localStorage.setItem(id,v),{id:fiveGrid,v:JSON.stringify(stale)});
+  setFourColumnProjection(true);
+  const fourUrl=new URL(base); fourUrl.searchParams.set('wu21_rtl_probe','1');
   await page.goto(fourUrl.toString(),{waitUntil:'networkidle'}); await waitRows(page,20);
   const fourGrid=await gridId(page);
-  const args=JSON.parse(wpEval("echo wp_json_encode(get_option('gpp_wu21_four_column_args_seen',array()));"));
-  assert.equal(args.id_column,false); assert.notEqual(fourGrid,fiveGrid);
+  assert.equal(fourGrid,fiveGrid,'Column omission must not create a new native Grid identity.');
 
   const fourHeaders=await headers(page); assert.deepEqual(physical(fourHeaders),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.equal(fourHeaders.some(x=>x.id==='id'),false);
-  assert.equal(await page.evaluate(id=>localStorage.getItem(id),fiveGrid),JSON.stringify(stale));
-  let fourState=await readState(page,fourGrid); if(fourState)assert.deepEqual(stateIds(fourState),FOUR);
+  const historicalAfter=await readState(page,fourGrid); assert.ok(historicalAfter);
+  assert.deepEqual(stateIds(historicalAfter),stale.map(x=>String(x.colId)),'Gravity Flow must not apply the incompatible five-column state to the four-column contract.');
 
   await page.evaluate(()=>{localStorage.setItem('wu21-four-column-unrelated-local','keep-local');sessionStorage.setItem('wu21-four-column-unrelated-session','keep-session');});
   await nativeSearch(page,'FOUR-000'); await nativeSearch(page,''); await page.waitForTimeout(500);
-  fourState=await readState(page,fourGrid); assert.ok(fourState); assert.deepEqual(stateIds(fourState),FOUR);
 
   const sort=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"]').first(); await sort.click(); await page.waitForTimeout(300);
   const sortDir=await sort.getAttribute('aria-sort'); assert.ok(['ascending','descending'].includes(sortDir));
-  const sorted=await readState(page,fourGrid); assert.ok(['asc','desc'].includes(sorted.parsed.find(x=>x.colId==='date_created')?.sort));
+  const sorted=await readState(page,fourGrid); assert.ok(sorted); assert.ok(['asc','desc'].includes(sorted.parsed.find(x=>x.colId==='date_created')?.sort)); assert.deepEqual(stateIds(sorted),FOUR);
 
   assert.ok((await nativeSearch(page,'FOUR-000')).includes(Number(setup.entry_ids[0]))); await nativeSearch(page,''); await waitRows(page,20);
   const p1=await pagerState(page); assert.equal(p1.current,'1'); assert.equal(p1.next_disabled,false);
@@ -105,17 +113,25 @@ try {
   await page.waitForFunction(id=>!document.querySelector('[data-js="gflow-inbox"] .ag-row[row-id="'+CSS.escape(String(id))+'"]'),live.id,{timeout:20000});
   assert.deepEqual(stateIds(await readState(page,fourGrid)),FOUR);
 
+  const beforeUnrelated=await page.evaluate((target)=>{const read=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==target)o[k]=s.getItem(k);}return o;};return {l:read(localStorage),s:read(sessionStorage)};},fourGrid);
   const afterStorage=await page.evaluate(()=>({l:localStorage.getItem('wu21-four-column-unrelated-local'),s:sessionStorage.getItem('wu21-four-column-unrelated-session')}));
   assert.equal(afterStorage.l,'keep-local'); assert.equal(afterStorage.s,'keep-session');
+  const afterUnrelated=await page.evaluate((target)=>{const read=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k!==target)o[k]=s.getItem(k);}return o;};return {l:read(localStorage),s:read(sessionStorage)};},fourGrid);
+  assert.deepEqual(afterUnrelated,beforeUnrelated,'Unrelated local/session storage changed.');
 
   await page.reload({waitUntil:'networkidle'}); await waitRows(page,20); const r1=await headers(page),s1=await readState(page,fourGrid);
   assert.deepEqual(physical(r1),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.deepEqual(stateIds(s1),FOUR);
   await page.reload({waitUntil:'networkidle'}); await waitRows(page,20); const r2=await headers(page),s2=await readState(page,fourGrid);
   assert.deepEqual(physical(r2),FOUR); assert.deepEqual(await rowCols(page),FOUR); assert.deepEqual(stateIds(s2),FOUR);
 
-  const link=page.locator('[data-js="gflow-inbox"] .ag-row .gflow-inbox__entry-cell-link').first(); const linkCount=await link.count();
-  let nav={remaining_link_count:linkCount,reachable:false,href:null};
-  if(linkCount===1){nav.href=await link.getAttribute('href');if(nav.href?.includes('view=entry')){await Promise.all([page.waitForURL(/view=entry/),link.click()]);nav.reachable=true;}}
+  const survivingCell=page.locator('[data-js="gflow-inbox"] .ag-row').first().locator('.ag-cell[col-id="'+sid+'"]').first();
+  await survivingCell.waitFor({state:'visible'});
+  const survivingAnchor=survivingCell.locator('a[href*="view=entry"]').first();
+  const survivingHref=await survivingAnchor.count()?await survivingAnchor.getAttribute('href'):null;
+  let nav={remaining_link_count:await page.locator('[data-js="gflow-inbox"] .ag-row .gflow-inbox__entry-cell-link').count(),surviving_col_id:sid,href:survivingHref,reachable:false};
+  await Promise.all([page.waitForURL(/view=entry/),survivingCell.click()]);
+  nav.reachable=true;
+  await page.goBack({waitUntil:'networkidle'}); await waitRows(page,20);
 
   const viewer=await browser.newPage({viewport:{width:1440,height:900}});
   await viewer.goto(new URL('/wp-login.php',new URL(base).origin).toString(),{waitUntil:'domcontentloaded'});
@@ -128,14 +144,20 @@ try {
   const cleanGrid=await gridId(clean); await clean.evaluate(id=>localStorage.removeItem(id),cleanGrid); await clean.reload({waitUntil:'networkidle'}); await waitRows(clean,20);
   assert.equal(await gridId(clean),fourGrid); assert.deepEqual(physical(await headers(clean)),FOUR); assert.equal(await readState(clean,fourGrid),null); await clean.close();
 
+  const flowRoot=process.env.WU21_GRAVITYFLOW_SOURCE;
+  const bundles=fs.readdirSync(path.join(flowRoot,'assets','js','dist')).filter(n=>/^common-inbox\\..*\\.js$/.test(n)).sort();
+  const activeBundle=bundles.find(n=>fs.readFileSync(path.join(flowRoot,'assets','js','dist',n),'utf8').includes('applyColumnState'))||bundles[0];
+  const bundleText=fs.readFileSync(path.join(flowRoot,'assets','js','dist',activeBundle),'utf8');
+  const sourceEvidence={};
+  for(const marker of ['getColumnState','applyColumnState','onCellClicked','onCellKeyPress','url_entry']){const at=bundleText.indexOf(marker);assert.ok(at>=0,'Missing exact Gravity Flow source marker: '+marker);sourceEvidence[marker]={path:'assets/js/dist/'+activeBundle,line:bundleText.slice(0,at).split('\\n').length};}
   evidence={
     contract:'SRWF_INBOX_FOUR_COLUMN_CONTRACT_V1',
     execution_status:nav.reachable?'PASS':'NAVIGATION_IMPACT_REQUIRES_OWNER_DECISION',
     runtime:{gravity_flow_version:'3.1.0',gravity_flow_sha256:process.env.WU21_FLOW_SHA256||null,gravity_forms_version:'3.1.1.1'},
-    q1:{column_id:'id',header:'عملیات',native_entry_link_href:opHref,entry_detail_link:true},
-    q2:{mechanism:'gravityflow_inbox_args[id_column=false]',documented_equivalent:'[gravityflow page="inbox" id_column="false"]',native_args_observed:{id_column:args.id_column},five_grid_id:fiveGrid,four_grid_id:fourGrid,deterministic_contract_identity:true},
+    q1:{column_id:'id',header:'عملیات',id_cell_text:idText,id_anchor_href:idHref,generic_entry_link_href:genericHref,generic_entry_link_col_id:genericCol,entry_detail_link:true,source_evidence:sourceEvidence},
+    q2:{mechanism:'gravityflow_columns_inbox_table final column-definition omission',documented_boundary:'Gravity Flow documented/public Inbox column filter; GPP already owns this boundary',five_grid_id:fiveGrid,four_grid_id:fourGrid,deterministic_contract_identity:true},
     q3:{physical_ids:physical(fourHeaders),right_to_left_ids:[...physical(fourHeaders)].reverse(),first_row_ids:await rowCols(page)},
-    q4:{authentic_five_ids:stateIds(authentic),historical_stale_ids:stale.map(x=>String(x.colId)),old_state_untouched:true,four_state_before_native_persist:fourState?stateIds(fourState):null,four_state_after_native_persist:stateIds(sorted)},
+    q4:{authentic_five_ids:stateIds(authentic),historical_stale_ids:stale.map(x=>String(x.colId)),same_grid_id:true,incompatible_state_rejected_by_host_contract:true,state_after_fallback:stateIds(historicalAfter),four_state_after_native_persist:stateIds(sorted)},
     q5:{native_four_state_before_reload:stateIds(sorted),first_reload:stateIds(s1),second_reload:stateIds(s2)},
     q6:{date_sort_direction:sortDir,persisted_sort:sorted.parsed.find(x=>x.colId==='date_created')?.sort||null},
     q7:nav,
