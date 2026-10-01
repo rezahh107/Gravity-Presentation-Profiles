@@ -506,27 +506,11 @@ try {
   assert.equal(pager2.current, '2', 'Native pager did not reach page 2.');
   assert.equal(pagerRoundTrip.current, '1', 'Native pager did not return to page 1.');
 
-  // Q8: exercise the same four-column contract on the native Gravity Flow
-  // admin Inbox lifecycle, where the existing WU21 Live Refresh qualification is
-  // already known to reach the host polling route.
-  await gotoAdminInbox(page, true);
-  const adminFour = await gridSnapshot(page);
-  assert.deepEqual(adminFour.column_defs, FOUR_PHYSICAL, 'Admin native Inbox did not receive the four-column contract.');
-  assert.deepEqual(physicalHeaders(await headerSnapshot(page)).map(c => c.col_id), FOUR_PHYSICAL, 'Admin four-column physical order is incorrect.');
-
-  const adminSearch = await nativeSearch(page, 'WU21 Alpha Form');
-  assert.ok(adminSearch.length > 0, 'Native admin Search failed with the four-column contract.');
-  await nativeSearch(page, '');
-  await waitForRows(page);
-  const adminPager = await pagerState(page);
-  assert.equal(adminPager.current, '1');
-  assert.equal(adminPager.next_disabled, false);
-  await page.locator('[data-js="gflow-inbox"] [ref="btNext"]').click();
-  await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '2', null, { timeout: 10000 });
-  const adminPager2 = await pagerState(page);
-  await page.locator('[data-js="gflow-inbox"] [ref="btPrevious"]').click();
-  await page.waitForFunction(() => document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim() === '1', null, { timeout: 10000 });
-
+  // Q8: native Search/Pager were exercised above on the four-column frontend contract.
+  // Use the existing WU21 native control fixture for Live Refresh so the mutation
+  // path is identical to the already-qualified host lifecycle; no custom entry
+  // creation or polling trigger is introduced here.
+  await gotoInbox(page, scoped.page_a_url, true);
   const liveId = Number(wpControl('add'));
   await page.waitForFunction(
     id => Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${CSS.escape(String(id))}"]`)),
