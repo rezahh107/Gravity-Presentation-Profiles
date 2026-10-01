@@ -66,12 +66,14 @@ final class InboxTableHeaderPresentation {
         );
 
         // Gravity Flow's current native Inbox Grid remains physically LTR even
-        // when the surrounding WordPress presentation is RTL. The column hook
-        // therefore needs the inverse physical sequence on RTL requests so the
-        // visible right-to-left order matches the Owner contract. This stays on
-        // Flow's existing column seam and does not create Grid/DOM order state.
+        // when the surrounding WordPress presentation is RTL. Keep the native
+        // Operations/id column at the physical beginning, and reverse only the
+        // four informational columns so GPP's projection matches the qualified
+        // host-restored order instead of fighting persisted native state.
         if ( function_exists( 'is_rtl' ) && is_rtl() ) {
-            $visible = array_reverse( $visible, true );
+            $id_column = array( 'id' => $visible['id'] );
+            unset( $visible['id'] );
+            $visible = $id_column + array_reverse( $visible, true );
         }
 
         // Gravity Flow 3.1.0 keeps the raw date_created compare value and its
