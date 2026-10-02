@@ -78,6 +78,40 @@ gpp_journey_assert( false === strpos( $php, 'window.confirm' ) && false === strp
 gpp_journey_assert( false === strpos( $php, 'update_option(' ) && false === strpos( $php, 'add_option(' ) && false === strpos( $php, 'set_transient(' ), 'Journey adapter must remain stateless.' );
 gpp_journey_assert( false === strpos( $php, 'wp_insert_post' ) && false === strpos( $php, 'page_id' ), 'Production journey must not create or hard-code environment Page IDs.' );
 gpp_journey_assert( false !== strpos( $css, ':focus-visible' ), 'Journey return control requires visible keyboard focus.' );
+gpp_journey_assert(
+    false !== strpos( $css, '.gravityflow-back-link-container a.back-link' )
+    && false !== strpos( $css, '.gpp-entry-journey__return' ),
+    'Primary-navigation treatment must cover both admitted native and GPP return-control paths.'
+);
+foreach ( array(
+    '#2563eb',
+    '#1d4ed8',
+    '#93c5fd',
+    'border-radius: 12px',
+    'min-block-size: 44px',
+    '0 6px 18px rgba(37, 99, 235, .14)',
+    'content: ""',
+    'data:image/svg+xml',
+) as $primary_navigation_visual_marker ) {
+    gpp_journey_assert(
+        false !== strpos( $css, $primary_navigation_visual_marker ),
+        'Primary-navigation visual contract marker is missing: ' . $primary_navigation_visual_marker
+    );
+}
+gpp_journey_assert(
+    false !== strpos( $css, '.gravityflow-back-link-container a.back-link::before' )
+    && false !== strpos( $css, "stroke='%23fff'" ),
+    'Decorative RTL return icon must be CSS-only and white on both return paths.'
+);
+gpp_journey_assert(
+    false === strpos( $css, '.gpp-entry-print-utility' ),
+    'Journey refinement must not restyle the existing Print utility.'
+);
+gpp_journey_assert(
+    false === strpos( $php, 'gpp-entry-journey__return-icon' )
+    && false === strpos( $php, 'aria-label="' . 'بازگشت به کارهای من' . '"' ),
+    'Return icon must not add duplicate accessible naming or icon markup to the action name.'
+);
 gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
 gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );
 
