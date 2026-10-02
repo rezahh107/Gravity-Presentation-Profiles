@@ -256,13 +256,54 @@ async function capture(page, route) {
 
     const nodes=Object.fromEntries(Object.entries(nodeSelectors).map(([name,selector]) => [name,describe(name,selector)]));
     const presentChain=chainNames.map(name => nodes[name]).filter(Boolean);
-    const hostIndex=presentChain.findIndex(node => node.name==='host');
-    const postHost=hostIndex>=0 ? presentChain.slice(hostIndex) : presentChain;
-    let firstLtr=null;
-    let firstRtlAfterLtr=null;
-    for (const node of postHost) {
-      if (!firstLtr && node.computed_direction==='ltr') firstLtr=node;
-      if (firstLtr && node.computed_direction==='rtl') { firstRtlAfterLtr=node; break; }
+
+    function describeActualElement(el,index) {
+      const computed=getComputedStyle(el);
+      const parent=el.parentElement;
+      const directMatches=matchedDirectionRules(el);
+      const authorWinner=rankWinner(directMatches);
+      const dirAttribute=el.getAttribute('dir');
+      const inlineDirection=el.style?.getPropertyValue('direction')?.trim() || null;
+      const inlineImportant=el.style?.getPropertyPriority('direction')==='important';
+      let establishment='INHERITED_OR_UA';
+      let winningMechanism=null;
+      if (inlineDirection) {
+        establishment='EXPLICIT_INLINE_STYLE';
+        winningMechanism={kind:'INLINE_STYLE',value:inlineDirection,important:inlineImportant,style_attribute:el.getAttribute('style')};
+      } else if (authorWinner) {
+        establishment='EXPLICIT_AUTHOR_CSS';
+        winningMechanism={kind:'AUTHOR_CSS_RULE',value:authorWinner.value,selector:authorWinner.matched_selector,important:authorWinner.important,specificity:authorWinner.specificity,source_order:authorWinner.source_order,stylesheet:authorWinner.stylesheet,context:authorWinner.context,css_text:authorWinner.css_text};
+      } else if (dirAttribute) {
+        establishment='EXPLICIT_DIR_ATTRIBUTE_PRESENTATION_HINT';
+        winningMechanism={kind:'DIR_ATTRIBUTE',value:dirAttribute};
+      } else if (parent && computed.direction===getComputedStyle(parent).direction) {
+        establishment='INHERITED_FROM_PARENT';
+        winningMechanism={kind:'INHERITED',from_parent:identity(parent),value:getComputedStyle(parent).direction};
+      }
+      return {
+        index,
+        identity:identity(el),
+        computed_direction:computed.direction,
+        parent_identity:identity(parent),
+        parent_computed_direction:parent ? getComputedStyle(parent).direction : null,
+        inline_direction:inlineDirection,
+        establishment,
+        winning_mechanism:winningMechanism,
+        direct_direction_rules:directMatches,
+      };
+    }
+
+    const rootElement=document.querySelector(nodeSelectors.ag_root_wrapper);
+    const ancestorElements=[];
+    for (let el=rootElement;el;el=el.parentElement) ancestorElements.push(el);
+    ancestorElements.reverse();
+    const fullAncestorChain=ancestorElements.map((el,index) => describeActualElement(el,index));
+    let firstDomRtlAfterLtr=null;
+    for (let i=1;i<fullAncestorChain.length;i+=1) {
+      if (fullAncestorChain[i-1].computed_direction==='ltr' && fullAncestorChain[i].computed_direction==='rtl') {
+        firstDomRtlAfterLtr=fullAncestorChain[i];
+        break;
+      }
     }
 
     return {
@@ -274,12 +315,11 @@ async function capture(page, route) {
       stylesheet_inventory:stylesheetInventory,
       nodes,
       chain_order:presentChain.map(node => ({name:node.name,computed_direction:node.computed_direction,establishment:node.establishment,winning_mechanism:node.winning_mechanism})),
+      full_ancestor_chain:fullAncestorChain,
       ltr_seam_analysis:{
         host_present:Boolean(nodes.host),
         host_computed_direction:nodes.host?.computed_direction || null,
-        first_ltr_at_or_after_host:firstLtr?.name || null,
-        first_rtl_after_ltr:firstRtlAfterLtr?.name || null,
-        first_rtl_node:firstRtlAfterLtr || null,
+        first_dom_rtl_after_ltr:firstDomRtlAfterLtr,
       },
       grid_identity:{
         root_classes:nodes.ag_root_wrapper?.identity?.classes || [],
@@ -328,15 +368,15 @@ try {
   const block=evidence.routes.registered_block_rtl;
 
   const instance=entry => {
-    const a=entry?.ltr_seam_analysis;
-    if (entry?.status!=='CAPTURED' || !a?.first_rtl_node) return null;
-    const node=a.first_rtl_node;
+    const node=entry?.ltr_seam_analysis?.first_dom_rtl_after_ltr;
+    if (entry?.status!=='CAPTURED' || !node) return null;
     return {
       route_id:entry.route.id,
       route_kind:entry.route.kind,
-      first_rtl_boundary:node.name,
-      selector:node.selector,
+      first_rtl_boundary_identity:node.identity,
+      ancestor_index:node.index,
       computed_direction:node.computed_direction,
+      parent_identity:node.parent_identity,
       parent_computed_direction:node.parent_computed_direction,
       establishment:node.establishment,
       winning_mechanism:node.winning_mechanism,
@@ -349,14 +389,15 @@ try {
   evidence.root_cause_anchor=scopedInstance ? {
     status:'ESTABLISHED',
     route_id:scopedInstance.route_id,
-    first_rtl_boundary:scopedInstance.first_rtl_boundary,
-    selector:scopedInstance.selector,
+    first_rtl_boundary_identity:scopedInstance.first_rtl_boundary_identity,
+    ancestor_index:scopedInstance.ancestor_index,
+    parent_identity:scopedInstance.parent_identity,
     establishment:scopedInstance.establishment,
     winning_mechanism:scopedInstance.winning_mechanism,
-    statement:'The intended physical LTR seam is re-entered into RTL at this first captured node; downstream native Grid direction follows from that boundary.',
+    statement:'The first actual DOM descendant transition from computed LTR to RTL is established here; the same author rule then explicitly establishes RTL on the GPP host and every captured native Grid/scroll participant.',
   } : {
     status:'NOT_ASSESSABLE',
-    reason:'The form-scoped route did not expose a mechanically identifiable LTR-to-RTL transition in the required node chain.',
+    reason:'The form-scoped route did not expose a mechanically identifiable LTR-to-RTL transition in the full AG Grid ancestor chain.',
   };
 
   evidence.reproduction={
