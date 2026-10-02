@@ -484,7 +484,10 @@ const result = {
   disposition: 'NOT_PROVEN',
   hypothesis_evaluation: null,
   proposed_smallest_candidate: null,
-  production_files_changed: [],
+  production_files_changed: [
+    'assets/css/srwf-gravity-flow-inbox.css',
+    'src/SRWF/GravityFlow/InboxPresentationAdapter.php',
+  ],
 };
 
 let browser = null;
