@@ -460,6 +460,7 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/inbox-width-rtl-comparative-browser-tests.mjs
           test -s "$WU21_ARTIFACT_DIR/inbox-direction-scroll-qualification.json"
+          # Production acceptance is intentionally fail-closed: diagnostic dispositions are not success.
           node -e '
             const fs = require("fs");
             const file = process.env.WU21_ARTIFACT_DIR + "/inbox-direction-scroll-qualification.json";
