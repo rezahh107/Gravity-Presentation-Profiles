@@ -58,6 +58,16 @@ cp -a "$WORK/dev-source" "$AUTHOR_ALTERED"
 sed -i 's/Author: Reza Hashemi Hosseini/Author: Reza Hashemi/' "$AUTHOR_ALTERED/gravity-presentation-profiles.php"
 expect_fail release_assert_author_identity "$AUTHOR_ALTERED"
 
+AUTHOR_CASE="$WORK/author-case"
+cp -a "$WORK/dev-source" "$AUTHOR_CASE"
+sed -i 's/Author: Reza Hashemi Hosseini/Author: reza hashemi hosseini/' "$AUTHOR_CASE/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_CASE"
+
+AUTHOR_EXTRA="$WORK/author-extra"
+cp -a "$WORK/dev-source" "$AUTHOR_EXTRA"
+sed -i 's/Author: Reza Hashemi Hosseini/Author: Reza Hashemi Hosseini and GPP Team/' "$AUTHOR_EXTRA/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_EXTRA"
+
 AUTHOR_USERNAME="$WORK/author-username"
 cp -a "$WORK/dev-source" "$AUTHOR_USERNAME"
 sed -i 's/Author: Reza Hashemi Hosseini/Author: rezahh107/' "$AUTHOR_USERNAME/gravity-presentation-profiles.php"
