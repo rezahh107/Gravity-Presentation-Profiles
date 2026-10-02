@@ -9,6 +9,7 @@ The project intends to follow Semantic Versioning once production releases begin
 ### Changed
 
 - Locked the WordPress plugin Author metadata to `Reza Hashemi Hosseini` and made exact Author identity a fail-closed invariant of source and packaged release validation.
+- Refined the canonical Entry Detail `بازگشت به کارهای من` control as the primary navigation CTA across admitted native and GPP fallback return paths, using the semantic primary-blue treatment and a decorative RTL return arrow while leaving navigation/workflow behavior unchanged; Print remains the secondary outlined utility.
 
 ## [0.3.1] - 2026-10-01
 
