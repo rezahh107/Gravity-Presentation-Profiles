@@ -6,7 +6,7 @@ import path from 'node:path';
 const A=process.env.WU21_ARTIFACT_DIR;
 const R=process.env.GITHUB_WORKSPACE;
 const SHA=process.env.GPP_WU21_REPOSITORY_SHA;
-const URL=process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
+const BASE_URL=process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const WPCLI=process.env.WU21_WP_CLI;
 const WPPATH=process.env.WU21_WP_PATH;
 const T=2;
@@ -273,7 +273,7 @@ let browser=null,fatal=null;
 try{
   browser=await chromium.launch({headless:true});
   const context=await browser.newContext({locale:'en-US',timezoneId:'UTC',reducedMotion:'reduce'});
-  await context.addCookies(cookies.map(c=>({...c,url:URL})));
+  await context.addCookies(cookies.map(c=>({...c,url:BASE_URL})));
   const page=await context.newPage();
   const choice=await chooseWidth(page,routes.unscoped);
   if(!choice) throw new Error('Q2_AXIS_MIN_INCOMPLETE: no desktop viewport produced native horizontal scrolling.');
