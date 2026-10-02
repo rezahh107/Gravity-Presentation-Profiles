@@ -85,6 +85,123 @@ function assertCanonicalPageOneHref(href, route) {
   if (comparable(href) !== comparable(route.url)) throw new Error(`Return href is not canonical Inbox page 1: ${JSON.stringify({ href, expected: route.url })}`);
 }
 
+async function assertPrimaryReturnVisual(page, route, entryId, expectedMode) {
+  const selector = expectedMode === 'native'
+    ? '.gravityflow-back-link-container a.back-link'
+    : 'a.gpp-entry-journey__return';
+  const evidence = [];
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+    { width: 320, height: 720 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(frontendEntryUrl(route, entryId), { waitUntil: 'networkidle' });
+
+    const controls = await returnControls(page);
+    const all = [...controls.gpp, ...controls.native];
+    if (all.length !== 1) throw new Error(`Expected exactly one return control at ${viewport.width}px: ${JSON.stringify(controls)}`);
+    if (expectedMode === 'native' && (controls.native.length !== 1 || controls.gpp.length !== 0)) throw new Error(`Native return mode drifted at ${viewport.width}px: ${JSON.stringify(controls)}`);
+    if (expectedMode === 'gpp' && (controls.gpp.length !== 1 || controls.native.length !== 0)) throw new Error(`GPP return mode drifted at ${viewport.width}px: ${JSON.stringify(controls)}`);
+    if (all[0].text !== 'بازگشت به کارهای من') throw new Error(`Return label drifted at ${viewport.width}px: ${JSON.stringify(all[0])}`);
+    assertCanonicalPageOneHref(all[0].href, route);
+
+    const control = page.locator(selector).filter({ visible: true }).first();
+    const visual = await control.evaluate(el => {
+      const style = getComputedStyle(el);
+      const before = getComputedStyle(el, '::before');
+      const rect = el.getBoundingClientRect();
+      return {
+        text: el.textContent.replace(/\s+/g, ' ').trim(),
+        aria_label: el.getAttribute('aria-label'),
+        background: style.backgroundColor,
+        border_color: style.borderTopColor,
+        color: style.color,
+        border_radius: style.borderRadius,
+        min_block_size: style.minBlockSize,
+        box_shadow: style.boxShadow,
+        white_space: style.whiteSpace,
+        rect: { left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+        client_width: el.clientWidth,
+        scroll_width: el.scrollWidth,
+        pseudo: {
+          content: before.content,
+          background_image: before.backgroundImage,
+          width: before.width,
+          height: before.height,
+        },
+      };
+    });
+
+    if (
+      visual.background !== 'rgb(37, 99, 235)'
+      || visual.border_color !== 'rgb(37, 99, 235)'
+      || visual.color !== 'rgb(255, 255, 255)'
+      || visual.border_radius !== '12px'
+      || visual.min_block_size !== '44px'
+      || !visual.box_shadow.includes('rgba(37, 99, 235, 0.14)')
+    ) {
+      throw new Error(`Primary-navigation visual tokens drifted at ${viewport.width}px: ${JSON.stringify(visual)}`);
+    }
+    if (
+      visual.text !== 'بازگشت به کارهای من'
+      || visual.aria_label !== null
+      || visual.pseudo.content !== '""'
+      || !visual.pseudo.background_image.includes('data:image/svg+xml')
+      || visual.pseudo.width !== '18px'
+      || visual.pseudo.height !== '18px'
+    ) {
+      throw new Error(`Decorative return icon/accessibility contract drifted at ${viewport.width}px: ${JSON.stringify(visual)}`);
+    }
+    if (
+      visual.rect.height < 44
+      || visual.rect.left < -1
+      || visual.rect.right > viewport.width + 1
+      || visual.scroll_width > visual.client_width + 1
+      || visual.white_space === 'nowrap'
+    ) {
+      throw new Error(`Return control clipped or overflowed at ${viewport.width}px: ${JSON.stringify(visual)}`);
+    }
+
+    await control.hover();
+    const hover = await control.evaluate(el => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, border_color: style.borderTopColor, color: style.color };
+    });
+    if (hover.background !== 'rgb(29, 78, 216)' || hover.border_color !== 'rgb(29, 78, 216)' || hover.color !== 'rgb(255, 255, 255)') {
+      throw new Error(`Primary-navigation hover contract drifted at ${viewport.width}px: ${JSON.stringify(hover)}`);
+    }
+
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    let keyboardFocused = false;
+    for (let i = 0; i < 120; i += 1) {
+      await page.keyboard.press('Tab');
+      keyboardFocused = await control.evaluate(el => document.activeElement === el);
+      if (keyboardFocused) break;
+    }
+    if (!keyboardFocused) throw new Error(`Return control was not keyboard reachable at ${viewport.width}px.`);
+    const focus = await control.evaluate(el => {
+      const style = getComputedStyle(el);
+      return {
+        focus_visible: el.matches(':focus-visible'),
+        outline_style: style.outlineStyle,
+        outline_width: style.outlineWidth,
+        outline_color: style.outlineColor,
+        outline_offset: style.outlineOffset,
+      };
+    });
+    if (!focus.focus_visible || focus.outline_style !== 'solid' || focus.outline_width !== '3px' || focus.outline_color !== 'rgb(147, 197, 253)' || focus.outline_offset !== '3px') {
+      throw new Error(`Return focus-visible contract drifted at ${viewport.width}px: ${JSON.stringify(focus)}`);
+    }
+
+    evidence.push({ viewport, mode: expectedMode, visual, hover, focus });
+  }
+
+  return evidence;
+}
+
 function controlMode() {
   return wpEval('echo get_option("gpp_journey_back_link_control", "__MISSING__");');
 }
@@ -135,30 +252,24 @@ await page.goto(frontendEntryUrl(route, stableEntryId), { waitUntil: 'networkidl
 const baselineControls = await returnControls(page);
 if ([...baselineControls.gpp, ...baselineControls.native].length !== 1) throw new Error(`Baseline return control is not singular: ${JSON.stringify(baselineControls)}`);
 
-await test('SRWF-PROD-BACK-LINK-FORCE-ON-001', 'force_on yields one canonical Persian native return control', async () => {
+await test('SRWF-PROD-BACK-LINK-FORCE-ON-001', 'force_on yields one canonical Persian native return control with primary-navigation presentation', async () => {
   try {
     setControlMode('force_on');
-    await page.goto(frontendEntryUrl(route, stableEntryId), { waitUntil: 'networkidle' });
+    const visual = await assertPrimaryReturnVisual(page, route, stableEntryId, 'native');
     const controls = await returnControls(page);
-    if (controls.native.length !== 1 || controls.gpp.length !== 0) throw new Error(`force_on did not yield exactly one native control: ${JSON.stringify(controls)}`);
-    if (controls.native[0].text !== 'بازگشت به کارهای من') throw new Error(`force_on native label is not canonical Persian copy: ${JSON.stringify(controls.native[0])}`);
-    assertCanonicalPageOneHref(controls.native[0].href, route);
-    return { mode: 'force_on', controls };
+    return { mode: 'force_on', controls, visual };
   } finally {
     clearControlMode();
   }
 });
 
-await test('SRWF-PROD-BACK-LINK-FORCE-OFF-001', 'force_off yields one canonical GPP return control', async () => {
+await test('SRWF-PROD-BACK-LINK-FORCE-OFF-001', 'force_off yields one canonical GPP return control with primary-navigation presentation', async () => {
   try {
     if (controlMode() !== '__MISSING__') throw new Error('force_on leaked into force_off scenario.');
     setControlMode('force_off');
-    await page.goto(frontendEntryUrl(route, stableEntryId), { waitUntil: 'networkidle' });
+    const visual = await assertPrimaryReturnVisual(page, route, stableEntryId, 'gpp');
     const controls = await returnControls(page);
-    if (controls.gpp.length !== 1 || controls.native.length !== 0) throw new Error(`force_off did not yield exactly one GPP control: ${JSON.stringify(controls)}`);
-    if (controls.gpp[0].text !== 'بازگشت به کارهای من') throw new Error(`force_off GPP label drifted: ${JSON.stringify(controls.gpp[0])}`);
-    assertCanonicalPageOneHref(controls.gpp[0].href, route);
-    return { mode: 'force_off', controls };
+    return { mode: 'force_off', controls, visual };
   } finally {
     clearControlMode();
   }
