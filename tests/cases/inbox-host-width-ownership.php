@@ -1306,10 +1306,10 @@ gpp_inbox_assert_rejected_with_message(
     '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper { direction: ltr !important; width: 10px; }',
     'physical-axis selectors may contain only'
 );
-gpp_inbox_assert_rejected_with_property(
+gpp_inbox_assert_rejected_with_message(
     'PRI_FND_001_PHYSICAL_AXIS_UNLISTED_NODE_REJECT',
     '.gflow-inbox.gflow-grid.gflow-common .ag-body-viewport { direction: ltr !important; }',
-    'direction'
+    'direction is admitted only'
 );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_WIDTH_REJECT', '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT', '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }', 'width' );
