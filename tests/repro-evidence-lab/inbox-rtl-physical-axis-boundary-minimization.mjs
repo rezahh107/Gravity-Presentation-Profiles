@@ -312,6 +312,7 @@ try{
   if(winnerNarrow.status!=='PASS') throw new Error('Q2_AXIS_MIN_NOT_PROVEN: minimized winner failed 390px RTL scroll invariants.');
 
   const routeChecks={};
+  const routeFailures=[];
   result.winner_route_verification=routeChecks;
   for(const [name,url] of Object.entries(routes)){
     if(!url){routeChecks[name]={status:'NOT_APPLICABLE',reason:'route unavailable'};continue;}
@@ -323,9 +324,29 @@ try{
     const base=await evaluateCandidate(page,url,candidatePlan[0],routeChoice.width,routeChoice.height,null);
     const order=base.states?.[0]?.visual_order_left_to_right||[];
     const repaired=await evaluateCandidate(page,url,winner,routeChoice.width,routeChoice.height,order);
-    routeChecks[name]={viewport:routeChoice,baseline_status:base.status,repaired_status:repaired.status,baseline_metrics:base.metrics,repaired_metrics:repaired.metrics,range:repaired.range};
-    if(repaired.status!=='PASS') throw new Error('Q2_AXIS_MIN_NOT_PROVEN: winner failed route '+name);
+    routeChecks[name]={
+      viewport:routeChoice,
+      baseline_status:base.status,
+      repaired_status:repaired.status,
+      baseline_metrics:base.metrics,
+      repaired_metrics:repaired.metrics,
+      range:repaired.range,
+      repaired_states:(repaired.states||[]).map(s=>({
+        label:s.label,
+        movement:s.movement,
+        grid:s.grid,
+        alignment:s.alignment,
+        participants:s.participants,
+        text_directions:s.text_directions,
+        pager:s.pager,
+        visual_order_left_to_right:s.visual_order_left_to_right,
+        doc_overflow_px:s.doc_overflow_px,
+        scrollbar_count:s.scrollbar_count
+      }))
+    };
+    if(repaired.status!=='PASS') routeFailures.push(name);
   }
+  if(routeFailures.length) throw new Error('Q2_AXIS_MIN_NOT_PROVEN: winner failed routes '+routeFailures.join(','));
 
   const interaction=await pagerFocusProbe(page,routes.unscoped,winner.keys,choice.width,choice.height);
   if(!interaction.pass) throw new Error('Q2_AXIS_MIN_NOT_PROVEN: native pager/focus preservation failed.');
