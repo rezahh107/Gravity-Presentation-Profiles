@@ -100,8 +100,8 @@ foreach ( array( '#1d4ed8', '#1e40af', '#f8fafe', '#c9d6f0', '#9bb4e7', '#93c5fd
     gpp_assert_true( false !== strpos( $css, $semantic_color ), 'Manual refresh semantic utility color is missing: ' . $semantic_color );
 }
 gpp_assert_true( false !== strpos( $css, 'min-block-size: 44px' ), 'Manual refresh must preserve the minimum touch target block size.' );
-gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button:focus-visible' ), 'Manual refresh must retain an explicit scoped focus-visible treatment.' );
-gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[aria-busy="true"]' ), 'Manual refresh must retain a distinct scoped busy presentation.' );
+gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh]:focus-visible' ), 'Manual refresh must retain an explicit scoped focus-visible treatment strong enough to override host button paint.' );
+gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh][aria-busy="true"]' ), 'Manual refresh must retain a distinct scoped busy presentation strong enough to override host disabled paint.' );
 
 $admission = strpos( $script, 'var inbox = document.querySelector( surfaceSelector )' );
 $creation = strpos( $script, "document.createElement( 'p' )" );
