@@ -43,7 +43,7 @@ const cookies=JSON.parse(wpEval(
   "array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in'))),JSON_UNESCAPED_SLASHES);"
 ));
 
-const rtl=url=>{const u=new URL(url);u.searchParams.set('wu21_header_rtl_probe','1');return u.toString();};
+const rtl=url=>{const u=new globalThis.URL(url);u.searchParams.set('wu21_header_rtl_probe','1');return u.toString();};
 const routes={
   unscoped:rtl(fixture.frontend_inbox_url),
   form_scoped:rtl(scoped.url),
