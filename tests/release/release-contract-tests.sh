@@ -20,14 +20,54 @@ plugin_version() {
     sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' "$1/gravity-presentation-profiles.php" | head -n1 | tr -d '\r'
 }
 
+plugin_author() {
+    sed -n 's/^[[:space:]]*\*[[:space:]]*Author:[[:space:]]*//p' "$1/gravity-presentation-profiles.php" | head -n1 | tr -d '\r'
+}
+
 addon_version() {
     awk -F"'" '/protected[[:space:]]+\$_version[[:space:]]*=/{print $2; exit}' "$1/src/GravityForms/AddOn.php" | tr -d '\r'
 }
 
 bash "$ROOT/tests/release/smoke-endpoint-contract-tests.sh"
 
+# The canonical author identity is part of release identity, not mutable release data.
+# Source, candidate, packaged artifact, and development continuation must all retain it.
+# shellcheck source=scripts/release/release-lib.sh
+source "$ROOT/scripts/release/release-lib.sh"
+release_assert_author_identity "$ROOT"
+release_assert_version_mirrors "$ROOT"
+[[ "$(release_plugin_author "$ROOT")" == 'Reza Hashemi Hosseini' ]]
+
 mkdir -p "$WORK/dev-source"
 git -C "$ROOT" archive HEAD | tar -x -C "$WORK/dev-source"
+[[ "$(plugin_author "$WORK/dev-source")" == 'Reza Hashemi Hosseini' ]]
+release_assert_author_identity "$WORK/dev-source"
+
+AUTHOR_MISSING="$WORK/author-missing"
+cp -a "$WORK/dev-source" "$AUTHOR_MISSING"
+sed -i '/^[[:space:]]*\*[[:space:]]*Author:/d' "$AUTHOR_MISSING/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_MISSING"
+
+AUTHOR_EMPTY="$WORK/author-empty"
+cp -a "$WORK/dev-source" "$AUTHOR_EMPTY"
+sed -i 's/Author: Reza Hashemi Hosseini/Author:/' "$AUTHOR_EMPTY/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_EMPTY"
+
+AUTHOR_ALTERED="$WORK/author-altered"
+cp -a "$WORK/dev-source" "$AUTHOR_ALTERED"
+sed -i 's/Author: Reza Hashemi Hosseini/Author: Reza Hashemi/' "$AUTHOR_ALTERED/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_ALTERED"
+
+AUTHOR_USERNAME="$WORK/author-username"
+cp -a "$WORK/dev-source" "$AUTHOR_USERNAME"
+sed -i 's/Author: Reza Hashemi Hosseini/Author: rezahh107/' "$AUTHOR_USERNAME/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_USERNAME"
+
+AUTHOR_DUPLICATE="$WORK/author-duplicate"
+cp -a "$WORK/dev-source" "$AUTHOR_DUPLICATE"
+sed -i '/Author: Reza Hashemi Hosseini/a\ * Author: Gravity Presentation Profiles' "$AUTHOR_DUPLICATE/gravity-presentation-profiles.php"
+expect_fail release_assert_author_identity "$AUTHOR_DUPLICATE"
+
 php -r '
     $path = $argv[1];
     $text = file_get_contents($path);
@@ -41,6 +81,8 @@ php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --versio
 
 [[ "$(plugin_version "$WORK/source")" == '9.8.7' ]]
 [[ "$(addon_version "$WORK/source")" == '9.8.7' ]]
+[[ "$(plugin_author "$WORK/source")" == 'Reza Hashemi Hosseini' ]]
+release_assert_author_identity "$WORK/source"
 grep -Fq '## [9.8.7] - 2030-01-02' "$WORK/source/CHANGELOG.md"
 cmp -s "$WORK/dev-source/LICENSE" "$WORK/source/LICENSE"
 expect_fail php "$ROOT/scripts/release/prepare-candidate.php" --root="$WORK/source" --version=9.8.8 --date=2030-01-03
@@ -73,6 +115,10 @@ unzip -Z1 "$ZIP_RELATIVE" > "$WORK/zip-files.txt"
 grep -Fxq 'gravity-presentation-profiles/LICENSE' "$WORK/zip-files.txt"
 unzip -p "$ZIP_RELATIVE" gravity-presentation-profiles/LICENSE > "$WORK/packaged-license"
 cmp -s "$WORK/source/LICENSE" "$WORK/packaged-license"
+mkdir -p "$WORK/packaged-root"
+unzip -q "$ZIP_RELATIVE" -d "$WORK/packaged-root"
+[[ "$(plugin_author "$WORK/packaged-root/gravity-presentation-profiles")" == 'Reza Hashemi Hosseini' ]]
+release_assert_author_identity "$WORK/packaged-root/gravity-presentation-profiles"
 for forbidden_file in README.md AGENTS.md CHANGELOG.md SECURITY.md composer.json; do
     if grep -Fxq "gravity-presentation-profiles/$forbidden_file" "$WORK/zip-files.txt"; then
         echo "Development-only file unexpectedly shipped: $forbidden_file" >&2
@@ -101,6 +147,8 @@ mutate_zip() {
         forbidden) mkdir -p "$dir/gravity-presentation-profiles/tests"; echo '<?php' > "$dir/gravity-presentation-profiles/tests/forbidden.php" ;;
         missing) rm -f "$dir/gravity-presentation-profiles/src/Bootstrap.php" ;;
         wrong-version) sed -i 's/Version: 9.8.7/Version: 9.8.6/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
+        missing-author) sed -i '/^[[:space:]]*\*[[:space:]]*Author:/d' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
+        wrong-author) sed -i 's/Author: Reza Hashemi Hosseini/Author: Gravity Presentation Profiles/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         missing-license) rm -f "$dir/gravity-presentation-profiles/LICENSE" ;;
         wrong-license) printf '%s\n' 'mutated license bytes' > "$dir/gravity-presentation-profiles/LICENSE" ;;
     esac
@@ -113,6 +161,10 @@ mutate_zip "$ZIP_RELATIVE" "$WORK/missing.zip" missing
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-version.zip" wrong-version
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-version.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/missing-author.zip" missing-author
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-author.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-author.zip" wrong-author
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-author.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing-license.zip" missing-license
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-license.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-license.zip" wrong-license
@@ -261,6 +313,8 @@ CHANGELOG_SHA="$(sha256sum "$LIFECYCLE/CHANGELOG.md" | awk '{print $1}')"
 php "$ROOT/scripts/release/prepare-development-continuation.php" --root="$LIFECYCLE" --released-version=9.8.7 >/dev/null
 [[ "$(plugin_version "$LIFECYCLE")" == '0.0.0-dev' ]]
 [[ "$(addon_version "$LIFECYCLE")" == '0.0.0-dev' ]]
+[[ "$(plugin_author "$LIFECYCLE")" == 'Reza Hashemi Hosseini' ]]
+release_assert_author_identity "$LIFECYCLE"
 [[ "$(sha256sum "$LIFECYCLE/CHANGELOG.md" | awk '{print $1}')" == "$CHANGELOG_SHA" ]]
 grep -Fq '## [9.8.7] - 2030-01-02' "$LIFECYCLE/CHANGELOG.md"
 git -C "$LIFECYCLE" diff --name-only | sort > "$WORK/continuation-files.txt"
