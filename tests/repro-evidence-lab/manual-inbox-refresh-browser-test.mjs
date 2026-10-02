@@ -152,6 +152,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await control.hover();
+  await page.waitForTimeout(220);
   visualEvidence.hover = await control.evaluate(element => {
     const style = getComputedStyle(element);
     return { color: style.color, background_color: style.backgroundColor, border_color: style.borderColor };
@@ -170,6 +171,7 @@ try {
   if ((await control.textContent())?.trim() !== 'در حال به‌روزرسانی…' || (await control.getAttribute('aria-busy')) !== 'true' || !(await control.isDisabled())) {
     throw new Error('Manual refresh busy semantics changed before reload.');
   }
+  await page.waitForTimeout(220);
   visualEvidence.busy = await control.evaluate(element => {
     const style = getComputedStyle(element);
     return {
