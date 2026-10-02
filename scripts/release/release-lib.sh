@@ -73,9 +73,9 @@ release_plugin_author_headers() {
         return 1
     }
 
-    # Match the effective WordPress file-header recognition boundary for Author:
-    # first 8 KiB, CR normalized to LF, case-insensitive header name, and the
-    # same optional PHP/comment-prefix characters accepted by get_file_data().
+    # Mirror WordPress get_file_data() header recognition for Author:
+    # scan the first 8 KiB, normalize CR to LF, compare the header name
+    # case-insensitively, and accept the same optional PHP/comment prefixes.
     LC_ALL=C head -c 8192 "$entrypoint" | tr '\r' '\n' | awk '
         {
             raw = $0
@@ -106,70 +106,8 @@ release_assert_author_identity() {
         return 1
     }
 
-    IFS=
-release_addon_version() {
-    local root="${1:-.}"
-    awk -F"'" '/protected[[:space:]]+\$_version[[:space:]]*=/{print $2; exit}' "$root/$GPP_ADDON" | tr -d '\r'
-}
-
-release_assert_version_mirrors() {
-    local root="${1:-.}"
-    local plugin addon
-    release_assert_author_identity "$root"
-    plugin="$(release_plugin_version "$root")"
-    addon="$(release_addon_version "$root")"
-    [[ -n "$plugin" ]] || release_fail 'Plugin header version is missing.'
-    [[ -n "$addon" ]] || release_fail 'Gravity Forms Add-On version mirror is missing.'
-    [[ "$plugin" == "$addon" ]] || release_fail "Version mirror mismatch: plugin=$plugin addon=$addon"
-}
-
-release_next_version() {
-    local current="${1:-}" intent="${2:-}"
-    release_is_production_version "$current" || release_fail "Cannot increment invalid production version: $current"
-    local major minor patch
-    IFS=. read -r major minor patch <<<"$current"
-    case "$intent" in
-        patch) patch=$((patch + 1)) ;;
-        minor) minor=$((minor + 1)); patch=0 ;;
-        major) major=$((major + 1)); minor=0; patch=0 ;;
-        *) release_fail "Unsupported release intent: $intent"; return 1 ;;
-    esac
-    printf '%s.%s.%s\n' "$major" "$minor" "$patch"
-}
-
-release_runtime_files() {
-    local root="${1:-.}"
-    (
-        cd "$root"
-        printf '%s\n' "$GPP_ENTRYPOINT" 'LICENSE'
-        find src -type f -name '*.php' -print
-        find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print
-        find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print
-    ) | LC_ALL=C sort -u
-}
-
-release_required_runtime_files() {
-    cat <<'FILES'
-LICENSE
-gravity-presentation-profiles.php
-src/Autoloader.php
-src/Bootstrap.php
-src/GravityForms/AddOn.php
-src/GravityForms/EntryDetailSetupDiagnosticStore.php
-assets/css/base.css
-assets/css/gravity-forms-declarative.css
-assets/css/srwf-gravity-flow-inbox.css
-assets/css/srwf-gravity-flow-entry-detail.css
-assets/css/srwf-gravity-flow-print-dossier.css
-assets/js/gravity-flow-inbox-manual-refresh.js
-profiles/srwf/registration/profile.css
-profiles/srwf/registration/profile-package-v1.1.json
-profiles/srwf/operations/operations-package-v1.json
-assets/images/print/razavi-complex-approved.png
-assets/images/print/kanoon-approved.png
-FILES
-}
-\t' read -r author_key author <<< "$author_headers"
+    author_key="$(printf '%s\n' "$author_headers" | cut -f1)"
+    author="$(printf '%s\n' "$author_headers" | cut -f2-)"
     [[ "$author_key" == 'Author' ]] || {
         release_fail "Plugin header Author field spelling is non-canonical: $author_key"
         return 1
