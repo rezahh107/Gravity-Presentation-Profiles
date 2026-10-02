@@ -24,6 +24,7 @@ $executable_php_source = static function ( $source_text ) {
 };
 
 $bridge_executable = $executable_php_source( $bridge );
+$timeline_executable = $executable_php_source( $timeline );
 
 gpp_assert_true( false === strpos( $bridge_executable, 'QUALIFIED_PROVIDER_VERSION' ), 'Historical provider-version identity must not return as runtime compatibility authority.' );
 gpp_assert_true( false === strpos( $bridge_executable, 'STATUS_PROVIDER_INCOMPATIBLE' ), 'Version mismatch must not be represented as provider incompatibility without a capability-level defect.' );
@@ -37,12 +38,22 @@ gpp_assert_true(
     'PersianGravity runtime admission must be anchored to the consumed public facade/callable capability.'
 );
 
-// Gravity Flow is intentionally different: its public Timeline notes seam exposes
-// date_created, but the UTC meaning consumed by GPP is still package/source-qualified.
-// Keep that exact gate until the timezone contract is independently generalized.
+gpp_assert_true( false === strpos( $timeline_executable, 'GRAVITY_FLOW_VERSION' ), 'Timeline Jalali admission must not inspect the Gravity Flow version constant.' );
+gpp_assert_true( false === strpos( $timeline_executable, 'gravity_flow()->get_version()' ), 'Timeline Jalali admission must not inspect the Gravity Flow runtime version accessor.' );
+gpp_assert_true( false === strpos( $timeline_executable, 'version_compare(' ), 'Timeline Jalali admission must not wrap version identity in a range comparison.' );
+gpp_assert_true( false === strpos( $timeline_executable, "'3.1.0'" ), 'The historical Gravity Flow qualification release must not appear in executable Timeline admission code.' );
 gpp_assert_true(
-    false !== strpos( $timeline, "'3.1.0' !== GRAVITY_FLOW_VERSION" ),
-    'Gravity Flow Timeline UTC gate must remain until its source-timezone contract is independently qualified beyond 3.1.0.'
+    false !== strpos( $timeline_executable, '\\GFAPI::get_notes(' )
+        && false !== strpos( $timeline_executable, '\'entry_id\' => (int) $entry[\'id\']' )
+        && false !== strpos( $timeline_executable, "'note_type' => 'gravityflow'" )
+        && false !== strpos( $timeline_executable, "'gravityflow' !== (string) $persisted->note_type" )
+        && false !== strpos( $timeline_executable, "'gravityflow' === (string) $note->note_type" ),
+    'Persisted Timeline date admission must be anchored to authoritative Gravity Forms note provenance.'
+);
+gpp_assert_true(
+    false !== strpos( $timeline_executable, 'isWorkflowSubmittedSyntheticEvent' )
+        && false !== strpos( $timeline_executable, '$raw === $entry_created ? $entry_created : null' ),
+    'Synthetic Workflow Submitted admission must be anchored to the authoritative Entry timestamp relationship.'
 );
 
 echo "DEPENDENCY_VERSION_AUTHORITY_PASS\n";

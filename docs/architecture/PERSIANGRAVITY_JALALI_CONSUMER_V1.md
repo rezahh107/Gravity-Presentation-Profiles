@@ -29,17 +29,18 @@ Canonical `entry.created_at` bindings resolve to Gravity Forms `date_created`. T
 
 This covers the existing Entry Detail and Inbox presentation paths that consume canonical `entry.created_at`. The underlying entry value is never changed.
 
-### Gravity Flow Timeline/history — exact 3.1.0 qualification
+### Gravity Flow Timeline/history — capability + provenance admission
 
-The admitted Timeline remains the native Gravity Flow Timeline. For the qualified Gravity Flow `3.1.0` runtime, WU18 verifies that:
+The admitted Timeline remains the native Gravity Flow Timeline and reaches GPP only through the documented `gravityflow_timeline_notes` display-time filter. Runtime date admission does not inspect Gravity Flow version identity.
 
-- native Timeline events come through `Gravity_Flow_Common::get_timeline_notes()`;
-- the raw event object exposes `date_created`;
-- native Entry Detail passes that raw value to its date header formatter;
-- Gravity Flow/GF note creation uses the UTC WordPress timestamp source;
-- the synthetic `Workflow Submitted` Timeline event carries the authoritative entry `date_created` value.
+GPP admits exactly two timestamp provenance families:
 
-Only that raw `note->date_created` seam is eligible for provider presentation, and only on exact Gravity Flow `3.1.0`. GPP never parses the already-rendered Timeline date text. If the version, raw property, strict source shape, provider, or conversion result is unavailable, the original native Timeline date node is retained unchanged.
+- **Persisted Gravity Flow notes:** the Timeline note must have a positive note ID whose `date_created` exactly matches the corresponding `note_type=gravityflow` record returned for the same Entry by the public `GFAPI::get_notes()` API. Gravity Forms remains the authoritative note store and UTC timestamp owner.
+- **Synthetic Workflow Submitted:** the item must match the bounded native Workflow Submitted signature, carry synthetic ID `0`, and its raw `date_created` must exactly equal the current Entry's authoritative UTC `date_created`.
+
+Only after one of those provenance relationships is established does GPP apply strict `Y-m-d H:i:s`/real-date validation and delegate to PersianGravity. Unknown synthetic Timeline events, altered persisted timestamps, missing note capability, malformed sources, provider failure, or unusable provider output leave the original native Timeline date node unchanged.
+
+The historical Gravity Flow `3.1.0` WU18 package/source evidence remains a reproducible control proving how the observed note families are produced in that runtime. It is evidence provenance, not production compatibility authority. GPP never parses already-rendered Timeline date text.
 
 ## Deliberately native / not covered
 
