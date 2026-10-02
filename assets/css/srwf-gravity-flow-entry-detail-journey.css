@@ -13,30 +13,52 @@
     margin: 0 0 18px;
 }
 
-.gpp-entry-journey__return {
+.gpp-entry-journey__return,
+.gravityflow-back-link-container a.back-link {
+    box-sizing: border-box;
     display: inline-flex;
     min-block-size: 44px;
+    max-inline-size: 100%;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     padding: 8px 16px;
-    border: 1px solid #8690a1;
-    border-radius: 8px;
-    background: #fff;
-    color: #172033;
+    border: 1px solid #2563eb;
+    border-radius: 12px;
+    background: #2563eb;
+    color: #fff;
     font: inherit;
     font-weight: 600;
     line-height: 1.8;
+    text-align: center;
     text-decoration: none;
+    white-space: normal;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, .14);
 }
 
-.gpp-entry-journey__return:hover {
+.gpp-entry-journey__return::before,
+.gravityflow-back-link-container a.back-link::before {
+    content: "";
+    display: inline-block;
+    flex: 0 0 18px;
+    inline-size: 18px;
+    block-size: 18px;
+    background: center / 18px 18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14m-5-5 5 5-5 5'/%3E%3C/svg%3E");
+}
+
+.gpp-entry-journey__return:hover,
+.gravityflow-back-link-container a.back-link:hover {
     border-color: #1d4ed8;
-    color: #1d4ed8;
+    background: #1d4ed8;
+    color: #fff;
 }
 
-.gpp-entry-journey__return:focus-visible {
-    outline: 3px solid #1d4ed8;
+.gpp-entry-journey__return:focus-visible,
+.gravityflow-back-link-container a.back-link:focus-visible {
+    outline: 3px solid #93c5fd;
     outline-offset: 3px;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px #1d4ed8, 0 6px 18px rgba(37, 99, 235, .14);
 }
 
 .gpp-entry-journey,
@@ -197,7 +219,8 @@
         padding: 12px 14px;
     }
     .gpp-entry-journey__return,
-    .gpp-entry-journey-result__return {
+    .gpp-entry-journey-result__return,
+    .gravityflow-back-link-container a.back-link {
         width: 100%;
     }
 }
