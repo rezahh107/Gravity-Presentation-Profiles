@@ -460,7 +460,15 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/inbox-width-rtl-comparative-browser-tests.mjs
           test -s "$WU21_ARTIFACT_DIR/inbox-direction-scroll-qualification.json"
-          grep -Eq '"disposition": "(PRODUCTION_REPAIR_VERIFIED|HYPOTHESIS_SUPPORTED|HYPOTHESIS_FALSIFIED|NOT_PROVEN)"' "$WU21_ARTIFACT_DIR/inbox-direction-scroll-qualification.json"
+          node -e '
+            const fs = require("fs");
+            const file = process.env.WU21_ARTIFACT_DIR + "/inbox-direction-scroll-qualification.json";
+            const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
+            if (evidence.disposition !== "PRODUCTION_REPAIR_VERIFIED") {
+              console.error("RTL scroll production repair not verified:", evidence.disposition);
+              process.exit(1);
+            }
+          '
 
       - name: Verify Card Mode vertical geometry and native lifecycle
         run: node tests/repro-evidence-lab/inbox-card-geometry-browser-tests.mjs
