@@ -240,6 +240,8 @@ try {
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardControl = page.getByRole('button', { name: label, exact: true });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(220);
   const keyboardTabStops = await focusByKeyboardTab(page, keyboardControl);
   const focusStyle = await keyboardControl.evaluate(element => ({
     active: element === document.activeElement,
