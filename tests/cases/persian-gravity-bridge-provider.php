@@ -19,6 +19,9 @@ final class PGR_Jalali_Presentation {
         if ( 'null' === self::$mode || (int) $source->format( 'Y' ) < 1800 || $source > new DateTimeImmutable( '2124-03-19 23:59:59', new DateTimeZone( 'UTC' ) ) ) {
             return null;
         }
+        if ( 'empty' === self::$mode ) {
+            return '';
+        }
 
         return 'provider:' . $source->format( 'Y-m-d H:i:s' );
     }
@@ -61,6 +64,9 @@ gpp_assert_same( $display, $repeat, 'Repeated presentation must be deterministic
 
 PGR_Jalali_Presentation::$mode = 'null';
 gpp_assert_same( $raw, PersianDateFormatter::formatDateTime( $raw ), 'Provider null must preserve native source presentation.' );
+
+PGR_Jalali_Presentation::$mode = 'empty';
+gpp_assert_same( $raw, PersianDateFormatter::formatDateTime( $raw ), 'Provider empty-string output must preserve native source presentation.' );
 
 PGR_Jalali_Presentation::$mode = 'value';
 gpp_assert_same( '1799-12-31 00:00:00', PersianDateFormatter::formatDateTime( '1799-12-31 00:00:00' ), 'Out-of-range provider fallback must preserve native presentation.' );

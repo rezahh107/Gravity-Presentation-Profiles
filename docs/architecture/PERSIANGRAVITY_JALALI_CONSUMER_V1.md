@@ -6,7 +6,7 @@ GPP optionally consumes PersianGravity's public Jalali presentation facade for h
 
 This is presentation-only. Gravity Forms, Gravity Flow, and WordPress remain authoritative for stored values, timezone semantics, ordering, filtering, queries, workflow state, permissions, and transitions.
 
-The exact qualified provider contract is PersianGravity `v4.6.0`, source `d134c9ac81b177a32a3138f074fca3d1c1ebfae4`, through:
+The public provider contract was first runtime-qualified on PersianGravity `v4.6.0`, source `d134c9ac81b177a32a3138f074fca3d1c1ebfae4`, through:
 
 ```php
 PGR_Jalali_Presentation::format_datetime(
@@ -15,7 +15,11 @@ PGR_Jalali_Presentation::format_datetime(
 ): ?string
 ```
 
-GPP does not load PersianGravity files, call its converter internals, or contain a Gregorian→Jalali conversion algorithm. The provider remains optional and is detected at the public-facade boundary. Provider releases other than the exact qualified `4.6.0` version remain native until separately qualified.
+GPP does not load PersianGravity files, call its converter internals, or contain a Gregorian→Jalali conversion algorithm. The provider remains optional and is detected at the public-facade boundary.
+
+Runtime admission is capability-first: GPP requires the already-loaded public `PGR_Jalali_Presentation` facade and callable `format_datetime()` method, then validates the nullable/non-empty string result. `PGR_VERSION` may distinguish diagnostic provider-presence context, but version identity does not admit or reject the integration. A missing facade/callable or unusable provider result preserves native presentation.
+
+For the capability-first migration, the released PersianGravity `v4.8.0` facade was independently rechecked against `v4.6.0`: `includes/class-pgr-jalali-presentation.php` has the same Git blob SHA-1 `335dc59850dcbef8fe62dc28beae26bf0302c9b3` in both tags. This establishes continuity of the exact public facade consumed by GPP without promoting either release number into runtime compatibility authority.
 
 ## Covered sources
 
@@ -25,17 +29,18 @@ Canonical `entry.created_at` bindings resolve to Gravity Forms `date_created`. T
 
 This covers the existing Entry Detail and Inbox presentation paths that consume canonical `entry.created_at`. The underlying entry value is never changed.
 
-### Gravity Flow Timeline/history — exact 3.1.0 qualification
+### Gravity Flow Timeline/history — capability + provenance admission
 
-The admitted Timeline remains the native Gravity Flow Timeline. For the qualified Gravity Flow `3.1.0` runtime, WU18 verifies that:
+The admitted Timeline remains the native Gravity Flow Timeline and reaches GPP only through the documented `gravityflow_timeline_notes` display-time filter. Runtime date admission does not inspect Gravity Flow version identity.
 
-- native Timeline events come through `Gravity_Flow_Common::get_timeline_notes()`;
-- the raw event object exposes `date_created`;
-- native Entry Detail passes that raw value to its date header formatter;
-- Gravity Flow/GF note creation uses the UTC WordPress timestamp source;
-- the synthetic `Workflow Submitted` Timeline event carries the authoritative entry `date_created` value.
+GPP admits exactly two timestamp provenance families:
 
-Only that raw `note->date_created` seam is eligible for provider presentation, and only on exact Gravity Flow `3.1.0`. GPP never parses the already-rendered Timeline date text. If the version, raw property, strict source shape, provider, or conversion result is unavailable, the original native Timeline date node is retained unchanged.
+- **Persisted Gravity Flow notes:** the Timeline note must have a positive note ID whose `date_created` exactly matches the corresponding `note_type=gravityflow` record returned for the same Entry by the public `GFAPI::get_notes()` API. Gravity Forms remains the authoritative note store and UTC timestamp owner.
+- **Synthetic Workflow Submitted:** the item must match the bounded native Workflow Submitted signature, carry synthetic ID `0`, and its raw `date_created` must exactly equal the current Entry's authoritative UTC `date_created`.
+
+Only after one of those provenance relationships is established does GPP apply strict `Y-m-d H:i:s`/real-date validation and delegate to PersianGravity. Unknown synthetic Timeline events, altered persisted timestamps, missing note capability, malformed sources, provider failure, or unusable provider output leave the original native Timeline date node unchanged.
+
+The historical Gravity Flow `3.1.0` WU18 package/source evidence remains a reproducible control proving how the observed note families are produced in that runtime. It is evidence provenance, not production compatibility authority. GPP never parses already-rendered Timeline date text.
 
 ## Deliberately native / not covered
 
@@ -46,7 +51,7 @@ Only that raw `note->date_created` seam is eligible for provider presentation, a
 
 ## Fail-safe behavior
 
-Native presentation is retained when PersianGravity is absent, the provider version is not exactly the qualified `4.6.0` release, the qualified capability cannot be established, the `jalali_presentation` module is disabled, the public facade is unavailable, the source contract or strict source shape is not qualified, the provider returns `null`, the date is outside the provider's validated range, or the optional provider raises an exception.
+Native presentation is retained when PersianGravity/public facade is absent, the required callable capability cannot be established, the `jalali_presentation` module is disabled, the source contract or strict source shape is not qualified, the provider returns `null`/empty/unusable output, the date is outside the provider's validated range, or the optional provider raises an exception. A version mismatch by itself is not a fallback reason.
 
 No provider state is persisted by GPP. No global WordPress date filter, save/update hook, database rewrite, browser-side conversion, AJAX conversion endpoint, parallel Timeline, or duplicate date state is introduced.
 
@@ -54,4 +59,6 @@ No provider state is persisted by GPP. No global WordPress date filter, save/upd
 
 The existing GPP runtime diagnostics vocabulary includes the bounded `integration.persian_gravity / JALALI_PRESENTATION` decision stage. It records non-PII reason codes for native fallback versus actual provider application; it does not record real entry timestamps.
 
-WU18 additionally installs and byte-verifies the released PersianGravity `v4.6.0` ZIP in the existing disposable WordPress/Gravity Forms/Gravity Flow evidence lab. It verifies the released module-default-disabled native fallback, the real public facade after module enablement, an exact UTC→WordPress-site-timezone day-boundary case, provider `null` fallback, deterministic repeated rendering, and the qualified Timeline raw-date seam.
+The historical WU18 qualification still installs and byte-verifies the released PersianGravity `v4.6.0` ZIP in the disposable WordPress/Gravity Forms/Gravity Flow evidence lab. It proves the environment it actually tested and is not rewritten as capability-first evidence.
+
+The current capability-first regression additionally downloads and verifies the real PersianGravity `v4.8.0` release asset (SHA-256 `a050a4c5eaa87b9b3e8a216d83dcf08cf8af5aa887648ba7d0e98d04ce41a3ea`), verifies the public facade Git blob identity above, checks the reflected `DateTimeInterface` / optional `DateTimeZone` / nullable-string contract, and executes the real facade through the GPP bridge at an exact UTC→WordPress-site-timezone boundary plus provider-null fallback.

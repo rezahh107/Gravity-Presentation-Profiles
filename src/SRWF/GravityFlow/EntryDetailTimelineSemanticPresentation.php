@@ -59,11 +59,12 @@ final class EntryDetailTimelineSemanticPresentation {
         }
 
         $steps = self::stepsForEntry( $entry );
+        $persisted_note_dates = self::persistedNoteDatesForEntry( $entry );
         self::$events = array();
 
         foreach ( $notes as $note ) {
             $event = self::classify( $note, $steps );
-            $event['date_presentation'] = self::timelineDatePresentation( $note );
+            $event['date_presentation'] = self::timelineDatePresentation( $note, $entry, $persisted_note_dates );
             self::$events[] = $event;
         }
 
@@ -213,20 +214,129 @@ final class EntryDetailTimelineSemanticPresentation {
     }
 
     /**
-     * Gravity Flow 3.1.0 runtime qualification proves Timeline `date_created`
-     * is the raw UTC host timestamp supplied to get_note_header(). No visible
-     * Timeline date text is parsed. Any other host version or malformed source
-     * is deliberately left native until independently qualified.
+     * Timeline date admission is capability/provenance based.
+     *
+     * Persisted Gravity Flow notes are revalidated through Gravity Forms' public
+     * note API for the current Entry. The one admitted synthetic host event,
+     * Workflow Submitted, is admitted only when its raw timestamp is exactly the
+     * authoritative Entry date_created value. Unknown synthetic events stay native.
      */
-    private static function timelineDatePresentation( $note ) {
-        if ( ! defined( 'GRAVITY_FLOW_VERSION' ) || '3.1.0' !== GRAVITY_FLOW_VERSION ) {
+    private static function timelineDatePresentation( $note, array $entry, array $persisted_note_dates ) {
+        $source = self::qualifiedTimelineUtcSource( $note, $entry, $persisted_note_dates );
+        if ( null === $source ) {
             return null;
         }
+
+        return PersianDateFormatter::tryFormatUtcDateTime( $source );
+    }
+
+    /**
+     * @return string|null Authoritative UTC Y-m-d H:i:s candidate, before strict
+     *                     shape/real-date validation by PersianDateFormatter.
+     */
+    private static function qualifiedTimelineUtcSource( $note, array $entry, array $persisted_note_dates ) {
         if ( ! is_object( $note ) || ! isset( $note->date_created ) || ! is_scalar( $note->date_created ) ) {
             return null;
         }
 
-        return PersianDateFormatter::tryFormatUtcDateTime( (string) $note->date_created );
+        $raw = (string) $note->date_created;
+
+        if ( isset( $note->id, $note->note_type )
+            && is_scalar( $note->note_type )
+            && 'gravityflow' === (string) $note->note_type
+            && ( is_int( $note->id ) || ( is_string( $note->id ) && ctype_digit( $note->id ) ) )
+        ) {
+            $note_id = (int) $note->id;
+            if ( $note_id > 0
+                && isset( $persisted_note_dates[ $note_id ] )
+                && is_string( $persisted_note_dates[ $note_id ] )
+                && $raw === $persisted_note_dates[ $note_id ]
+            ) {
+                return $raw;
+            }
+        }
+
+        if ( ! self::isWorkflowSubmittedSyntheticEvent( $note )
+            || ! isset( $entry['date_created'] )
+            || ! is_scalar( $entry['date_created'] )
+        ) {
+            return null;
+        }
+
+        $entry_created = (string) $entry['date_created'];
+        return $raw === $entry_created ? $entry_created : null;
+    }
+
+    /**
+     * Resolve persisted Gravity Flow note timestamps from the authoritative
+     * Gravity Forms note store for this Entry. Failure is intentionally empty:
+     * callers then keep native Timeline dates unchanged.
+     *
+     * @return array<int,string>
+     */
+    private static function persistedNoteDatesForEntry( array $entry ) {
+        if ( ! isset( $entry['id'] )
+            || ! is_scalar( $entry['id'] )
+            || (int) $entry['id'] <= 0
+            || ! class_exists( '\\GFAPI' )
+            || ! is_callable( array( '\\GFAPI', 'get_notes' ) )
+        ) {
+            return array();
+        }
+
+        try {
+            $notes = \GFAPI::get_notes(
+                array(
+                    'entry_id' => (int) $entry['id'],
+                    'note_type' => 'gravityflow',
+                )
+            );
+        } catch ( \Throwable $exception ) {
+            return array();
+        }
+
+        if ( ! is_array( $notes ) ) {
+            return array();
+        }
+
+        $dates = array();
+        foreach ( $notes as $persisted ) {
+            if ( ! is_object( $persisted )
+                || ! isset( $persisted->id, $persisted->date_created, $persisted->note_type )
+                || ! is_scalar( $persisted->id )
+                || ! is_scalar( $persisted->date_created )
+                || 'gravityflow' !== (string) $persisted->note_type
+            ) {
+                continue;
+            }
+
+            $id = (int) $persisted->id;
+            if ( $id > 0 ) {
+                $dates[ $id ] = (string) $persisted->date_created;
+            }
+        }
+
+        return $dates;
+    }
+
+    private static function isWorkflowSubmittedSyntheticEvent( $note ) {
+        if ( ! is_object( $note )
+            || ! isset( $note->id, $note->value )
+            || ! ( is_int( $note->id ) || ( is_string( $note->id ) && ctype_digit( $note->id ) ) )
+            || 0 !== (int) $note->id
+            || ! is_scalar( $note->value )
+        ) {
+            return false;
+        }
+
+        $value = self::normalizeEventValue( (string) $note->value );
+        foreach ( self::exactHostTexts( 'Workflow Submitted' ) as $workflow_submitted ) {
+            if ( $value === $workflow_submitted ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function decorateNativeTimeline( $html, array $events ) {

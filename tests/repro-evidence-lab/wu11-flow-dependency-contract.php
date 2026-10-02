@@ -200,9 +200,11 @@ $steps = $timeline_api->get_steps();
 $timeline_ref = new ReflectionClass( EntryDetailTimelineSemanticPresentation::class );
 $classify = $timeline_ref->getMethod( 'classify' ); $classify->setAccessible( true );
 $date = $timeline_ref->getMethod( 'timelineDatePresentation' ); $date->setAccessible( true );
+$persisted_dates_method = $timeline_ref->getMethod( 'persistedNoteDatesForEntry' ); $persisted_dates_method->setAccessible( true );
+$persisted_dates = $persisted_dates_method->invoke( null, $timeline_entry );
 $decorate = $timeline_ref->getMethod( 'decorateNativeTimeline' ); $decorate->setAccessible( true );
 $events = array();
-foreach ( $notes as $note ) { $event = $classify->invoke( null, $note, $steps ); $event['date_presentation'] = $date->invoke( null, $note ); $events[] = $event; }
+foreach ( $notes as $note ) { $event = $classify->invoke( null, $note, $steps ); $event['date_presentation'] = $date->invoke( null, $note, $timeline_entry, $persisted_dates ); $events[] = $event; }
 $pattern = '~(<div class="gravityflow-note-body-wrap"><div class="gravityflow-note-body">.*?<div class="gravityflow-note-body">)(.*?)(</div></div></div>)~s';
 $count = preg_match_all( $pattern, $native_html, $unused );
 $assert( is_int( $count ) && $count > 0 && $count === count( $events ), 'WU11 authentic Timeline DOM/event count changed.' );
