@@ -6,6 +6,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-02
+
 ### Changed
 
 - Locked the WordPress plugin Author metadata to `Reza Hashemi Hosseini` and made exact Author identity a fail-closed invariant of source and packaged release validation.
