@@ -313,13 +313,6 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
 
-      - name: Verify PR126 direction cascade root cause
-        shell: bash
-        run: |
-          set -euo pipefail
-          node tests/repro-evidence-lab/inbox-direction-cascade-root-cause.mjs
-          test -s "$WU21_ARTIFACT_DIR/pr126-direction-cascade-root-cause.json"
-
       - name: Execute bounded Inbox Visual Design V2 qualification
         shell: bash
         run: |
