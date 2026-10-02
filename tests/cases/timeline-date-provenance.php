@@ -101,6 +101,14 @@ $mismatch = clone $persisted;
 $mismatch->date_created = '2026-03-20 20:30:01';
 gpp_assert_same( null, $present_method->invoke( null, $mismatch, $entry, $dates ), 'Persisted note timestamp mismatch must fail closed.' );
 
+$borrowed_identity = clone $persisted;
+$borrowed_identity->note_type = 'user';
+gpp_assert_same( null, $present_method->invoke( null, $borrowed_identity, $entry, $dates ), 'A non-Gravity-Flow Timeline object must not borrow a persisted Gravity Flow note ID/date to gain provenance.' );
+
+$missing_type = clone $persisted;
+unset( $missing_type->note_type );
+gpp_assert_same( null, $present_method->invoke( null, $missing_type, $entry, $dates ), 'A Timeline object without Gravity Flow note identity must fail closed.' );
+
 $submitted_mismatch = clone $submitted;
 $submitted_mismatch->date_created = '2026-01-01 00:00:01';
 gpp_assert_same( null, $present_method->invoke( null, $submitted_mismatch, $entry, $dates ), 'Workflow Submitted timestamp mismatch must fail closed.' );

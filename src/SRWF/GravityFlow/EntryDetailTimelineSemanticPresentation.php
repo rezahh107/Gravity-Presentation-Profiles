@@ -241,7 +241,9 @@ final class EntryDetailTimelineSemanticPresentation {
 
         $raw = (string) $note->date_created;
 
-        if ( isset( $note->id )
+        if ( isset( $note->id, $note->note_type )
+            && is_scalar( $note->note_type )
+            && 'gravityflow' === (string) $note->note_type
             && ( is_int( $note->id ) || ( is_string( $note->id ) && ctype_digit( $note->id ) ) )
         ) {
             $note_id = (int) $note->id;
