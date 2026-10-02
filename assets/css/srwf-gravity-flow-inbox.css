@@ -160,9 +160,9 @@
 
 .gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh][aria-busy="true"],
 .gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh]:disabled {
-    border-color: var(--gpp-inbox-utility-border);
-    background: var(--gpp-inbox-utility-surface);
-    color: var(--gpp-inbox-text-muted);
+    border-color: var(--gpp-inbox-utility-border) !important;
+    background: var(--gpp-inbox-utility-surface) !important;
+    color: var(--gpp-inbox-text-muted) !important;
     cursor: wait;
     opacity: 0.76;
 }
