@@ -44,7 +44,7 @@ gpp_assert_true( false === strpos( $timeline_executable, 'version_compare(' ), '
 gpp_assert_true( false === strpos( $timeline_executable, "'3.1.0'" ), 'The historical Gravity Flow qualification release must not appear in executable Timeline admission code.' );
 gpp_assert_true(
     false !== strpos( $timeline_executable, '\\GFAPI::get_notes(' )
-        && false !== strpos( $timeline_executable, "'entry_id' => (int) $entry['id']" )
+        && false !== strpos( $timeline_executable, '\'entry_id\' => (int) $entry[\'id\']' )
         && false !== strpos( $timeline_executable, "'note_type' => 'gravityflow'" )
         && false !== strpos( $timeline_executable, "'gravityflow' !== (string) $persisted->note_type" )
         && false !== strpos( $timeline_executable, "'gravityflow' === (string) $note->note_type" ),

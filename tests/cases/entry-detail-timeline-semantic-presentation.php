@@ -47,7 +47,7 @@ gpp_assert_true( false !== strpos( $semantic, '$prefix . $match[2] . \'</div>\' 
 gpp_assert_true( false !== strpos( $semantic, "~(<div class=\"gravityflow-note-meta\">).*?(</div>)~s" ) && false !== strpos( $semantic, '$prefix = $match[1]' ), 'Jalali Timeline decoration must be confined to the native metadata prefix rather than rewriting the authentic event body.' );
 gpp_assert_true( false !== strpos( $semantic, 'timelineDatePresentation( $note, $entry, $persisted_note_dates )' ) && false !== strpos( $semantic, '$note->date_created' ), 'Timeline Jalali presentation must consume the raw note timestamp only after request-local provenance qualification.' );
 gpp_assert_true(
-    false !== strpos( $semantic, "'entry_id' => (int) $entry['id']" )
+    false !== strpos( $semantic, '\'entry_id\' => (int) $entry[\'id\']' )
         && false !== strpos( $semantic, "'note_type' => 'gravityflow'" )
         && false !== strpos( $semantic, '\\GFAPI::get_notes(' ),
     'Persisted Timeline date provenance must be revalidated through the public Gravity Forms note API, bounded to the current Entry and Gravity Flow note family.'
