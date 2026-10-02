@@ -73,9 +73,7 @@ release_plugin_author() {
 release_assert_author_identity() {
     local root="${1:-.}"
     local author author_count
-    author_count="$(
-        sed -n 's/^[[:space:]]*\*[[:space:]]*Author:[[:space:]]*//p' "$root/$GPP_ENTRYPOINT"             | wc -l             | tr -d '[:space:]'
-    )"
+    author_count="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Author:[[:space:]]*//p' "$root/$GPP_ENTRYPOINT" | wc -l | tr -d '[:space:]')"
     [[ "$author_count" == '1' ]] || {
         release_fail "Plugin header must contain exactly one Author field; found=$author_count"
         return 1
