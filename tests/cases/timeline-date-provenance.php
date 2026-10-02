@@ -77,7 +77,11 @@ $present_method->setAccessible( true );
 
 $dates = $dates_method->invoke( null, $entry );
 gpp_assert_same( array( 7 => '2026-03-20 20:30:00' ), $dates, 'Only persisted Gravity Flow notes for the current Entry may establish note timestamp provenance.' );
-gpp_assert_same( array( array( 'entry_id' => 42 ) ), GFAPI::$queries, 'Persisted note provenance must be resolved through the current Entry boundary.' );
+gpp_assert_same(
+    array( array( 'entry_id' => 42, 'note_type' => 'gravityflow' ) ),
+    GFAPI::$queries,
+    'Persisted note provenance query must be bounded to the current Entry and Gravity Flow note family.'
+);
 
 $result = $present_method->invoke( null, clone $persisted, $entry, $dates );
 gpp_assert_same( 'jalali:2026-03-20 20:30:00', $result, 'Persisted Gravity Flow note with authoritative GF note provenance must be admitted.' );

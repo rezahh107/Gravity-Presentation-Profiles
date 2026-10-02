@@ -285,7 +285,12 @@ final class EntryDetailTimelineSemanticPresentation {
         }
 
         try {
-            $notes = \GFAPI::get_notes( array( 'entry_id' => (int) $entry['id'] ) );
+            $notes = \GFAPI::get_notes(
+                array(
+                    'entry_id' => (int) $entry['id'],
+                    'note_type' => 'gravityflow',
+                )
+            );
         } catch ( \Throwable $exception ) {
             return array();
         }
