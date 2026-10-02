@@ -263,9 +263,21 @@ async function captureState(page, label, movement) {
         max_abs_right_delta_px: maxAbs('right_delta_px'),
         max_abs_width_delta_px: maxAbs('width_delta_px'),
       },
+      text_direction_samples: {
+        headers: [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell-text')].slice(0, 8).map(el => ({
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          direction: getComputedStyle(el).direction,
+        })),
+        cells: cells.slice(0, 8).map(el => ({
+          col_id: el.getAttribute('col-id'),
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          direction: getComputedStyle(el).direction,
+        })),
+      },
       derived: {
         scroll_left_spread_px: scrollLeftSpread,
         document_horizontal_overflow_px: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        native_horizontal_scrollbar_count: document.querySelectorAll('[data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport').length,
         horizontal_scrollbar_present: Boolean(
           resolved.ag_body_horizontal_scroll_viewport
           && resolved.ag_body_horizontal_scroll_viewport.scroll_range > tolerancePx
@@ -345,41 +357,60 @@ function scenarioMetrics(scenario) {
       - (origin?.elements?.ag_center_cols_viewport?.client_width || 0)
     )),
     max_document_overflow_px: states.length ? Math.max(...states.map(state => state.derived?.document_horizontal_overflow_px || 0)) : null,
+    native_horizontal_scrollbar_count: origin?.derived?.native_horizontal_scrollbar_count ?? null,
+    native_text_leaves_rtl: Boolean(
+      origin
+      && [...(origin.text_direction_samples?.headers || []), ...(origin.text_direction_samples?.cells || [])].length
+      && [...(origin.text_direction_samples?.headers || []), ...(origin.text_direction_samples?.cells || [])].every(item => item.direction === 'rtl')
+    ),
   };
 }
 
 function dispositionFor(rtlScenario, ltrScenario) {
   const rtl = scenarioMetrics(rtlScenario);
   const ltr = scenarioMetrics(ltrScenario);
-  const supported = rtlScenario.scroll_condition_present
+  const defectSupported = rtlScenario.scroll_condition_present
     && rtl.grid_ltr_identity
     && rtl.any_relevant_rtl
     && rtl.nonzero_movement
     && rtl.alignment_growth_px > tolerancePx;
-  const falsified = rtlScenario.scroll_condition_present
+  const repairVerified = rtlScenario.scroll_condition_present
+    && rtl.grid_ltr_identity
+    && rtl.all_relevant_ltr
+    && rtl.nonzero_movement
+    && rtl.moved_alignment_max_px <= tolerancePx
+    && rtl.max_document_overflow_px <= tolerancePx
+    && rtl.native_horizontal_scrollbar_count === 1
+    && rtl.native_text_leaves_rtl;
+  const hypothesisFalsified = rtlScenario.scroll_condition_present
     && rtl.grid_ltr_identity
     && rtl.all_relevant_ltr
     && rtl.nonzero_movement
     && rtl.moved_alignment_max_px <= tolerancePx;
 
   let disposition = 'NOT_PROVEN';
-  if (supported) disposition = 'HYPOTHESIS_SUPPORTED';
-  else if (falsified) disposition = 'HYPOTHESIS_FALSIFIED';
+  if (repairVerified) disposition = 'PRODUCTION_REPAIR_VERIFIED';
+  else if (defectSupported) disposition = 'HYPOTHESIS_SUPPORTED';
+  else if (hypothesisFalsified) disposition = 'HYPOTHESIS_FALSIFIED';
 
   let alternative = {
     status: 'NO_ALTERNATIVE_CAUSE_ESTABLISHED',
     candidate: null,
-    reason: 'No independent header/body geometry defect is established by this reproducible integrated host.',
-    next_qualification: 'Capture the same direction/scroll matrix in the reported target environment if the user-visible drift remains reproducible there.',
+    reason: repairVerified
+      ? 'The bounded LTR physical-axis seam keeps native AG Grid header/body synchronization intact under real horizontal scrolling.'
+      : 'No independent header/body geometry defect is established by this reproducible integrated host.',
+    next_qualification: repairVerified
+      ? 'Target-production acceptance remains separate from reproducible WU21 evidence.'
+      : 'Capture the same direction/scroll matrix in the reported target environment if the user-visible drift remains reproducible there.',
   };
-  if (!supported && rtl.header_center_client_width_delta_px > tolerancePx) {
+  if (!defectSupported && !repairVerified && rtl.header_center_client_width_delta_px > tolerancePx) {
     alternative = {
       status: 'EVIDENCE_SUPPORTED_NEXT_LEAD',
       candidate: 'NATIVE_HEADER_BODY_VIEWPORT_WIDTH_MISMATCH',
       reason: 'Header and center viewport client widths differ beyond the qualification tolerance.',
       next_qualification: 'Trace which native/host container introduces the width delta without changing Grid ownership.',
     };
-  } else if (!supported && rtl.moved_alignment_max_px > tolerancePx && !rtl.any_relevant_rtl) {
+  } else if (!defectSupported && !repairVerified && rtl.moved_alignment_max_px > tolerancePx && !rtl.any_relevant_rtl) {
     alternative = {
       status: 'EVIDENCE_SUPPORTED_NEXT_LEAD',
       candidate: 'NATIVE_SCROLL_TRANSFORM_OR_POSITIONING_PATH',
@@ -388,7 +419,14 @@ function dispositionFor(rtlScenario, ltrScenario) {
     };
   }
 
-  return { disposition, rtl_metrics: rtl, ltr_control_metrics: ltr, alternative_cause: alternative };
+  return {
+    disposition,
+    defect_supported: defectSupported,
+    repair_verified: repairVerified,
+    rtl_metrics: rtl,
+    ltr_control_metrics: ltr,
+    alternative_cause: alternative,
+  };
 }
 
 const result = {
@@ -464,6 +502,17 @@ try {
   }
   if (!rtlDesktop.scroll_condition_present) criticalMissing.push('rtl-desktop:horizontal-scroll-condition');
   if (rtlDesktop.scroll_condition_present && !evaluation.rtl_metrics.nonzero_movement) criticalMissing.push('rtl-desktop:nonzero-scroll-movement');
+
+  const narrowMetrics = scenarioMetrics(rtlNarrow);
+  result.narrow_metrics = narrowMetrics;
+  if (evaluation.repair_verified && narrowHasScroll) {
+    if (!narrowMetrics.nonzero_movement) criticalMissing.push('rtl-narrow:nonzero-scroll-movement');
+    if (!narrowMetrics.all_relevant_ltr) criticalMissing.push('rtl-narrow:physical-axis-not-ltr');
+    if (narrowMetrics.moved_alignment_max_px > tolerancePx) criticalMissing.push('rtl-narrow:header-body-desync');
+    if (narrowMetrics.max_document_overflow_px > tolerancePx) criticalMissing.push('rtl-narrow:document-horizontal-overflow');
+    if (narrowMetrics.native_horizontal_scrollbar_count !== 1) criticalMissing.push('rtl-narrow:native-scrollbar-count');
+    if (!narrowMetrics.native_text_leaves_rtl) criticalMissing.push('rtl-narrow:text-direction-not-rtl');
+  }
   result.missing_unresolved_measurements = [...new Set(criticalMissing)];
 
   if (result.disposition === 'HYPOTHESIS_SUPPORTED') {
@@ -514,6 +563,7 @@ try {
     required_by_condition: result.scenarios?.rtl_narrow?.required_by_condition ?? null,
     scroll_condition_present: result.scenarios?.rtl_narrow?.scroll_condition_present ?? null,
     scroll_range_px: result.scenarios?.rtl_narrow?.scroll_range_px ?? null,
+    metrics: result.narrow_metrics || null,
   }));
   console.log('GPP_RTL_SCROLL_ALTERNATIVE=' + JSON.stringify(result.hypothesis_evaluation?.alternative_cause || null));
   console.log('GPP_RTL_SCROLL_MISSING=' + JSON.stringify(result.missing_unresolved_measurements));
