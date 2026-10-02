@@ -447,11 +447,40 @@ function gpp_inbox_is_admitted_host_shell_classification( $parsed, $root_index )
         && gpp_inbox_compound_is_exact_native_root_identity( $parsed['compounds'][1] );
 }
 
+/** Exact Owner-authorized MR-1 physical-axis selector set. */
+function gpp_inbox_is_admitted_physical_axis_selector( $selector ) {
+    $parsed = gpp_inbox_split_selector_compounds( trim( $selector ) );
+    if ( null !== $parsed['error']
+        || 3 !== count( $parsed['compounds'] )
+        || 2 !== count( $parsed['combinators'] )
+        || ' ' !== $parsed['combinators'][0]
+        || ' ' !== $parsed['combinators'][1]
+        || '.gpp-inbox-surface' !== $parsed['compounds'][0]
+        || '[data-js="gflow-inbox"]' !== $parsed['compounds'][1]
+    ) {
+        return false;
+    }
+
+    return in_array(
+        $parsed['compounds'][2],
+        array(
+            '.ag-root-wrapper',
+            '.ag-header-viewport',
+            '.ag-center-cols-viewport',
+            '.ag-body-horizontal-scroll-viewport',
+        ),
+        true
+    );
+}
+
 /** Authoritative bounded semantic classifier for one effective selector-list member. */
 function gpp_inbox_classify_native_selector_member( $selector ) {
     $parsed = gpp_inbox_split_selector_compounds( trim( $selector ) );
     if ( null !== $parsed['error'] ) {
         return array( 'kind' => 'error', 'error' => $parsed['error'] );
+    }
+    if ( gpp_inbox_is_admitted_physical_axis_selector( $selector ) ) {
+        return array( 'kind' => 'physical-axis', 'error' => null );
     }
 
     $root_indexes = array();
@@ -485,8 +514,9 @@ function gpp_inbox_classify_native_selector_member( $selector ) {
 
 /** Positive Phase-B property contract for the authentic native Inbox subtree. */
 /**
- * Direction is admitted only on text leaves. It must never become a native
- * Grid/root/viewport contract because AG Grid 25.2.0 remains physically LTR.
+ * Direction remains presentation-only. RTL is admitted on text leaves, plus the
+ * Owner-authorized MR-1 exception that establishes physical LTR on exactly four
+ * runtime-proven AG Grid scroll participants.
  */
 function gpp_inbox_is_admitted_native_text_direction_selector( $selector ) {
     return 1 === preg_match( '/(?:^|\\s)(?:\\.ag-header-cell-text|\\.ag-cell)(?:$|[:.#[\\s>+~])/', trim( $selector ) );
@@ -832,6 +862,18 @@ function gpp_inbox_enforce_native_declarations( $targets, $statement_texts, &$er
             }
             continue;
         }
+        if ( 'physical-axis' === $target['kind'] ) {
+            $normalized_direction_value = 1 === count( $declarations['declarations'] )
+                ? strtolower( preg_replace( '/\\s+/', ' ', trim( $declarations['declarations'][0]['value'] ) ) )
+                : '';
+            if ( 1 !== count( $declarations['declarations'] )
+                || 'direction' !== $declarations['declarations'][0]['property']
+                || 'ltr !important' !== $normalized_direction_value
+            ) {
+                $errors[] = 'Owner-authorized Inbox physical-axis selectors may contain only direction: ltr !important. Selector: ' . $target['selector'];
+            }
+            continue;
+        }
         if ( 'ancestor' === $target['kind'] ) {
             $errors[] = 'Unadmitted ancestor-qualified selector targets the native Inbox subtree: ' . $target['selector'];
             continue;
@@ -1079,10 +1121,23 @@ foreach ( $inner_rules as $rule ) {
 }
 gpp_assert_same( 1, $host_width_rule_count, 'Inbox inner shell must have exactly one host-width ownership rule.' );
 
-gpp_assert_true(
-    1 === preg_match( '/\\.gpp-inbox-surface__host\\s*\\{[^}]*direction\\s*:\\s*ltr\\s*;/s', $shared_css ),
-    'GPP-owned native Inbox host seam must establish the physical LTR Grid axis.'
+$physical_axis_selectors = array(
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-header-viewport',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-center-cols-viewport',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport',
 );
+foreach ( $physical_axis_selectors as $physical_axis_selector ) {
+    gpp_assert_true(
+        false !== strpos( $shared_css, $physical_axis_selector ),
+        'Owner-authorized Inbox physical-axis selector is missing: ' . $physical_axis_selector
+    );
+    gpp_assert_same(
+        array(),
+        gpp_inbox_native_paint_contract_errors( $physical_axis_selector . ' { direction: ltr !important; }' ),
+        'Owner-authorized Inbox physical-axis selector must admit only its exact LTR direction exception: ' . $physical_axis_selector
+    );
+}
 gpp_assert_true(
     1 === preg_match( '/\\.ag-header-cell-text\\s*,\\s*\\n?\\s*\\.gflow-inbox\\.gflow-grid\\.gflow-common \\.ag-cell\\s*\\{[^}]*direction\\s*:\\s*rtl\\s*;/s', $shared_css ),
     'Native Inbox Persian text leaves must restore RTL independently of the physical Grid axis.'
@@ -1230,6 +1285,31 @@ gpp_inbox_assert_rejected_with_message(
     'PRI_FND_001_GRID_VIEWPORT_DIRECTION_REJECT',
     '.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-viewport { direction: rtl; }',
     'direction is admitted only'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_GRID_ROOT_LTR_UNSCOPED_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper { direction: ltr !important; }',
+    'direction is admitted only'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_PHYSICAL_AXIS_WRONG_VALUE_REJECT',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper { direction: rtl !important; }',
+    'physical-axis selectors may contain only'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_PHYSICAL_AXIS_IMPORTANT_REQUIRED_REJECT',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper { direction: ltr; }',
+    'physical-axis selectors may contain only'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_PHYSICAL_AXIS_EXTRA_PROPERTY_REJECT',
+    '.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper { direction: ltr !important; width: 10px; }',
+    'physical-axis selectors may contain only'
+);
+gpp_inbox_assert_rejected_with_property(
+    'PRI_FND_001_PHYSICAL_AXIS_UNLISTED_NODE_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-body-viewport { direction: ltr !important; }',
+    'direction'
 );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_WIDTH_REJECT', '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT', '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }', 'width' );
