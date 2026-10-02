@@ -11,6 +11,14 @@ const wpCli = process.env.WU21_WP_CLI;
 const wpPath = process.env.WU21_WP_PATH;
 const tolerancePx = 2;
 
+function wpEval(code) {
+  return execFileSync(
+    'php',
+    [wpCli, '--path=' + wpPath, 'eval', code],
+    { cwd: repoRoot, env: process.env, encoding: 'utf8' }
+  ).trim();
+}
+
 if (!artifactDir || !repoRoot || !repositorySha || !wpCli || !wpPath) {
   throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: WU21 environment is incomplete.');
 }
@@ -28,6 +36,27 @@ const integratedHost = JSON.parse(fs.readFileSync(integratedHostPath, 'utf8'));
 if (!fixture.frontend_inbox_url) throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic Inbox URL unavailable.');
 if (integratedHost.classification !== 'INTEGRATED_SRWF_VISUAL_HOST') {
   throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: integrated Hello Elementor host identity unavailable.');
+}
+if (!fixture.forms?.[0]?.form_id) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: canonical form identity unavailable.');
+}
+
+const p06Manifest = JSON.parse(
+  wpEval('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);') || 'null'
+);
+if (!p06Manifest?.authentic_block_page?.url) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic gravityflow/inbox Block route unavailable.');
+}
+
+const scopedSetup = JSON.parse(wpEval(
+  "$existing=get_page_by_path('wu21-mr1-production-form-scoped',OBJECT,'page');"
+  + "if($existing instanceof WP_Post){wp_delete_post($existing->ID,true);}"
+  + "$id=wp_insert_post(array('post_title'=>'WU21 MR1 Production Form Scoped','post_status'=>'publish','post_type'=>'page','post_name'=>'wu21-mr1-production-form-scoped','post_content'=>'[gravityflow page=\"inbox\" form=\"" + Number(fixture.forms[0].form_id) + "\"]'),true);"
+  + "if(is_wp_error($id)){throw new RuntimeException($id->get_error_message());}"
+  + "echo wp_json_encode(array('id'=>(int)$id,'url'=>get_permalink($id)),JSON_UNESCAPED_SLASHES);"
+));
+if (!scopedSetup?.id || !scopedSetup?.url) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic form-scoped route setup failed.');
 }
 
 const muDir = path.join(wpPath, 'wp-content/mu-plugins');
@@ -449,6 +478,8 @@ const result = {
   integrated_host: integratedHost,
   desktop_probe: [],
   scenarios: {},
+  route_evaluations: {},
+  route_desktop_probes: {},
   missing_unresolved_measurements: [],
   disposition: 'NOT_PROVEN',
   hypothesis_evaluation: null,
@@ -467,10 +498,23 @@ try {
 
   const rtlUrl = new URL(fixture.frontend_inbox_url);
   rtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  const formScopedRtlUrl = new URL(scopedSetup.url);
+  formScopedRtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  const blockRtlUrl = new URL(p06Manifest.authentic_block_page.url);
+  blockRtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+
   const desktopChoice = await chooseDesktop(page, rtlUrl.toString());
   result.desktop_probe = desktopChoice.probes;
+  result.route_desktop_probes.unscoped = desktopChoice.probes;
 
-  const rtlDesktop = await runScenario(page, 'rtl-desktop', rtlUrl.toString(), desktopChoice.viewport, true);
+  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString());
+  const blockDesktopChoice = await chooseDesktop(page, blockRtlUrl.toString());
+  result.route_desktop_probes.form_scoped = formDesktopChoice.probes;
+  result.route_desktop_probes.block = blockDesktopChoice.probes;
+
+  const rtlDesktop = await runScenario(page, 'rtl-desktop-unscoped', rtlUrl.toString(), desktopChoice.viewport, true);
+  const formScopedDesktop = await runScenario(page, 'rtl-desktop-form-scoped', formScopedRtlUrl.toString(), formDesktopChoice.viewport, false);
+  const blockDesktop = await runScenario(page, 'rtl-desktop-block', blockRtlUrl.toString(), blockDesktopChoice.viewport, false);
   const ltrDesktop = await runScenario(page, 'ltr-desktop-control', fixture.frontend_inbox_url, desktopChoice.viewport, false);
   await load(page, rtlUrl.toString(), narrowViewport);
   const narrowRange = await inspectRange(page);
@@ -479,12 +523,23 @@ try {
 
   result.scenarios = {
     rtl_desktop: rtlDesktop,
+    rtl_desktop_form_scoped: formScopedDesktop,
+    rtl_desktop_block: blockDesktop,
     ltr_desktop_control: ltrDesktop,
     rtl_narrow: { ...rtlNarrow, required_by_condition: narrowHasScroll },
   };
 
   const evaluation = dispositionFor(rtlDesktop, ltrDesktop);
-  result.disposition = evaluation.disposition;
+  const formScopedEvaluation = dispositionFor(formScopedDesktop, ltrDesktop);
+  const blockEvaluation = dispositionFor(blockDesktop, ltrDesktop);
+  result.route_evaluations = {
+    unscoped: evaluation,
+    form_scoped: formScopedEvaluation,
+    block: blockEvaluation,
+  };
+  result.disposition = [evaluation, formScopedEvaluation, blockEvaluation].every(item => item.repair_verified)
+    ? 'PRODUCTION_REPAIR_VERIFIED'
+    : 'NOT_PROVEN';
   result.hypothesis_evaluation = evaluation;
 
   const firstState = rtlDesktop.states?.[0];
@@ -494,14 +549,21 @@ try {
   };
 
   const criticalMissing = [];
-  for (const scenario of [rtlDesktop, ltrDesktop]) {
+  for (const scenario of [rtlDesktop, formScopedDesktop, blockDesktop, ltrDesktop]) {
     const origin = scenario.states?.[0];
     for (const name of ['html','body','surface','surface_host','gravityflow_wrap','inbox','ag_root_wrapper','ag_header_viewport','ag_center_cols_viewport','ag_body_horizontal_scroll_viewport']) {
       if (!origin?.elements?.[name]) criticalMissing.push(scenario.id + ':' + name);
     }
   }
-  if (!rtlDesktop.scroll_condition_present) criticalMissing.push('rtl-desktop:horizontal-scroll-condition');
-  if (rtlDesktop.scroll_condition_present && !evaluation.rtl_metrics.nonzero_movement) criticalMissing.push('rtl-desktop:nonzero-scroll-movement');
+  for (const [routeName, scenario, routeEvaluation] of [
+    ['unscoped', rtlDesktop, evaluation],
+    ['form-scoped', formScopedDesktop, formScopedEvaluation],
+    ['block', blockDesktop, blockEvaluation],
+  ]) {
+    if (!scenario.scroll_condition_present) criticalMissing.push(routeName + ':horizontal-scroll-condition');
+    if (scenario.scroll_condition_present && !routeEvaluation.rtl_metrics.nonzero_movement) criticalMissing.push(routeName + ':nonzero-scroll-movement');
+    if (!routeEvaluation.repair_verified) criticalMissing.push(routeName + ':production-repair-not-verified');
+  }
 
   const narrowMetrics = scenarioMetrics(rtlNarrow);
   result.narrow_metrics = narrowMetrics;
@@ -515,22 +577,6 @@ try {
   }
   result.missing_unresolved_measurements = [...new Set(criticalMissing)];
 
-  if (result.disposition === 'HYPOTHESIS_SUPPORTED') {
-    result.proposed_smallest_candidate = {
-      status: 'CANDIDATE_ONLY_NOT_IMPLEMENTED',
-      candidate: 'BOUNDED_PHYSICAL_LTR_BOUNDARY_AT_NATIVE_HOST_SEAM',
-      selector_boundary: 'Resolve from the first native host node whose computed direction switches the AG Grid scroll participants; do not target .ag-rtl or own Grid options.',
-      required_preservations: [
-        'GPP Persian heading/helper/manual refresh remain RTL',
-        'native five-column order',
-        'one native horizontal scrollbar',
-        'native sorting/pagination/focus/keyboard behavior',
-        'host-width ownership',
-        'no document-level horizontal overflow',
-      ],
-    };
-  }
-
   if (result.missing_unresolved_measurements.length) {
     result.disposition = 'NOT_PROVEN';
   }
@@ -541,6 +587,15 @@ try {
 } finally {
   if (browser) await browser.close().catch(() => {});
   fs.rmSync(muPath, { force: true });
+  try {
+    wpEval('wp_delete_post(' + Number(scopedSetup.id) + ', true);');
+  } catch (cleanupError) {
+    result.cleanup_error = String(cleanupError);
+    if (!fatal) {
+      fatal = String(cleanupError);
+      result.disposition = 'NOT_PROVEN';
+    }
+  }
   fs.writeFileSync(path.join(artifactDir, 'inbox-direction-scroll-qualification.json'), JSON.stringify(result, null, 2) + '\n');
 
   const rtl = result.hypothesis_evaluation?.rtl_metrics || null;
@@ -550,6 +605,7 @@ try {
   console.log('GPP_RTL_SCROLL_DESKTOP_PROBES=' + JSON.stringify(result.desktop_probe.map(item => ({ viewport: item.viewport, range: item.effective_scroll_range_px }))));
   console.log('GPP_RTL_SCROLL_RTL_METRICS=' + JSON.stringify(rtl));
   console.log('GPP_RTL_SCROLL_LTR_METRICS=' + JSON.stringify(ltr));
+  console.log('GPP_RTL_SCROLL_ROUTE_EVALUATIONS=' + JSON.stringify(result.route_evaluations));
   console.log('GPP_RTL_SCROLL_DIRECTIONS=' + JSON.stringify(result.scenarios?.rtl_desktop?.states?.[0]?.directions || null));
   console.log('GPP_RTL_SCROLL_AG_IDENTITY=' + JSON.stringify(result.scenarios?.rtl_desktop?.states?.[0]?.ag_grid_direction_identity || null));
   console.log('GPP_RTL_SCROLL_STATES=' + JSON.stringify((result.scenarios?.rtl_desktop?.states || []).map(state => ({
