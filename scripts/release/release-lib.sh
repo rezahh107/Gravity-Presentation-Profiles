@@ -4,6 +4,7 @@ set -euo pipefail
 GPP_RELEASE_SLUG='gravity-presentation-profiles'
 GPP_ENTRYPOINT='gravity-presentation-profiles.php'
 GPP_ADDON='src/GravityForms/AddOn.php'
+GPP_RELEASE_AUTHOR='Reza Hashemi Hosseini'
 
 release_fail() {
     echo "GPP_RELEASE_FAIL: $*" >&2
@@ -64,6 +65,22 @@ release_plugin_version() {
     sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*//p' "$root/$GPP_ENTRYPOINT" | head -n1 | tr -d '\r'
 }
 
+release_plugin_author() {
+    local root="${1:-.}"
+    sed -n 's/^[[:space:]]*\*[[:space:]]*Author:[[:space:]]*//p' "$root/$GPP_ENTRYPOINT" | head -n1 | tr -d '\r'
+}
+
+release_assert_author_identity() {
+    local root="${1:-.}"
+    local author
+    author="$(release_plugin_author "$root")"
+    if [[ -z "$author" ]]; then
+        release_fail 'Plugin header Author is missing or empty.'
+        return 1
+    fi
+    [[ "$author" == "$GPP_RELEASE_AUTHOR" ]] || release_fail "Plugin header Author mismatch: expected=$GPP_RELEASE_AUTHOR actual=$author"
+}
+
 release_addon_version() {
     local root="${1:-.}"
     awk -F"'" '/protected[[:space:]]+\$_version[[:space:]]*=/{print $2; exit}' "$root/$GPP_ADDON" | tr -d '\r'
@@ -72,6 +89,7 @@ release_addon_version() {
 release_assert_version_mirrors() {
     local root="${1:-.}"
     local plugin addon
+    release_assert_author_identity "$root"
     plugin="$(release_plugin_version "$root")"
     addon="$(release_addon_version "$root")"
     [[ -n "$plugin" ]] || release_fail 'Plugin header version is missing.'
