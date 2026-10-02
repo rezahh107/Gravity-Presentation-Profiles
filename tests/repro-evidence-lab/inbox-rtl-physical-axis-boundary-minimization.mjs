@@ -312,12 +312,18 @@ try{
   if(winnerNarrow.status!=='PASS') throw new Error('Q2_AXIS_MIN_NOT_PROVEN: minimized winner failed 390px RTL scroll invariants.');
 
   const routeChecks={};
+  result.winner_route_verification=routeChecks;
   for(const [name,url] of Object.entries(routes)){
     if(!url){routeChecks[name]={status:'NOT_APPLICABLE',reason:'route unavailable'};continue;}
-    const base=await evaluateCandidate(page,url,candidatePlan[0],choice.width,choice.height,null);
+    const routeChoice=await chooseWidth(page,url);
+    if(!routeChoice){
+      routeChecks[name]={status:'NOT_PROVEN',reason:'no desktop viewport produced native horizontal scrolling'};
+      throw new Error('Q2_AXIS_MIN_NOT_PROVEN: no scroll condition on route '+name);
+    }
+    const base=await evaluateCandidate(page,url,candidatePlan[0],routeChoice.width,routeChoice.height,null);
     const order=base.states?.[0]?.visual_order_left_to_right||[];
-    const repaired=await evaluateCandidate(page,url,winner,choice.width,choice.height,order);
-    routeChecks[name]={baseline_status:base.status,repaired_status:repaired.status,baseline_metrics:base.metrics,repaired_metrics:repaired.metrics,range:repaired.range};
+    const repaired=await evaluateCandidate(page,url,winner,routeChoice.width,routeChoice.height,order);
+    routeChecks[name]={viewport:routeChoice,baseline_status:base.status,repaired_status:repaired.status,baseline_metrics:base.metrics,repaired_metrics:repaired.metrics,range:repaired.range};
     if(repaired.status!=='PASS') throw new Error('Q2_AXIS_MIN_NOT_PROVEN: winner failed route '+name);
   }
 
