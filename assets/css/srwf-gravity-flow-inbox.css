@@ -149,7 +149,7 @@
     color: var(--gpp-inbox-utility-hover);
 }
 
-.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button:focus-visible {
+.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh]:focus-visible {
     outline: 3px solid var(--gpp-inbox-utility-focus) !important;
     outline-offset: 3px;
     border-color: var(--gpp-inbox-accent);
@@ -158,8 +158,8 @@
     box-shadow: 0 0 0 1px #fff, 0 2px 4px rgba(23, 32, 51, .05);
 }
 
-.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[aria-busy="true"],
-.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button:disabled {
+.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh][aria-busy="true"],
+.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh]:disabled {
     border-color: var(--gpp-inbox-utility-border);
     background: var(--gpp-inbox-utility-surface);
     color: var(--gpp-inbox-text-muted);
