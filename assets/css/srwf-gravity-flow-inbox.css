@@ -17,11 +17,6 @@
     --gpp-inbox-control-border: #8690a1;
     --gpp-inbox-accent: #1d4ed8;
     --gpp-inbox-focus: var(--gpp-inbox-accent);
-    --gpp-inbox-utility-hover: #1e40af;
-    --gpp-inbox-utility-surface: #f8fafe;
-    --gpp-inbox-utility-border: #c9d6f0;
-    --gpp-inbox-utility-border-hover: #9bb4e7;
-    --gpp-inbox-utility-focus: #93c5fd;
     --gpp-inbox-row-hover: #f8fafc;
     --gpp-inbox-elevation: 0 2px 4px rgba(23, 32, 51, .05);
 }
@@ -95,6 +90,12 @@
  * Its geometry is therefore not a Grid allocation contract.
  */
 .gpp-inbox-manual-refresh {
+    --gpp-inbox-utility-hover: #1e40af;
+    --gpp-inbox-utility-surface: #f8fafe;
+    --gpp-inbox-utility-border: #c9d6f0;
+    --gpp-inbox-utility-border-hover: #9bb4e7;
+    --gpp-inbox-utility-focus: #93c5fd;
+
     margin: 0 0 0.75rem;
     direction: rtl;
     text-align: start;
