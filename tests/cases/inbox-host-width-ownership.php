@@ -484,6 +484,14 @@ function gpp_inbox_classify_native_selector_member( $selector ) {
 }
 
 /** Positive Phase-B property contract for the authentic native Inbox subtree. */
+/**
+ * Direction is admitted only on text leaves. It must never become a native
+ * Grid/root/viewport contract because AG Grid 25.2.0 remains physically LTR.
+ */
+function gpp_inbox_is_admitted_native_text_direction_selector( $selector ) {
+    return 1 === preg_match( '/(?:^|\\s)(?:\\.ag-header-cell-text|\\.ag-cell)(?:$|[:.#[\\s>+~])/', trim( $selector ) );
+}
+
 function gpp_inbox_is_admitted_native_paint_property( $property ) {
     $custom_properties = array(
         '--gpp-inbox-canvas',
@@ -829,6 +837,14 @@ function gpp_inbox_enforce_native_declarations( $targets, $statement_texts, &$er
             continue;
         }
         foreach ( $declarations['declarations'] as $declaration ) {
+            if ( 'direction' === $declaration['property'] ) {
+                if ( gpp_inbox_is_admitted_native_text_direction_selector( $target['selector'] )
+                    && 'rtl' === strtolower( trim( $declaration['value'] ) ) ) {
+                    continue;
+                }
+                $errors[] = 'Native Inbox direction is admitted only as RTL text presentation on .ag-cell/.ag-header-cell-text leaves. Selector: ' . $target['selector'];
+                continue;
+            }
             if ( ! gpp_inbox_is_admitted_native_paint_property( $declaration['property'] ) ) {
                 $errors[] = 'Unadmitted native Inbox property `' . $declaration['property'] . '` in selector: ' . $target['selector'];
             }
@@ -1063,6 +1079,15 @@ foreach ( $inner_rules as $rule ) {
 }
 gpp_assert_same( 1, $host_width_rule_count, 'Inbox inner shell must have exactly one host-width ownership rule.' );
 
+gpp_assert_true(
+    1 === preg_match( '/\\.gpp-inbox-surface__host\\s*\\{[^}]*direction\\s*:\\s*ltr\\s*;/s', $shared_css ),
+    'GPP-owned native Inbox host seam must establish the physical LTR Grid axis.'
+);
+gpp_assert_true(
+    1 === preg_match( '/\\.ag-header-cell-text\\s*,\\s*\\n?\\s*\\.gflow-inbox\\.gflow-grid\\.gflow-common \\.ag-cell\\s*\\{[^}]*direction\\s*:\\s*rtl\\s*;/s', $shared_css ),
+    'Native Inbox Persian text leaves must restore RTL independently of the physical Grid axis.'
+);
+
 $paint_errors = array_merge(
     gpp_inbox_native_paint_contract_errors( $shared_css ),
     gpp_inbox_native_paint_contract_errors( $native_css )
@@ -1191,6 +1216,21 @@ gpp_inbox_assert_rejected_with_message(
 
 /* Existing flat-selector closure. */
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_DIRECT_WIDTH_REJECT', '.gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
+gpp_assert_same(
+    array(),
+    gpp_inbox_native_paint_contract_errors( '.gflow-inbox.gflow-grid.gflow-common .ag-cell { direction: rtl; }' ),
+    'RTL text direction on the admitted native cell leaf must remain presentation-only.'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_GRID_ROOT_DIRECTION_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper { direction: rtl; }',
+    'direction is admitted only'
+);
+gpp_inbox_assert_rejected_with_message(
+    'PRI_FND_001_GRID_VIEWPORT_DIRECTION_REJECT',
+    '.gflow-inbox.gflow-grid.gflow-common .ag-center-cols-viewport { direction: rtl; }',
+    'direction is admitted only'
+);
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_REORDERED_WIDTH_REJECT', '.gflow-grid.gflow-inbox.gflow-common .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_ADDITIONAL_PERMUTATION_WIDTH_REJECT', '.gflow-common.gflow-grid.gflow-inbox .ag-row { width: 10px; }', 'width' );
 gpp_inbox_assert_rejected_with_property( 'PRI_FND_001_GROUPED_NONFIRST_WIDTH_REJECT', '.decoy-selector, .gflow-inbox.gflow-grid.gflow-common .ag-row { width: 10px; }', 'width' );
