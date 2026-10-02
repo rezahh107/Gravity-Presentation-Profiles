@@ -78,6 +78,22 @@ cp -a "$WORK/dev-source" "$AUTHOR_DUPLICATE"
 sed -i '/Author: Reza Hashemi Hosseini/a\ * Author: Gravity Presentation Profiles' "$AUTHOR_DUPLICATE/gravity-presentation-profiles.php"
 expect_fail release_assert_author_identity "$AUTHOR_DUPLICATE"
 
+# WordPress get_file_data() matches plugin header names case-insensitively.
+# A wrong case-variant Author before the canonical line is therefore an
+# effective duplicate/conflict and must not bypass the release invariant.
+AUTHOR_MIXED_REPRESENTATION="$WORK/author-mixed-representation"
+cp -a "$WORK/dev-source" "$AUTHOR_MIXED_REPRESENTATION"
+sed -i '/Author: Reza Hashemi Hosseini/i\ * author: Wrong Name' "$AUTHOR_MIXED_REPRESENTATION/gravity-presentation-profiles.php"
+[[ "$(release_plugin_author_headers "$AUTHOR_MIXED_REPRESENTATION" | wc -l | tr -d '[:space:]')" == '2' ]]
+[[ "$(release_plugin_author "$AUTHOR_MIXED_REPRESENTATION")" == 'Wrong Name' ]]
+expect_fail release_assert_author_identity "$AUTHOR_MIXED_REPRESENTATION"
+
+AUTHOR_HEADER_NAME_CASE="$WORK/author-header-name-case"
+cp -a "$WORK/dev-source" "$AUTHOR_HEADER_NAME_CASE"
+sed -i 's/Author: Reza Hashemi Hosseini/author: Reza Hashemi Hosseini/' "$AUTHOR_HEADER_NAME_CASE/gravity-presentation-profiles.php"
+[[ "$(release_plugin_author "$AUTHOR_HEADER_NAME_CASE")" == 'Reza Hashemi Hosseini' ]]
+expect_fail release_assert_author_identity "$AUTHOR_HEADER_NAME_CASE"
+
 php -r '
     $path = $argv[1];
     $text = file_get_contents($path);
@@ -159,6 +175,7 @@ mutate_zip() {
         wrong-version) sed -i 's/Version: 9.8.7/Version: 9.8.6/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         missing-author) sed -i '/^[[:space:]]*\*[[:space:]]*Author:/d' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         wrong-author) sed -i 's/Author: Reza Hashemi Hosseini/Author: Gravity Presentation Profiles/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
+        mixed-author-representation) sed -i '/Author: Reza Hashemi Hosseini/i\ * author: Wrong Name' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         missing-license) rm -f "$dir/gravity-presentation-profiles/LICENSE" ;;
         wrong-license) printf '%s\n' 'mutated license bytes' > "$dir/gravity-presentation-profiles/LICENSE" ;;
     esac
@@ -175,6 +192,8 @@ mutate_zip "$ZIP_RELATIVE" "$WORK/missing-author.zip" missing-author
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-author.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-author.zip" wrong-author
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-author.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/mixed-author-representation.zip" mixed-author-representation
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/mixed-author-representation.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing-license.zip" missing-license
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-license.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-license.zip" wrong-license
