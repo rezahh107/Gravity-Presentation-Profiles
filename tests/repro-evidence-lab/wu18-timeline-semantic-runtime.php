@@ -175,6 +175,9 @@ $classify = $reflection->getMethod( 'classify' );
 $classify->setAccessible( true );
 $date_presentation = $reflection->getMethod( 'timelineDatePresentation' );
 $date_presentation->setAccessible( true );
+$persisted_note_dates_method = $reflection->getMethod( 'persistedNoteDatesForEntry' );
+$persisted_note_dates_method->setAccessible( true );
+$persisted_note_dates = $persisted_note_dates_method->invoke( null, $alpha_entry );
 $steps = ( new Gravity_Flow_API( (int) $manifest['alpha']['form_id'] ) )->get_steps();
 if ( ! is_array( $steps ) ) {
     $steps = array();
@@ -186,10 +189,23 @@ $unknown_result = $classify->invoke( null, $synthetic_control, $steps );
 wu18_assert( is_array( $system_result ) && 'system' === $system_result['family'], 'Authentic Workflow Submitted event did not classify as system.' );
 wu18_assert( is_array( $unknown_result ) && 'unknown' === $unknown_result['family'], 'Unmapped synthetic Timeline event did not remain neutral/unknown.' );
 
-$workflow_submitted_jalali = $date_presentation->invoke( null, $workflow_submitted );
-$synthetic_control_jalali = $date_presentation->invoke( null, $synthetic_control );
-wu18_assert( is_string( $workflow_submitted_jalali ) && '' !== $workflow_submitted_jalali, 'Qualified Workflow Submitted raw timestamp did not receive provider-backed Jalali presentation.' );
-wu18_assert( is_string( $synthetic_control_jalali ) && '' !== $synthetic_control_jalali, 'Qualified native Gravity Flow note raw timestamp did not receive provider-backed Jalali presentation.' );
+wu18_assert(
+    isset( $synthetic_control->id, $persisted_note_dates[ (int) $synthetic_control->id ] )
+        && (string) $synthetic_control->date_created === (string) $persisted_note_dates[ (int) $synthetic_control->id ],
+    'Persisted Gravity Flow Timeline note was not revalidated against authoritative Gravity Forms note storage.'
+);
+
+$workflow_submitted_jalali = $date_presentation->invoke( null, $workflow_submitted, $alpha_entry, $persisted_note_dates );
+$synthetic_control_jalali = $date_presentation->invoke( null, $synthetic_control, $alpha_entry, $persisted_note_dates );
+wu18_assert( is_string( $workflow_submitted_jalali ) && '' !== $workflow_submitted_jalali, 'Qualified Workflow Submitted Entry timestamp did not receive provider-backed Jalali presentation.' );
+wu18_assert( is_string( $synthetic_control_jalali ) && '' !== $synthetic_control_jalali, 'Persisted Gravity Forms note timestamp did not receive provider-backed Jalali presentation.' );
+
+$unknown_synthetic = clone $workflow_submitted;
+$unknown_synthetic->value = 'Unknown synthetic workflow event';
+wu18_assert(
+    null === $date_presentation->invoke( null, $unknown_synthetic, $alpha_entry, $persisted_note_dates ),
+    'Unknown synthetic Timeline event was admitted without authoritative timestamp provenance.'
+);
 
 // Falsification: a human-looking note that contains tempting semantic keywords
 // must remain unknown. This proves the classifier is not a broad keyword parser.
@@ -200,19 +216,35 @@ wu18_assert( is_array( $misleading_result ) && 'unknown' === $misleading_result[
 
 $malformed_date = clone $synthetic_control;
 $malformed_date->date_created = 'not-a-qualified-host-date';
-wu18_assert( null === $date_presentation->invoke( null, $malformed_date ), 'Malformed Timeline raw timestamp did not fail closed to native presentation.' );
+$malformed_persisted_dates = $persisted_note_dates;
+$malformed_persisted_dates[ (int) $malformed_date->id ] = $malformed_date->date_created;
+wu18_assert(
+    null === $date_presentation->invoke( null, $malformed_date, $alpha_entry, $malformed_persisted_dates ),
+    'Malformed but provenance-matched Timeline raw timestamp did not fail closed to native presentation.'
+);
+
+$provenance_mismatch = clone $synthetic_control;
+$provenance_mismatch->date_created = '2026-10-02 16:39:39';
+wu18_assert(
+    null === $date_presentation->invoke( null, $provenance_mismatch, $alpha_entry, $persisted_note_dates ),
+    'Persisted Timeline timestamp that diverges from authoritative note storage did not fail closed.'
+);
 
 $integration_trace = RuntimeDiagnostics::snapshot( 'integration.persian_gravity' );
 wu18_assert( is_array( $integration_trace ) && ! empty( $integration_trace['events'] ), 'Provider-backed Timeline application was not observable in GPP diagnostics.' );
 
 $probe = array(
-    'schema_version' => '1.2.0',
+    'schema_version' => '1.3.0',
     'gravity_flow_version' => GRAVITY_FLOW_VERSION,
     'timeline_date_contract' => array(
         'raw_property' => 'note.date_created',
         'source_timezone' => 'UTC',
         'visible_text_parsed' => false,
         'workflow_submitted_matches_entry_date_created' => true,
+        'workflow_submitted_entry_provenance_admitted' => true,
+        'persisted_gravity_forms_note_provenance_admitted' => true,
+        'unknown_synthetic_native_fallback' => true,
+        'persisted_provenance_mismatch_native_fallback' => true,
         'native_note_creation_utc_source_proven' => true,
         'gravity_flow_utc_source_provenance' => $timeline_utc_source_evidence,
         'provider_backed_system_event' => $workflow_submitted_jalali,
