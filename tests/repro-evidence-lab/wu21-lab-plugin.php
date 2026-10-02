@@ -211,6 +211,74 @@ function gpp_wu21_elementor_inbox_content( $attributes ) {
 }
 add_shortcode( 'gpp_wu21_elementor_inbox', 'gpp_wu21_elementor_inbox_content' );
 
+/**
+ * Qualification-only four-column contract.
+ *
+ * This runs only on an explicit WU21 request and only for the requested form.
+ * It uses Gravity Flow's documented gravityflow_columns_inbox_table filter to
+ * omit the active id column from the actual Grid column contract. No DOM,
+ * browser storage, Grid API or production state is touched.
+ */
+
+function gpp_wu21_four_column_rtl_probe() {
+    if ( is_admin()
+        || ! isset( $_GET['wu21_four_column_rtl'] )
+        || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column_rtl'] ) )
+    ) {
+        return;
+    }
+
+    global $wp_locale;
+    if ( is_object( $wp_locale ) ) {
+        $wp_locale->text_direction = 'rtl';
+    }
+}
+add_action( 'wp', 'gpp_wu21_four_column_rtl_probe', PHP_INT_MIN );
+
+function gpp_wu21_four_column_qualification_enabled( $args = null ) {
+    if ( is_admin() || ! isset( $_GET['wu21_four_column'] ) || '1' !== sanitize_key( wp_unslash( $_GET['wu21_four_column'] ) ) ) {
+        return false;
+    }
+
+    if ( null === $args || ! is_array( $args ) || ! array_key_exists( 'form_id', $args ) ) {
+        return false;
+    }
+
+    $target = isset( $_GET['wu21_four_column_form'] ) ? absint( wp_unslash( $_GET['wu21_four_column_form'] ) ) : 0;
+    if ( $target < 1 ) {
+        return false;
+    }
+
+    $form_id = $args['form_id'];
+    if ( is_array( $form_id ) ) {
+        $ids = array_values( array_filter( array_map( 'absint', $form_id ) ) );
+        return 1 === count( $ids ) && $ids[0] === $target;
+    }
+
+    return absint( $form_id ) === $target;
+}
+
+function gpp_wu21_four_column_remove_operations( $columns, $args ) {
+    if ( ! gpp_wu21_four_column_qualification_enabled( $args ) ) {
+        return $columns;
+    }
+
+    unset( $columns['id'] );
+    return $columns;
+}
+
+function gpp_wu21_four_column_register_filter() {
+    if ( ! isset( $_GET['wu21_four_column'] ) ) {
+        return;
+    }
+
+    // GPP registers its production projection at PHP_INT_MAX during gform_loaded.
+    // This later registration is test-only and exercises the same supported host
+    // column-definition seam after the real production projection has run.
+    add_filter( 'gravityflow_columns_inbox_table', 'gpp_wu21_four_column_remove_operations', PHP_INT_MAX, 2 );
+}
+add_action( 'gform_loaded', 'gpp_wu21_four_column_register_filter', 100 );
+
 // Keep the Raw Native bypass as a separate WU21-only module. The repository is
 // symlinked into the ephemeral plugin directory by the existing lab workflow,
 // so this adds no production bootstrap or workflow-owned runtime mode.
