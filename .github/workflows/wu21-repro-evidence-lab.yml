@@ -313,6 +313,13 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
 
+      - name: Qualify Q2 RTL physical-axis boundary minimization
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-rtl-physical-axis-boundary-minimization.mjs
+          test -s "$WU21_ARTIFACT_DIR/q2-rtl-physical-axis-boundary-minimization.json"
+
       - name: Execute bounded Inbox Visual Design V2 qualification
         shell: bash
         run: |
