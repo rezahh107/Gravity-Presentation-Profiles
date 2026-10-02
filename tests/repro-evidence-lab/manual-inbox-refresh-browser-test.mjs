@@ -243,6 +243,7 @@ try {
   await page.mouse.move(0, 0);
   await page.waitForTimeout(220);
   const keyboardTabStops = await focusByKeyboardTab(page, keyboardControl);
+  await page.waitForTimeout(220);
   const focusStyle = await keyboardControl.evaluate(element => ({
     active: element === document.activeElement,
     focusVisible: element.matches(':focus-visible'),
