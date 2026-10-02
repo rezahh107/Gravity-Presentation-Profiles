@@ -60,6 +60,39 @@ async function focusByKeyboardTab(page, locator, maxTabs = 120) {
   throw new Error(`Manual refresh was not keyboard-reachable within ${maxTabs} Tab stops.`);
 }
 
+async function captureManualRefreshPresentation(page, control, width) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.waitForTimeout(50);
+  return control.evaluate((element, viewportWidth) => {
+    const style = getComputedStyle(element);
+    const icon = getComputedStyle(element, '::before');
+    const rect = element.getBoundingClientRect();
+    const container = element.closest('.gpp-inbox-manual-refresh');
+    return {
+      viewport_width: viewportWidth,
+      rect: { left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+      display: style.display,
+      align_items: style.alignItems,
+      gap: style.gap,
+      color: style.color,
+      background_color: style.backgroundColor,
+      border_color: style.borderColor,
+      border_radius: style.borderRadius,
+      min_block_size: style.minBlockSize || style.minHeight,
+      container_overflow_px: container ? Math.max(0, container.scrollWidth - container.clientWidth) : null,
+      clipped: rect.left < -0.5 || rect.right > viewportWidth + 0.5 || rect.width > viewportWidth + 0.5,
+      icon: {
+        content: icon.content,
+        display: icon.display,
+        width: icon.width,
+        height: icon.height,
+        background_color: icon.backgroundColor,
+        mask_image: icon.maskImage || icon.webkitMaskImage || '',
+      },
+    };
+  }, width);
+}
+
 const browserResults = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
 if (!Array.isArray(browserResults.results)) throw new Error('WU21 browser results are missing before manual refresh test.');
 if (browserResults.results.some(item => item.id === 'WU21-BROWSER-007')) throw new Error('WU21-BROWSER-007 already exists.');
@@ -79,6 +112,7 @@ const context = await browser.newContext();
 await context.addCookies(authCookies.map(cookie => ({ ...cookie, url: baseUrl })));
 const page = await context.newPage();
 const network = [];
+const visualEvidence = { viewports: [] };
 let result;
 
 try {
@@ -99,13 +133,60 @@ try {
   const refreshInsideHost = await page.locator('.gflow-inbox.gflow-grid.gflow-common [data-gpp-inbox-manual-refresh]').count();
   if (refreshInsideHost !== 0) throw new Error('Manual refresh was mounted inside the host-owned Inbox subtree.');
 
+  for (const width of [1440, 390, 320]) {
+    const presentation = await captureManualRefreshPresentation(page, control, width);
+    visualEvidence.viewports.push(presentation);
+    if (presentation.display !== 'inline-flex' || presentation.align_items !== 'center' || presentation.gap !== '8px') {
+      throw new Error(`Manual refresh text/icon alignment is not stable at ${width}px: ${JSON.stringify(presentation)}`);
+    }
+    if (presentation.color !== 'rgb(29, 78, 216)' || presentation.background_color !== 'rgb(248, 250, 254)' || presentation.border_color !== 'rgb(201, 214, 240)') {
+      throw new Error(`Manual refresh utility-blue idle treatment drifted at ${width}px: ${JSON.stringify(presentation)}`);
+    }
+    if (presentation.border_radius !== '10px' || presentation.rect.height < 44 || presentation.clipped || presentation.container_overflow_px > 1) {
+      throw new Error(`Manual refresh responsive geometry failed at ${width}px: ${JSON.stringify(presentation)}`);
+    }
+    if (presentation.icon.display === 'none' || presentation.icon.width !== '18px' || presentation.icon.height !== '18px' || presentation.icon.background_color !== presentation.color || presentation.icon.mask_image === 'none' || !presentation.icon.mask_image.includes('data:image/svg+xml')) {
+      throw new Error(`Manual refresh decorative icon is not visibly bound to currentColor at ${width}px: ${JSON.stringify(presentation.icon)}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await control.hover();
+  await page.waitForTimeout(220);
+  visualEvidence.hover = await control.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { color: style.color, background_color: style.backgroundColor, border_color: style.borderColor };
+  });
+  if (visualEvidence.hover.color !== 'rgb(30, 64, 175)' || visualEvidence.hover.background_color !== 'rgb(248, 250, 254)' || visualEvidence.hover.border_color !== 'rgb(155, 180, 231)') {
+    throw new Error(`Manual refresh hover treatment drifted: ${JSON.stringify(visualEvidence.hover)}`);
+  }
+  await page.mouse.move(0, 0);
+
   // A bfcache restoration must not preserve stale busy/disabled utility state.
   await control.evaluate(button => {
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     button.textContent = 'در حال به‌روزرسانی…';
-    window.dispatchEvent(new Event('pageshow'));
   });
+  if ((await control.textContent())?.trim() !== 'در حال به‌روزرسانی…' || (await control.getAttribute('aria-busy')) !== 'true' || !(await control.isDisabled())) {
+    throw new Error('Manual refresh busy semantics changed before reload.');
+  }
+  await page.waitForTimeout(220);
+  visualEvidence.busy = await control.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      color: style.color,
+      background_color: style.backgroundColor,
+      border_color: style.borderColor,
+      opacity: style.opacity,
+      cursor: style.cursor,
+      icon_background_color: getComputedStyle(element, '::before').backgroundColor,
+    };
+  });
+  if (visualEvidence.busy.color !== 'rgb(71, 84, 103)' || visualEvidence.busy.background_color !== 'rgb(248, 250, 254)' || visualEvidence.busy.border_color !== 'rgb(201, 214, 240)' || Number(visualEvidence.busy.opacity) >= 1 || visualEvidence.busy.icon_background_color !== visualEvidence.busy.color) {
+    throw new Error(`Manual refresh busy presentation drifted: ${JSON.stringify(visualEvidence.busy)}`);
+  }
+  await control.evaluate(() => window.dispatchEvent(new Event('pageshow')));
   if (await control.isDisabled()) throw new Error('pageshow did not recover the manual refresh disabled state.');
   if (await control.getAttribute('aria-busy')) throw new Error('pageshow did not clear the manual refresh busy state.');
   if ((await control.textContent())?.trim() !== label) throw new Error('pageshow did not restore the idle Persian label.');
@@ -159,15 +240,22 @@ try {
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector(gridSelector, { timeout: 30000 });
   const keyboardControl = page.getByRole('button', { name: label, exact: true });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(220);
   const keyboardTabStops = await focusByKeyboardTab(page, keyboardControl);
+  await page.waitForTimeout(220);
   const focusStyle = await keyboardControl.evaluate(element => ({
     active: element === document.activeElement,
     focusVisible: element.matches(':focus-visible'),
     outlineStyle: getComputedStyle(element).outlineStyle,
     outlineWidth: getComputedStyle(element).outlineWidth,
+    outlineColor: getComputedStyle(element).outlineColor,
+    color: getComputedStyle(element).color,
+    backgroundColor: getComputedStyle(element).backgroundColor,
   }));
-  if (!focusStyle.active || !focusStyle.focusVisible || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0) {
-    throw new Error(`Manual refresh keyboard focus is not visibly indicated: ${JSON.stringify(focusStyle)}`);
+  visualEvidence.focus = focusStyle;
+  if (!focusStyle.active || !focusStyle.focusVisible || focusStyle.outlineStyle === 'none' || parseFloat(focusStyle.outlineWidth) <= 0 || focusStyle.outlineColor !== 'rgb(147, 197, 253)' || focusStyle.color !== 'rgb(29, 78, 216)') {
+    throw new Error(`Manual refresh keyboard focus is not visibly indicated by the semantic utility treatment: ${JSON.stringify(focusStyle)}`);
   }
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
@@ -211,6 +299,7 @@ try {
       unrelated_frontend_control_count: 0,
       keyboard_tab_stops_to_control: keyboardTabStops,
       keyboard_focus: focusStyle,
+      visual_contract: visualEvidence,
     },
   };
 } catch (error) {

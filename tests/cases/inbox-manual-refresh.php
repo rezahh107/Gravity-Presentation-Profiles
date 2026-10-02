@@ -92,6 +92,17 @@ gpp_assert_true( false !== strpos( $script, "button.setAttribute( 'aria-busy', '
 gpp_assert_true( false !== strpos( $script, "window.addEventListener( 'pageshow'" ), 'bfcache pageshow must recover the utility state.' );
 gpp_assert_true( false === strpos( $script, 'MutationObserver' ), 'Native-first utility must not own a persistent DOM reconciliation lifecycle.' );
 
+$css = file_get_contents( dirname( __DIR__, 2 ) . '/assets/css/srwf-gravity-flow-inbox.css' );
+gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh__button::before' ), 'Manual refresh must expose its decorative Refresh icon through scoped CSS only.' );
+gpp_assert_true( false !== strpos( $css, 'mask-image: url("data:image/svg+xml' ), 'Manual refresh Refresh icon must remain dependency-free CSS presentation.' );
+gpp_assert_true( false !== strpos( $css, 'background-color: currentColor' ), 'Manual refresh icon must inherit the semantic utility text color.' );
+foreach ( array( '#1d4ed8', '#1e40af', '#f8fafe', '#c9d6f0', '#9bb4e7', '#93c5fd' ) as $semantic_color ) {
+    gpp_assert_true( false !== strpos( $css, $semantic_color ), 'Manual refresh semantic utility color is missing: ' . $semantic_color );
+}
+gpp_assert_true( false !== strpos( $css, 'min-block-size: 44px' ), 'Manual refresh must preserve the minimum touch target block size.' );
+gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh]:focus-visible' ), 'Manual refresh must retain an explicit scoped focus-visible treatment strong enough to override host button paint.' );
+gpp_assert_true( false !== strpos( $css, '.gpp-inbox-manual-refresh > .gpp-inbox-manual-refresh__button[data-gpp-inbox-manual-refresh][aria-busy="true"]' ), 'Manual refresh must retain a distinct scoped busy presentation strong enough to override host disabled paint.' );
+
 $admission = strpos( $script, 'var inbox = document.querySelector( surfaceSelector )' );
 $creation = strpos( $script, "document.createElement( 'p' )" );
 gpp_assert_true( false !== $admission && false !== $creation && $admission < $creation, 'Native Inbox admission must complete before any control DOM creation.' );
