@@ -89,7 +89,7 @@ try {
     const attributes = {selectedFormsJson:JSON.stringify([{value:form.form_id}])};
     pages = JSON.parse(wp(`
 $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${form.form_id}"]','block'=>'<!-- wp:gravityflow/inbox ${JSON.stringify(attributes)} /-->') as $kind=>$content){
- $id=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Width qualification '.$kind,'post_content'=>$content),true);
+ $id=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Width qualification '.$kind,'post_content'=>wp_slash($content)),true);
  if(is_wp_error($id))throw new RuntimeException($id->get_error_message());$items[]=array('id'=>(int)$id,'kind'=>$kind,'url'=>get_permalink($id));}
  update_option('gpp_width_candidate_a_lab',array('pages'=>wp_list_pluck($items,'id'),'observer_path'=>${JSON.stringify(path.join(repoRoot,'tests/repro-evidence-lab/inbox-width-candidate-a-observer.js'))}),false);echo wp_json_encode($items);
 `));
