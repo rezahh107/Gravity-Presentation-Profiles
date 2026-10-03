@@ -48,6 +48,15 @@ assert.equal(controlWindow.__gppWidthControl.run('unrelated_after_startup'),true
 const deliveredLate=deliveryQueue.shift();listener(deliveredLate);
 assert.equal(controlWindow.__gppWidthControl.origin(deliveredLate),'unrelated_after_startup');
 assert.equal(Object.keys(deliveredLate).join(','),'type,source,api,columnApi','Ground truth must not alter event keys');
+const emptyOptions={};
+const emptyWindow={__gppWidthLab:{control:'startup',seeded:true},gflow_config:{grids:{empty:{grid_options:emptyOptions}}}};
+vm.runInNewContext(controlSource,{window:emptyWindow,gflow_config:emptyWindow.gflow_config,performance:{now:()=>0}});
+emptyOptions.onColumnEverythingChanged({source:'gridInitializing',api:publicApi,columnApi:publicColumns});
+assert.equal(applied,3,'Empty startup must use the surviving public callback');
+const emptyDelivery=deliveryQueue.shift();listener(emptyDelivery);
+assert.equal(emptyWindow.__gppWidthControl.origin(emptyDelivery),'unrelated_startup');
+emptyOptions.onColumnEverythingChanged({source:'api',api:publicApi,columnApi:publicColumns});
+assert.equal(applied,3,'Empty fallback must also be one-shot');
 
 const event = (type,source,sequence,origin) => ({event_type:type,source,sequence,at:sequence,
     callback:type==='gridSizeChanged'?'onGridSizeChanged':type==='firstDataRendered'?'onFirstDataRendered':'onColumnEverythingChanged',

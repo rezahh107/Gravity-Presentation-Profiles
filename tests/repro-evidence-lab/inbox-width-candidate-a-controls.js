@@ -67,6 +67,12 @@
         if (priorEverything != null && typeof priorEverything !== 'function') throw new Error('Non-callable column callback');
         options.onColumnEverythingChanged = function (params) {
             bind(id, params);
+            // Empty Inbox constructs no rows. Its initial surviving callback
+            // still runs before the host's asynchronous ready restore handler.
+            if (settings.control === 'startup' && !startupFired && run && params.source === 'gridInitializing') {
+                startupFired = true;
+                run('unrelated_startup', settings.control_state);
+            }
             return typeof priorEverything === 'function' ? Reflect.apply(priorEverything, this, arguments) : undefined;
         };
     }

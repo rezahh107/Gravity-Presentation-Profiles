@@ -121,11 +121,13 @@ async function discriminatorCases(page, context) {
     assert.equal(await page.evaluate(()=>window.__gppWidthControl.run('unrelated_after_startup')),true);
     await refreshControlEvidence(page,late);
     assert.ok(late.events.some(e=>e.source==='api' && e.fixture_origin==='unrelated_after_startup'));
-    for (const [name, saved] of [['startup_clean',null],['startup_stale',stale],['startup_fitting',fitting]]) {
-        const startup = await capture(page,context,saved,{name, startup:true});
+    for (const [name, saved] of [['startup_clean',null],['startup_stale',stale],['startup_fitting',fitting],['startup_empty',stale]]) {
+        const startup = await capture(page,context,saved,{name, startup:true, empty:name==='startup_empty'});
         assert.ok(startup.events.some(e=>e.source==='api' && e.fixture_origin==='unrelated_startup'),`${name}: synchronous public control did not emit`);
         const action = startup.control_trace.find(t=>t.kind==='end' && t.origin==='unrelated_startup');
         assert.equal(action.accepted,true);
+        assert.equal(startup.events.filter(e=>e.fixture_origin==='unrelated_startup').length,1);
+        assert.equal(startup.events.filter(e=>e.source==='api').length,saved ? 2 : 1,'Control/native delivery counts must be unambiguous');
     }
     const manual = await capture(page,context,stale,{name:'manual_resize'});
     const before = await page.evaluate(()=>window.__gppWidthControl.inspect());

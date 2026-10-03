@@ -54,10 +54,10 @@ investigate if the surviving event/config seam is demonstrated unreliable.
 
 The same browser/MU/observer harness now has a focused
 `GPP_WIDTH_DISCRIMINATOR_ONLY=1` mode. WU21 runs that mode instead of repeating
-the closed broad Phase-1 matrix. Both native routes execute eleven cases:
+the closed broad Phase-1 matrix. Both native routes execute twelve cases:
 clean/no restore, stale restore, fitting restore (native default widths), empty
 restore, unrelated public state reapplication after startup, synchronous startup
-reapplication on clean/stale/fitting fixtures, native mouse resize, and pin/flex
+reapplication on clean/stale/fitting/empty fixtures, native mouse resize, and pin/flex
 restore followed by an unrelated API call. No production files are changed.
 
 The separate **test-only control** chains the public `getRowHeight` option,
@@ -69,8 +69,9 @@ or storage. Public listeners deliver asynchronously in this pinned host. A
 bounded FIFO of explicit control calls and a WeakMap provide separate fixture
 ground truth without modifying event keys. Each control emits one event; the
 driver drains delivery before another control. The startup listener is installed
-before the sole explicit startup call and native ready restore. Empty Inbox has no row-height
-callback, so its restore is observed without that startup control. The fixture
+before the sole explicit startup call and native ready restore. Empty Inbox has
+no row-height callback; its initial surviving column callback binds the public
+control before the host's asynchronous ready handler. The fixture
 seed labels and control trace are evidence only, never discrimination authority.
 
 Predicates compare API type/source/keys, first API occurrence after initializing
