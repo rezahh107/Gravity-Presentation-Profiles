@@ -6,6 +6,15 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+### Changed
+
+- Refined the SRWF Inbox Manual Refresh control as the accepted secondary utility presentation, including the bounded refresh icon, focus/busy states and responsive touch target, while preserving the existing same-page reload behavior and native Gravity Flow Live Refresh ownership.
+
+### Fixed
+
+- Removed runtime exact-version coupling from the optional PersianGravity Jalali consumer and Gravity Flow Timeline date admission, using proven public capability and authoritative source/provenance checks instead while preserving native fallback and host ownership.
+- Fixed native Gravity Flow Inbox RTL horizontal-scroll header/body desynchronization by applying the Owner-authorized physical LTR axis only to the four runtime-proven AG Grid scroll participants, while preserving the accepted five-column RTL presentation, Persian text direction, native pagination, Grid state and one native horizontal scrollbar.
+
 ## [0.3.2] - 2026-10-02
 
 ### Changed
