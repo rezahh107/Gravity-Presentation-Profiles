@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { artifactDir, wpCli, wpPath, repoRoot, baseUrl, login, waitForGrid } from './inbox-visual-design-v2-browser-lib.mjs';
+import { annotate, evaluate } from './inbox-width-candidate-a-discriminator.mjs';
 
 if (!artifactDir || !wpCli || !wpPath || !repoRoot) throw new Error('Pinned WU21 lab unavailable');
 const baseline = '24c29c9dfeda5c38d8ff021526da65ddaa301a6b';
@@ -12,7 +13,8 @@ const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manif
 const form = fixture.forms.find(f => f.key === 'alpha');
 const fields = ['id', 'date_created', String(form.school_field_id), String(form.national_id_field_id), String(form.first_name_field_id)];
 const muPath = path.join(wpPath, 'wp-content/mu-plugins/inbox-width-candidate-a-mu.php');
-const evidencePath = path.join(artifactDir, 'inbox-width-candidate-a-phase1.json');
+const discriminatorOnly = process.env.GPP_WIDTH_DISCRIMINATOR_ONLY === '1';
+const evidencePath = path.join(artifactDir, discriminatorOnly ? 'inbox-width-candidate-a-discriminator.json' : 'inbox-width-candidate-a-phase1.json');
 const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 function wp(code) {
     const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], {encoding:'utf8'});
@@ -34,6 +36,12 @@ function state(widths, extra = {}) {
 }
 async function capture(page, context, saved, options = {}) {
     const url = new URL(context.url);
+    if (discriminatorOnly) {
+        url.searchParams.set('width_lab_discriminator','1');
+        if (saved) url.searchParams.set('width_lab_seeded','1');
+        if (options.startup) url.searchParams.set('width_lab_startup','1');
+        wp(`$lab=get_option('gpp_width_candidate_a_lab');$lab['control_state']=json_decode(${JSON.stringify(JSON.stringify(options.startup ? saved : null))},true);update_option('gpp_width_candidate_a_lab',$lab,false);`);
+    }
     if (options.empty) url.searchParams.set('width_lab_empty','1');
     if (options.compose) url.searchParams.set('width_lab_compose','1');
     // Harness-only fixture setup; the attached observer never reads/writes Storage.
@@ -86,7 +94,56 @@ async function capture(page, context, saved, options = {}) {
         assert.ok(entry.manual_composition_probe.prior.slice(0,-1).every(c=>c.native_this_api),'Native callback receiver/API was not preserved');
         assert.ok(report.attachment.flatMap(a=>a.callbacks).every(c=>c.chained));
     }
+    if (discriminatorOnly) {
+        entry.control_trace = await page.evaluate(()=>window.__gppWidthControl.trace);
+        annotate(entry);
+    }
     return entry;
+}
+
+async function refreshControlEvidence(page, entry) {
+    await page.waitForTimeout(150);
+    Object.assign(entry, await page.evaluate(()=>JSON.parse(JSON.stringify(window.__gppWidthQualification))));
+    entry.control_trace = await page.evaluate(()=>window.__gppWidthControl.trace);
+    entry.final_public_state = await page.evaluate(()=>window.__gppWidthControl.inspect());
+    annotate(entry);
+}
+
+async function discriminatorCases(page, context) {
+    const fitting = state([80,200,200,200,200]);
+    const stale = state([165,528,414,355,410]);
+    const clean = await capture(page,context,null,{name:'clean_no_restore'});
+    assert.equal(clean.events.filter(e=>e.source==='api').length,0);
+    await capture(page,context,stale,{name:'stale_restore'});
+    await capture(page,context,fitting,{name:'fitting_restore'});
+    await capture(page,context,stale,{name:'empty_restore',empty:true});
+    const late = await capture(page,context,stale,{name:'unrelated_after_startup'});
+    assert.equal(await page.evaluate(()=>window.__gppWidthControl.run('unrelated_after_startup')),true);
+    await refreshControlEvidence(page,late);
+    assert.ok(late.events.some(e=>e.source==='api' && e.fixture_origin==='unrelated_after_startup'));
+    for (const [name, saved] of [['startup_clean',null],['startup_stale',stale],['startup_fitting',fitting]]) {
+        const startup = await capture(page,context,saved,{name, startup:true});
+        assert.ok(startup.events.some(e=>e.source==='api' && e.fixture_origin==='unrelated_startup'),`${name}: synchronous public control did not emit`);
+        const action = startup.control_trace.find(t=>t.kind==='end' && t.origin==='unrelated_startup');
+        assert.equal(action.accepted,true);
+    }
+    const manual = await capture(page,context,stale,{name:'manual_resize'});
+    const before = await page.evaluate(()=>window.__gppWidthControl.inspect());
+    const handle = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"] .ag-header-cell-resize').first();
+    const box = await handle.boundingBox(); assert.ok(box,'Native resize handle unavailable');
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+    await page.mouse.down(); await page.mouse.move(box.x+box.width/2+45,box.y+box.height/2,{steps:6}); await page.mouse.up();
+    await refreshControlEvidence(page,manual);
+    assert.notDeepEqual(manual.final_public_state.state,before.state,'User drag did not change width');
+    assert.ok(manual.resize_events.some(e=>e.source==='uiColumnDragged' && e.finished),'Native user resize event missing');
+    assert.equal(manual.events.filter(e=>e.source==='api').length,1,'User resize unexpectedly generated an API everything event');
+    manual.manual_before = before;
+    // Pin/flex only test whether those state facts disambiguate a same-state API call.
+    for (const [name, extra] of [['pinned',{[fields[3]]:{pinned:'left'}}],['flex',{[fields[4]]:{flex:1}}]]) {
+        const entry = await capture(page,context,state([165,528,414,355,410],extra),{name:`${name}_restore_then_unrelated`});
+        assert.equal(await page.evaluate(()=>window.__gppWidthControl.run('unrelated_after_startup')),true);
+        await refreshControlEvidence(page,entry);
+    }
 }
 
 async function scrollGeometry(page) {
@@ -123,6 +180,7 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
     const page = await browser.newPage({viewport:{width:1440,height:900}});
     const errors = []; page.on('pageerror',e=>errors.push(String(e))); await login(page);
     for (const context of pages) {
+        if (discriminatorOnly) { await discriminatorCases(page,context); continue; }
         await capture(page,context,null,{name:'clean'});
         await capture(page,context,state([165,528,414,355,410]),{name:'stale_wide'});
         await capture(page,context,state([80,190,135,125,120]),{name:'saved_fitting'});
@@ -150,6 +208,13 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
         await page.setViewportSize({width:1440,height:900});
     }
     evidence.page_errors = errors; assert.deepEqual(errors,[]);
+    if (discriminatorOnly) {
+        evidence.qualification = evaluate(evidence.scenarios);
+        evidence.decision = evidence.qualification.decision;
+        evidence.execution_status = 'CAPTURED';
+        evidence.phase2_blocker = 'Restore-specific authority is not proven. Only fixture actions mutated columns; no fit or production repair exists.';
+        evidence.gates.focused_harness = 'PASS';
+    } else {
     evidence.gates.delivery = 'RUNTIME_PROVEN'; evidence.gates.composition = 'RUNTIME_PROVEN';
     const restored = evidence.scenarios.filter(s=>s.native_restored_state);
     const readyReceived = restored.every(s=>s.events.some(e=>e.callback==='publicGridReady'));
@@ -160,6 +225,7 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
     evidence.gates.resize = 'NATIVE_EVENTS_CAPTURED';
     evidence.execution_status = 'CAPTURED';
     evidence.phase2_blocker = 'Initial api-source event matches the seeded restore in controlled cases, but has no restore-specific identity; the public gridReady corroboration subscribed through the surviving callback is not delivered. Source api alone is forbidden as a production discriminator. No mutation phase executed.';
+    }
 } catch(error) {
     evidence.execution_status='ERROR'; evidence.failure=String(error.stack||error); throw error;
 } finally {
@@ -168,4 +234,4 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
     if (pages.length) wp(`foreach(${JSON.stringify(pages.map(p=>p.id))} as $id)wp_delete_post($id,true);delete_option('gpp_width_candidate_a_lab');`);
     fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2)+'\n');
 }
-console.log('CANDIDATE_A_PHASE1_OBSERVATION_CAPTURED');
+console.log(discriminatorOnly ? 'CANDIDATE_A_DISCRIMINATOR_QUALIFICATION_CAPTURED' : 'CANDIDATE_A_PHASE1_OBSERVATION_CAPTURED');

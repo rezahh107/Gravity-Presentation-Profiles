@@ -300,19 +300,19 @@ jobs:
           }
           ' "$probe_body"
 
-      - name: Observe Candidate A callbacks in pinned native frontend Inbox
+      - name: Falsify Candidate A restore discriminator in pinned native Inbox
         shell: bash
         run: |
           set -euo pipefail
           node tests/repro-evidence-lab/inbox-width-candidate-a-observer-test.mjs
-          node tests/repro-evidence-lab/inbox-width-candidate-a-browser.mjs
+          GPP_WIDTH_DISCRIMINATOR_ONLY=1 node tests/repro-evidence-lab/inbox-width-candidate-a-browser.mjs
 
-      - name: Upload Candidate A phase-1 trace independently
+      - name: Upload Candidate A discriminator trace independently
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: inbox-width-candidate-a-phase1-${{ github.run_id }}
-          path: /tmp/wu21-artifacts/inbox-width-candidate-a-phase1.json
+          name: inbox-width-candidate-a-discriminator-${{ github.run_id }}
+          path: /tmp/wu21-artifacts/inbox-width-candidate-a-discriminator.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -527,7 +527,7 @@ jobs:
           path: |
             /tmp/wu21-artifacts/${{ steps.evidence.outputs.evidence_file }}
             /tmp/wu21-artifacts/runtime.json
-            /tmp/wu21-artifacts/inbox-width-candidate-a-phase1.json
+            /tmp/wu21-artifacts/inbox-width-candidate-a-discriminator.json
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json

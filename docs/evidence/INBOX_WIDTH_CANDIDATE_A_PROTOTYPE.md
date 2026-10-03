@@ -49,3 +49,41 @@ the captured provenance can support a safe initial-restore discriminator.
 No merge, release, production deployment or host-source modifications are
 authorized by this prototype. Candidate D remains the architecture family to
 investigate if the surviving event/config seam is demonstrated unreliable.
+
+## Bounded discriminator falsification
+
+The same browser/MU/observer harness now has a focused
+`GPP_WIDTH_DISCRIMINATOR_ONLY=1` mode. WU21 runs that mode instead of repeating
+the closed broad Phase-1 matrix. Both native routes execute eleven cases:
+clean/no restore, stale restore, fitting restore (native default widths), empty
+restore, unrelated public state reapplication after startup, synchronous startup
+reapplication on clean/stale/fitting fixtures, native mouse resize, and pin/flex
+restore followed by an unrelated API call. No production files are changed.
+
+The separate **test-only control** chains the public `getRowHeight` option,
+preserving its result/receiver/arguments, to receive public APIs during initial
+row construction. It calls public `columnApi.applyColumnState` once for the
+explicit unrelated startup control. Later controls reapply the current public
+state. It neither replaces the Grid constructor nor intercepts native restore
+or storage. A public synchronous event listener and a WeakMap provide separate
+fixture ground truth without modifying event keys. Empty Inbox has no row-height
+callback, so its restore is observed without that startup control. The fixture
+seed labels and control trace are evidence only, never discrimination authority.
+
+Predicates compare API type/source/keys, first API occurrence after initializing
+and before first size/data callbacks, then the complete effective column state,
+displayed widths/pin/flex/min/max facts, row existence and center geometry.
+Raw elapsed milliseconds relative to all three boundaries are retained, but
+are not treated as stable provenance. Any equal positive/negative signature
+falsifies the tested predicate. No collisions also cannot prove uniqueness in
+this bounded test. The regression explicitly prohibits an A outcome when
+negative controls are absent. Future predicates outside this finite family
+remain NOT_PROVEN.
+
+`inbox-width-candidate-a-discriminator.json` records positive/negative events,
+public dispatch/control traces, native drag events and the decision. WU21 uploads
+it independently and in the final evidence artifact. Phase 2 remains false;
+there is no fit call, repair, state-store implementation, merge or deployment.
+For B/C, the next investigation is Candidate D: verify whether an official
+after-restore seam exists, otherwise assess an upstream repair. Its existence
+is not assumed or investigated in this qualification step.

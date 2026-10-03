@@ -27,7 +27,18 @@ add_action( 'wp_print_footer_scripts', static function () {
         || ! class_exists( 'Gravity_Flow' ) || ! wp_script_is( Gravity_Flow::THEME_JS, 'enqueued' ) ) { return; }
     $script = file_get_contents( $lab['observer_path'] );
     if ( false === $script ) { throw new RuntimeException( 'Qualification observer unreadable.' ); }
-    $prefix = 'window.__gppWidthLab = ' . wp_json_encode( array( 'phase' => 'OBSERVATION_ONLY' ) ) . ';';
+    $prefix = 'window.__gppWidthLab = ' . wp_json_encode( array(
+        'phase' => 'OBSERVATION_ONLY',
+        'discriminator' => isset( $_GET['width_lab_discriminator'] ),
+        'control' => isset( $_GET['width_lab_startup'] ) ? 'startup' : null,
+        'seeded' => isset( $_GET['width_lab_seeded'] ),
+        'control_state' => $lab['control_state'] ?? null,
+    ) ) . ';';
+    if ( isset( $_GET['width_lab_discriminator'] ) ) {
+        $controls = file_get_contents( dirname( $lab['observer_path'] ) . '/inbox-width-candidate-a-controls.js' );
+        if ( false === $controls ) { throw new RuntimeException( 'Qualification controls unreadable.' ); }
+        $prefix .= $controls;
+    }
     // The test-only fixture installs a real function BEFORE observer inspection.
     if ( isset( $_GET['width_lab_compose'] ) ) {
         $prefix .= <<<'JS'

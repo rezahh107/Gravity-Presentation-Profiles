@@ -2,7 +2,7 @@
 (function () {
     'use strict';
     const report = window.__gppWidthQualification = {
-        phase: 'OBSERVATION_ONLY', attachment: [], events: [], repair_count: 0,
+        phase: 'OBSERVATION_ONLY', attachment: [], events: [], resize_events: [], repair_count: 0,
         installed_at: performance.now(), config_present: !!window.gflow_config,
         function_was_attached_before_mount: false
     };
@@ -31,6 +31,7 @@
         return {grid_id: id, displayed, displayed_width: displayed.reduce((s,c) => s+c.width,0),
             state: columns && typeof columns.getColumnState === 'function' ? columns.getColumnState() : null,
             api_available: !!api, column_api_available: !!columns,
+            row_count: api && typeof api.getDisplayedRowCount === 'function' ? api.getDisplayedRowCount() : null,
             pixel_range: api && typeof api.getHorizontalPixelRange === 'function' ? api.getHorizontalPixelRange() : null,
             center_viewport: center, center_container: metric('.ag-center-cols-container'),
             body_viewport: metric('.ag-body-viewport'), horizontal_scroll: metric('.ag-body-horizontal-scroll-viewport'),
@@ -64,6 +65,11 @@
                     if (!readyListenerInstalled && name === 'onColumnEverythingChanged' && params.source === 'gridInitializing'
                         && params.api && typeof params.api.addEventListener === 'function') {
                         readyListenerInstalled = true;
+                        if (settings.discriminator) params.api.addEventListener('columnResized', resized => {
+                            report.resize_events.push({sequence:report.resize_events.length, at:performance.now(),
+                                event_type:resized.type, source:resized.source, event_keys:Object.keys(resized).sort(),
+                                finished:resized.finished, ...snapshot(id, resized)});
+                        });
                         const onReady = ready => {
                             report.events.push({sequence: report.events.length, callback: 'publicGridReady',
                                 source: null, at: performance.now(), ...snapshot(id, ready)});
@@ -77,6 +83,7 @@
                         source: params && params.source || null, event_type: params && params.type || null,
                         event_keys: params ? Object.keys(params).sort() : [], argument_count: args.length,
                         previous_return: result === undefined ? null : String(result), ...snapshot(id, params)};
+                    if (window.__gppWidthControl) event.fixture_origin = window.__gppWidthControl.origin(params);
                     report.events.push(event);
                     requestAnimationFrame(() => {
                         try { event.after_frame = snapshot(id, params); }
