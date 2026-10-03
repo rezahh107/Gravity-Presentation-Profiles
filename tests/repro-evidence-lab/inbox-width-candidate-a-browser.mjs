@@ -62,6 +62,8 @@ async function capture(page, context, saved, options = {}) {
             row_count:document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length};
     });
     entry.dom = dom;
+    entry.physical_order = report.events[0].displayed.map(c=>c.id);
+    assert.deepEqual(entry.physical_order,fields,'Accepted five-column physical order must remain native');
     assert.deepEqual(dom.script_order,['gravityflow_theme_js-js-extra','gravityflow_theme_js-js-before','gravityflow_theme_js-js']);
     if (options.empty) assert.equal(dom.row_count,0);
     const restoreEvents = report.events.filter(e => e.callback==='onColumnEverythingChanged' && e.source==='api');
@@ -85,6 +87,26 @@ async function capture(page, context, saved, options = {}) {
         assert.ok(report.attachment.flatMap(a=>a.callbacks).every(c=>c.chained));
     }
     return entry;
+}
+
+async function scrollGeometry(page) {
+    const stages=[];
+    for(const fraction of [0,0.5,1]) {
+        await page.locator('[data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport').evaluate((n,f)=>{n.scrollLeft=(n.scrollWidth-n.clientWidth)*f;},fraction);
+        await page.waitForTimeout(200);
+        const geometry=await page.locator('[data-js="gflow-inbox"]').evaluate(root=>{
+            const rects=selector=>[...root.querySelectorAll(selector)].map(n=>({id:n.getAttribute('col-id'),left:n.getBoundingClientRect().left,width:n.getBoundingClientRect().width,direction:getComputedStyle(n).direction}));
+            const headers=rects('.ag-header-cell'),cells=rects('.ag-center-cols-container .ag-row:first-child .ag-cell');
+            const deltas=cells.map(c=>{const h=headers.find(h=>h.id===c.id);return h?Math.max(Math.abs(h.left-c.left),Math.abs(h.width-c.width)):null;}).filter(d=>d!=null);
+            return {headers,cells,max_alignment_delta:deltas.length?Math.max(...deltas):null,
+                scroll:[...root.querySelectorAll('.ag-header-viewport,.ag-center-cols-viewport,.ag-body-horizontal-scroll-viewport')].map(n=>({class:n.className,left:n.scrollLeft,direction:getComputedStyle(n).direction})),
+                text_directions:[...root.querySelectorAll('.ag-header-cell-text,.ag-cell')].map(n=>getComputedStyle(n).direction),ag_ltr:!!root.querySelector('.ag-ltr'),ag_rtl:!!root.querySelector('.ag-rtl')};
+        });
+        assert.ok(geometry.ag_ltr && !geometry.ag_rtl);assert.ok(geometry.max_alignment_delta!=null && geometry.max_alignment_delta<=1);
+        assert.ok(geometry.scroll.every(n=>n.direction==='ltr'));assert.ok(geometry.text_directions.every(d=>d==='rtl'));
+        stages.push({fraction,...geometry});
+    }
+    return stages;
 }
 try {
     const attributes = {selectedFormsJson:JSON.stringify([{value:form.form_id}])};
@@ -122,7 +144,8 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
         for(const width of [1920,390,320]) {
             await page.setViewportSize({width,height:900});
             await capture(page,context,null,{name:`clean_${width}`});
-            await capture(page,context,state([165,528,414,355,410]),{name:`stale_${width}`});
+            const stale=await capture(page,context,state([165,528,414,355,410]),{name:`stale_${width}`});
+            stale.native_scroll_geometry=await scrollGeometry(page);
         }
         await page.setViewportSize({width:1440,height:900});
     }

@@ -2,6 +2,15 @@
 /** Ephemeral WU21 lab attachment, never installed by the product. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 
+// Reuse the established WU21 presentation-direction fixture technique on the
+// explicit temporary lab pages. No AG Grid enableRtl or production CSS changes.
+add_action( 'wp', static function () {
+    $lab = get_option( 'gpp_width_candidate_a_lab' );
+    if ( ! is_array( $lab ) || ! in_array( get_queried_object_id(), $lab['pages'], true ) ) { return; }
+    global $wp_locale;
+    if ( is_object( $wp_locale ) ) { $wp_locale->text_direction = 'rtl'; }
+}, PHP_INT_MIN );
+
 add_filter( 'gravityflow_js_config_shared', static function ( $config ) {
     $lab = get_option( 'gpp_width_candidate_a_lab' );
     if ( ! is_array( $lab ) || ! in_array( get_queried_object_id(), $lab['pages'], true ) ) { return $config; }
