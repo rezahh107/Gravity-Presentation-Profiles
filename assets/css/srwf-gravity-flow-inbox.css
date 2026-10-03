@@ -50,6 +50,31 @@
     padding-inline: clamp(1rem, 2vw, 1.625rem);
 }
 
+/*
+ * Owner-authorized MR-1 physical-axis exception.
+ *
+ * Gravity Flow 3.1.0 applies a frontend RTL !important rule to every descendant,
+ * while this Inbox is still an AG Grid ag-ltr instance. Keep only the four
+ * runtime-proven physical scroll participants LTR. Gravity Flow / AG Grid retain
+ * all Grid state, lifecycle, geometry, scrolling and interaction ownership.
+ */
+.gpp-inbox-surface [data-js="gflow-inbox"] .ag-root-wrapper,
+.gpp-inbox-surface [data-js="gflow-inbox"] .ag-header-viewport,
+.gpp-inbox-surface [data-js="gflow-inbox"] .ag-center-cols-viewport,
+.gpp-inbox-surface [data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport {
+    direction: ltr !important;
+}
+
+/*
+ * The physical Grid axis is not the text axis. Restore RTL only at native text
+ * leaves so Persian labels/values keep their reading direction without changing
+ * Grid/viewport scroll semantics.
+ */
+.gflow-inbox.gflow-grid.gflow-common .ag-header-cell-text,
+.gflow-inbox.gflow-grid.gflow-common .ag-cell {
+    direction: rtl;
+}
+
 /* RTL is intentionally bounded to GPP-owned Persian copy. */
 .gpp-inbox-surface__header {
     margin: 0 0 clamp(1rem, 1.8vw, 1.375rem);
@@ -208,7 +233,7 @@
     outline-offset: 3px;
 }
 
-/* Native Grid paint hierarchy; AG Grid keeps all layout and direction semantics. */
+/* Native Grid paint hierarchy; only the Owner-authorized four-node physical-axis exception above may alter direction. */
 .gflow-inbox.gflow-grid.gflow-common .ag-root-wrapper {
     background-color: var(--gpp-inbox-surface);
     border-color: var(--gpp-inbox-border);

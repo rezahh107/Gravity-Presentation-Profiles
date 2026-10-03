@@ -227,6 +227,7 @@ try {
   };
 
   assert.equal(embedded.ag_rtl, false, 'RTL repair must not enable or take ownership of AG Grid RTL state.');
+  assert.equal(embedded.root_direction, 'ltr', 'Native AG Grid physical axis must remain LTR inside the RTL SRWF page.');
   assert.deepEqual(afterLeftToRight.map(item => item.text), expectedPhysicalRtlLabels, 'RTL physical left-to-right order is not the required inverse sequence.');
   assert.deepEqual(afterLeftToRight.map(item => item.col_id), expectedPhysicalRtlColumnIds, 'RTL physical native column IDs are not the required inverse sequence.');
   assert.deepEqual(afterRightToLeft.map(item => item.text), expectedRightToLeftLabels, 'Rendered visible right-to-left order differs from the Owner contract.');
@@ -261,10 +262,21 @@ try {
   assert.equal(searched.includes(firstAddedId), true, 'Native Inbox search did not retain the expected scoped row.');
   const searchedRow = page.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${firstAddedId}"]`).first();
   await searchedRow.waitFor({ state: 'visible', timeout: 10000 });
-  const studentText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.first_name_field_id}"]`).innerText()).trim();
-  const nationalText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.national_id_field_id}"]`).innerText()).trim();
-  const schoolGradeText = (await searchedRow.locator(`.ag-cell[col-id="${alpha.school_field_id}"]`).innerText()).trim();
-  const dateText = (await searchedRow.locator('.ag-cell[col-id="date_created"]').innerText()).trim();
+  const studentCell = searchedRow.locator(`.ag-cell[col-id="${alpha.first_name_field_id}"]`);
+  const nationalCell = searchedRow.locator(`.ag-cell[col-id="${alpha.national_id_field_id}"]`);
+  const schoolGradeCell = searchedRow.locator(`.ag-cell[col-id="${alpha.school_field_id}"]`);
+  const dateCell = searchedRow.locator('.ag-cell[col-id="date_created"]');
+  const studentText = (await studentCell.innerText()).trim();
+  const nationalText = (await nationalCell.innerText()).trim();
+  const schoolGradeText = (await schoolGradeCell.innerText()).trim();
+  const dateText = (await dateCell.innerText()).trim();
+  const textDirections = {
+    student_name: await studentCell.evaluate(el => getComputedStyle(el).direction),
+    national_id: await nationalCell.evaluate(el => getComputedStyle(el).direction),
+    school_grade: await schoolGradeCell.evaluate(el => getComputedStyle(el).direction),
+    date_created: await dateCell.evaluate(el => getComputedStyle(el).direction),
+    headers: await page.locator('[data-js="gflow-inbox"] .ag-header-cell-text').evaluateAll(nodes => nodes.map(el => getComputedStyle(el).direction)),
+  };
   const embeddedRow = embedded.rows.find(row => Number(row.id) === firstAddedId);
   assert.equal(studentText, 'Header First 00 Header Last 00', 'Student-name plain-text composition is not authoritative.');
   assert.equal(nationalText, 'HDR-A-000', 'National-ID native field value changed unexpectedly.');
@@ -273,6 +285,11 @@ try {
   assert.equal(typeof embeddedRow?.date_created_human_readable, 'string', 'Native date_created display value is unavailable.');
   assert.notEqual(embeddedRow?.date_created_human_readable, '', 'Native date_created display value is empty.');
   assert.equal(dateText, embeddedRow.date_created_human_readable, 'Submitted cell must display Gravity Flow\'s native human-readable value rather than a fabricated value.');
+  assert.deepEqual(
+    Object.values(textDirections).flat(),
+    Object.values(textDirections).flat().map(() => 'rtl'),
+    'Persian/native Inbox text leaves must remain RTL while the physical Grid axis is LTR.'
+  );
 
   await nativeSearch(page, '');
   await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row').length === 20, null, { timeout: 10000 });
@@ -317,6 +334,7 @@ try {
       school_grade: schoolGradeText,
       date_created_display: dateText,
       date_created_raw: embeddedRow.date_created,
+      directions: textDirections,
     },
     pagination: { page_1: pagerBefore, page_2: pagerPage2, round_trip: pagerRoundTrip },
     entry_open: { href: openHref, opened_url: openedUrl },

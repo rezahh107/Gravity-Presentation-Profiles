@@ -454,6 +454,23 @@ jobs:
           set -euo pipefail
           node tests/visual-regression/inbox-visual-diagnostics.mjs
 
+      - name: Qualify native Inbox RTL/LTR scroll synchronization
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-width-rtl-comparative-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/inbox-direction-scroll-qualification.json"
+          # Production acceptance is intentionally fail-closed: diagnostic dispositions are not success.
+          node -e '
+            const fs = require("fs");
+            const file = process.env.WU21_ARTIFACT_DIR + "/inbox-direction-scroll-qualification.json";
+            const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
+            if (evidence.disposition !== "PRODUCTION_REPAIR_VERIFIED") {
+              console.error("RTL scroll production repair not verified:", evidence.disposition);
+              process.exit(1);
+            }
+          '
+
       - name: Verify Card Mode vertical geometry and native lifecycle
         run: node tests/repro-evidence-lab/inbox-card-geometry-browser-tests.mjs
 
@@ -506,6 +523,8 @@ jobs:
             /tmp/wu21-artifacts/inbox-table-header-before.png
             /tmp/wu21-artifacts/inbox-table-header-after.png
             /tmp/wu21-artifacts/integrated-visual-host.json
+            /tmp/wu21-artifacts/inbox-direction-scroll-qualification.json
+            /tmp/wu21-artifacts/inbox-direction-scroll-*.png
             /tmp/wu21-artifacts/vazir-font-authority.json
             /tmp/wu21-artifacts/design-authority-runtime/PersianGravity-Visual-Reference-Final.html
             /tmp/wu21-artifacts/design-authority-runtime/fonts

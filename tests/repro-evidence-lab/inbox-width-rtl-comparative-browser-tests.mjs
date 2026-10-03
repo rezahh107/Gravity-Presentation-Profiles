@@ -1,62 +1,634 @@
 import { chromium } from 'playwright';
-import { spawnSync } from 'node:child_process';
-import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const A=process.env.WU21_ARTIFACT_DIR,R=process.env.GITHUB_WORKSPACE,SHA=process.env.GPP_WU21_REPOSITORY_SHA;
-const BASE='8265507e7330a1e444ee10eec0592e816e03fad3',QUALIFIED_PR65_HEAD='8f2f83e46450a3f6165bb560a74771053517ad22',URL=process.env.WU21_BASE_URL||'http://127.0.0.1:8080',T=3;
-if(!A||!R||!SHA) throw new Error('WU21 comparative environment is incomplete.');
-const runtime=JSON.parse(fs.readFileSync(path.join(A,'inbox-width-rtl-runtime.json'),'utf8'));
-const fixture=JSON.parse(fs.readFileSync(path.join(A,'inbox-width-rtl-fixture.json'),'utf8'));
-const productFixture=JSON.parse(fs.readFileSync(path.join(A,'fixture-manifest.json'),'utf8'));
-if(!productFixture.frontend_inbox_url) throw new Error('Canonical WU21 frontend Inbox fixture is unavailable.');
-const blob=f=>{const p=spawnSync('git',['hash-object',f],{cwd:R,encoding:'utf8'});if(p.status!==0)throw new Error(p.stderr||p.stdout);return p.stdout.trim();};
-const fileSha=f=>crypto.createHash('sha256').update(fs.readFileSync(path.join(R,f))).digest('hex');
-const productionFiles=['assets/css/srwf-gravity-flow-inbox.css','assets/css/srwf-gravity-flow-inbox-native.css'];
-const historicalControlFiles={
- 'assets/css/srwf-gravity-flow-inbox.css':'2b0ed958c37471b1f5ffbf2aab22c13798596924',
- 'assets/css/srwf-gravity-flow-inbox-native.css':'87549fc51b33888cd58c0242b9397cf5e67172d8'
-};
-const currentProductionFiles=Object.fromEntries(productionFiles.map(f=>[f,{git_blob_sha:blob(f),sha256:fileSha(f)}]));
-const productionSource=productionFiles.map(f=>fs.readFileSync(path.join(R,f),'utf8')).join('\n');
-const fullWidthRules=[...productionSource.matchAll(/([^{}]*\.gpp-inbox-surface--full-width[^{}]*)\{([^{}]*)\}/gm)].map(m=>m[2]);
-if(!fullWidthRules.length)throw new Error('Production Full Width Inbox ownership rule is missing.');
-if(!fullWidthRules.some(rule=>/inline-size\s*:\s*100%\s*;/i.test(rule)))throw new Error('Production Full Width Inbox is not host-relative.');
-for(const rule of fullWidthRules){
- if(/\b\d*\.?\d+(?:d|s|l)?vw\b/i.test(rule))throw new Error('Production Full Width Inbox still owns viewport width.');
- if(/(?:^|;)\s*margin(?:-[a-z-]+)?\s*:\s*-(?!0)/i.test(rule))throw new Error('Production Full Width Inbox uses a negative-margin breakout.');
- if(/(?:^|;)\s*(?:left|right)\s*:\s*(?!auto\b)/i.test(rule))throw new Error('Production Full Width Inbox uses a physical offset breakout.');
- if(/(?:^|;)\s*transform\s*:\s*(?!none\b)/i.test(rule))throw new Error('Production Full Width Inbox uses a transform breakout.');
+const artifactDir = process.env.WU21_ARTIFACT_DIR;
+const repoRoot = process.env.GITHUB_WORKSPACE;
+const repositorySha = process.env.GPP_WU21_REPOSITORY_SHA;
+const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
+const wpCli = process.env.WU21_WP_CLI;
+const wpPath = process.env.WU21_WP_PATH;
+const tolerancePx = 2;
+
+function wpEval(code) {
+  return execFileSync(
+    'php',
+    [wpCli, '--path=' + wpPath, 'eval', code],
+    { cwd: repoRoot, env: process.env, encoding: 'utf8' }
+  ).trim();
 }
-const HISTORICAL_CONTROL_CSS='.gpp-inbox-surface.gpp-inbox-surface--full-width{inline-size:100vw!important;width:100vw!important;max-inline-size:100vw!important;max-width:100vw!important;margin-inline:0!important;position:relative!important;left:calc(50% - 50vw)!important;right:auto!important;transform:none!important}';
-const C=Object.freeze([
- {id:'CONTROL',kind:'historical_production_control_replay',authority_compatible_candidate:false,css:HISTORICAL_CONTROL_CSS,identity:{baseline_sha:BASE,qualified_pr65_head:QUALIFIED_PR65_HEAD,files:historicalControlFiles,replay_css_sha256:crypto.createHash('sha256').update(HISTORICAL_CONTROL_CSS).digest('hex'),description:'Replay only the PR65-proven historical viewport-owned width mechanism over current runtime for regression comparison.'}},
- {id:'CANDIDATE_HOST_OWNED',kind:'production_repair',authority_compatible_candidate:true,css:null,identity:{qualified_pr65_head:QUALIFIED_PR65_HEAD,test_css_injected:false,files:currentProductionFiles,description:'Current production CSS: host owns page width; GPP keeps the bounded inner Inbox axis.'}}
-]);
-const G=Object.freeze({G1:'NO DOCUMENT HORIZONTAL OVERFLOW',G2:'NO VISIBLE GRID HORIZONTAL OVERFLOW',G3:'RTL PHYSICAL GEOMETRY CORRECTNESS',G4:'LTR SMOKE',G5:'FULL_WIDTH_HOST OWNERSHIP',G6:'BOUNDED INNER AXIS',G7:'CONSTRAINED_HOST TRUTHFULNESS',G8:'RESPONSIVE',G9:'HOST BEHAVIOR UNCHANGED',G10:'FAIL-CLOSED EVIDENCE'});
-const contexts=['FULL_WIDTH_HOST','CONSTRAINED_HOST'],directions=['rtl','ltr'],viewports=[{id:'desktop_1440',width:1440,height:1000},{id:'mobile_390',width:390,height:844}];
-const sid=(c,h,d,v,z=100)=>`${c}__${h}__${d}__${v}__text_${z}`;
 
-async function waitInbox(p){await p.waitForSelector('[data-gpp-inbox-surface="gravity_flow.inbox"]',{timeout:30000});await p.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper',{timeout:30000});await p.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container>.ag-row').length>1,null,{timeout:30000});await p.waitForFunction(()=>document.querySelectorAll('.gpp-inbox-card').length>1,null,{timeout:30000});}
-async function prepare(p,c,h,d,v,z=100){await p.setViewportSize({width:v.width,height:v.height});await p.goto(fixture.contexts[h].url,{waitUntil:'domcontentloaded'});if(c.css)await p.addStyleTag({content:c.css});await p.evaluate(dir=>{document.documentElement.dir=dir;document.body.dir=dir;document.querySelector('[data-gpp-inbox-surface="gravity_flow.inbox"]')?.setAttribute('dir',dir);},d);await p.addStyleTag({content:`[data-gpp-inbox-surface="gravity_flow.inbox"]{direction:${d}!important}${z===100?'':`html{font-size:${z}%!important}`}`});await waitInbox(p);await p.evaluate(async()=>{if(document.fonts?.ready)await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});await p.waitForTimeout(150);}
-async function prepareBehavior(p,c){await p.setViewportSize({width:1440,height:1000});await p.goto(productFixture.frontend_inbox_url,{waitUntil:'domcontentloaded'});if(c.css)await p.addStyleTag({content:c.css});await p.waitForLoadState('networkidle',{timeout:30000});await waitInbox(p);await p.evaluate(async()=>{if(document.fonts?.ready)await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});await p.waitForTimeout(150);}
-async function measure(p,meta){return p.evaluate(({meta,T})=>{const st=e=>{if(!e)return null;const c=getComputedStyle(e);return{display:c.display,visibility:c.visibility,direction:c.direction,width:c.width,minWidth:c.minWidth,maxWidth:c.maxWidth,marginLeft:c.marginLeft,marginRight:c.marginRight,marginInlineStart:c.marginInlineStart,marginInlineEnd:c.marginInlineEnd,paddingLeft:c.paddingLeft,paddingRight:c.paddingRight,position:c.position,left:c.left,right:c.right,insetInlineStart:c.insetInlineStart,insetInlineEnd:c.insetInlineEnd,transform:c.transform,overflowX:c.overflowX,overflowY:c.overflowY,gridTemplateColumns:c.gridTemplateColumns};};const desc=e=>{if(!e)return null;const r=e.getBoundingClientRect();return{rect:{left:+r.left.toFixed(2),right:+r.right.toFixed(2),top:+r.top.toFixed(2),bottom:+r.bottom.toFixed(2),width:+r.width.toFixed(2),height:+r.height.toFixed(2),logicalStart:+(meta.direction==='rtl'?r.right:r.left).toFixed(2),logicalEnd:+(meta.direction==='rtl'?r.left:r.right).toFixed(2)},scroll:{scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,scrollLeft:e.scrollLeft},style:st(e)};};const q=s=>document.querySelector(s),cards=[...document.querySelectorAll('.gpp-inbox-card')],rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container>.ag-row')];const n={host:q(`[data-gpp-comparative-host="${meta.context}"]`),surface:q('[data-gpp-inbox-surface="gravity_flow.inbox"]'),inner:q('.gpp-inbox-surface__inner'),inbox:q('.gflow-inbox.gflow-grid.gflow-common'),agRoot:q('[data-js="gflow-inbox"] .ag-root-wrapper'),center:q('[data-js="gflow-inbox"] .ag-center-cols-viewport'),grid:q('[data-js="gflow-inbox"] .ag-center-cols-container'),first:cards[0],second:cards[1],search:q('[data-js="gflow-inbox-search"]'),scrollbar:q('[data-js="gflow-inbox"] .ag-body-horizontal-scroll')};const missing=['host','surface','inner','inbox','agRoot','center','grid','first','second','search'].filter(k=>!n[k]);const root=document.documentElement,cr=n.center?.getBoundingClientRect(),gr=n.grid?.getBoundingClientRect(),a=cards[0]?.getBoundingClientRect(),b=cards[1]?.getBoundingClientRect(),sr=n.scrollbar?.getBoundingClientRect(),ss=n.scrollbar?getComputedStyle(n.scrollbar):null;return{...meta,established:missing.length===0,missing_required_measurements:missing,viewport:{innerWidth,innerHeight,clientWidth:root.clientWidth},document:{scrollWidth:root.scrollWidth,clientWidth:root.clientWidth,rootFontSize:parseFloat(getComputedStyle(root).fontSize)},elements:Object.fromEntries(Object.entries(n).map(([k,e])=>[k,desc(e)])),card_mode:{row_count:rows.length,card_count:cards.length,ready_count:document.querySelectorAll('.gpp-inbox-card__readiness--ready').length,unready_count:document.querySelectorAll('.gpp-inbox-card__readiness--unready').length},derived:{document_overflow_px:root.scrollWidth-root.clientWidth,center_scroll_range_px:n.center?n.center.scrollWidth-n.center.clientWidth:null,horizontal_scroll_range_px:n.scrollbar?n.scrollbar.scrollWidth-n.scrollbar.clientWidth:null,horizontal_scrollbar_rendered:Boolean(sr&&ss&&ss.display!=='none'&&ss.visibility!=='hidden'&&sr.height>T),grid_inside_center:Boolean(cr&&gr&&gr.left>=cr.left-T&&gr.right<=cr.right+T),two_cards_vertical:Boolean(a&&b&&b.top>=a.bottom-T),two_cards_same_row:Boolean(a&&b&&Math.abs(a.top-b.top)<=T)}};},{meta,T});}
-const inside=(o,i)=>Boolean(o?.rect&&i?.rect&&i.rect.left>=o.rect.left-T&&i.rect.right<=o.rect.right+T);
-const inViewport=m=>Boolean(m.elements.surface?.rect&&m.elements.surface.rect.left>=-T&&m.elements.surface.rect.right<=m.viewport.clientWidth+T);
-const noDoc=m=>m.document.scrollWidth<=m.viewport.clientWidth+T;
-const noGrid=m=>{const c=m.elements.center,s=m.elements.scrollbar;if(!c||!m.derived.grid_inside_center)return false;return c.scroll.scrollWidth<=c.scroll.clientWidth+T&&(!s||s.scroll.scrollWidth<=s.scroll.clientWidth+T);};
-const innerBound=m=>{const s=m.elements.surface?.rect,i=m.elements.inner?.rect,f=m.document.rootFontSize;if(!s||!i||!f)return false;return i.width<=s.width+T&&i.width<=70*f+T&&Math.abs((i.left+i.right-s.left-s.right)/2)<=T;};
-const staticSurface=m=>{const s=m.elements.surface?.style;return Boolean(s&&s.position==='static'&&s.left==='auto'&&s.right==='auto');};
-const hostOwned=m=>Boolean(inside(m.elements.host,m.elements.surface)&&Math.abs(m.elements.host.rect.width-m.elements.surface.rect.width)<=T&&staticSurface(m));
-const fullHost=m=>Boolean(m.elements.host?.rect&&m.elements.host.rect.width>=m.viewport.clientWidth-8&&m.elements.host.rect.left>=-8&&m.elements.host.rect.right<=m.viewport.clientWidth+8);
-const constrainedHost=m=>Boolean(m.elements.host?.rect&&(m.viewport.clientWidth<=500?m.elements.host.rect.width<=m.viewport.clientWidth+T:m.elements.host.rect.width<m.viewport.clientWidth-100));
-const oneCol=m=>Boolean(m.derived.two_cards_vertical&&m.elements.first?.rect&&m.elements.second?.rect&&m.elements.grid?.rect&&m.elements.first.rect.width<=m.elements.grid.rect.width+T&&m.elements.second.rect.width<=m.elements.grid.rect.width+T);
-async function capture(p,c,h,d,v,z=100){const id=sid(c.id,h,d,v.id,z);try{await prepare(p,c,h,d,v,z);const m=await measure(p,{id,candidate:c.id,context:h,direction:d,viewport_id:v.id,text_scale_percent:z});if(h==='CONSTRAINED_HOST'&&d==='rtl'&&v.id==='desktop_1440'&&z===100)await p.screenshot({path:path.join(A,`inbox-width-rtl-${c.id.toLowerCase()}-constrained-rtl-1440.png`),fullPage:true});return m;}catch(e){return{id,candidate:c.id,context:h,direction:d,viewport_id:v.id,text_scale_percent:z,established:false,missing_required_measurements:['scenario_execution'],error:String(e?.stack||e)};}}
-async function behavior(p,c){const o={candidate:c.id,status:'NOT_PROVEN',fixture:'WU21_AUTHENTIC_FRONTEND',url:productFixture.frontend_inbox_url,checks:{}};try{const scope='[data-gpp-inbox-surface="gravity_flow.inbox"]',rows=`${scope} [data-js="gflow-inbox"] .ag-center-cols-container>.ag-row`;await prepareBehavior(p,c);const initial=await p.locator(rows).count(),first=p.locator(rows).first();o.checks.card_mode=(await p.locator(`${scope} .gpp-inbox-card__readiness--ready`).count())>=initial&&(await p.locator(`${scope} .gpp-inbox-card__readiness--unready`).count())===0;o.checks.row_identity=Boolean(await first.getAttribute('row-id'));o.checks.navigation=Boolean((await first.locator('.gflow-inbox__entry-cell-link').first().getAttribute('href'))?.match(/(?:lid|id)=/));const search=p.locator(`${scope} [data-js="gflow-inbox-search"]`);await search.click();await search.pressSequentially('00:24:00');await p.waitForFunction(s=>document.querySelectorAll(s).length===1,rows,{timeout:15000});o.checks.search=true;await search.press('Control+A');await search.press('Backspace');await p.waitForFunction(s=>document.querySelectorAll(s).length===20,rows,{timeout:15000});await prepareBehavior(p,c);const freshRows=await p.locator(rows).count();if(freshRows!==20)throw new Error(`Expected a fresh first page with 20 rows, got ${freshRows}`);const h=p.locator(`${scope} [data-js="gflow-inbox"] .ag-header-cell[col-id="gpp_case_card"]`).first();await h.click();await p.waitForTimeout(350);const s1=await h.getAttribute('aria-sort');await h.click();await p.waitForTimeout(350);const s2=await h.getAttribute('aria-sort');o.checks.sorting=Boolean(s1&&s2&&s1!==s2);await prepareBehavior(p,c);const current=p.locator(`${scope} [ref="lbCurrent"]`),total=p.locator(`${scope} [ref="lbTotal"]`),next=p.locator(`${scope} [ref="btNext"]`);if(await current.count()!==1||await total.count()!==1||await next.count()!==1)throw new Error('Native AG Grid pagination controls not found.');const before=(await current.innerText()).trim(),totalPages=(await total.innerText()).trim();if(before!=='1'||Number(totalPages)<2)throw new Error(`Expected native pagination to start at page 1 of at least 2, got ${before}/${totalPages}`);const firstPageIds=await p.locator(rows).evaluateAll(elements=>elements.map(element=>element.getAttribute('row-id')).filter(Boolean));if(firstPageIds.length!==20)throw new Error(`Expected 20 identified rows on page 1, got ${firstPageIds.length}`);const ariaDisabled=await next.getAttribute('aria-disabled'),disabledClass=await next.evaluate(element=>element.classList.contains('ag-disabled'));if(ariaDisabled==='true'||disabledClass)throw new Error(`Next-page control unexpectedly disabled: aria-disabled=${ariaDisabled}, class=${disabledClass}`);await next.click();await p.waitForFunction(currentSelector=>document.querySelector(currentSelector)?.textContent?.trim()==='2',`${scope} [ref="lbCurrent"]`,{timeout:15000});await p.waitForTimeout(350);const visible=await p.locator(rows).count(),after=(await current.innerText()).trim(),secondPageIds=await p.locator(rows).evaluateAll(elements=>elements.map(element=>element.getAttribute('row-id')).filter(Boolean)),ready=await p.locator(`${scope} .gpp-inbox-card__readiness--ready`).count(),unready=await p.locator(`${scope} .gpp-inbox-card__readiness--unready`).count();const overlap=secondPageIds.filter(id=>firstPageIds.includes(id));if(visible<1||visible>20||after!=='2'||secondPageIds.length!==visible||overlap.length||ready!==visible||unready!==0)throw new Error(`Native frontend pagination transition invalid: page=${after}, rows=${visible}, ids=${secondPageIds.length}, overlap=${overlap.length}, ready=${ready}, unready=${unready}`);o.pagination_evidence={activation:'click',page_before:before,total_pages:totalPages,page_after:after,first_page_rows:firstPageIds.length,second_page_rows:visible,row_identity_changed:true,ready_markers:ready,unready_markers:unready};o.checks.pagination=true;o.status=Object.values(o.checks).every(Boolean)?'PASS':'FAIL';}catch(e){o.error=String(e?.stack||e);}return o;}
-const res=(status,evidence,detail={})=>({status,evidence,detail});
-function gates(id,ms,b){const standard=ms.filter(m=>m.candidate===id&&m.text_scale_percent===100),all=ms.filter(m=>m.candidate===id),missing=all.filter(m=>!m.established),rtl=standard.filter(m=>m.direction==='rtl'),ltr=standard.filter(m=>m.direction==='ltr'),full=standard.filter(m=>m.context==='FULL_WIDTH_HOST'),con=standard.filter(m=>m.context==='CONSTRAINED_HOST'),mobile=all.filter(m=>m.viewport_id==='mobile_390'),status=(miss,fail)=>miss.length?'NOT_PROVEN':fail.length?'FAIL':'PASS',ids=x=>x.map(m=>m.id);const f1=all.filter(m=>m.established&&!noDoc(m)),f2=all.filter(m=>m.established&&!noGrid(m)),f3=rtl.filter(m=>m.established&&!inViewport(m)),f4=ltr.filter(m=>m.established&&(!noDoc(m)||!noGrid(m)||!inViewport(m))),c5=full.filter(m=>m.established&&!fullHost(m)),f5=full.filter(m=>m.established&&fullHost(m)&&!hostOwned(m)),f6=all.filter(m=>m.established&&!innerBound(m)),c7=con.filter(m=>m.established&&!constrainedHost(m)),f7=con.filter(m=>m.established&&constrainedHost(m)&&!hostOwned(m)),f8=mobile.filter(m=>m.established&&(!noDoc(m)||!inViewport(m)||!oneCol(m))),ctx=[...standard.filter(m=>m.context==='FULL_WIDTH_HOST'&&m.viewport_id==='desktop_1440'&&m.established&&!fullHost(m)),...standard.filter(m=>m.context==='CONSTRAINED_HOST'&&m.viewport_id==='desktop_1440'&&m.established&&!constrainedHost(m))];return{G1:res(status(missing,f1),ids(all),{failures:ids(f1)}),G2:res(status(missing,f2),ids(all),{failures:ids(f2)}),G3:res(status(rtl.filter(m=>!m.established),f3),ids(rtl),{failures:ids(f3)}),G4:res(status(ltr.filter(m=>!m.established),f4),ids(ltr),{failures:ids(f4)}),G5:res(status([...full.filter(m=>!m.established),...c5],f5),ids(full),{failures:ids(f5),context_not_proven:ids(c5)}),G6:res(status(missing,f6),ids(all),{failures:ids(f6)}),G7:res(status([...con.filter(m=>!m.established),...c7],f7),ids(con),{failures:ids(f7),context_not_proven:ids(c7)}),G8:res(status(mobile.filter(m=>!m.established),f8),ids(mobile),{failures:ids(f8)}),G9:res(b.status,[`behavior:${id}`],b.checks),G10:res(missing.length||ctx.length||b.status==='NOT_PROVEN'?'NOT_PROVEN':'PASS',[...ids(all),`behavior:${id}`],{missing:ids(missing),context_not_proven:ids(ctx),behavior:b.status})};}
+if (!artifactDir || !repoRoot || !repositorySha || !wpCli || !wpPath) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: WU21 environment is incomplete.');
+}
 
-const out={schema:'gpp.comparative_repair_qualification.v1',repository_sha:SHA,authorized_baseline_sha:BASE,qualified_pr65_head:QUALIFIED_PR65_HEAD,runtime:{wordpress:runtime.wordpress,php:runtime.php,database:runtime.database,gravity_forms:runtime.plugins?.gravity_forms,gravity_flow:runtime.plugins?.gravity_flow,node:{version:process.version},playwright:null,chromium:null},theme:{expected:{template:'twentytwentyfive',stylesheet:'twentytwentyfive'},observed:runtime.theme},fixture,objective:'Verify the bounded production Host-Owned Inbox width repair against the PR65 historical control.',non_goals:['Owner preference selection','Production equivalence','Generic benchmark framework','Gravity Flow behavior replacement'],contexts,directions,viewports:[...viewports,{id:'mobile_390_text_200',width:390,height:844,direction:'rtl',context:'FULL_WIDTH_HOST',text_scale_percent:200}],candidates:C.map(({css,...c})=>c),production_repair:{candidate:'CANDIDATE_HOST_OWNED',test_css_injected:false,qualified_pr65_head:QUALIFIED_PR65_HEAD,files:currentProductionFiles},hard_gates:G,measurements:[],behavior_probes:{},per_candidate_gate_results:{},control_reproduction:{status:'NOT_PROVEN',reproduced:null},surviving_candidates:[],outcome:'NOT_PROVEN',production_equivalence:'NOT_PROVEN'};
-let browser;
-try{if(runtime.theme?.template!=='twentytwentyfive'||runtime.theme?.stylesheet!=='twentytwentyfive')throw new Error(`Theme identity mismatch: ${JSON.stringify(runtime.theme)}`);if(!process.env.GPP_RP_BROWSER_USER||!process.env.GPP_RP_BROWSER_PASSWORD)throw new Error('Comparative browser credentials were not provisioned by WU21.');out.runtime.playwright={version:JSON.parse(fs.readFileSync(path.join(R,'node_modules/playwright/package.json'),'utf8')).version};browser=await chromium.launch({headless:true});out.runtime.chromium={version:browser.version()};const p=await browser.newPage();await p.goto(`${URL}/wp-login.php`,{waitUntil:'domcontentloaded'});await p.fill('#user_login',process.env.GPP_RP_BROWSER_USER);await p.fill('#user_pass',process.env.GPP_RP_BROWSER_PASSWORD);await Promise.all([p.waitForNavigation({waitUntil:'domcontentloaded'}),p.click('#wp-submit')]);for(const c of C){for(const h of contexts)for(const d of directions)for(const v of viewports)out.measurements.push(await capture(p,c,h,d,v));out.measurements.push(await capture(p,c,'FULL_WIDTH_HOST','rtl',viewports[1],200));out.behavior_probes[c.id]=await behavior(p,c);}for(const c of C)out.per_candidate_gate_results[c.id]=gates(c.id,out.measurements,out.behavior_probes[c.id]);const m=out.measurements.find(x=>x.id===sid('CONTROL','CONSTRAINED_HOST','rtl','desktop_1440'));if(m?.established){const escaped=!hostOwned(m),physical=!inViewport(m),overflow=!noDoc(m),reproduced=escaped||physical||overflow;out.control_reproduction={status:reproduced?'REPRODUCED':'NOT_REPRODUCED',reproduced,evidence:m.id,observed:{constrained_parent_escaped:escaped,rtl_physical_viewport_failure:physical,document_horizontal_overflow:overflow,host_rect:m.elements.host?.rect,surface_rect:m.elements.surface?.rect,surface_style:m.elements.surface?.style,document_overflow_px:m.derived?.document_overflow_px}};}out.surviving_candidates=C.filter(c=>c.authority_compatible_candidate&&Object.values(out.per_candidate_gate_results[c.id]).every(g=>g.status==='PASS')).map(c=>c.id);out.outcome=out.surviving_candidates.length===1?'METHOD_CLOSED_IN_REPRODUCIBLE_SIMULATION':out.surviving_candidates.length>1?'OWNER_GATE_REQUIRED':'NOT_PROVEN';}catch(e){out.fatal=String(e?.stack||e);out.outcome='NOT_PROVEN';}finally{if(browser)await browser.close().catch(()=>{});fs.writeFileSync(path.join(A,'inbox-width-rtl-comparative.json'),JSON.stringify(out,null,2)+'\n');console.log(`GPP_RP_WU01_OUTCOME=${out.outcome}`);console.log(`GPP_RP_WU01_CONTROL_REPRODUCTION=${out.control_reproduction.status}`);console.log(`GPP_RP_WU01_SURVIVORS=${out.surviving_candidates.join(',')||'NONE'}`);}if(out.fatal)throw new Error(out.fatal);
+const fixturePath = path.join(artifactDir, 'fixture-manifest.json');
+const runtimePath = path.join(artifactDir, 'runtime.json');
+const integratedHostPath = path.join(artifactDir, 'integrated-visual-host.json');
+for (const required of [fixturePath, runtimePath, integratedHostPath]) {
+  if (!fs.existsSync(required)) throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: missing ' + required);
+}
+
+const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
+const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+const integratedHost = JSON.parse(fs.readFileSync(integratedHostPath, 'utf8'));
+if (!fixture.frontend_inbox_url) throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic Inbox URL unavailable.');
+if (integratedHost.classification !== 'INTEGRATED_SRWF_VISUAL_HOST') {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: integrated Hello Elementor host identity unavailable.');
+}
+if (!fixture.forms?.[0]?.form_id) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: canonical form identity unavailable.');
+}
+
+const p06Manifest = JSON.parse(
+  wpEval('echo wp_json_encode(get_option("gpp_p06_fixture_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);') || 'null'
+);
+if (!p06Manifest?.authentic_block_page?.url) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic gravityflow/inbox Block route unavailable.');
+}
+
+const scopedSetup = JSON.parse(wpEval(
+  "$existing=get_page_by_path('wu21-mr1-production-form-scoped',OBJECT,'page');"
+  + "if($existing instanceof WP_Post){wp_delete_post($existing->ID,true);}"
+  + "$id=wp_insert_post(array('post_title'=>'WU21 MR1 Production Form Scoped','post_status'=>'publish','post_type'=>'page','post_name'=>'wu21-mr1-production-form-scoped','post_content'=>'[gravityflow page=\"inbox\" form=\"" + Number(fixture.forms[0].form_id) + "\"]'),true);"
+  + "if(is_wp_error($id)){throw new RuntimeException($id->get_error_message());}"
+  + "echo wp_json_encode(array('id'=>(int)$id,'url'=>get_permalink($id)),JSON_UNESCAPED_SLASHES);"
+));
+if (!scopedSetup?.id || !scopedSetup?.url) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: authentic form-scoped route setup failed.');
+}
+
+const muDir = path.join(wpPath, 'wp-content/mu-plugins');
+const muPath = path.join(muDir, 'inbox-direction-scroll-qualification-mu.php');
+const muSource = path.join(repoRoot, 'tests/repro-evidence-lab/inbox-visual-design-v2-qualification-mu.php');
+fs.mkdirSync(muDir, { recursive: true });
+fs.copyFileSync(muSource, muPath);
+
+const phpAuth = "$u=get_user_by('login','bootstrap_admin');"
+  + "if(!$u) throw new RuntimeException('Synthetic WU21 admin unavailable.');"
+  + "$e=time()+900;"
+  + "echo wp_json_encode(array("
+  + "array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'auth')),"
+  + "array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in'))"
+  + "), JSON_UNESCAPED_SLASHES);";
+const authCookies = JSON.parse(execFileSync(
+  'php',
+  [wpCli, '--path=' + wpPath, 'eval', phpAuth],
+  { encoding: 'utf8', env: process.env }
+).trim());
+
+const selectors = {
+  html: 'html',
+  body: 'body',
+  surface: '.gpp-inbox-surface',
+  surface_host: '.gpp-inbox-surface__host',
+  gravityflow_wrap: '.gravityflow_wrap',
+  inbox: '.gflow-inbox.gflow-grid.gflow-common',
+  ag_root_wrapper: '[data-js="gflow-inbox"] .ag-root-wrapper',
+  ag_header_viewport: '[data-js="gflow-inbox"] .ag-header-viewport',
+  ag_center_cols_viewport: '[data-js="gflow-inbox"] .ag-center-cols-viewport',
+  ag_body_viewport: '[data-js="gflow-inbox"] .ag-body-viewport',
+  ag_header_container: '[data-js="gflow-inbox"] .ag-header-container',
+  ag_center_cols_container: '[data-js="gflow-inbox"] .ag-center-cols-container',
+};
+
+const horizontalViewportCandidates = [
+  '[data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport',
+  '[data-js="gflow-inbox"] .ag-body-horizontal-scroll .ag-body-horizontal-scroll-viewport',
+];
+
+const desktopCandidates = [
+  { width: 1440, height: 1000 },
+  { width: 1200, height: 900 },
+  { width: 1024, height: 900 },
+  { width: 900, height: 900 },
+];
+const narrowViewport = { width: 390, height: 844 };
+
+function round(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(3)) : null;
+}
+
+async function waitForGrid(page) {
+  await page.waitForSelector(selectors.ag_root_wrapper, { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row').length > 0, null, { timeout: 30000 });
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await page.waitForTimeout(150);
+}
+
+async function resolveHorizontalViewport(page) {
+  for (const candidate of horizontalViewportCandidates) {
+    if (await page.locator(candidate).count()) return candidate;
+  }
+  return null;
+}
+
+async function load(page, url, viewport) {
+  await page.setViewportSize(viewport);
+  await page.goto(url, { waitUntil: 'networkidle' });
+  await waitForGrid(page);
+}
+
+async function inspectRange(page) {
+  const horizontalSelector = await resolveHorizontalViewport(page);
+  return page.evaluate(({ selectors, horizontalSelector }) => {
+    const snap = selector => {
+      if (!selector) return null;
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      return {
+        scroll_left: el.scrollLeft,
+        scroll_width: el.scrollWidth,
+        client_width: el.clientWidth,
+        range: Math.max(0, el.scrollWidth - el.clientWidth),
+        direction: getComputedStyle(el).direction,
+      };
+    };
+    return {
+      horizontal_selector: horizontalSelector,
+      horizontal: snap(horizontalSelector),
+      center: snap(selectors.ag_center_cols_viewport),
+      body: snap(selectors.ag_body_viewport),
+    };
+  }, { selectors, horizontalSelector });
+}
+
+async function chooseDesktop(page, rtlUrl) {
+  const probes = [];
+  for (const viewport of desktopCandidates) {
+    await load(page, rtlUrl, viewport);
+    const range = await inspectRange(page);
+    const effective = Math.max(range.horizontal?.range || 0, range.center?.range || 0, range.body?.range || 0);
+    probes.push({ viewport, effective_scroll_range_px: effective, participants: range });
+    if (effective > tolerancePx && range.horizontal_selector) return { viewport, probes };
+  }
+  return { viewport: desktopCandidates[0], probes };
+}
+
+async function setDriverScroll(page, driverSelector, range, fraction) {
+  if (!driverSelector || range <= tolerancePx || fraction === 0) {
+    if (driverSelector) {
+      await page.locator(driverSelector).first().evaluate(el => { el.scrollLeft = 0; el.dispatchEvent(new Event('scroll')); });
+      await page.waitForTimeout(120);
+    }
+    return { attempted: [0], selected_target: 0, actual: 0 };
+  }
+  const magnitude = Math.max(1, Math.round(range * fraction));
+  const attempts = [magnitude, -magnitude];
+  for (const target of attempts) {
+    const actual = await page.locator(driverSelector).first().evaluate((el, value) => {
+      el.scrollLeft = value;
+      el.dispatchEvent(new Event('scroll'));
+      return el.scrollLeft;
+    }, target);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.waitForTimeout(120);
+    if (Math.abs(actual) > tolerancePx) return { attempted: attempts, selected_target: target, actual };
+  }
+  return { attempted: attempts, selected_target: attempts[attempts.length - 1], actual: 0 };
+}
+
+async function captureState(page, label, movement) {
+  const horizontalSelector = await resolveHorizontalViewport(page);
+  return page.evaluate(({ selectors, horizontalSelector, label, movement, tolerancePx }) => {
+    const rect = el => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: +r.left.toFixed(3), right: +r.right.toFixed(3), top: +r.top.toFixed(3), bottom: +r.bottom.toFixed(3), width: +r.width.toFixed(3), height: +r.height.toFixed(3) };
+    };
+    const describe = selector => {
+      if (!selector) return null;
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        selector,
+        tag: el.tagName.toLowerCase(),
+        classes: [...el.classList],
+        direction: s.direction,
+        overflow_x: s.overflowX,
+        position: s.position,
+        left: s.left,
+        right: s.right,
+        transform: s.transform,
+        inline_style: {
+          left: el.style.left || null,
+          right: el.style.right || null,
+          transform: el.style.transform || null,
+        },
+        rect: rect(el),
+        scroll_left: el.scrollLeft,
+        scroll_width: el.scrollWidth,
+        client_width: el.clientWidth,
+        scroll_range: Math.max(0, el.scrollWidth - el.clientWidth),
+      };
+    };
+
+    const resolved = {};
+    for (const [name, selector] of Object.entries(selectors)) resolved[name] = describe(selector);
+    resolved.ag_body_horizontal_scroll_viewport = describe(horizontalSelector);
+
+    const root = document.querySelector(selectors.ag_root_wrapper);
+    const headers = [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell[col-id]')];
+    const firstRow = document.querySelector('[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row');
+    const cells = firstRow ? [...firstRow.querySelectorAll('.ag-cell[col-id]')] : [];
+    const headerById = new Map(headers.map(el => [el.getAttribute('col-id'), el]));
+    const bodyById = new Map(cells.map(el => [el.getAttribute('col-id'), el]));
+    const sharedIds = [...headerById.keys()].filter(id => bodyById.has(id));
+    const alignment = sharedIds.map(colId => {
+      const h = rect(headerById.get(colId));
+      const b = rect(bodyById.get(colId));
+      return {
+        col_id: colId,
+        header: h,
+        body: b,
+        left_delta_px: +(h.left - b.left).toFixed(3),
+        right_delta_px: +(h.right - b.right).toFixed(3),
+        width_delta_px: +(h.width - b.width).toFixed(3),
+      };
+    });
+    const maxAbs = key => alignment.length ? Math.max(...alignment.map(item => Math.abs(item[key]))) : null;
+    const resourceUrls = performance.getEntriesByType('resource').map(entry => entry.name).filter(name => /(?:ag-grid|gravityflow.*grid|grid.*gravityflow)/i.test(name));
+
+    const directions = Object.fromEntries(Object.entries(resolved).map(([name, value]) => [name, value?.direction || null]));
+    const missing = Object.entries(resolved).filter(([name, value]) => !value && name !== 'ag_body_viewport').map(([name]) => name);
+    const scrollParticipants = {
+      header_viewport: resolved.ag_header_viewport,
+      center_viewport: resolved.ag_center_cols_viewport,
+      body_viewport: resolved.ag_body_viewport,
+      horizontal_scroll_viewport: resolved.ag_body_horizontal_scroll_viewport,
+    };
+    const participantScrollLeft = Object.values(scrollParticipants).filter(Boolean).map(item => item.scroll_left);
+    const scrollLeftSpread = participantScrollLeft.length ? Math.max(...participantScrollLeft) - Math.min(...participantScrollLeft) : null;
+
+    return {
+      label,
+      movement,
+      resolved_selectors: Object.fromEntries(Object.entries(resolved).map(([name, value]) => [name, value?.selector || null])),
+      missing_resolved_measurements: missing,
+      directions,
+      ag_grid_direction_identity: {
+        root_classes: root ? [...root.classList] : [],
+        ag_ltr: Boolean(root?.classList.contains('ag-ltr')),
+        ag_rtl: Boolean(root?.classList.contains('ag-rtl')),
+        root_dir_attribute: root?.getAttribute('dir') || null,
+        runtime_global_version: window.agGrid?.version || window.agGrid?.VERSION || null,
+        resource_urls: resourceUrls,
+      },
+      elements: resolved,
+      scroll_participants: scrollParticipants,
+      content_positioning: {
+        header_container: resolved.ag_header_container,
+        center_cols_container: resolved.ag_center_cols_container,
+      },
+      alignment: {
+        shared_column_ids: sharedIds,
+        columns: alignment,
+        max_abs_left_delta_px: maxAbs('left_delta_px'),
+        max_abs_right_delta_px: maxAbs('right_delta_px'),
+        max_abs_width_delta_px: maxAbs('width_delta_px'),
+      },
+      text_direction_samples: {
+        headers: [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell-text')].slice(0, 8).map(el => ({
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          direction: getComputedStyle(el).direction,
+        })),
+        cells: cells.slice(0, 8).map(el => ({
+          col_id: el.getAttribute('col-id'),
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          direction: getComputedStyle(el).direction,
+        })),
+      },
+      derived: {
+        scroll_left_spread_px: scrollLeftSpread,
+        document_horizontal_overflow_px: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        native_horizontal_scrollbar_count: document.querySelectorAll('[data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport').length,
+        horizontal_scrollbar_present: Boolean(
+          resolved.ag_body_horizontal_scroll_viewport
+          && resolved.ag_body_horizontal_scroll_viewport.scroll_range > tolerancePx
+          && resolved.ag_body_horizontal_scroll_viewport.rect?.height > 0
+        ),
+      },
+    };
+  }, { selectors, horizontalSelector, label, movement, tolerancePx });
+}
+
+async function runScenario(page, id, url, viewport, screenshots) {
+  await load(page, url, viewport);
+  const initialRange = await inspectRange(page);
+  const driverSelector = initialRange.horizontal_selector;
+  const range = initialRange.horizontal?.range || 0;
+
+  const originMove = await setDriverScroll(page, driverSelector, range, 0);
+  const origin = await captureState(page, 'origin', originMove);
+  if (screenshots) {
+    await page.locator(selectors.surface).first().screenshot({ path: path.join(artifactDir, 'inbox-direction-scroll-' + id + '-origin.png') });
+  }
+
+  if (range <= tolerancePx || !driverSelector) {
+    return {
+      id,
+      viewport,
+      scroll_condition_present: false,
+      driver_selector: driverSelector,
+      scroll_range_px: range,
+      states: [origin],
+    };
+  }
+
+  const intermediateMove = await setDriverScroll(page, driverSelector, range, 0.5);
+  const intermediate = await captureState(page, 'intermediate', intermediateMove);
+  const endMove = await setDriverScroll(page, driverSelector, range, 1);
+  const end = await captureState(page, 'end', endMove);
+  if (screenshots) {
+    await page.locator(selectors.surface).first().screenshot({ path: path.join(artifactDir, 'inbox-direction-scroll-' + id + '-nonzero.png') });
+  }
+
+  return {
+    id,
+    viewport,
+    scroll_condition_present: true,
+    driver_selector: driverSelector,
+    scroll_range_px: range,
+    states: [origin, intermediate, end],
+  };
+}
+
+function scenarioMetrics(scenario) {
+  const states = scenario.states || [];
+  const origin = states.find(state => state.label === 'origin');
+  const moved = states.filter(state => state.label !== 'origin');
+  const align = state => Math.max(state?.alignment?.max_abs_left_delta_px || 0, state?.alignment?.max_abs_right_delta_px || 0);
+  const originAlignment = align(origin);
+  const maxMovedAlignment = moved.length ? Math.max(...moved.map(align)) : originAlignment;
+  const maxGrowth = maxMovedAlignment - originAlignment;
+  const nonzeroMovement = moved.some(state => Math.abs(state.movement?.actual || 0) > tolerancePx);
+  const relevantNames = ['ag_root_wrapper', 'ag_header_viewport', 'ag_center_cols_viewport', 'ag_body_horizontal_scroll_viewport'];
+  const directions = Object.fromEntries(relevantNames.map(name => [name, origin?.directions?.[name] || null]));
+  const allRelevantLtr = relevantNames.every(name => directions[name] === 'ltr');
+  const anyRelevantRtl = relevantNames.some(name => directions[name] === 'rtl');
+  const gridLtr = Boolean(origin?.ag_grid_direction_identity?.ag_ltr) && !origin?.ag_grid_direction_identity?.ag_rtl;
+  return {
+    grid_ltr_identity: gridLtr,
+    relevant_directions: directions,
+    all_relevant_ltr: allRelevantLtr,
+    any_relevant_rtl: anyRelevantRtl,
+    nonzero_movement: nonzeroMovement,
+    origin_alignment_max_px: round(originAlignment),
+    moved_alignment_max_px: round(maxMovedAlignment),
+    alignment_growth_px: round(maxGrowth),
+    header_center_client_width_delta_px: round(Math.abs(
+      (origin?.elements?.ag_header_viewport?.client_width || 0)
+      - (origin?.elements?.ag_center_cols_viewport?.client_width || 0)
+    )),
+    max_document_overflow_px: states.length ? Math.max(...states.map(state => state.derived?.document_horizontal_overflow_px || 0)) : null,
+    native_horizontal_scrollbar_count: origin?.derived?.native_horizontal_scrollbar_count ?? null,
+    native_text_leaves_rtl: Boolean(
+      origin
+      && [...(origin.text_direction_samples?.headers || []), ...(origin.text_direction_samples?.cells || [])].length
+      && [...(origin.text_direction_samples?.headers || []), ...(origin.text_direction_samples?.cells || [])].every(item => item.direction === 'rtl')
+    ),
+  };
+}
+
+function dispositionFor(rtlScenario, ltrScenario) {
+  const rtl = scenarioMetrics(rtlScenario);
+  const ltr = scenarioMetrics(ltrScenario);
+  const defectSupported = rtlScenario.scroll_condition_present
+    && rtl.grid_ltr_identity
+    && rtl.any_relevant_rtl
+    && rtl.nonzero_movement
+    && rtl.alignment_growth_px > tolerancePx;
+  const repairVerified = rtlScenario.scroll_condition_present
+    && rtl.grid_ltr_identity
+    && rtl.all_relevant_ltr
+    && rtl.nonzero_movement
+    && rtl.moved_alignment_max_px <= tolerancePx
+    && rtl.max_document_overflow_px <= tolerancePx
+    && rtl.native_horizontal_scrollbar_count === 1
+    && rtl.native_text_leaves_rtl;
+  const hypothesisFalsified = rtlScenario.scroll_condition_present
+    && rtl.grid_ltr_identity
+    && rtl.all_relevant_ltr
+    && rtl.nonzero_movement
+    && rtl.moved_alignment_max_px <= tolerancePx;
+
+  let disposition = 'NOT_PROVEN';
+  if (repairVerified) disposition = 'PRODUCTION_REPAIR_VERIFIED';
+  else if (defectSupported) disposition = 'HYPOTHESIS_SUPPORTED';
+  else if (hypothesisFalsified) disposition = 'HYPOTHESIS_FALSIFIED';
+
+  let alternative = {
+    status: 'NO_ALTERNATIVE_CAUSE_ESTABLISHED',
+    candidate: null,
+    reason: repairVerified
+      ? 'The bounded LTR physical-axis seam keeps native AG Grid header/body synchronization intact under real horizontal scrolling.'
+      : 'No independent header/body geometry defect is established by this reproducible integrated host.',
+    next_qualification: repairVerified
+      ? 'Target-production acceptance remains separate from reproducible WU21 evidence.'
+      : 'Capture the same direction/scroll matrix in the reported target environment if the user-visible drift remains reproducible there.',
+  };
+  if (!defectSupported && !repairVerified && rtl.header_center_client_width_delta_px > tolerancePx) {
+    alternative = {
+      status: 'EVIDENCE_SUPPORTED_NEXT_LEAD',
+      candidate: 'NATIVE_HEADER_BODY_VIEWPORT_WIDTH_MISMATCH',
+      reason: 'Header and center viewport client widths differ beyond the qualification tolerance.',
+      next_qualification: 'Trace which native/host container introduces the width delta without changing Grid ownership.',
+    };
+  } else if (!defectSupported && !repairVerified && rtl.moved_alignment_max_px > tolerancePx && !rtl.any_relevant_rtl) {
+    alternative = {
+      status: 'EVIDENCE_SUPPORTED_NEXT_LEAD',
+      candidate: 'NATIVE_SCROLL_TRANSFORM_OR_POSITIONING_PATH',
+      reason: 'Header/body alignment diverges during native scrolling without an RTL-computed scroll-container boundary.',
+      next_qualification: 'Trace the differing native transform/left path at the first non-zero offset.',
+    };
+  }
+
+  return {
+    disposition,
+    defect_supported: defectSupported,
+    repair_verified: repairVerified,
+    rtl_metrics: rtl,
+    ltr_control_metrics: ltr,
+    alternative_cause: alternative,
+  };
+}
+
+const result = {
+  schema: 'gpp.inbox_direction_scroll_qualification.v1',
+  qualification: 'MR1_INBOX_RTL_LTR_DIRECTION_BOUNDARY',
+  repository_sha: repositorySha,
+  evidence_class: 'PROVEN_IN_REPRODUCIBLE_WU21_INTEGRATED_HOST_ONLY',
+  production_equivalence: 'NOT_PROVEN',
+  runtime: {
+    wordpress: runtime.wordpress,
+    php: runtime.php,
+    database: runtime.database,
+    gravity_forms: runtime.plugins?.gravity_forms,
+    gravity_flow: runtime.plugins?.gravity_flow,
+    node: { version: process.version },
+    playwright: { version: JSON.parse(fs.readFileSync(path.join(repoRoot, 'node_modules/playwright/package.json'), 'utf8')).version },
+    chromium: null,
+    ag_grid: { runtime_global_version: null, resource_urls: [] },
+  },
+  integrated_host: integratedHost,
+  desktop_probe: [],
+  scenarios: {},
+  route_evaluations: {},
+  route_desktop_probes: {},
+  missing_unresolved_measurements: [],
+  disposition: 'NOT_PROVEN',
+  hypothesis_evaluation: null,
+  proposed_smallest_candidate: null,
+  production_files_changed: [
+    'assets/css/srwf-gravity-flow-inbox.css',
+    'src/SRWF/GravityFlow/InboxPresentationAdapter.php',
+  ],
+};
+
+let browser = null;
+let fatal = null;
+try {
+  browser = await chromium.launch({ headless: true });
+  result.runtime.chromium = { version: browser.version() };
+  const context = await browser.newContext({ locale: 'en-US', timezoneId: 'UTC', reducedMotion: 'reduce' });
+  await context.addCookies(authCookies.map(cookie => ({ ...cookie, url: baseUrl })));
+  const page = await context.newPage();
+
+  const rtlUrl = new URL(fixture.frontend_inbox_url);
+  rtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  const formScopedRtlUrl = new URL(scopedSetup.url);
+  formScopedRtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+  const blockRtlUrl = new URL(p06Manifest.authentic_block_page.url);
+  blockRtlUrl.searchParams.set('wu21_header_rtl_probe', '1');
+
+  const desktopChoice = await chooseDesktop(page, rtlUrl.toString());
+  result.desktop_probe = desktopChoice.probes;
+  result.route_desktop_probes.unscoped = desktopChoice.probes;
+
+  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString());
+  const blockDesktopChoice = await chooseDesktop(page, blockRtlUrl.toString());
+  result.route_desktop_probes.form_scoped = formDesktopChoice.probes;
+  result.route_desktop_probes.block = blockDesktopChoice.probes;
+
+  const rtlDesktop = await runScenario(page, 'rtl-desktop-unscoped', rtlUrl.toString(), desktopChoice.viewport, true);
+  const formScopedDesktop = await runScenario(page, 'rtl-desktop-form-scoped', formScopedRtlUrl.toString(), formDesktopChoice.viewport, false);
+  const blockDesktop = await runScenario(page, 'rtl-desktop-block', blockRtlUrl.toString(), blockDesktopChoice.viewport, false);
+  const ltrDesktop = await runScenario(page, 'ltr-desktop-control', fixture.frontend_inbox_url, desktopChoice.viewport, false);
+  await load(page, rtlUrl.toString(), narrowViewport);
+  const narrowRange = await inspectRange(page);
+  const narrowHasScroll = (narrowRange.horizontal?.range || 0) > tolerancePx && Boolean(narrowRange.horizontal_selector);
+  const rtlNarrow = await runScenario(page, 'rtl-narrow', rtlUrl.toString(), narrowViewport, false);
+
+  result.scenarios = {
+    rtl_desktop: rtlDesktop,
+    rtl_desktop_form_scoped: formScopedDesktop,
+    rtl_desktop_block: blockDesktop,
+    ltr_desktop_control: ltrDesktop,
+    rtl_narrow: { ...rtlNarrow, required_by_condition: narrowHasScroll },
+  };
+
+  const evaluation = dispositionFor(rtlDesktop, ltrDesktop);
+  const formScopedEvaluation = dispositionFor(formScopedDesktop, ltrDesktop);
+  const blockEvaluation = dispositionFor(blockDesktop, ltrDesktop);
+  result.route_evaluations = {
+    unscoped: evaluation,
+    form_scoped: formScopedEvaluation,
+    block: blockEvaluation,
+  };
+  result.disposition = [evaluation, formScopedEvaluation, blockEvaluation].every(item => item.repair_verified)
+    ? 'PRODUCTION_REPAIR_VERIFIED'
+    : 'NOT_PROVEN';
+  result.hypothesis_evaluation = evaluation;
+
+  const firstState = rtlDesktop.states?.[0];
+  result.runtime.ag_grid = {
+    runtime_global_version: firstState?.ag_grid_direction_identity?.runtime_global_version || null,
+    resource_urls: firstState?.ag_grid_direction_identity?.resource_urls || [],
+  };
+
+  const criticalMissing = [];
+  for (const scenario of [rtlDesktop, formScopedDesktop, blockDesktop, ltrDesktop]) {
+    const origin = scenario.states?.[0];
+    for (const name of ['html','body','surface','surface_host','gravityflow_wrap','inbox','ag_root_wrapper','ag_header_viewport','ag_center_cols_viewport','ag_body_horizontal_scroll_viewport']) {
+      if (!origin?.elements?.[name]) criticalMissing.push(scenario.id + ':' + name);
+    }
+  }
+  for (const [routeName, scenario, routeEvaluation] of [
+    ['unscoped', rtlDesktop, evaluation],
+    ['form-scoped', formScopedDesktop, formScopedEvaluation],
+    ['block', blockDesktop, blockEvaluation],
+  ]) {
+    if (!scenario.scroll_condition_present) criticalMissing.push(routeName + ':horizontal-scroll-condition');
+    if (scenario.scroll_condition_present && !routeEvaluation.rtl_metrics.nonzero_movement) criticalMissing.push(routeName + ':nonzero-scroll-movement');
+    if (!routeEvaluation.repair_verified) criticalMissing.push(routeName + ':production-repair-not-verified');
+  }
+
+  const narrowMetrics = scenarioMetrics(rtlNarrow);
+  result.narrow_metrics = narrowMetrics;
+  if (evaluation.repair_verified && narrowHasScroll) {
+    if (!narrowMetrics.nonzero_movement) criticalMissing.push('rtl-narrow:nonzero-scroll-movement');
+    if (!narrowMetrics.all_relevant_ltr) criticalMissing.push('rtl-narrow:physical-axis-not-ltr');
+    if (narrowMetrics.moved_alignment_max_px > tolerancePx) criticalMissing.push('rtl-narrow:header-body-desync');
+    if (narrowMetrics.max_document_overflow_px > tolerancePx) criticalMissing.push('rtl-narrow:document-horizontal-overflow');
+    if (narrowMetrics.native_horizontal_scrollbar_count !== 1) criticalMissing.push('rtl-narrow:native-scrollbar-count');
+    if (!narrowMetrics.native_text_leaves_rtl) criticalMissing.push('rtl-narrow:text-direction-not-rtl');
+  }
+  result.missing_unresolved_measurements = [...new Set(criticalMissing)];
+
+  if (result.missing_unresolved_measurements.length) {
+    result.disposition = 'NOT_PROVEN';
+  }
+} catch (error) {
+  fatal = String(error?.stack || error);
+  result.fatal = fatal.slice(0, 12000);
+  result.disposition = 'NOT_PROVEN';
+} finally {
+  if (browser) await browser.close().catch(() => {});
+  fs.rmSync(muPath, { force: true });
+  try {
+    wpEval('wp_delete_post(' + Number(scopedSetup.id) + ', true);');
+  } catch (cleanupError) {
+    result.cleanup_error = String(cleanupError);
+    if (!fatal) {
+      fatal = String(cleanupError);
+      result.disposition = 'NOT_PROVEN';
+    }
+  }
+  fs.writeFileSync(path.join(artifactDir, 'inbox-direction-scroll-qualification.json'), JSON.stringify(result, null, 2) + '\n');
+
+  const rtl = result.hypothesis_evaluation?.rtl_metrics || null;
+  const ltr = result.hypothesis_evaluation?.ltr_control_metrics || null;
+  console.log('GPP_RTL_SCROLL_DISPOSITION=' + result.disposition);
+  console.log('GPP_RTL_SCROLL_REPOSITORY_SHA=' + repositorySha);
+  console.log('GPP_RTL_SCROLL_DESKTOP_PROBES=' + JSON.stringify(result.desktop_probe.map(item => ({ viewport: item.viewport, range: item.effective_scroll_range_px }))));
+  console.log('GPP_RTL_SCROLL_RTL_METRICS=' + JSON.stringify(rtl));
+  console.log('GPP_RTL_SCROLL_LTR_METRICS=' + JSON.stringify(ltr));
+  console.log('GPP_RTL_SCROLL_ROUTE_EVALUATIONS=' + JSON.stringify(result.route_evaluations));
+  console.log('GPP_RTL_SCROLL_DIRECTIONS=' + JSON.stringify(result.scenarios?.rtl_desktop?.states?.[0]?.directions || null));
+  console.log('GPP_RTL_SCROLL_AG_IDENTITY=' + JSON.stringify(result.scenarios?.rtl_desktop?.states?.[0]?.ag_grid_direction_identity || null));
+  console.log('GPP_RTL_SCROLL_STATES=' + JSON.stringify((result.scenarios?.rtl_desktop?.states || []).map(state => ({
+    label: state.label,
+    movement: state.movement,
+    alignment: state.alignment,
+    scroll: Object.fromEntries(Object.entries(state.scroll_participants || {}).map(([name, value]) => [name, value ? { scroll_left: value.scroll_left, scroll_width: value.scroll_width, client_width: value.client_width, direction: value.direction, transform: value.transform, left: value.left } : null])),
+    positioning: state.content_positioning,
+  }))));
+  console.log('GPP_RTL_SCROLL_NARROW=' + JSON.stringify({
+    required_by_condition: result.scenarios?.rtl_narrow?.required_by_condition ?? null,
+    scroll_condition_present: result.scenarios?.rtl_narrow?.scroll_condition_present ?? null,
+    scroll_range_px: result.scenarios?.rtl_narrow?.scroll_range_px ?? null,
+    metrics: result.narrow_metrics || null,
+  }));
+  console.log('GPP_RTL_SCROLL_ALTERNATIVE=' + JSON.stringify(result.hypothesis_evaluation?.alternative_cause || null));
+  console.log('GPP_RTL_SCROLL_MISSING=' + JSON.stringify(result.missing_unresolved_measurements));
+}
+
+if (fatal) throw new Error('RTL_SCROLL_QUALIFICATION_INFRASTRUCTURE_FAILURE: ' + fatal);
+if (result.missing_unresolved_measurements.length) {
+  throw new Error('RTL_SCROLL_QUALIFICATION_INCOMPLETE: ' + result.missing_unresolved_measurements.join(', '));
+}

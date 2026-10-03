@@ -14,7 +14,9 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
  *
  * Gravity Flow and AG Grid remain authoritative for the Inbox structure,
  * columns, row/cell lifecycle, search, sorting, paging, settings, focus model,
- * navigation and state. GPP owns only the bounded page shell and paint assets.
+ * navigation and state. GPP owns only the bounded page shell and paint assets,
+ * plus the Owner-authorized four-node physical LTR CSS exception documented by
+ * the Inbox V2 Visual/UX Contract.
  */
 final class InboxPresentationAdapter {
     const SURFACE = 'gravity_flow.inbox';
@@ -75,8 +77,9 @@ final class InboxPresentationAdapter {
         $title = esc_html__( 'کارهای من', 'gravity-presentation-profiles' );
         $helper = esc_html__( 'پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.', 'gravity-presentation-profiles' );
 
-        // RTL belongs to GPP-owned Persian copy. Do not propagate direction to
-        // the native Grid: AG Grid keeps its own proven direction/focus model.
+        // Persian copy remains RTL. The only native Grid direction exception is
+        // the Owner-authorized four-node physical LTR CSS seam; no Grid option,
+        // state, DOM or interaction ownership is acquired here.
         return self::prependLateStyles( '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" aria-labelledby="gpp-inbox-title">'
             . '<div class="gpp-inbox-surface__inner">'
             . '<header class="gpp-inbox-surface__header" dir="rtl">'
