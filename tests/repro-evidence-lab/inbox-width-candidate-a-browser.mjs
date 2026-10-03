@@ -130,9 +130,22 @@ async function discriminatorCases(page, context) {
     const manual = await capture(page,context,stale,{name:'manual_resize'});
     const before = await page.evaluate(()=>window.__gppWidthControl.inspect());
     const handle = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"] .ag-header-cell-resize').first();
-    const box = await handle.boundingBox(); assert.ok(box,'Native resize handle unavailable');
-    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
-    await page.mouse.down(); await page.mouse.move(box.x+box.width/2+45,box.y+box.height/2,{steps:6}); await page.mouse.up();
+    const point = await handle.evaluate(node => {
+        const box = node.getBoundingClientRect();
+        // The native handle straddles a clipped header-cell edge. Its midpoint
+        // can hit the adjacent header instead; select an actually exposed point.
+        for (const fraction of [0.1,0.25,0.4,0.6,0.8,0.9]) {
+            const x=box.x+box.width*fraction, y=box.y+box.height/2;
+            const hit=document.elementFromPoint(x,y);
+            if (hit && (hit===node || node.contains(hit))) return {x,y,hit_class:hit.className};
+        }
+        return null;
+    });
+    assert.ok(point,'Native resize handle has no exposed hit target');
+    manual.resize_pointer_target = point;
+    await page.mouse.move(point.x,point.y); await page.waitForTimeout(50);
+    await page.mouse.down(); await page.waitForTimeout(50);
+    await page.mouse.move(point.x+45,point.y,{steps:6}); await page.mouse.up();
     await refreshControlEvidence(page,manual);
     assert.notDeepEqual(manual.final_public_state.state,before.state,'User drag did not change width');
     assert.ok(manual.resize_events.some(e=>e.source==='uiColumnDragged' && e.finished),'Native user resize event missing');
