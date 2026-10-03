@@ -65,8 +65,11 @@ preserving its result/receiver/arguments, to receive public APIs during initial
 row construction. It calls public `columnApi.applyColumnState` once for the
 explicit unrelated startup control. Later controls reapply the current public
 state. It neither replaces the Grid constructor nor intercepts native restore
-or storage. A public synchronous event listener and a WeakMap provide separate
-fixture ground truth without modifying event keys. Empty Inbox has no row-height
+or storage. Public listeners deliver asynchronously in this pinned host. A
+bounded FIFO of explicit control calls and a WeakMap provide separate fixture
+ground truth without modifying event keys. Each control emits one event; the
+driver drains delivery before another control. The startup listener is installed
+before the sole explicit startup call and native ready restore. Empty Inbox has no row-height
 callback, so its restore is observed without that startup control. The fixture
 seed labels and control trace are evidence only, never discrimination authority.
 

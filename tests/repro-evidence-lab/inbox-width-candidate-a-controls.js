@@ -4,6 +4,7 @@
     const settings = window.__gppWidthLab;
     const origins = new WeakMap();
     const trace = [];
+    const pending = [];
     let active = null, owner = null, run, inspect;
     function bind(id, params) {
         if (!params || !params.api || !params.columnApi) return;
@@ -14,9 +15,13 @@
         owner = id;
         const columns = params.columnApi;
         params.api.addEventListener('columnEverythingChanged', event => {
-            const origin = active || (settings.seeded ? 'native_restore_fixture' : 'unattributed');
+            // GridApi listeners are asynchronous in this pinned host. Public
+            // deliveries retain dispatch order. The isolated fixture performs
+            // exactly one API call per control and drains it before the next.
+            const origin = event.source === 'api' && pending.length ? pending.shift()
+                : (settings.seeded ? 'native_restore_fixture' : 'unattributed');
             origins.set(event, origin);
-            trace.push({kind:'dispatch', origin, at:performance.now(), type:event.type,
+            trace.push({kind:'public_listener_delivery', origin, at:performance.now(), type:event.type,
                 source:event.source, keys:Object.keys(event).sort(), state:columns.getColumnState()});
         });
         inspect = () => ({state:columns.getColumnState(), rows:params.api.getDisplayedRowCount()});
@@ -24,6 +29,7 @@
             if (active) throw new Error('Reentrant control');
             const before = columns.getColumnState();
             active = label;
+            pending.push(label);
             trace.push({kind:'begin', origin:label, at:performance.now(), before});
             try {
                 // Deliberate unrelated state reapplication, not a restore or fit.

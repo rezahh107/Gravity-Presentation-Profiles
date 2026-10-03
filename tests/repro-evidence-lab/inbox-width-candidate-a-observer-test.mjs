@@ -26,10 +26,11 @@ console.log('ISOLATED_CALLBACK_COMPOSITION_PASS_NOT_RUNTIME_EVIDENCE');
 const controlSource = fs.readFileSync(new URL('./inbox-width-candidate-a-controls.js',import.meta.url),'utf8');
 assert.doesNotMatch(controlSource,/\b(?:localStorage|sessionStorage|sizeColumnsToFit|__agComponent)\b/);
 let listener, applied=0, heightCalls=0;
+const deliveryQueue=[];
 const fixtureState=[{colId:'id',width:80}];
 const publicColumns={getColumnState:()=>structuredClone(fixtureState),applyColumnState:arg=>{
     applied++; assert.equal(arg.applyOrder,true);assert.deepEqual(arg.state,fixtureState);
-    listener({type:'columnEverythingChanged',source:'api',api:publicApi,columnApi:publicColumns});return true;
+    deliveryQueue.push({type:'columnEverythingChanged',source:'api',api:publicApi,columnApi:publicColumns});return true;
 }};
 const publicApi={getDisplayedRowCount:()=>1,addEventListener:(name,fn)=>{assert.equal(name,'columnEverythingChanged');listener=fn;}};
 const heightReceiver={columnApi:publicColumns};
@@ -40,8 +41,13 @@ const heightParams={api:publicApi};
 assert.equal(controlOptions.getRowHeight.call(heightReceiver,heightParams),37);
 assert.equal(controlOptions.getRowHeight.call(heightReceiver,heightParams),37);
 assert.equal(heightCalls,2);assert.equal(applied,1,'Startup control must be one-shot');
-assert.equal(controlWindow.__gppWidthControl.trace.filter(t=>t.kind==='dispatch')[0].origin,'unrelated_startup');
+const deliveredControl=deliveryQueue.shift();listener(deliveredControl);
+assert.equal(controlWindow.__gppWidthControl.origin(deliveredControl),'unrelated_startup');
+assert.equal(controlWindow.__gppWidthControl.trace.filter(t=>t.kind==='public_listener_delivery')[0].origin,'unrelated_startup');
 assert.equal(controlWindow.__gppWidthControl.run('unrelated_after_startup'),true);assert.equal(applied,2);
+const deliveredLate=deliveryQueue.shift();listener(deliveredLate);
+assert.equal(controlWindow.__gppWidthControl.origin(deliveredLate),'unrelated_after_startup');
+assert.equal(Object.keys(deliveredLate).join(','),'type,source,api,columnApi','Ground truth must not alter event keys');
 
 const event = (type,source,sequence,origin) => ({event_type:type,source,sequence,at:sequence,
     callback:type==='gridSizeChanged'?'onGridSizeChanged':type==='firstDataRendered'?'onFirstDataRendered':'onColumnEverythingChanged',
