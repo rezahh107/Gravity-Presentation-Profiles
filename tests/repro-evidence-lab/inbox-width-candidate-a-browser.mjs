@@ -37,7 +37,7 @@ async function capture(page, context, saved, options = {}) {
     if (options.empty) url.searchParams.set('width_lab_empty','1');
     if (options.compose) url.searchParams.set('width_lab_compose','1');
     // Harness-only fixture setup; the attached observer never reads/writes Storage.
-    await page.goto(context.url,{waitUntil:'networkidle'}); await waitForGrid(page);
+    await page.goto(url.toString(),{waitUntil:'networkidle'}); await waitForGrid(page);
     const id = await page.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id');
     await page.evaluate(({id,saved}) => {
         localStorage.setItem('width-lab-local-sentinel','keep'); sessionStorage.setItem('width-lab-session-sentinel','keep');
@@ -45,6 +45,7 @@ async function capture(page, context, saved, options = {}) {
         sessionStorage.removeItem(id);
     },{id,saved});
     await page.goto(url.toString(),{waitUntil:'networkidle'}); await waitForGrid(page);
+    assert.equal(await page.locator('[data-js="gflow-inbox"]').getAttribute('data-grid-id'),id,'Seed and observed mount must have identical native Grid ID');
     await page.waitForTimeout(450);
     const report = await page.evaluate(() => JSON.parse(JSON.stringify(window.__gppWidthQualification)));
     const entry = {route:context.kind,url:url.pathname,viewport:page.viewportSize(),scenario:options.name,

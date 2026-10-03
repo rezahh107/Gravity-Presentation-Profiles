@@ -7,7 +7,7 @@ function run(options) {
     const root = {dataset:{gridId:'synthetic'},querySelector:()=>null};
     const scope = {querySelectorAll:()=>[root]};
     const window = {__gppWidthLab:{},gflow_config:{grids:{synthetic:{grid_options:options}}}};
-    vm.runInNewContext(source,{window,gflow_config:window.gflow_config,document:{querySelector:()=>scope},performance:{now:()=>0},requestAnimationFrame:()=>{}});
+vm.runInNewContext(source,{window,gflow_config:window.gflow_config,document:{querySelector:()=>scope},performance:{now:()=>0},requestAnimationFrame:()=>{},queueMicrotask:()=>{}});
     return window.__gppWidthQualification;
 }
 const receiver={}; const arg={}; const token={}; let calls=0;

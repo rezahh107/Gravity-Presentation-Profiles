@@ -42,6 +42,7 @@
         const root = [...scope.querySelectorAll('[data-js="gflow-inbox"]')].find(n => n.dataset.gridId === id);
         if (!root || !grid.grid_options) continue;
         const options = grid.grid_options;
+        let readyListenerInstalled = false;
         const attachment = {grid_id: id, mounted_before_attachment: !!root.querySelector('.ag-root-wrapper'), callbacks: []};
         report.attachment.push(attachment);
         if (attachment.mounted_before_attachment) { report.failure = 'Already mounted'; continue; }
@@ -60,6 +61,18 @@
                 catch (error) { record.original_threw = true; throw error; }
                 // Diagnostics must not alter the callback's result/exception behavior.
                 try {
+                    if (!readyListenerInstalled && name === 'onColumnEverythingChanged' && params.source === 'gridInitializing'
+                        && params.api && typeof params.api.addEventListener === 'function') {
+                        readyListenerInstalled = true;
+                        const onReady = ready => {
+                            report.events.push({sequence: report.events.length, callback: 'publicGridReady',
+                                source: null, at: performance.now(), ...snapshot(id, ready)});
+                            params.api.removeEventListener('gridReady', onReady);
+                            queueMicrotask(() => report.events.push({sequence: report.events.length, callback: 'afterGridReady',
+                                source: null, at: performance.now(), ...snapshot(id, ready)}));
+                        };
+                        params.api.addEventListener('gridReady', onReady);
+                    }
                     const event = {sequence: report.events.length, at: performance.now(), callback: name,
                         source: params && params.source || null, event_type: params && params.type || null,
                         event_keys: params ? Object.keys(params).sort() : [], argument_count: args.length,
