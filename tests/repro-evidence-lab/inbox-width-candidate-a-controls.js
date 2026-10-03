@@ -48,7 +48,9 @@
         // This synchronous PUBLIC option receives APIs while initial rows are
         // constructed. Preserve the native/default row-height result exactly.
         options.getRowHeight = function (params) {
-            bind(id, params);
+            // This pinned public callback supplies api but not columnApi in
+            // params. Its receiver is the public GridOptions used by the host.
+            bind(id, {api:params.api, columnApi:this && this.columnApi});
             if (settings.control === 'startup' && !startupFired && run) {
                 startupFired = true;
                 run('unrelated_startup', settings.control_state);

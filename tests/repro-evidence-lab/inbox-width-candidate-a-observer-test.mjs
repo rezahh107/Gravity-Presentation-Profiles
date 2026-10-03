@@ -32,12 +32,13 @@ const publicColumns={getColumnState:()=>structuredClone(fixtureState),applyColum
     listener({type:'columnEverythingChanged',source:'api',api:publicApi,columnApi:publicColumns});return true;
 }};
 const publicApi={getDisplayedRowCount:()=>1,addEventListener:(name,fn)=>{assert.equal(name,'columnEverythingChanged');listener=fn;}};
-const controlOptions={getRowHeight:function(){heightCalls++;assert.equal(this,receiver);return 37;}};
+const heightReceiver={columnApi:publicColumns};
+const controlOptions={getRowHeight:function(){heightCalls++;assert.equal(this,heightReceiver);return 37;}};
 const controlWindow={__gppWidthLab:{control:'startup'},gflow_config:{grids:{test:{grid_options:controlOptions}}}};
 vm.runInNewContext(controlSource,{window:controlWindow,gflow_config:controlWindow.gflow_config,performance:{now:()=>0}});
-const heightParams={api:publicApi,columnApi:publicColumns};
-assert.equal(controlOptions.getRowHeight.call(receiver,heightParams),37);
-assert.equal(controlOptions.getRowHeight.call(receiver,heightParams),37);
+const heightParams={api:publicApi};
+assert.equal(controlOptions.getRowHeight.call(heightReceiver,heightParams),37);
+assert.equal(controlOptions.getRowHeight.call(heightReceiver,heightParams),37);
 assert.equal(heightCalls,2);assert.equal(applied,1,'Startup control must be one-shot');
 assert.equal(controlWindow.__gppWidthControl.trace.filter(t=>t.kind==='dispatch')[0].origin,'unrelated_startup');
 assert.equal(controlWindow.__gppWidthControl.run('unrelated_after_startup'),true);assert.equal(applied,2);
