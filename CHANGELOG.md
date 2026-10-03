@@ -6,6 +6,8 @@ The project intends to follow Semantic Versioning once production releases begin
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-03
+
 ### Changed
 
 - Refined the SRWF Inbox Manual Refresh control as the accepted secondary utility presentation, including the bounded refresh icon, focus/busy states and responsive touch target, while preserving the existing same-page reload behavior and native Gravity Flow Live Refresh ownership.
