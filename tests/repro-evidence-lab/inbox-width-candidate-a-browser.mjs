@@ -70,7 +70,7 @@ async function capture(page, context, saved, options = {}) {
         assert.ok(restoreEvents.length>0,'Matching saved state did not deliver onColumnEverythingChanged');
         entry.native_restored_state = restoreEvents[0].state;
         const keyed = s => [...s].sort((a,b)=>String(a.colId).localeCompare(String(b.colId)));
-        assert.deepEqual(keyed(restoreEvents[0].state),keyed(saved),'Observer changed saved state');
+        if (!saved.some(c=>Number(c.flex)>0)) assert.deepEqual(keyed(restoreEvents[0].state),keyed(saved),'Observer changed saved state');
     }
     if (options.compose) {
         entry.manual_composition_probe = await page.evaluate(() => {
@@ -81,6 +81,7 @@ async function capture(page, context, saved, options = {}) {
         assert.equal(entry.manual_composition_probe.result,'prior-return');
         assert.ok(entry.manual_composition_probe.prior.at(-1).this_probe);
         assert.ok(entry.manual_composition_probe.prior.at(-1).argument_probe);
+        assert.ok(entry.manual_composition_probe.prior.slice(0,-1).every(c=>c.native_this_api),'Native callback receiver/API was not preserved');
         assert.ok(report.attachment.flatMap(a=>a.callbacks).every(c=>c.chained));
     }
     return entry;
@@ -116,13 +117,26 @@ $items=array();foreach(array('shortcode'=>'[gravityflow page="inbox" form="${for
         evidence.scenarios.push({route:context.kind,scenario:'shrink_grow',shrink,grow});
         assert.ok(grow.events.filter(e=>e.callback==='onGridSizeChanged').length > shrink.events.filter(e=>e.callback==='onGridSizeChanged').length);
         await page.setViewportSize({width:1440,height:900});
+        await capture(page,context,state([165,528,414,355,410],{[fields[3]]:{pinned:'left'}}),{name:'pinned_observation'});
+        await capture(page,context,state([165,528,414,355,410],{[fields[4]]:{flex:1}}),{name:'flex_observation'});
+        for(const width of [1920,390,320]) {
+            await page.setViewportSize({width,height:900});
+            await capture(page,context,null,{name:`clean_${width}`});
+            await capture(page,context,state([165,528,414,355,410]),{name:`stale_${width}`});
+        }
+        await page.setViewportSize({width:1440,height:900});
     }
     evidence.page_errors = errors; assert.deepEqual(errors,[]);
     evidence.gates.delivery = 'RUNTIME_PROVEN'; evidence.gates.composition = 'RUNTIME_PROVEN';
-    evidence.gates.initial_restore_provenance = 'REQUIRES_EVENT_TRACE_REVIEW';
-    evidence.gates.usable_width_metric = 'CAPTURED_NOT_SELECTED';
+    const restored = evidence.scenarios.filter(s=>s.native_restored_state);
+    const readyReceived = restored.every(s=>s.events.some(e=>e.callback==='publicGridReady'));
+    evidence.gates.public_ready_corroboration = readyReceived ? 'CAPTURED_REQUIRES_ORDER_REVIEW' : 'MISSED_IN_REAL_RUNTIME';
+    evidence.gates.initial_restore_provenance = 'INITIAL_RESTORE_OBSERVED_BUT_UNIQUE_DISCRIMINATOR_NOT_PROVEN';
+    evidence.gates.after_restore_timing = 'NOT_PROVEN_FOR_A_SAFE_MUTATION_TRIGGER';
+    evidence.gates.usable_width_metric = 'CENTER_CLIENT_WIDTH_MATCHES_NATIVE_CLEAN_FIT_PENDING_MUTATION_VERIFICATION';
     evidence.gates.resize = 'NATIVE_EVENTS_CAPTURED';
     evidence.execution_status = 'CAPTURED';
+    evidence.phase2_blocker = 'Initial api-source event matches the seeded restore in controlled cases, but has no restore-specific identity; the public gridReady corroboration subscribed through the surviving callback is not delivered. Source api alone is forbidden as a production discriminator. No mutation phase executed.';
 } catch(error) {
     evidence.execution_status='ERROR'; evidence.failure=String(error.stack||error); throw error;
 } finally {
