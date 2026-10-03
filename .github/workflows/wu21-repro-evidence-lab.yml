@@ -300,6 +300,13 @@ jobs:
           }
           ' "$probe_body"
 
+      - name: Observe Candidate A callbacks in pinned native frontend Inbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-width-candidate-a-observer-test.mjs
+          node tests/repro-evidence-lab/inbox-width-candidate-a-browser.mjs
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |
@@ -511,6 +518,7 @@ jobs:
           path: |
             /tmp/wu21-artifacts/${{ steps.evidence.outputs.evidence_file }}
             /tmp/wu21-artifacts/runtime.json
+            /tmp/wu21-artifacts/inbox-width-candidate-a-phase1.json
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
