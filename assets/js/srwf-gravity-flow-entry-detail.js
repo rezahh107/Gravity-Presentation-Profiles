@@ -47,13 +47,13 @@
         if (dossier.dataset.gppReviewMode !== 'read-only') return;
 
         const form = dossier.closest('form');
-        const actionRegion = form?.querySelector('.gravityflow-status-box .gravityflow-action-buttons');
-        const hiddenStatus = actionRegion?.querySelector('input#gravityflow_approval_new_status_step');
+        const hiddenStatus = form?.querySelector('input#gravityflow_approval_new_status_step');
+        const actionRegion = hiddenStatus?.parentElement;
         const buttons = actionRegion
             ? [...actionRegion.querySelectorAll('button[type="submit"]')].filter(button => MATERIAL_REVIEW_ACTIONS.has(button.value))
             : [];
 
-        if (!form || !actionRegion || !hiddenStatus || buttons.length === 0) return;
+        if (!form || !hiddenStatus || !actionRegion || buttons.length === 0) return;
 
         const feedback = document.createElement('span');
         feedback.className = 'gpp-review-action-busy-feedback';
