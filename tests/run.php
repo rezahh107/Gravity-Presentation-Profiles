@@ -42,6 +42,7 @@ $cases = array(
     'wordpress-option-state-store.php',
     'inbox-presentation-model.php',
     'inbox-table-header-presentation.php',
+    'inbox-initial-geometry-guard.php',
     'inbox-table-header-rtl-order.php',
     'inbox-manual-refresh.php',
     'inbox-package-authority.php',
