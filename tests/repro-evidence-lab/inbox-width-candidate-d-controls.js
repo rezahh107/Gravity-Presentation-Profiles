@@ -6,6 +6,16 @@
     const trace = [];
     const pending = [];
     let active = null, owner = null, run, inspect;
+
+    function numericProbe(value) {
+        return {
+            type: typeof value,
+            string: String(value),
+            finite: Number.isFinite(value),
+            nullish: value == null,
+        };
+    }
+
     function bind(id, params) {
         if (!params || !params.api || !params.columnApi) return;
         if (owner !== null) {
@@ -30,7 +40,20 @@
             trace.push({kind:'public_listener_delivery', origin, at:performance.now(), type:event.type,
                 source:event.source, keys:Object.keys(event).sort(), state:columns.getColumnState()});
         });
-        inspect = () => ({state:columns.getColumnState(), rows:params.api.getDisplayedRowCount()});
+        inspect = () => ({
+            state: columns.getColumnState(),
+            rows: params.api.getDisplayedRowCount(),
+            displayed: columns.getAllDisplayedColumns().map(column => ({
+                id: String(column.getColId()),
+                width: numericProbe(column.getActualWidth()),
+                min: numericProbe(column.getMinWidth()),
+                max: numericProbe(column.getMaxWidth()),
+                flex: numericProbe(column.getFlex()),
+                pinned_type: typeof column.getPinned(),
+                pinned_string: String(column.getPinned()),
+                suppressSizeToFit: column.getColDef().suppressSizeToFit === true,
+            })),
+        });
         run = (label, requestedState) => {
             if (active) throw new Error('Reentrant control');
             const before = columns.getColumnState();
