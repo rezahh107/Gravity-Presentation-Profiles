@@ -5,8 +5,12 @@ await import('./manual-inbox-refresh-browser-test.mjs');
 // as the native Inbox suite. The first module exercises the shipped guard in an
 // isolated GridOptions seam; the second drives authentic shortcode + Block
 // Inboxes against the real production adapter/asset and Gravity Flow runtime.
+// The third is an explicit fail-hard teardown/readback boundary for the one
+// synthetic binding falsifier so later shared-runtime qualifications cannot
+// inherit Candidate C test state.
 await import('./inbox-width-candidate-c-test.mjs');
 await import('./inbox-width-candidate-c-browser.mjs');
+await import('./inbox-width-candidate-c-teardown.mjs');
 
 globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1') };
 await import('./authoring-prompt-admin-browser-tests.mjs');
