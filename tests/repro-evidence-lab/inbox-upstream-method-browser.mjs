@@ -28,7 +28,8 @@ function state(widths,extra={}) {return ids.map((colId,i)=>({colId,width:widths[
   aggFunc:null,rowGroup:false,rowGroupIndex:null,pivot:false,pivotIndex:null,flex:null,...extra[colId]}));}
 const stale=state([165,528,414,355,410]);
 const fitting=state([80,200,200,200,200],{[ids[2]]:{sort:'asc',sortIndex:0}});
-let browser,pages=[],unrelatedForm=0,plugin='';
+let browser,pages=[],unrelatedForm=0,activation=null;
+const visual=String.raw`$v=new \GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle(new \GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore(\GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle::OPTION_NAME));`;
 async function snapshot(page) {
   return page.evaluate(()=>{
     const report=window.__gppWidthQualification;
@@ -78,7 +79,8 @@ async function capture(page,context,name,saved,{width=1440,empty=false,raw=null,
     assert.ok(entry.report.attachment.every(a=>!a.failure&&!a.mounted_before_attachment));
     assert.ok(entry.report.attachment.flatMap(a=>a.callbacks).every(c=>!c.observation_error));
     assert.ok(!entry.report.events.some(e=>e.callback==='onGridReady'),'Host consumer-ready overwrite changed');
-  }else assert.equal(entry.profile,false,'Negative control unexpectedly has active Inbox profile');
+  }else if(name==='inactive_profile')assert.equal(entry.profile,false,'Inactive profile still rendered');
+  else {assert.equal(entry.report,null,'Unrelated Inbox received qualification observer');entry.limit='Existing global surface wrapper may be present; no new observer/repair is attached outside lab pages.';}
   if(empty)assert.equal(entry.rows,0);
   if(raw===null&&saved&&!saved.some(c=>c.flex>0)&&ids.every(id=>saved.some(c=>c.colId===id))) {
     const restored=entry.report.events.find(e=>e.source==='api');assert.ok(restored,'Native matching restore missing');
@@ -140,10 +142,10 @@ try {
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}});
   page.on('pageerror',e=>result.page_errors.push(String(e)));await login(page);
   for(const context of pages)await cases(page,context);
-  plugin=wp(`foreach(get_plugins() as $p=>$d){if($d['Name']==='Gravity Presentation Profiles'){echo $p;break;}}`);assert.ok(plugin);
-  wp(`deactivate_plugins(${JSON.stringify(plugin)});`);
+  activation=JSON.parse(wp(visual+`echo wp_json_encode($v->resolve('gravity_flow.inbox'));`));assert.ok(activation);
+  wp(visual+`$v->deactivate(array('surface'=>'gravity_flow.inbox'));`);
   await capture(page,pages[0],'inactive_profile',null,{nativeOnly:true});
-  wp(`$r=activate_plugin(${JSON.stringify(plugin)});if(is_wp_error($r))throw new RuntimeException($r->get_error_message());`);
+  wp(visual+`$a=json_decode(${JSON.stringify(JSON.stringify(activation))},true);$a['surface']='gravity_flow.inbox';$v->activate($a);`);activation=null;
   const unrelated=JSON.parse(wp(`$f=GFAPI::get_form(${form.form_id});unset($f['id']);$f['title']='Unrelated unconfigured synthetic form';$id=GFAPI::add_form($f);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());$p=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Unrelated Inbox','post_content'=>'[gravityflow page="inbox" form="'.$id.'"]'),true);echo wp_json_encode(array('form_id'=>$id,'id'=>$p,'url'=>get_permalink($p),'kind'=>'shortcode'));`));
   unrelatedForm=unrelated.form_id;pages.push(unrelated);
   await capture(page,unrelated,'unrelated_inbox',null,{nativeOnly:true});
@@ -154,7 +156,7 @@ try {
 } catch(e) {result.execution_status='ERROR';result.failure=String(e.stack||e);throw e;}
 finally {
   if(browser)await browser.close();if(fs.existsSync(mu))fs.unlinkSync(mu);
-  if(plugin)wp(`if(!is_plugin_active(${JSON.stringify(plugin)}))activate_plugin(${JSON.stringify(plugin)});`);
+  if(activation)wp(visual+`$a=json_decode(${JSON.stringify(JSON.stringify(activation))},true);$a['surface']='gravity_flow.inbox';$v->activate($a);`);
   if(pages.length)wp(`foreach(${JSON.stringify(pages.map(p=>p.id))} as $id)wp_delete_post($id,true);delete_option('gpp_width_candidate_d_lab');`);
   if(unrelatedForm)wp(`GFAPI::delete_form(${unrelatedForm});`);
   fs.writeFileSync(path.join(artifactDir,'inbox-upstream-method-runtime.json'),JSON.stringify(result,null,2)+'\n');
