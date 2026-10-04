@@ -41,6 +41,32 @@ final class InboxTableHeaderPresentation {
         self::$active_form_id = null;
     }
 
+    /**
+     * Return the exact native Grid identity admitted by the resolved SRWF
+     * table-wide binding for these Gravity Flow Inbox arguments.
+     *
+     * This intentionally reuses the same resolved configuration that owns the
+     * five-column projection. Consumers must still verify the actual host Grid
+     * shape before mutating anything.
+     */
+    public static function initialGeometryContract( $args ) {
+        $configuration = self::configurationForColumns( $args );
+        if ( null === $configuration ) {
+            return null;
+        }
+
+        return array(
+            'form_id'    => (int) $configuration['form_id'],
+            'column_ids' => array(
+                'id',
+                $configuration['column_keys']['student_name'],
+                $configuration['column_keys']['national_id'],
+                $configuration['column_keys']['school_grade'],
+                'date_created',
+            ),
+        );
+    }
+
     public static function filterColumns( $columns, $args = array() ) {
         if ( ! is_array( $columns ) ) {
             return $columns;
