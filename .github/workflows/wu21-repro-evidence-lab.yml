@@ -300,6 +300,22 @@ jobs:
           }
           ' "$probe_body"
 
+      - name: Qualify Candidate C one-shot mount geometry guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/inbox-width-candidate-c-test.mjs
+          node tests/repro-evidence-lab/inbox-width-candidate-c-browser.mjs
+
+      - name: Upload bounded Candidate C mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inbox-width-candidate-c-${{ github.run_id }}
+          path: /tmp/wu21-artifacts/inbox-width-candidate-c-*.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |
@@ -523,6 +539,7 @@ jobs:
             /tmp/wu21-artifacts/inbox-table-header-before.png
             /tmp/wu21-artifacts/inbox-table-header-after.png
             /tmp/wu21-artifacts/integrated-visual-host.json
+            /tmp/wu21-artifacts/inbox-width-candidate-c-*.json
             /tmp/wu21-artifacts/inbox-direction-scroll-qualification.json
             /tmp/wu21-artifacts/inbox-direction-scroll-*.png
             /tmp/wu21-artifacts/vazir-font-authority.json
