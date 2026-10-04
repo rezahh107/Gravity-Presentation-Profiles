@@ -66,7 +66,7 @@ let pages = [];
 let unrelatedForm = 0;
 let activation = null;
 let bindingSnapshot = null;
-const visual = String.raw`$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));`;
+const visual = String.raw`$v=new \GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle(new \GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore(\GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle::OPTION_NAME));`;
 
 async function snapshot(page) {
   return page.evaluate(() => {
@@ -351,7 +351,7 @@ $clone['binding_set_id']='gpp.wu21.candidate-c.ambiguous';
 $clone['artifact']['binding_set_id']=$clone['binding_set_id'];
 $clone['artifact']['context']['surfaces'][]='gravity_flow.entry_detail';
 $clone['artifact']['context']['surfaces']=array_values(array_unique($clone['artifact']['context']['surfaces']));
-$key=\\GravityPresentationProfiles\\Core\\Portable\\CanonicalJson::hash($clone['artifact']['context']);
+$key=\GravityPresentationProfiles\Core\Portable\CanonicalJson::hash($clone['artifact']['context']);
 $clone['context_key']=$key;
 $version=$clone['binding_set_version'];
 $state['installed'][$clone['binding_set_id']][$version]=$clone;
