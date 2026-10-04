@@ -1,6 +1,13 @@
 await import('./browser-tests-core.mjs');
 await import('./manual-inbox-refresh-browser-test.mjs');
 
+// Candidate C production verification runs inside the same pinned WU21 runtime
+// as the native Inbox suite. The first module exercises the shipped guard in an
+// isolated GridOptions seam; the second drives authentic shortcode + Block
+// Inboxes against the real production adapter/asset and Gravity Flow runtime.
+await import('./inbox-width-candidate-c-test.mjs');
+await import('./inbox-width-candidate-c-browser.mjs');
+
 globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1') };
 await import('./authoring-prompt-admin-browser-tests.mjs');
 await import('./diagnostics-admin-row-browser-tests.mjs');
