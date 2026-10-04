@@ -34,10 +34,21 @@ const bundle = path.join(wpPath, 'wp-content/plugins/gravityflow/assets/js/dist/
 const originalBundle = hash(bundle);
 assert.equal(originalBundle, 'f5866f71b6cf2dabf62f586998eddc382a2a6a49801ccee7e87536043acfbce4');
 
+let wpEvalSequence = 0;
 function wp(code) {
-  const command = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], {encoding: 'utf8'});
-  if (command.status !== 0) throw new Error(`${command.stderr}\n${command.stdout}`);
-  return command.stdout.trim();
+  const script = path.join(artifactDir, `candidate-c-wp-eval-${process.pid}-${++wpEvalSequence}.php`);
+  fs.writeFileSync(script, `<?php\n${code}\n`);
+  let command;
+  try {
+    command = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval-file', script], {encoding: 'utf8'});
+  } finally {
+    fs.rmSync(script, {force: true});
+  }
+  if (command.error) throw command.error;
+  if (command.status !== 0) {
+    throw new Error(`WP-CLI eval-file failed status=${command.status}\n${command.stderr || ''}\n${command.stdout || ''}`);
+  }
+  return (command.stdout || '').trim();
 }
 
 function state(widths, extra = {}) {
@@ -55,7 +66,7 @@ let pages = [];
 let unrelatedForm = 0;
 let activation = null;
 let bindingSnapshot = null;
-const visual = String.raw`$v=new \GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle(new \GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore(\GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle::OPTION_NAME));`;
+const visual = String.raw`$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));`;
 
 async function snapshot(page) {
   return page.evaluate(() => {
@@ -340,7 +351,7 @@ $clone['binding_set_id']='gpp.wu21.candidate-c.ambiguous';
 $clone['artifact']['binding_set_id']=$clone['binding_set_id'];
 $clone['artifact']['context']['surfaces'][]='gravity_flow.entry_detail';
 $clone['artifact']['context']['surfaces']=array_values(array_unique($clone['artifact']['context']['surfaces']));
-$key=\GravityPresentationProfiles\Core\Portable\CanonicalJson::hash($clone['artifact']['context']);
+$key=\\GravityPresentationProfiles\\Core\\Portable\\CanonicalJson::hash($clone['artifact']['context']);
 $clone['context_key']=$key;
 $version=$clone['binding_set_version'];
 $state['installed'][$clone['binding_set_id']][$version]=$clone;
