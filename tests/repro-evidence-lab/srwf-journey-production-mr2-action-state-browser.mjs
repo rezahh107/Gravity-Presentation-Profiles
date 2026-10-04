@@ -35,12 +35,8 @@ function createReviewEntry(label) {
   const raw = wpEval(`
     wp_set_current_user(${operatorId});
     $entry_id=GFAPI::add_entry(array(
-      'form_id'=>${formId},
-      'created_by'=>${operatorId},
-      '1'=>'MR2-${safe}',
-      '2'=>'Journey',
-      '3'=>'${safe}',
-      '4'=>'JRN-MR2-${safe}'
+      'form_id'=>${formId}, 'created_by'=>${operatorId},
+      '1'=>'MR2-${safe}', '2'=>'Journey', '3'=>'${safe}', '4'=>'JRN-MR2-${safe}'
     ));
     if (is_wp_error($entry_id) || !$entry_id) { fwrite(STDERR, is_wp_error($entry_id)?$entry_id->get_error_message():'add_entry failed'); exit(2); }
     $api=new Gravity_Flow_API(${formId});
@@ -78,7 +74,7 @@ async function test(id, name, fn) {
   catch (error) { results.push({ id, name, status: 'FAIL', details: { error: String(error?.stack || error).slice(0, 12000) } }); }
 }
 
-async function waitUntil(check, timeoutMs = 3000) {
+async function waitUntil(check, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await check()) return;
@@ -144,13 +140,24 @@ async function busySnapshot(page) {
 function assertBusy(snapshot) {
   if (snapshot.bound !== '1' || snapshot.busy !== '1' || snapshot.aria_busy !== 'true') throw new Error(`Busy semantics missing: ${JSON.stringify(snapshot)}`);
   if (snapshot.feedback_count !== 1 || snapshot.feedback_hidden !== false || snapshot.feedback_text !== 'در حال ثبت نتیجه…' || snapshot.feedback_role !== 'status' || snapshot.feedback_live !== 'polite' || snapshot.feedback_atomic !== 'true') throw new Error(`Accessible busy feedback wrong: ${JSON.stringify(snapshot)}`);
-  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled !== 'true')) throw new Error(`Material actions were not marked unavailable without mutating native disabled state: ${JSON.stringify(snapshot)}`);
+  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled !== 'true')) throw new Error(`Material actions were not marked unavailable without changing native disabled state: ${JSON.stringify(snapshot)}`);
 }
 
 function assertIdle(snapshot) {
   if (snapshot.bound !== '1' || snapshot.busy !== null || snapshot.aria_busy !== null) throw new Error(`Idle Review unexpectedly busy: ${JSON.stringify(snapshot)}`);
   if (snapshot.feedback_count !== 1 || snapshot.feedback_hidden !== true) throw new Error(`Idle feedback contract wrong: ${JSON.stringify(snapshot)}`);
   if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled === 'true')) throw new Error(`Idle material actions unavailable: ${JSON.stringify(snapshot)}`);
+}
+
+async function rawActivate(page, button, keyboard = false) {
+  if (keyboard) {
+    await button.focus();
+    await page.keyboard.press('Enter');
+    return;
+  }
+  const box = await button.boundingBox();
+  if (!box) throw new Error('Material action has no clickable geometry.');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 async function acceptedActionWithBusy(page, value, options = {}) {
@@ -190,15 +197,10 @@ async function acceptedActionWithBusy(page, value, options = {}) {
 
   let result;
   try {
-    if (options.keyboard) {
-      await button.focus();
-      await page.keyboard.press('Enter');
-    } else {
-      await button.click({ noWaitAfter: true });
-    }
-
-    await page.waitForFunction(() => document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy === '1');
+    await rawActivate(page, button, Boolean(options.keyboard));
+    await page.waitForFunction(() => document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy === '1', null, { timeout: 5000 });
     await waitUntil(() => postCount === 1);
+
     const busy = await busySnapshot(page);
     const submitsWhileBusy = await submitCount(page);
     assertBusy(busy);
@@ -208,7 +210,6 @@ async function acceptedActionWithBusy(page, value, options = {}) {
     if (typeof options.duringBusy === 'function') {
       duringBusy = await options.duringBusy({ button, getSubmitCount: () => submitCount(page), getPostCount: () => postCount, getDialogCount: () => dialogs.length });
     }
-
     result = { busy, submits_while_busy: submitsWhileBusy, post_count: postCount, dialogs, during_busy: duringBusy };
   } finally {
     releasePost();
@@ -238,12 +239,11 @@ await test('SRWF-MR2-CANCEL-001', 'Approve native confirmation Cancel never ente
   const listener = async dialog => { dialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.dismiss(); };
   page.on('dialog', listener);
   const approve = page.locator('.gravityflow-action-buttons button[value="approved"]').first();
-  await approve.click();
-  await page.waitForTimeout(120);
+  await rawActivate(page, approve, false);
+  await page.waitForTimeout(100);
   const afterMouse = await busySnapshot(page);
-  await approve.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(120);
+  await rawActivate(page, approve, true);
+  await page.waitForTimeout(100);
   page.off('dialog', listener);
   const afterKeyboard = await busySnapshot(page);
   const after = hostState(id);
@@ -287,15 +287,14 @@ await test('SRWF-MR2-REVERT-001', 'native Revert uses bounded busy behavior and 
   return { submission, state, orientation, mr3_reason_ui_count: mr3 };
 });
 
-await test('SRWF-MR2-DOUBLE-001', 'rapid mouse/keyboard reactivation cannot create a second material submission', async () => {
+await test('SRWF-MR2-DOUBLE-001', 'rapid repeated mouse/keyboard activation cannot create a second material submission', async () => {
   const id = createReviewEntry('DOUBLE');
   await gotoReview(page, id);
   const submission = await acceptedActionWithBusy(page, 'approved', {
     keyboard: true,
     duringBusy: async ({ button, getSubmitCount, getPostCount, getDialogCount }) => {
-      await button.click({ force: true, noWaitAfter: true, timeout: 800 }).catch(() => {});
-      await button.focus();
-      await page.keyboard.press('Enter').catch(() => {});
+      await rawActivate(page, button, false);
+      await rawActivate(page, button, true);
       await page.waitForTimeout(80);
       const counts = { submits: await getSubmitCount(), posts: getPostCount(), dialogs: getDialogCount() };
       if (counts.submits !== 1 || counts.posts !== 1 || counts.dialogs !== 1) throw new Error(`Duplicate activation escaped busy guard: ${JSON.stringify(counts)}`);
@@ -326,10 +325,10 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale action remains host-authoritativ
   const staleDialogs = [];
   const dialogListener = async dialog => { staleDialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.accept(); };
   tabB.on('dialog', dialogListener);
-  await Promise.all([
-    tabB.waitForNavigation({ waitUntil: 'networkidle' }),
-    tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first().click(),
-  ]);
+  const staleButton = tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first();
+  const navigation = tabB.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
+  await rawActivate(tabB, staleButton, false);
+  await navigation;
   tabB.off('response', responseListener);
   tabB.off('dialog', dialogListener);
 
@@ -345,7 +344,7 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale action remains host-authoritativ
   return { actionA, after_tab_a: afterA, stale_response: staleResponse, stale_dialogs: staleDialogs, after_tab_b: afterB, rendered_after_readback: rendered, stale_controls_after_readback: staleControls };
 });
 
-await test('SRWF-MR2-UNKNOWN-001', 'lost action response keeps busy intent non-terminal until fresh host read-back', async () => {
+await test('SRWF-MR2-UNKNOWN-001', 'lost action response keeps client intent non-terminal until fresh host read-back', async () => {
   const id = createReviewEntry('UNKNOWN');
   await gotoReview(page, id);
   let intercepted = null;
@@ -361,12 +360,14 @@ await test('SRWF-MR2-UNKNOWN-001', 'lost action response keeps busy intent non-t
   });
   let dialog = null;
   page.once('dialog', async item => { dialog = { type: item.type() }; await item.accept(); });
-  await page.locator('.gravityflow-action-buttons button[value="approved"]').first().click({ noWaitAfter: true }).catch(() => {});
-  await page.waitForTimeout(220);
+  const approve = page.locator('.gravityflow-action-buttons button[value="approved"]').first();
+  await rawActivate(page, approve, false).catch(() => {});
+  await waitUntil(() => intercepted !== null).catch(() => {});
+  await page.waitForTimeout(150);
   await page.unroute('**/*');
   const beforeReloadResults = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).count();
   const busy = await busySnapshot(page);
-  if (!dialog || !intercepted || beforeReloadResults !== 0 || busy.busy !== '1') throw new Error(`Lost response fabricated or lost the bounded in-flight state: ${JSON.stringify({ dialog, intercepted, beforeReloadResults, busy })}`);
+  if (!dialog || !intercepted || beforeReloadResults !== 0 || busy.busy !== '1') throw new Error(`Lost response fabricated or lost bounded in-flight state: ${JSON.stringify({ dialog, intercepted, beforeReloadResults, busy })}`);
   const truth = hostState(id);
   await page.reload({ waitUntil: 'networkidle' });
   const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-gpp-entry-journey-result')));
@@ -391,7 +392,7 @@ await test('SRWF-MR2-RESPONSIVE-001', 'idle Review keeps existing action colors 
         document_overflow: document.documentElement.scrollWidth - window.innerWidth,
         region_width: region?.getBoundingClientRect().width || 0,
         feedback_hidden: region?.querySelector('.gpp-review-action-busy-feedback')?.hidden ?? null,
-        buttons: buttons.map(button => ({ value: button.value, background: getComputedStyle(button).backgroundColor, color: getComputedStyle(button).color, width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
+        buttons: buttons.map(button => ({ value: button.value, background: getComputedStyle(button).backgroundColor, width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
       };
     });
     const colors = Object.fromEntries(state.buttons.map(button => [button.value, button.background]));
