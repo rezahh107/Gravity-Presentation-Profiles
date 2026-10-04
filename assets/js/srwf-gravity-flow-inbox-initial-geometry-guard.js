@@ -16,6 +16,11 @@
         && new Set(ids).size === ids.length
         && ids.every(id => expectedIds.includes(String(id)));
 
+    const admittedDisplayedShape = ids => Array.isArray(ids)
+        && ids.length > 0
+        && new Set(ids).size === ids.length
+        && ids.every(id => expectedIds.includes(String(id)));
+
     const formMatches = options => {
         if (!options || !options.searchArgs || typeof options.searchArgs !== 'object') {
             return false;
@@ -113,12 +118,7 @@
             }
 
             const displayed = columnApi.getAllDisplayedColumns();
-            if (!Array.isArray(displayed) || !sameShape(displayed.map(column => {
-                if (!column || typeof column.getColId !== 'function') {
-                    return '';
-                }
-                return String(column.getColId());
-            }))) {
+            if (!Array.isArray(displayed) || displayed.length === 0) {
                 return result;
             }
 
@@ -152,7 +152,7 @@
                 });
             }
 
-            if (!sameShape(geometry.map(column => column.id))) {
+            if (!admittedDisplayedShape(geometry.map(column => column.id))) {
                 return result;
             }
             if (geometry.some(column => column.pinned != null)) {
