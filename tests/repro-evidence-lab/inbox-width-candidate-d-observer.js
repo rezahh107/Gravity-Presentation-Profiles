@@ -6,7 +6,7 @@
         installed_at: performance.now(), config_present: !!window.gflow_config,
         function_was_attached_before_mount: false
     };
-    const names = ['onColumnEverythingChanged', 'onFirstDataRendered', 'onGridSizeChanged', 'onGridReady', 'onNewColumnsLoaded', 'onDisplayedColumnsChanged', 'onRowDataChanged', 'onRowDataUpdated'];
+    const names = ['onColumnEverythingChanged', 'onFirstDataRendered', 'onGridSizeChanged', 'onNewColumnsLoaded', 'onDisplayedColumnsChanged', 'onRowDataChanged', 'onRowDataUpdated'];
     const settings = window.__gppWidthLab;
     const scope = document.querySelector('[data-gpp-inbox-surface="gravity_flow.inbox"]');
     if (!settings || !scope || !window.gflow_config || !gflow_config.grids) {

@@ -23,13 +23,19 @@
         let currentMount = null, consumed = false, mountNumber = 0;
         options.onGridSizeChanged = function () {
             const args=arguments, params=args[0];
-            const result = typeof prior==='function' ? Reflect.apply(prior,this,args) : undefined;
-            try {
-                if (!params || !params.api) return result;
+            let first=false;
+            if (params && params.api) {
                 if (currentMount !== params.api) {currentMount=params.api;consumed=false;mountNumber++;}
-                report.deliveries.push({at:performance.now(),mount:mountNumber,already_consumed:consumed,type:params.type});
-                if (consumed) return result;
-                consumed=true; // Consume before any eligibility read or reentrant sizing call.
+                first=!consumed;consumed=true;
+                report.deliveries.push({at:performance.now(),mount:mountNumber,already_consumed:!first,type:params.type});
+            }
+            // Consume before the prior callback too: a thrown prior or reentrant
+            // public operation cannot defer the first evaluation to a later resize.
+            let result;
+            try {result=typeof prior==='function' ? Reflect.apply(prior,this,args) : undefined;}
+            catch(error) {if(first)report.evaluations.push({mount:mountNumber,decision:'FAIL_CLOSED',reason:'prior_callback_failure'});throw error;}
+            try {
+                if (!first) return result;
                 const e={at:performance.now(),mount:mountNumber,grid_id:id,type:params.type,source:params.source||null,
                     keys:Object.keys(params).sort(),decision:'FAIL_CLOSED',repair_count:0};
                 report.evaluations.push(e);
@@ -48,6 +54,7 @@
                 if (!Number.isFinite(e.center_width) || e.center_width<=0) return reject('unusable_geometry');
                 const displayed=columns.getAllDisplayedColumns();
                 if (!displayed.length) return reject('no_displayed_columns');
+                if (displayed.some(c=>['getColId','getActualWidth','getMinWidth','getMaxWidth','getPinned','getFlex','getColDef'].some(name=>typeof c[name]!=='function'))) return reject('missing_column_capability');
                 e.displayed=displayed.map(c=>({id:c.getColId(),width:c.getActualWidth(),min:c.getMinWidth(),max:c.getMaxWidth(),
                     pinned:c.getPinned(),flex:c.getFlex(),suppress:c.getColDef().suppressSizeToFit===true}));
                 if (e.displayed.some(c=>c.pinned!=null)) return reject('pinned');

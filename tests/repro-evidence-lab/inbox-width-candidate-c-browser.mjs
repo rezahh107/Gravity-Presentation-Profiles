@@ -87,7 +87,6 @@ async function capture(page,context,name,saved,{width=1440,empty=false,raw=null,
     assert.equal(entry.profile,true);assert.equal(entry.report.function_was_attached_before_mount,true);
     assert.ok(entry.report.attachment.every(a=>!a.failure&&!a.mounted_before_attachment));
     assert.ok(entry.report.attachment.flatMap(a=>a.callbacks).every(c=>!c.observation_error));
-    assert.ok(!entry.report.events.some(e=>e.callback==='onGridReady'),'Host consumer-ready overwrite changed');
     assert.equal(entry.guard.attachment.length,1);assert.equal(entry.guard.evaluations.length,1,'Guard evaluated more/less than once');
     assert.ok(!entry.guard.evaluations.some(e=>e.error));
     assert.ok(entry.prior.some(e=>e.name==='onGridSizeChanged'&&e.native_this_api),'Real prior callback composition missing');
@@ -124,6 +123,8 @@ async function cases(page,context) {
   const old=await capture(page,context,'known_stale_165_528_414_355_410',stale,{repair:1});
   assert.ok(old.center.scrollWidth-old.center.clientWidth<=1);assert.deepEqual(nonWidth(old.public_state.state),nonWidth(stale));
   assert.ok(old.report.resize_events.some(e=>e.source==='sizeColumnsToFit'));
+  old.scroll_after_repair=await scrollProof(page);assert.ok(old.scroll_after_repair.every(s=>s.alignment.every(a=>a===null||a<=1)));
+  assert.deepEqual(old.headers.map(c=>c.id),ids);
   old.native_saved=await page.evaluate(id=>JSON.parse(localStorage.getItem(id)),old.grid_id);
   assert.deepEqual(old.native_saved,old.public_state.state,'Native persistence did not save correction');
   await page.reload({waitUntil:'networkidle'});await waitForGrid(page);old.after_reload=await after(page);
@@ -152,8 +153,9 @@ async function cases(page,context) {
   const persisted=await capture(page,context,'native_manual_after_guard',fitting);
   const h=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"] .ag-header-cell-resize').first();
   const point=await h.evaluate(n=>{const b=n.getBoundingClientRect();for(const f of [.1,.25,.4,.6,.8,.9]){const x=b.x+b.width*f,y=b.y+b.height/2;const hit=document.elementFromPoint(x,y);if(hit&&(hit===n||n.contains(hit)))return{x,y};}return null;});
-  assert.ok(point);await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+45,point.y,{steps:6});await page.mouse.up();
+  assert.ok(point);await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+600,point.y,{steps:10});await page.mouse.up();
   persisted.after_drag=await after(page);completed(persisted.after_drag,0);
+  assert.ok(persisted.after_drag.center.scrollWidth>persisted.after_drag.center.clientWidth,'Manual overflow negative control missing');
   assert.notDeepEqual(persisted.after_drag.public_state.state,fitting);assert.deepEqual(nonWidth(persisted.after_drag.public_state.state),nonWidth(fitting));
   persisted.native_saved=await page.evaluate(id=>JSON.parse(localStorage.getItem(id)),persisted.grid_id);assert.deepEqual(persisted.native_saved,persisted.after_drag.public_state.state);
   const live=await capture(page,context,'ordinary_live_refresh',stale,{repair:1,live:true});
@@ -179,11 +181,13 @@ try {
   for(const context of pages)await cases(page,context);
   activation=JSON.parse(wp(visual+`echo wp_json_encode($v->resolve('gravity_flow.inbox'));`));assert.ok(activation);
   wp(visual+`$v->deactivate(array('surface'=>'gravity_flow.inbox'));`);
-  await capture(page,pages[0],'inactive_profile',null,{nativeOnly:true});
+  for(const context of pages)await capture(page,context,'inactive_profile',null,{nativeOnly:true});
   wp(visual+`$a=json_decode(${JSON.stringify(JSON.stringify(activation))},true);$a['surface']='gravity_flow.inbox';$v->activate($a);`);activation=null;
   const unrelated=JSON.parse(wp(`$f=GFAPI::get_form(${form.form_id});unset($f['id']);$f['title']='Unrelated unconfigured synthetic form';$id=GFAPI::add_form($f);if(is_wp_error($id))throw new RuntimeException($id->get_error_message());$p=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Unrelated Inbox','post_content'=>'[gravityflow page="inbox" form="'.$id.'"]'),true);echo wp_json_encode(array('form_id'=>$id,'id'=>$p,'url'=>get_permalink($p),'kind'=>'shortcode'));`));
   unrelatedForm=unrelated.form_id;pages.push(unrelated);wp(`$lab=get_option('gpp_width_candidate_d_lab');$lab['pages'][]=${unrelated.id};update_option('gpp_width_candidate_d_lab',$lab,false);`);
   await capture(page,unrelated,'unrelated_inbox',null,{nativeOnly:true});
+  const unrelatedBlock=JSON.parse(wp(`$attrs=array('selectedFormsJson'=>wp_json_encode(array(array('value'=>${unrelated.form_id}))));$p=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Unrelated Block Inbox','post_content'=>wp_slash('<!-- wp:gravityflow/inbox '.wp_json_encode($attrs).' /-->')),true);$lab=get_option('gpp_width_candidate_d_lab');$lab['pages'][]=$p;update_option('gpp_width_candidate_d_lab',$lab,false);echo wp_json_encode(array('id'=>$p,'url'=>get_permalink($p),'kind'=>'block'));`));
+  pages.push(unrelatedBlock);await capture(page,unrelatedBlock,'unrelated_inbox',null,{nativeOnly:true});
   assert.equal(hash(bundle),originalBundle,'Vendor bundle was modified');
   result.vendor_bundle_sha256=originalBundle;
   result.remaining_not_proven=['production attachment implementation','other host versions and unsupported shapes/modes (fail closed)'];

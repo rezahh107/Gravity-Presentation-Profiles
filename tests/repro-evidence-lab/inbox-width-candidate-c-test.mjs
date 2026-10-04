@@ -22,6 +22,7 @@ assert.equal(call.receiver,receiver);assert.deepEqual(call.args,[f.params,'extra
 assert.equal(f.count(),1);assert.equal(f.window.__gppCandidateC.evaluations.length,1);
 f.options.onGridSizeChanged(f.params);assert.equal(f.count(),1);
 const second={...f.params,api:{sizeColumnsToFit:()=>{}}};f.options.onGridSizeChanged(second);assert.equal(f.window.__gppCandidateC.evaluations.length,2);
+let throws=true;const intermittent=fixture({prior:()=>{if(throws)throw new Error('first');}});assert.throws(()=>intermittent.options.onGridSizeChanged(intermittent.params));throws=false;intermittent.options.onGridSizeChanged(intermittent.params);assert.equal(intermittent.count(),0);
 const error=new Error('prior');const broken=fixture({prior:()=>{throw error;}});assert.throws(()=>broken.options.onGridSizeChanged(broken.params),e=>e===error);assert.equal(broken.count(),0);
 for(const settings of [{pinned:'left'},{flex:1},{flex:NaN},{min:NaN},{suppress:true},{center:0},{center:450},{width:200},{width:200.2},{active:false},{prior:'not callable'}]) {
  const c=fixture(settings);if(typeof c.options.onGridSizeChanged==='function') {c.options.onGridSizeChanged(c.params);c.options.onGridSizeChanged(c.params);}assert.equal(c.count(),0,JSON.stringify(settings));
