@@ -118,8 +118,10 @@ JS;
 /**
  * Run after the product priority-0 action but still before native Grid
  * construction. This wrapper is observation-only: it proves whether GPP
- * composed the callback and records the native return/receiver plus whether a
- * synchronous native sizeColumnsToFit resize occurred inside that call.
+ * composed the callback and records the native return/receiver. Native
+ * columnResized observation is frame-delayed in the pinned Grid runtime, so
+ * repair attribution is finalized on the next animation frame rather than
+ * incorrectly assuming synchronous listener delivery.
  */
 add_action( 'wp_print_footer_scripts', static function () {
     $lab = get_option( 'gpp_width_candidate_d_lab' );
@@ -140,17 +142,23 @@ for (const [id, grid] of Object.entries(gflow_config.grids)) {
         const report=window.__gppWidthQualification;
         const count=()=>report ? report.resize_events.filter(event=>event.source==='sizeColumnsToFit').length : 0;
         const resizeBefore=count();
+        const delivery={grid_id:id,threw:false,repaired:null,previous_return:null,argument_count:args.length,
+            this_api:!!(this&&params&&params.api&&this.api===params.api),type:params&&params.type||null};
         let result;
         try { result=Reflect.apply(current,this,args); }
         catch(error) {
-            window.__gppCandidateCProduction.deliveries.push({grid_id:id,threw:true,error:String(error),this_api:!!(this&&params&&params.api&&this.api===params.api)});
+            delivery.threw=true;
+            delivery.error=String(error);
+            window.__gppCandidateCProduction.deliveries.push(delivery);
             throw error;
         }
-        const repaired=count()>resizeBefore;
-        if(repaired) window.__gppCandidateCProduction.repair_count++;
-        window.__gppCandidateCProduction.deliveries.push({grid_id:id,threw:false,repaired,
-            previous_return:result===undefined?null:String(result),argument_count:args.length,
-            this_api:!!(this&&params&&params.api&&this.api===params.api),type:params&&params.type||null});
+        delivery.previous_return=result===undefined?null:String(result);
+        window.__gppCandidateCProduction.deliveries.push(delivery);
+        requestAnimationFrame(()=>{
+            const repaired=count()>resizeBefore;
+            delivery.repaired=repaired;
+            if(repaired) window.__gppCandidateCProduction.repair_count++;
+        });
         return result;
     };
 }
