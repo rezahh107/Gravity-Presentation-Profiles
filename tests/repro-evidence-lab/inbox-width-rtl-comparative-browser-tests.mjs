@@ -321,12 +321,12 @@ async function captureState(page, label, movement) {
       },
       text_direction_samples: {
         headers: [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell-text')].slice(0, 8).map(el => ({
-          text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
           direction: getComputedStyle(el).direction,
         })),
         cells: cells.slice(0, 8).map(el => ({
           col_id: el.getAttribute('col-id'),
-          text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120),
+          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
           direction: getComputedStyle(el).direction,
         })),
       },
