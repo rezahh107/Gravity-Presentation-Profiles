@@ -133,6 +133,11 @@ async function load(page, url, viewport) {
   await waitForGrid(page);
 }
 
+async function settleAfterViewportResize(page) {
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForTimeout(150);
+}
+
 async function inspectRange(page) {
   const horizontalSelector = await resolveHorizontalViewport(page);
   return page.evaluate(({ selectors, horizontalSelector }) => {
@@ -157,16 +162,38 @@ async function inspectRange(page) {
   }, { selectors, horizontalSelector });
 }
 
-async function chooseDesktop(page, rtlUrl) {
+async function chooseDesktop(page, rtlUrl, { allowLiveShrinkFallback = false } = {}) {
   const probes = [];
   for (const viewport of desktopCandidates) {
     await load(page, rtlUrl, viewport);
     const range = await inspectRange(page);
     const effective = Math.max(range.horizontal?.range || 0, range.center?.range || 0, range.body?.range || 0);
-    probes.push({ viewport, effective_scroll_range_px: effective, participants: range });
-    if (effective > tolerancePx && range.horizontal_selector) return { viewport, probes };
+    probes.push({ viewport, phase: 'initial_restore', effective_scroll_range_px: effective, participants: range });
+    if (effective > tolerancePx && range.horizontal_selector) return { viewport, probes, mount_viewport: null };
   }
-  return { viewport: desktopCandidates[0], probes };
+
+  if (allowLiveShrinkFallback) {
+    const mountViewport = desktopCandidates[0];
+    await load(page, rtlUrl, mountViewport);
+    for (const viewport of desktopCandidates.slice(1)) {
+      await page.setViewportSize(viewport);
+      await settleAfterViewportResize(page);
+      const range = await inspectRange(page);
+      const effective = Math.max(range.horizontal?.range || 0, range.center?.range || 0, range.body?.range || 0);
+      probes.push({
+        viewport,
+        phase: 'same_mount_live_shrink',
+        mount_viewport: mountViewport,
+        effective_scroll_range_px: effective,
+        participants: range,
+      });
+      if (effective > tolerancePx && range.horizontal_selector) {
+        return { viewport, probes, mount_viewport: mountViewport };
+      }
+    }
+  }
+
+  return { viewport: desktopCandidates[0], probes, mount_viewport: null };
 }
 
 async function setDriverScroll(page, driverSelector, range, fraction) {
@@ -294,12 +321,12 @@ async function captureState(page, label, movement) {
       },
       text_direction_samples: {
         headers: [...document.querySelectorAll('[data-js="gflow-inbox"] .ag-header-cell-text')].slice(0, 8).map(el => ({
-          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120),
           direction: getComputedStyle(el).direction,
         })),
         cells: cells.slice(0, 8).map(el => ({
           col_id: el.getAttribute('col-id'),
-          text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 120),
+          text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120),
           direction: getComputedStyle(el).direction,
         })),
       },
@@ -317,8 +344,14 @@ async function captureState(page, label, movement) {
   }, { selectors, horizontalSelector, label, movement, tolerancePx });
 }
 
-async function runScenario(page, id, url, viewport, screenshots) {
-  await load(page, url, viewport);
+async function runScenario(page, id, url, viewport, screenshots, mountViewport = null) {
+  if (mountViewport) {
+    await load(page, url, mountViewport);
+    await page.setViewportSize(viewport);
+    await settleAfterViewportResize(page);
+  } else {
+    await load(page, url, viewport);
+  }
   const initialRange = await inspectRange(page);
   const driverSelector = initialRange.horizontal_selector;
   const range = initialRange.horizontal?.range || 0;
@@ -333,6 +366,7 @@ async function runScenario(page, id, url, viewport, screenshots) {
     return {
       id,
       viewport,
+      mount_viewport: mountViewport,
       scroll_condition_present: false,
       driver_selector: driverSelector,
       scroll_range_px: range,
@@ -351,6 +385,7 @@ async function runScenario(page, id, url, viewport, screenshots) {
   return {
     id,
     viewport,
+    mount_viewport: mountViewport,
     scroll_condition_present: true,
     driver_selector: driverSelector,
     scroll_range_px: range,
@@ -510,13 +545,20 @@ try {
   result.desktop_probe = desktopChoice.probes;
   result.route_desktop_probes.unscoped = desktopChoice.probes;
 
-  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString());
+  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString(), { allowLiveShrinkFallback: true });
   const blockDesktopChoice = await chooseDesktop(page, blockRtlUrl.toString());
   result.route_desktop_probes.form_scoped = formDesktopChoice.probes;
   result.route_desktop_probes.block = blockDesktopChoice.probes;
 
   const rtlDesktop = await runScenario(page, 'rtl-desktop-unscoped', rtlUrl.toString(), desktopChoice.viewport, true);
-  const formScopedDesktop = await runScenario(page, 'rtl-desktop-form-scoped', formScopedRtlUrl.toString(), formDesktopChoice.viewport, false);
+  const formScopedDesktop = await runScenario(
+    page,
+    'rtl-desktop-form-scoped',
+    formScopedRtlUrl.toString(),
+    formDesktopChoice.viewport,
+    false,
+    formDesktopChoice.mount_viewport
+  );
   const blockDesktop = await runScenario(page, 'rtl-desktop-block', blockRtlUrl.toString(), blockDesktopChoice.viewport, false);
   const ltrDesktop = await runScenario(page, 'ltr-desktop-control', fixture.frontend_inbox_url, desktopChoice.viewport, false);
   await load(page, rtlUrl.toString(), narrowViewport);
