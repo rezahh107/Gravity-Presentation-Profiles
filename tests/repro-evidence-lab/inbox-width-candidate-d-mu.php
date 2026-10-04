@@ -118,11 +118,11 @@ JS;
 /**
  * Run after the product priority-0 action but still before native Grid
  * construction. This wrapper is observation-only: it proves whether GPP
- * composed the callback and records the native return/receiver. Native
- * columnResized observation is asynchronously delivered in the pinned Grid
- * runtime. Two animation frames give that public event a stable attribution
- * window without changing production behavior or relying on synchronous
- * listener delivery.
+ * composed the callback and records the native return/receiver. Repair
+ * attribution uses the public observer timestamps: a native sizeColumnsToFit
+ * event belongs to the Grid-size delivery whose interval contains that event.
+ * This separates startup host sizing (before the callback) from Candidate C
+ * sizing without assuming synchronous listener delivery or an arbitrary delay.
  */
 add_action( 'wp_print_footer_scripts', static function () {
     $lab = get_option( 'gpp_width_candidate_d_lab' );
@@ -130,36 +130,42 @@ add_action( 'wp_print_footer_scripts', static function () {
         || ! class_exists( 'Gravity_Flow' ) || ! wp_script_is( Gravity_Flow::THEME_JS, 'enqueued' ) ) { return; }
 
     $probe = <<<'JS'
-window.__gppCandidateCProduction = {mode:'PRODUCTION_IMPLEMENTATION',attachment:[],deliveries:[],repair_count:0};
+const production=window.__gppCandidateCProduction={mode:'PRODUCTION_IMPLEMENTATION',attachment:[],deliveries:[]};
+const repairedDuring=delivery=>{
+    const report=window.__gppWidthQualification;
+    if(!report||!Array.isArray(report.resize_events)) return false;
+    const index=production.deliveries.indexOf(delivery);
+    const next=index>=0 ? production.deliveries[index+1] : null;
+    const end=next ? next.started_at : Infinity;
+    return report.resize_events.some(event=>event.source==='sizeColumnsToFit'
+        && Number.isFinite(event.at) && event.at>=delivery.started_at && event.at<end);
+};
+Object.defineProperty(production,'repair_count',{enumerable:true,get(){
+    return this.deliveries.filter(repairedDuring).length;
+}});
 for (const [id, grid] of Object.entries(gflow_config.grids)) {
     const options=grid.grid_options;
     const before=window.__gppWidthPreProduct && window.__gppWidthPreProduct[id];
     const current=options.onGridSizeChanged;
     const attached=typeof current==='function' && current!==before;
-    window.__gppCandidateCProduction.attachment.push({grid_id:id,attached,before_type:typeof before,after_type:typeof current});
+    production.attachment.push({grid_id:id,attached,before_type:typeof before,after_type:typeof current});
     if(!attached) continue;
     options.onGridSizeChanged=function(){
         const args=arguments,params=args[0];
-        const report=window.__gppWidthQualification;
-        const count=()=>report ? report.resize_events.filter(event=>event.source==='sizeColumnsToFit').length : 0;
-        const resizeBefore=count();
-        const delivery={grid_id:id,threw:false,repaired:null,previous_return:null,argument_count:args.length,
-            this_api:!!(this&&params&&params.api&&this.api===params.api),type:params&&params.type||null};
+        const delivery={grid_id:id,threw:false,previous_return:null,argument_count:args.length,
+            this_api:!!(this&&params&&params.api&&this.api===params.api),type:params&&params.type||null,
+            started_at:performance.now()};
+        Object.defineProperty(delivery,'repaired',{enumerable:true,get(){return repairedDuring(delivery);}});
         let result;
         try { result=Reflect.apply(current,this,args); }
         catch(error) {
             delivery.threw=true;
             delivery.error=String(error);
-            window.__gppCandidateCProduction.deliveries.push(delivery);
+            production.deliveries.push(delivery);
             throw error;
         }
         delivery.previous_return=result===undefined?null:String(result);
-        window.__gppCandidateCProduction.deliveries.push(delivery);
-        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-            const repaired=count()>resizeBefore;
-            delivery.repaired=repaired;
-            if(repaired) window.__gppCandidateCProduction.repair_count++;
-        }));
+        production.deliveries.push(delivery);
         return result;
     };
 }
