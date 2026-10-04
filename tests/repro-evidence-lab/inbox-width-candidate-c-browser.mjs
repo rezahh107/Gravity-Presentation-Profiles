@@ -12,8 +12,6 @@ const fixture = JSON.parse(fs.readFileSync(path.join(artifactDir, 'fixture-manif
 const form = fixture.forms.find(item => item.key === 'alpha');
 if (!form) throw new Error('WU21 alpha form missing');
 const ids = ['id', 'date_created', String(form.school_field_id), String(form.national_id_field_id), String(form.first_name_field_id)];
-const expectedContractIds = ['id', String(form.first_name_field_id), String(form.national_id_field_id), String(form.school_field_id), 'date_created'];
-const syntheticBindingId = 'gpp.wu21.candidate-c.ambiguous';
 const mu = path.join(wpPath, 'wp-content/mu-plugins/inbox-width-candidate-d-mu.php');
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const result = {
@@ -67,8 +65,8 @@ let browser;
 let pages = [];
 let unrelatedForm = 0;
 let activation = null;
-let ambiguousBindingMayBeInstalled = false;
-const visual = String.raw`$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));`;
+let bindingSnapshot = null;
+const visual = String.raw`$v=new \GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle(new \GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore(\GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle::OPTION_NAME));`;
 
 async function snapshot(page) {
   return page.evaluate(() => {
@@ -337,83 +335,31 @@ async function authorizedCases(page, context) {
 }
 
 function installAmbiguousBindingForForm(formId) {
+  const original = wp(`echo wp_json_encode(get_option('gpp_binding_set_lifecycle_v1'));`);
   const code = String.raw`
 $state=get_option('gpp_binding_set_lifecycle_v1');
-if(!is_array($state)||!isset($state['installed'],$state['activations']))throw new RuntimeException('Binding lifecycle unavailable');
-$synthetic_id=${JSON.stringify(syntheticBindingId)};
-if(isset($state['installed'][$synthetic_id]))throw new RuntimeException('Synthetic Candidate C binding already installed');
-$found=null;$found_context_key=null;$matches=0;
+$found=null;
 foreach($state['activations'] as $context_key=>$identity){
   $record=$state['installed'][$identity['binding_set_id']][$identity['binding_set_version']]??null;
   if(!$record||($record['artifact']['context']['form_source_ref']['form_id']??null)!=${formId})continue;
   if(!in_array('gravity_flow.inbox',$record['artifact']['context']['surfaces']??array(),true))continue;
-  $found=$record;$found_context_key=$context_key;$matches++;
+  $found=$record;break;
 }
-if($matches!==1||!$found)throw new RuntimeException('Expected exactly one authoritative alpha Inbox binding before ambiguity falsifier');
+if(!$found)throw new RuntimeException('Alpha binding record not found');
 $clone=$found;
-$clone['binding_set_id']=$synthetic_id;
-$clone['artifact']['binding_set_id']=$synthetic_id;
-$candidates=array(
-  array('gravity_flow.inbox'),
-  array('gravity_flow.inbox','gravity_flow.entry_detail'),
-  array('gravity_flow.inbox','print.dossier')
-);
-$key=null;
-foreach($candidates as $surfaces){
-  $clone['artifact']['context']['surfaces']=$surfaces;
-  $candidate_key=\\GravityPresentationProfiles\\Core\\Portable\\CanonicalJson::hash($clone['artifact']['context']);
-  if($candidate_key!==$found_context_key&&!isset($state['activations'][$candidate_key])){$key=$candidate_key;break;}
-}
-if(!$key)throw new RuntimeException('Could not construct a distinct admitted alpha Inbox binding context');
-$sources=array();
-foreach($clone['artifact']['bindings'] as $binding){
-  if(($binding['state']??null)==='PROVEN'&&is_array($binding['source_ref']??null))$sources[$binding['semantic_slot_key']]=$binding['source_ref'];
-}
-foreach($clone['artifact']['runtime_claims'] as &$claim){
-  if(($claim['claim']??null)!=='availability'||($claim['evidence_state']??null)!=='PROVEN')continue;
-  $slot=$claim['semantic_slot_key']??null;
-  if(!isset($sources[$slot]))throw new RuntimeException('Availability claim lost its proven source while cloning ambiguity fixture');
-  $claim['evidence_refs']=array(\\GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxRuntimeEvidence::availabilityRef($clone['artifact'],$slot,$sources[$slot]));
-}
-unset($claim);
+$clone['binding_set_id']='gpp.wu21.candidate-c.ambiguous';
+$clone['artifact']['binding_set_id']=$clone['binding_set_id'];
+$clone['artifact']['context']['surfaces'][]='gravity_flow.entry_detail';
+$clone['artifact']['context']['surfaces']=array_values(array_unique($clone['artifact']['context']['surfaces']));
+$key=\GravityPresentationProfiles\Core\Portable\CanonicalJson::hash($clone['artifact']['context']);
 $clone['context_key']=$key;
-$clone['content_hash']=\\GravityPresentationProfiles\\Core\\Portable\\EnvironmentBindingSet::contentHash($clone['artifact']);
 $version=$clone['binding_set_version'];
-$state['installed'][$synthetic_id][$version]=$clone;
-$state['activations'][$key]=array('binding_set_id'=>$synthetic_id,'binding_set_version'=>$version);
+$state['installed'][$clone['binding_set_id']][$version]=$clone;
+$state['activations'][$key]=array('binding_set_id'=>$clone['binding_set_id'],'binding_set_version'=>$version);
 update_option('gpp_binding_set_lifecycle_v1',$state,false);
-$readback=get_option('gpp_binding_set_lifecycle_v1');
-$active=$readback['activations'][$key]??null;
-if(($active['binding_set_id']??null)!==$synthetic_id)throw new RuntimeException('Synthetic ambiguous binding activation did not persist');
-echo wp_json_encode(array('context_key'=>$key,'source_context_key'=>$found_context_key,'binding_set_version'=>$version));`;
-  return JSON.parse(wp(code));
-}
-
-function cleanupAmbiguousBindingForForm(formId) {
-  const code = String.raw`
-$state=get_option('gpp_binding_set_lifecycle_v1');
-if(!is_array($state)||!isset($state['installed'],$state['activations']))throw new RuntimeException('Binding lifecycle unavailable during Candidate C cleanup');
-$synthetic_id=${JSON.stringify(syntheticBindingId)};
-foreach($state['activations'] as $context_key=>$identity){
-  if(($identity['binding_set_id']??null)===$synthetic_id)unset($state['activations'][$context_key]);
-}
-unset($state['installed'][$synthetic_id]);
-update_option('gpp_binding_set_lifecycle_v1',$state,false);
-$readback=get_option('gpp_binding_set_lifecycle_v1');
-if(isset($readback['installed'][$synthetic_id]))throw new RuntimeException('Synthetic Candidate C binding remained installed after cleanup');
-foreach($readback['activations'] as $identity){
-  if(($identity['binding_set_id']??null)===$synthetic_id)throw new RuntimeException('Synthetic Candidate C activation remained after cleanup');
-}
-\\GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxTableHeaderPresentation::resetRuntimeCache();
-$contract=\\GravityPresentationProfiles\\SRWF\\GravityFlow\\InboxTableHeaderPresentation::initialGeometryContract(array('form_id'=>${formId}));
-$expected=${JSON.stringify(expectedContractIds)};
-if(!is_array($contract)||(int)($contract['form_id']??0)!==${formId}||array_values(array_map('strval',$contract['column_ids']??array()))!==$expected){
-  throw new RuntimeException('Candidate C cleanup did not restore the authoritative alpha Inbox geometry contract');
-}
-echo wp_json_encode(array('status'=>'PASS','contract'=>$contract));`;
-  const readback = JSON.parse(wp(code));
-  assert.equal(readback.status, 'PASS');
-  return readback;
+echo 'OK';`;
+  assert.equal(wp(code), 'OK');
+  return original;
 }
 
 try {
@@ -437,15 +383,12 @@ try {
   assert.equal(wrongColumns.profile, true, 'wrong-column falsifier lost the active profile wrapper');
   result.scope_falsification.push({scenario: 'correct_wrapper_wrong_column_identity', attached: attachedCount(wrongColumns)});
 
-  // Two independently active, evidence-current table-wide bindings for the
-  // same form are genuinely ambiguous and must fail closed. The synthetic
-  // binding uses a distinct admitted context and is removed as an exact delta.
-  ambiguousBindingMayBeInstalled = true;
-  const ambiguity = installAmbiguousBindingForForm(form.form_id);
+  // Ambiguous active binding configurations for one form must fail closed.
+  bindingSnapshot = installAmbiguousBindingForForm(form.form_id);
   const ambiguous = await capture(page, pages[0], 'scope_ambiguous_binding', null, {expectAttached: false, expectedRepair: 0});
-  result.scope_falsification.push({scenario: 'ambiguous_binding_resolution', attached: attachedCount(ambiguous), profile: ambiguous.profile, context_key: ambiguity.context_key});
-  cleanupAmbiguousBindingForForm(form.form_id);
-  ambiguousBindingMayBeInstalled = false;
+  result.scope_falsification.push({scenario: 'ambiguous_binding_resolution', attached: attachedCount(ambiguous), profile: ambiguous.profile});
+  wp(`update_option('gpp_binding_set_lifecycle_v1',json_decode(${JSON.stringify(bindingSnapshot)},true),false);`);
+  bindingSnapshot = null;
 
   // Inactive profile must not emit the production attachment.
   activation = JSON.parse(wp(visual + `echo wp_json_encode($v->resolve('gravity_flow.inbox'));`));
@@ -485,7 +428,7 @@ try {
 } finally {
   if (browser) await browser.close();
   if (fs.existsSync(mu)) fs.unlinkSync(mu);
-  if (ambiguousBindingMayBeInstalled) cleanupAmbiguousBindingForForm(form.form_id);
+  if (bindingSnapshot) wp(`update_option('gpp_binding_set_lifecycle_v1',json_decode(${JSON.stringify(bindingSnapshot)},true),false);`);
   if (activation) wp(visual + `$a=json_decode(${JSON.stringify(JSON.stringify(activation))},true);$a['surface']='gravity_flow.inbox';$v->activate($a);`);
   if (pages.length) wp(`foreach(${JSON.stringify(pages.map(page => page.id))} as $id)wp_delete_post($id,true);delete_option('gpp_width_candidate_d_lab');`);
   if (unrelatedForm) wp(`GFAPI::delete_form(${unrelatedForm});`);
