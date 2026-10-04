@@ -13,6 +13,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailJourneyPresentationA
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxInitialGeometryGuard;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
@@ -68,6 +69,7 @@ final class Bootstrap {
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         InboxTableHeaderPresentation::register();
+        InboxInitialGeometryGuard::register();
         InboxBlockCompositionBridge::register();
         EntryDetailJourneyPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();

@@ -157,16 +157,72 @@ async function inspectRange(page) {
   }, { selectors, horizontalSelector });
 }
 
-async function chooseDesktop(page, rtlUrl) {
+async function createNativeColumnResizeOverflow(page) {
+  const resizeHandle = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"] .ag-header-cell-resize').first();
+  if (!await resizeHandle.count()) {
+    return { attempted: false, reason: 'date_created_resize_handle_missing' };
+  }
+
+  const point = await resizeHandle.evaluate(node => {
+    const box = node.getBoundingClientRect();
+    for (const fraction of [.1, .25, .4, .6, .8, .9]) {
+      const x = box.x + box.width * fraction;
+      const y = box.y + box.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      if (hit && (hit === node || node.contains(hit))) return { x, y };
+    }
+    return null;
+  });
+  if (!point) {
+    return { attempted: false, reason: 'date_created_resize_handle_not_hittable' };
+  }
+
+  const before = await inspectRange(page);
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 600, point.y, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+  const after = await inspectRange(page);
+
+  return {
+    attempted: true,
+    col_id: 'date_created',
+    drag_delta_x_px: 600,
+    before,
+    after,
+  };
+}
+
+async function chooseDesktop(page, rtlUrl, { allowNativeResizeFallback = false } = {}) {
   const probes = [];
   for (const viewport of desktopCandidates) {
     await load(page, rtlUrl, viewport);
     const range = await inspectRange(page);
     const effective = Math.max(range.horizontal?.range || 0, range.center?.range || 0, range.body?.range || 0);
-    probes.push({ viewport, effective_scroll_range_px: effective, participants: range });
-    if (effective > tolerancePx && range.horizontal_selector) return { viewport, probes };
+    probes.push({ viewport, phase: 'initial_restore', effective_scroll_range_px: effective, participants: range });
+    if (effective > tolerancePx && range.horizontal_selector) return { viewport, probes, native_resize_fallback: false };
   }
-  return { viewport: desktopCandidates[0], probes };
+
+  if (allowNativeResizeFallback) {
+    const viewport = desktopCandidates[0];
+    await load(page, rtlUrl, viewport);
+    const nativeResize = await createNativeColumnResizeOverflow(page);
+    const range = await inspectRange(page);
+    const effective = Math.max(range.horizontal?.range || 0, range.center?.range || 0, range.body?.range || 0);
+    probes.push({
+      viewport,
+      phase: 'same_mount_native_column_resize',
+      native_resize: nativeResize,
+      effective_scroll_range_px: effective,
+      participants: range,
+    });
+    if (nativeResize.attempted && effective > tolerancePx && range.horizontal_selector) {
+      return { viewport, probes, native_resize_fallback: true };
+    }
+  }
+
+  return { viewport: desktopCandidates[0], probes, native_resize_fallback: false };
 }
 
 async function setDriverScroll(page, driverSelector, range, fraction) {
@@ -317,8 +373,9 @@ async function captureState(page, label, movement) {
   }, { selectors, horizontalSelector, label, movement, tolerancePx });
 }
 
-async function runScenario(page, id, url, viewport, screenshots) {
+async function runScenario(page, id, url, viewport, screenshots, { nativeResizeFallback = false } = {}) {
   await load(page, url, viewport);
+  const nativeResize = nativeResizeFallback ? await createNativeColumnResizeOverflow(page) : null;
   const initialRange = await inspectRange(page);
   const driverSelector = initialRange.horizontal_selector;
   const range = initialRange.horizontal?.range || 0;
@@ -333,6 +390,7 @@ async function runScenario(page, id, url, viewport, screenshots) {
     return {
       id,
       viewport,
+      native_resize_fallback: nativeResize,
       scroll_condition_present: false,
       driver_selector: driverSelector,
       scroll_range_px: range,
@@ -351,6 +409,7 @@ async function runScenario(page, id, url, viewport, screenshots) {
   return {
     id,
     viewport,
+    native_resize_fallback: nativeResize,
     scroll_condition_present: true,
     driver_selector: driverSelector,
     scroll_range_px: range,
@@ -510,13 +569,20 @@ try {
   result.desktop_probe = desktopChoice.probes;
   result.route_desktop_probes.unscoped = desktopChoice.probes;
 
-  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString());
+  const formDesktopChoice = await chooseDesktop(page, formScopedRtlUrl.toString(), { allowNativeResizeFallback: true });
   const blockDesktopChoice = await chooseDesktop(page, blockRtlUrl.toString());
   result.route_desktop_probes.form_scoped = formDesktopChoice.probes;
   result.route_desktop_probes.block = blockDesktopChoice.probes;
 
   const rtlDesktop = await runScenario(page, 'rtl-desktop-unscoped', rtlUrl.toString(), desktopChoice.viewport, true);
-  const formScopedDesktop = await runScenario(page, 'rtl-desktop-form-scoped', formScopedRtlUrl.toString(), formDesktopChoice.viewport, false);
+  const formScopedDesktop = await runScenario(
+    page,
+    'rtl-desktop-form-scoped',
+    formScopedRtlUrl.toString(),
+    formDesktopChoice.viewport,
+    false,
+    { nativeResizeFallback: formDesktopChoice.native_resize_fallback }
+  );
   const blockDesktop = await runScenario(page, 'rtl-desktop-block', blockRtlUrl.toString(), blockDesktopChoice.viewport, false);
   const ltrDesktop = await runScenario(page, 'ltr-desktop-control', fixture.frontend_inbox_url, desktopChoice.viewport, false);
   await load(page, rtlUrl.toString(), narrowViewport);
