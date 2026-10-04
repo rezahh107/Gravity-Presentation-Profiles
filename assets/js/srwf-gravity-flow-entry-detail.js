@@ -66,11 +66,8 @@
         feedback.textContent = 'در حال ثبت نتیجه…';
         actionRegion.insertBefore(feedback, buttons[0]);
 
-        const originalButtonState = new Map(
-            buttons.map(button => [button, {
-                disabled: button.disabled,
-                ariaDisabled: button.getAttribute('aria-disabled'),
-            }])
+        const originalAriaDisabled = new Map(
+            buttons.map(button => [button, button.getAttribute('aria-disabled')])
         );
         let busy = false;
 
@@ -81,23 +78,23 @@
             actionRegion.removeAttribute('aria-busy');
             feedback.hidden = true;
 
-            originalButtonState.forEach((state, button) => {
-                button.disabled = state.disabled;
-                if (state.ariaDisabled === null) {
+            originalAriaDisabled.forEach((value, button) => {
+                if (value === null) {
                     button.removeAttribute('aria-disabled');
                 } else {
-                    button.setAttribute('aria-disabled', state.ariaDisabled);
+                    button.setAttribute('aria-disabled', value);
                 }
             });
         };
 
-        const disableMaterialActions = () => {
+        form.addEventListener('click', event => {
             if (!busy) return;
-            buttons.forEach(button => {
-                button.disabled = true;
-                button.setAttribute('aria-disabled', 'true');
-            });
-        };
+            const button = event.target.closest('button[type="submit"]');
+            if (!button || !actionRegion.contains(button) || !MATERIAL_REVIEW_ACTIONS.has(button.value)) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
 
         form.addEventListener('submit', () => {
             const action = hiddenStatus.value;
@@ -108,14 +105,11 @@
             actionRegion.setAttribute('aria-busy', 'true');
             feedback.hidden = false;
 
-            // Let Gravity Flow / Gravity Forms finish handling the same native
-            // submit event before changing button enabled state. The microtask
-            // still runs before a second user activation can be delivered.
-            if (typeof queueMicrotask === 'function') {
-                queueMicrotask(disableMaterialActions);
-            } else {
-                Promise.resolve().then(disableMaterialActions);
-            }
+            // Do not set the native disabled property here. Gravity Forms owns
+            // the accepted submission lifecycle and may still inspect the native
+            // submitter after this event. ARIA conveys the busy/unavailable state;
+            // the capture-phase click guard blocks only later user activations.
+            buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
         }, true);
 
         // A history restoration is a fresh operator interaction lifetime even
