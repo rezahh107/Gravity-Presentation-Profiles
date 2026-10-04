@@ -43,7 +43,7 @@ async function snapshot(page) {
       headers:[...root.querySelectorAll('.ag-header-cell[col-id]')].map(n=>({id:n.getAttribute('col-id'),width:n.getBoundingClientRect().width})),
       rows:root.querySelectorAll('.ag-center-cols-container .ag-row').length,
       rtl:{ag_ltr:!!root.querySelector('.ag-ltr'),ag_rtl:!!root.querySelector('.ag-rtl'),
-        directions:Object.fromEntries(['.ag-body-viewport','.ag-center-cols-viewport','.ag-header-viewport','.ag-body-horizontal-scroll-viewport'].map(sel=>[sel,getComputedStyle(root.querySelector(sel)).direction])),
+        directions:Object.fromEntries(['.ag-root-wrapper','.ag-center-cols-viewport','.ag-header-viewport','.ag-body-horizontal-scroll-viewport'].map(sel=>[sel,getComputedStyle(root.querySelector(sel)).direction])),
         header_text:getComputedStyle(root.querySelector('.ag-header-cell-text')).direction,
         cell_text:root.querySelector('.ag-cell')?getComputedStyle(root.querySelector('.ag-cell')).direction:null,
         grids:root.querySelectorAll('.ag-root-wrapper').length,scrollbars:root.querySelectorAll('.ag-body-horizontal-scroll').length}};

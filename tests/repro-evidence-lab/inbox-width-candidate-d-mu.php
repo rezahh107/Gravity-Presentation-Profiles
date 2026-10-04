@@ -52,12 +52,14 @@ add_action( 'wp_print_footer_scripts', static function () {
 window.__gppWidthPrior = [];
 for (const [id, grid] of Object.entries(gflow_config.grids)) {
     for (const name of ['onColumnEverythingChanged','onFirstDataRendered','onGridSizeChanged']) {
-        if (grid.grid_options[name] != null) throw new Error('Fixture refuses to overwrite existing callback');
+        const prior=grid.grid_options[name];
+        if(prior!=null&&typeof prior!=="function")throw new Error('Fixture refuses non-callable callback');
         grid.grid_options[name] = function () {
+            const result=typeof prior==="function"?Reflect.apply(prior,this,arguments):undefined;
             window.__gppWidthPrior.push({name, argument_count: arguments.length,
                 this_probe: this && this.probe === 'this-preserved', argument_probe: arguments[1] === 'argument-preserved',
                 native_this_api: !!(this && arguments[0] && arguments[0].api && this.api === arguments[0].api)});
-            return 'prior-return';
+            return result===undefined?'prior-return':result;
         };
     }
 }

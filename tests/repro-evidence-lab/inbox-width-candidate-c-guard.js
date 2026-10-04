@@ -35,6 +35,9 @@
                 report.evaluations.push(e);
                 const reject = reason => {e.reason=reason;return result;};
                 if (!document.contains(root) || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) return reject('inactive_scope');
+                if ((options.domLayout!=null && options.domLayout!=='normal')
+                    || (options.rowModelType!=null && options.rowModelType!=='clientSide')
+                    || options.autoSizeStrategy!=null || options.suppressHorizontalScroll===true) return reject('unsupported_grid_mode');
                 const columns=params.columnApi;
                 if (!columns || typeof columns.getColumnState!=='function' || typeof columns.getAllDisplayedColumns!=='function'
                     || typeof params.api.sizeColumnsToFit!=='function') return reject('missing_public_capability');
