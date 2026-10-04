@@ -300,6 +300,23 @@ jobs:
           }
           ' "$probe_body"
 
+      - name: Qualify initial-restore method prerequisites without repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/repro-evidence-lab/inbox-upstream-method-source.py "$WU21_ARTIFACT_DIR/inbox-upstream-method-source.json"
+          node tests/repro-evidence-lab/inbox-width-candidate-d-observer-test.mjs
+          node tests/repro-evidence-lab/inbox-upstream-method-browser.mjs
+
+      - name: Upload bounded initial-restore method evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inbox-upstream-method-qualification-${{ github.run_id }}
+          path: /tmp/wu21-artifacts/inbox-upstream-method-*.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |
@@ -523,6 +540,7 @@ jobs:
             /tmp/wu21-artifacts/inbox-table-header-before.png
             /tmp/wu21-artifacts/inbox-table-header-after.png
             /tmp/wu21-artifacts/integrated-visual-host.json
+            /tmp/wu21-artifacts/inbox-upstream-method-*.json
             /tmp/wu21-artifacts/inbox-direction-scroll-qualification.json
             /tmp/wu21-artifacts/inbox-direction-scroll-*.png
             /tmp/wu21-artifacts/vazir-font-authority.json
