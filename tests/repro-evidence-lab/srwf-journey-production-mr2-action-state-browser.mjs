@@ -78,6 +78,15 @@ async function test(id, name, fn) {
   catch (error) { results.push({ id, name, status: 'FAIL', details: { error: String(error?.stack || error).slice(0, 12000) } }); }
 }
 
+async function waitUntil(check, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check()) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for MR-2 browser condition.`);
+}
+
 async function login(page) {
   await page.context().clearCookies();
   await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
@@ -135,7 +144,7 @@ async function busySnapshot(page) {
 function assertBusy(snapshot) {
   if (snapshot.bound !== '1' || snapshot.busy !== '1' || snapshot.aria_busy !== 'true') throw new Error(`Busy semantics missing: ${JSON.stringify(snapshot)}`);
   if (snapshot.feedback_count !== 1 || snapshot.feedback_hidden !== false || snapshot.feedback_text !== 'در حال ثبت نتیجه…' || snapshot.feedback_role !== 'status' || snapshot.feedback_live !== 'polite' || snapshot.feedback_atomic !== 'true') throw new Error(`Accessible busy feedback wrong: ${JSON.stringify(snapshot)}`);
-  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => !button.disabled || button.aria_disabled !== 'true')) throw new Error(`Material actions were not disabled truthfully: ${JSON.stringify(snapshot)}`);
+  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled !== 'true')) throw new Error(`Material actions were not marked unavailable without mutating native disabled state: ${JSON.stringify(snapshot)}`);
 }
 
 function assertIdle(snapshot) {
@@ -175,34 +184,44 @@ async function acceptedActionWithBusy(page, value, options = {}) {
 
   const button = page.locator(`.gravityflow-status-box .gravityflow-action-buttons button[value="${value}"]`).first();
   if (await button.count() !== 1) throw new Error(`Missing native action ${value}`);
-  const navigation = page.waitForNavigation({ waitUntil: 'networkidle' });
+  const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 })
+    .then(() => ({ ok: true }))
+    .catch(error => ({ ok: false, error: String(error?.stack || error) }));
 
-  if (options.keyboard) {
-    await button.focus();
-    await page.keyboard.press('Enter');
-  } else {
-    await button.click({ noWaitAfter: true });
+  let result;
+  try {
+    if (options.keyboard) {
+      await button.focus();
+      await page.keyboard.press('Enter');
+    } else {
+      await button.click({ noWaitAfter: true });
+    }
+
+    await page.waitForFunction(() => document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy === '1');
+    await waitUntil(() => postCount === 1);
+    const busy = await busySnapshot(page);
+    const submitsWhileBusy = await submitCount(page);
+    assertBusy(busy);
+    if (submitsWhileBusy !== 1 || postCount !== 1 || dialogs.length !== 1 || dialogs[0].type !== 'confirm') throw new Error(`Accepted action did not cross the native submit boundary exactly once: ${JSON.stringify({ submitsWhileBusy, postCount, dialogs })}`);
+
+    let duringBusy = null;
+    if (typeof options.duringBusy === 'function') {
+      duringBusy = await options.duringBusy({ button, getSubmitCount: () => submitCount(page), getPostCount: () => postCount, getDialogCount: () => dialogs.length });
+    }
+
+    result = { busy, submits_while_busy: submitsWhileBusy, post_count: postCount, dialogs, during_busy: duringBusy };
+  } finally {
+    releasePost();
   }
 
-  await page.waitForFunction(() => document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy === '1');
-  await page.waitForTimeout(0);
-  const busy = await busySnapshot(page);
-  const submitsWhileBusy = await submitCount(page);
-  assertBusy(busy);
-  if (submitsWhileBusy !== 1 || postCount !== 1 || dialogs.length !== 1 || dialogs[0].type !== 'confirm') throw new Error(`Accepted action did not cross the native submit boundary exactly once: ${JSON.stringify({ submitsWhileBusy, postCount, dialogs })}`);
-
-  let duringBusy = null;
-  if (typeof options.duringBusy === 'function') {
-    duringBusy = await options.duringBusy({ button, getSubmitCount: () => submitCount(page), getPostCount: () => postCount, getDialogCount: () => dialogs.length });
-  }
-
-  releasePost();
-  await navigation;
+  const navigationResult = await navigation;
   await page.unroute('**/*');
   page.off('response', responseListener);
   page.off('dialog', dialogListener);
+  if (!navigationResult.ok) throw new Error(`Accepted native action did not complete navigation after POST release: ${navigationResult.error}`);
+  await page.waitForLoadState('networkidle');
 
-  return { busy, submits_while_busy: submitsWhileBusy, post_count: postCount, post_response_status: postResponseStatus, dialogs, during_busy: duringBusy };
+  return { ...result, post_response_status: postResponseStatus };
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -275,6 +294,7 @@ await test('SRWF-MR2-DOUBLE-001', 'rapid mouse/keyboard reactivation cannot crea
     keyboard: true,
     duringBusy: async ({ button, getSubmitCount, getPostCount, getDialogCount }) => {
       await button.click({ force: true, noWaitAfter: true, timeout: 800 }).catch(() => {});
+      await button.focus();
       await page.keyboard.press('Enter').catch(() => {});
       await page.waitForTimeout(80);
       const counts = { submits: await getSubmitCount(), posts: getPostCount(), dialogs: getDialogCount() };
@@ -306,9 +326,10 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale action remains host-authoritativ
   const staleDialogs = [];
   const dialogListener = async dialog => { staleDialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.accept(); };
   tabB.on('dialog', dialogListener);
-  const navigation = tabB.waitForNavigation({ waitUntil: 'networkidle' });
-  await tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first().click({ noWaitAfter: true });
-  await navigation;
+  await Promise.all([
+    tabB.waitForNavigation({ waitUntil: 'networkidle' }),
+    tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first().click(),
+  ]);
   tabB.off('response', responseListener);
   tabB.off('dialog', dialogListener);
 
