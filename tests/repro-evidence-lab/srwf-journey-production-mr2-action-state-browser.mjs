@@ -60,7 +60,7 @@ function createEntry(label) {
 }
 
 function host(entryId) {
-  return JSON.parse(wpEval(`
+  const state = JSON.parse(wpEval(`
     wp_set_current_user(${operatorId});
     if (!class_exists('Gravity_Flow_Entry_Detail')) require_once gravity_flow()->get_base_path().'/includes/pages/class-entry-detail.php';
     $entry=GFAPI::get_entry(${Number(entryId)});
@@ -75,9 +75,19 @@ function host(entryId) {
         'type'=>(string)$step->get_type(),
         'can_update'=>(bool)Gravity_Flow_Entry_Detail::can_update($step)
       ):null,
-      'timeline_count'=>is_array($timeline)?count($timeline):null
+      'timeline'=>$timeline
     ),JSON_UNESCAPED_SLASHES);
   `));
+  const hasTimeline = Object.prototype.hasOwnProperty.call(state, 'timeline');
+  if (!hasTimeline || typeof state.timeline !== 'string' || state.timeline.trim() === '') {
+    throw new Error(`Unusable native Gravity Flow timeline evidence: ${JSON.stringify({
+      entry_id: Number(entryId),
+      timeline_present: hasTimeline,
+      timeline_type: typeof state.timeline,
+      timeline: hasTimeline ? state.timeline : null,
+    })}`);
+  }
+  return state;
 }
 
 async function auth(context) {
@@ -297,7 +307,7 @@ function persist() {
   fs.mkdirSync(artifactDir, { recursive: true });
   fs.writeFileSync(
     `${artifactDir}/srwf-journey-production-mr2-action-state-browser.json`,
-    JSON.stringify({ schema_version: '1.3.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
+    JSON.stringify({ schema_version: '1.4.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
   );
 }
 
@@ -432,14 +442,21 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale Reject cannot override Tab A App
   const tabB = await context.newPage();
   try {
     await Promise.all([gotoReview(tabA, id), gotoReview(tabB, id)]);
+    const beforeA = host(id);
     const actionA = await activateAccepted(tabA, id, 'approved');
     const afterA = host(id);
     if (afterA.workflow_final_status !== 'approved' || afterA.api_status !== 'approved' || afterA.current_step !== null) {
       throw new Error(`Tab A did not establish Approved host truth: ${JSON.stringify(afterA)}`);
     }
+    if (afterA.timeline === beforeA.timeline) {
+      throw new Error(`Timeline observation positive control failed: ${JSON.stringify({ beforeA, afterA })}`);
+    }
 
     const staleAction = await activateAccepted(tabB, id, 'rejected');
     const afterB = host(id);
+    if (afterB.timeline !== afterA.timeline) {
+      throw new Error(`Stale Tab B mutated native Gravity Flow timeline: ${JSON.stringify({ beforeA, afterA, afterB, staleAction })}`);
+    }
     const rendered = await tabB.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
     const controls = await tabB.locator('.gravityflow-status-box .gravityflow-action-buttons button').filter({ visible: true }).count();
     if (afterB.workflow_final_status !== afterA.workflow_final_status || afterB.api_status !== afterA.api_status || afterB.current_step !== null) {
@@ -449,11 +466,13 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale Reject cannot override Tab A App
       throw new Error(`Stale Tab B fabricated or retained authoritative action UI: ${JSON.stringify({ rendered, controls, afterA, afterB })}`);
     }
     return {
+      beforeA,
       actionA,
-      staleAction,
       afterA,
+      timeline_changed_after_approve: true,
+      staleAction,
       afterB,
-      timeline_delta_after_stale_action: Number(afterB.timeline_count || 0) - Number(afterA.timeline_count || 0),
+      timeline_unchanged_after_stale_action: true,
       rendered,
       controls,
     };
