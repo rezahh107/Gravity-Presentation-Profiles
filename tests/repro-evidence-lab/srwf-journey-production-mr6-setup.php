@@ -111,6 +111,21 @@ if ( empty( $inbox_setup['steps']['runtime_readiness']['outcome'] )
     throw new RuntimeException( 'MR-6 Inbox runtime readiness was not established: ' . wp_json_encode( $inbox_setup ) );
 }
 
+if ( empty( $manifest['routes']['shortcode']['page_id'] ) ) {
+    throw new RuntimeException( 'MR-6 canonical frontend Inbox page is unavailable.' );
+}
+$inbox_page_id = (int) $manifest['routes']['shortcode']['page_id'];
+$page_result = wp_update_post(
+    array(
+        'ID' => $inbox_page_id,
+        'post_content' => '[gravityflow page="inbox" form="' . $form_id . '"]',
+    ),
+    true
+);
+if ( is_wp_error( $page_result ) || (int) $page_result !== $inbox_page_id ) {
+    throw new RuntimeException( 'MR-6 could not scope the existing synthetic Inbox page to the Journey form.' );
+}
+
 $rtl_source = __DIR__ . '/srwf-journey-production-mr6-rtl-host-control.php';
 $rtl_target = trailingslashit( WPMU_PLUGIN_DIR ) . 'gpp-srwf-journey-production-mr6-rtl-host-control.php';
 wp_mkdir_p( WPMU_PLUGIN_DIR );
@@ -124,6 +139,8 @@ $manifest['mr6'] = array(
     'operations_setup_status' => $operations_setup['status'],
     'inbox_setup_status' => $inbox_setup['status'],
     'inbox_runtime_readiness' => $inbox_setup['steps']['runtime_readiness']['outcome'],
+    'inbox_page_id' => $inbox_page_id,
+    'inbox_form_scoped' => true,
     'rtl_host_control_enabled' => true,
     'rtl_host_control' => basename( $rtl_target ),
 );
