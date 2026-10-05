@@ -194,16 +194,12 @@
 
 /*
  * MR-5 terminal convergence is admitted only by the server-emitted result
- * marker produced from fresh Approved/Rejected host truth. The native nodes
- * stay in the DOM and Gravity Flow remains their owner; this presentation
- * layer removes only the competing completed-case surfaces. The separately
- * authorized GPP dossier Print utility is intentionally not selected here.
+ * marker produced from fresh Approved/Rejected host truth. Terminal case
+ * identity is omitted by the server renderer itself; CSS only suppresses the
+ * proven competing completed-case host regions. The native nodes stay in the
+ * DOM and Gravity Flow remains their owner. The separately authorized GPP
+ * dossier Print utility is intentionally not selected here.
  */
-.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"] .gpp-entry-journey__case-context,
-.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"] .gpp-entry-journey__case-context {
-    display: none;
-}
-
 .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #gravityflow-status-box-container, .gravityflow-timeline, .detail-view-print),
 .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #gravityflow-status-box-container, .gravityflow-timeline, .detail-view-print) {
     display: none;
