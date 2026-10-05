@@ -80,6 +80,8 @@ async function terminalSurfaceInventory(page) {
       result: '[data-gpp-entry-journey-result]',
       identity: '[data-gpp-entry-journey-result] .gpp-entry-journey__case-context',
       dossier: '.gpp-entry-dossier[data-gpp-entry-detail="ready"]',
+      workflow_region: '#postbox-container-1',
+      timeline_region: '#postbox-container-2',
       status_box: '.gravityflow-status-box',
       native_print: '.detail-view-print',
       gpp_print: '[data-gpp-print-utility="dossier"]',
@@ -106,7 +108,8 @@ async function assertTerminalResultOnly(page, state, route) {
   if(/داوطلب|کد ملی|JRN-PROD-|Journey Approve|Journey Reject/.test(text)) throw new Error(`Terminal result leaked case identity: ${text}`);
   if(state==='rejected' && /technical|خطای فنی|مشکل فنی/i.test(text)) throw new Error(`Rejected was presented as a technical error: ${text}`);
   const surfaces=await terminalSurfaceInventory(page);
-  for(const key of ['identity','dossier','status_box','native_print','timeline','entry_table','correction']) if(surfaces[key].visible!==0) throw new Error(`Competing terminal surface remained visible (${key}): ${JSON.stringify(surfaces)}`);
+  if(surfaces.identity.dom!==0) throw new Error(`Terminal identity remained in server markup: ${JSON.stringify(surfaces.identity)}`);
+  for(const key of ['dossier','workflow_region','timeline_region','status_box','native_print','timeline','entry_table','correction']) if(surfaces[key].visible!==0) throw new Error(`Competing terminal surface remained visible (${key}): ${JSON.stringify(surfaces)}`);
   if(surfaces.result.visible!==1||surfaces.gpp_print.visible!==1) throw new Error(`Terminal Result/Print visibility wrong: ${JSON.stringify(surfaces)}`);
   if((await nativeActions(page)).length!==0) throw new Error('Stale native workflow actions remained visible after terminal truth.');
   return {text,surfaces,return_control:await assertReturn(page,route)};
@@ -118,6 +121,7 @@ await login(page, manifest.users.operator.login, operatorPassword);
 await test('SRWF-PROD-REVIEW-001','Review preserves dossier/native actions and one canonical return',async()=>{
   await page.goto(frontendEntryUrl(manifest.routes.shortcode,manifest.entries.invalid),{waitUntil:'networkidle'});
   if(await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count()!==1) throw new Error('Entry Detail dossier missing.');
+  if(await page.locator('#postbox-container-1:visible').count()!==1 || await page.locator('#postbox-container-2:visible').count()!==1) throw new Error('Terminal region suppression leaked into Review.');
   const actions=await nativeActions(page); if(actions.map(x=>x.value).join(',')!=='approved,rejected,revert'||!actions.every(x=>x.onclick.includes('handleApprovalStepButtonClick'))) throw new Error(`Native actions changed: ${JSON.stringify(actions)}`);
   if(await page.locator('[data-gpp-entry-journey-result]:visible').count()!==0) throw new Error('Terminal suppression leaked into Review.');
   if(await page.locator('.gpp-entry-journey button, .gpp-entry-journey-result button').count()!==0) throw new Error('GPP manufactured workflow buttons.');
@@ -196,5 +200,5 @@ await test('SRWF-PROD-MOBILE-RTL-A11Y-001','terminal Result-only stays bounded a
 });
 await test('SRWF-PROD-NO-TECHNICAL-ERROR-001','no invented Technical Error taxonomy exists',async()=>{const html=await page.content();if(/data-gpp-entry-journey-result=["']technical/i.test(html)||/Technical Error|خطای فنی|مشکل فنی/i.test(html))throw new Error('Technical Error presentation appeared.');return {technical_error_result_count:0};});
 
-await browser.close(); fs.mkdirSync(artifactDir,{recursive:true}); fs.writeFileSync(`${artifactDir}/srwf-journey-production-browser.json`,JSON.stringify({schema_version:'1.1.0',runtime:'REPRODUCIBLE_PINNED_LAB',results},null,2)+'\n');
+await browser.close(); fs.mkdirSync(artifactDir,{recursive:true}); fs.writeFileSync(`${artifactDir}/srwf-journey-production-browser.json`,JSON.stringify({schema_version:'1.2.0',runtime:'REPRODUCIBLE_PINNED_LAB',results},null,2)+'\n');
 const failed=results.filter(x=>x.status!=='PASS'); if(failed.length){console.error(JSON.stringify({failed},null,2));process.exit(1);} console.log(`SRWF_JOURNEY_PRODUCTION_BROWSER_PASS ${results.length}`);
