@@ -132,7 +132,7 @@ jobs:
           cp -a /tmp/gravity-theme-builder/themes/srwf-registration/src/. "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/"
           grep -q '^ \* Version: 0\.1\.19$' "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/srwf-registration-theme.php"
 
-      - name: Install exact WU21 Hello Elementor forward host
+      - name: Install exact WU21 Hello Elementor MR-4 host
         shell: bash
         run: |
           set -euo pipefail
@@ -143,8 +143,6 @@ jobs:
           tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-elementor --strip-components=1
           mv /tmp/hello-elementor "$WU21_WP_PATH/wp-content/themes/hello-elementor"
           test "$(php "$WU21_WP_CLI" theme get hello-elementor --field=version --path="$WU21_WP_PATH")" = "$WU21_HELLO_VERSION"
-          php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
-          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = 'hello-elementor'
 
       - name: Activate exact host packages
         shell: bash
@@ -233,15 +231,30 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==13||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
 
-          # MR-2 action-state closure runs against fresh synthetic Review entries
-          # created inside the same admitted production presentation/runtime.
+          # MR-2 remains on the historical Journey host. MR-4 switches to the
+          # pinned forward host only for its own acceptance boundary below.
           node tests/repro-evidence-lab/srwf-journey-production-mr2-action-state-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr2-action-state-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-mr2-action-state-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==8||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
 
+          base_theme="$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")"
+          test -n "$base_theme"
+          test "$base_theme" != 'hello-elementor'
+          php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = 'hello-elementor'
+
           # MR-4 closes correction-mode Entry Detail composition while keeping
           # Gravity Flow / Gravity Forms authoritative for the editable step.
+          set +e
           node tests/repro-evidence-lab/srwf-journey-production-mr4-browser.mjs
+          mr4_status=$?
+          set -e
+
+          # Restore the historical host before the pre-existing downstream
+          # Journey probes, even when MR-4 itself fails.
+          php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
+          test "$mr4_status" -eq 0
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr4-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-mr4-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==6||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
 
