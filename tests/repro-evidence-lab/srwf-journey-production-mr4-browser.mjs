@@ -6,31 +6,21 @@ const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
 const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
-const operatorPassword = 'wu21-bootstrap-pass-2026';
 if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned MR-4 journey environment is incomplete.');
 
 function wpEval(code) {
-  const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], {
-    encoding: 'utf8',
-    env: process.env,
-  });
+  const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
   if (result.status !== 0) throw new Error(`${result.stderr}\n${result.stdout}`);
   return result.stdout.trim();
 }
 
-const manifest = JSON.parse(
-  wpEval('echo wp_json_encode(get_option("gpp_srwf_journey_host_manifest"),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);')
-);
+const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_srwf_journey_host_manifest"),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
 const formId = Number(manifest.form_id);
 const reviewId = Number(manifest.steps.review_id);
 const correctionId = Number(manifest.steps.correction_id);
 const operatorId = Number(manifest.users.operator.id);
 const conditionalFieldId = Number(manifest.production_presentation?.conditional_field_id || 0);
-if (
-  manifest.production_presentation?.entry_detail_setup_status !== 'COMPLETED'
-  || manifest.production_presentation?.gtb_registration_opt_in !== true
-  || conditionalFieldId !== 5
-) {
+if (manifest.production_presentation?.entry_detail_setup_status !== 'COMPLETED' || manifest.production_presentation?.gtb_registration_opt_in !== true || conditionalFieldId !== 5) {
   throw new Error(`MR-4 production fixture is incomplete: ${JSON.stringify(manifest.production_presentation)}`);
 }
 
@@ -65,15 +55,16 @@ function hostState(entryId) {
 }
 
 function createReviewEntry(label) {
+  const safe = String(label).replace(/[^A-Z0-9_-]/gi, '-');
   const raw = wpEval(`
     wp_set_current_user(${operatorId});
     $entry_id=GFAPI::add_entry(array(
       'form_id'=>${formId},
       'created_by'=>${operatorId},
-      '1'=>'MR4-BASE-${label}',
+      '1'=>'MR4-BASE-${safe}',
       '2'=>'Journey',
-      '3'=>'MR4 ${label}',
-      '4'=>'MR4-${label}'
+      '3'=>'MR4 ${safe}',
+      '4'=>'MR4-${safe}'
     ));
     if (is_wp_error($entry_id) || !$entry_id) throw new RuntimeException('MR4 entry creation failed.');
     $api=new Gravity_Flow_API(${formId});
@@ -88,23 +79,29 @@ function createReviewEntry(label) {
   return id;
 }
 
-async function login(page) {
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', manifest.users.operator.login);
-  await page.fill('#user_pass', operatorPassword);
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    page.click('#wp-submit'),
-  ]);
-  if (new URL(page.url()).pathname.endsWith('/wp-login.php')) throw new Error('MR-4 operator authentication failed.');
+async function auth(context) {
+  const cookies = JSON.parse(wpEval(`
+    $expiry=time()+3600;
+    echo wp_json_encode(array(
+      array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$expiry,'auth'),'expires'=>$expiry),
+      array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$expiry,'logged_in'),'expires'=>$expiry)
+    ));
+  `));
+  await context.addCookies(cookies.map(cookie => ({
+    name: cookie.name,
+    value: cookie.value,
+    domain: '127.0.0.1',
+    path: '/',
+    expires: Number(cookie.expires),
+    httpOnly: true,
+    secure: false,
+    sameSite: 'Lax',
+  })));
 }
 
 async function nativeActions(page) {
   return page.locator('.gravityflow-status-box .gravityflow-action-buttons button').evaluateAll(nodes =>
-    nodes.filter(node => node.offsetParent !== null).map(node => ({
-      value: node.value,
-      onclick: node.getAttribute('onclick') || '',
-    }))
+    nodes.filter(node => node.offsetParent !== null).map(node => ({ value: node.value, onclick: node.getAttribute('onclick') || '' }))
   );
 }
 
@@ -117,21 +114,18 @@ async function accept(page, value) {
     await d.accept();
     resolve();
   }));
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    button.click(),
-    dialog,
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), button.click(), dialog]);
   return dialogInfo;
+}
+
+function nativeCorrectionSubmit(page) {
+  return page.locator('#gravityflow_update_button:visible,#gravityflow_submit_button:visible').first();
 }
 
 async function printState(page) {
   return page.evaluate(() => {
     const nodes = [...document.querySelectorAll('[data-gpp-print-utility="dossier"]')];
-    return {
-      dom_count: nodes.length,
-      visible_count: nodes.filter(node => node.offsetParent !== null && getComputedStyle(node).display !== 'none').length,
-    };
+    return { dom_count: nodes.length, visible_count: nodes.filter(node => node.offsetParent !== null && getComputedStyle(node).display !== 'none').length };
   });
 }
 
@@ -141,22 +135,26 @@ async function gtbStyles(page) {
     .filter(link => link.id === 'srwf-registration-theme-css' || link.href.includes('/srwf-registration-theme/srwf-registration.css')));
 }
 
+async function pageOverflow(page) {
+  return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+}
+
 async function correctionGeometry(page) {
   return page.evaluate(() => {
-    const html = document.documentElement;
     const orientation = document.querySelector('[data-gpp-entry-journey="correction"]');
     const wrapper = document.querySelector('.gform_wrapper');
     const input = document.querySelector('input[name="input_1"]');
-    const submit = document.querySelector('.gform_footer input[type="submit"],.gform_footer button[type="submit"]');
+    const submit = document.querySelector('#gravityflow_update_button,#gravityflow_submit_button');
     const rect = element => element ? element.getBoundingClientRect() : null;
     const simplify = value => value ? { left: value.left, right: value.right, width: value.width, height: value.height } : null;
     return {
       viewport: window.innerWidth,
-      overflow: html.scrollWidth - window.innerWidth,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
       orientation: simplify(rect(orientation)),
       wrapper: simplify(rect(wrapper)),
       input: simplify(rect(input)),
       submit: simplify(rect(submit)),
+      submit_id: submit?.id || null,
       labels: input?.labels?.length || 0,
     };
   });
@@ -173,12 +171,13 @@ async function test(id, name, fn) {
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+context.setDefaultTimeout(10000);
+context.setDefaultNavigationTimeout(15000);
+await auth(context);
 const page = await context.newPage();
-await login(page);
 
 const activeTheme = wpEval('echo get_stylesheet();');
 if (activeTheme !== 'hello-elementor') throw new Error(`Forward target Hello Elementor host is not active: ${activeTheme}`);
-
 const entryId = createReviewEntry('END-TO-END');
 
 await test('SRWF-PROD-MR4-REVIEW-001', 'Review remains native-authoritative before correction', async () => {
@@ -187,14 +186,7 @@ await test('SRWF-PROD-MR4-REVIEW-001', 'Review remains native-authoritative befo
   const actions = await nativeActions(page);
   const print = await printState(page);
   const gtb = await gtbStyles(page);
-  if (
-    state.current_step?.id !== reviewId
-    || state.current_step?.type !== 'approval'
-    || actions.map(action => action.value).join(',') !== 'approved,rejected,revert'
-    || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick'))
-    || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').count() !== 1
-    || print.visible_count !== 1
-  ) {
+  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').count() !== 1 || print.visible_count !== 1) {
     throw new Error(`Review baseline failed: ${JSON.stringify({ state, actions, print, gtb })}`);
   }
   return { active_theme: activeTheme, state, actions, print, gtb_stylesheets_observed: gtb };
@@ -206,8 +198,7 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input and 
   await page.goto(frontendEntryUrl(entryId), { waitUntil: 'networkidle' });
   const dialog = await accept(page, 'revert');
   const state = hostState(entryId);
-  const visibleInputs = [...new Set(await page.locator('input[name^="input_"]:visible,textarea[name^="input_"]:visible,select[name^="input_"]:visible')
-    .evaluateAll(nodes => nodes.map(node => node.getAttribute('name')).filter(Boolean)))].sort();
+  const visibleInputs = [...new Set(await page.locator('input[name^="input_"]:visible,textarea[name^="input_"]:visible,select[name^="input_"]:visible').evaluateAll(nodes => nodes.map(node => node.getAttribute('name')).filter(Boolean)))].sort();
   const orientationCount = await page.locator('[data-gpp-entry-journey="correction"]:visible').count();
   const gppOwnedInputs = await page.locator('.gpp-entry-journey input,.gpp-entry-journey textarea,.gpp-entry-journey select').count();
   const unauthorized = await page.locator('input[name="input_2"]:visible,input[name="input_3"]:visible,input[name="input_4"]:visible').count();
@@ -216,9 +207,11 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input and 
   const visual = await page.evaluate(() => {
     const wrapper = document.querySelector('.gform_wrapper');
     const input = document.querySelector('input[name="input_1"]');
-    if (!wrapper || !input) return null;
+    const submit = document.querySelector('#gravityflow_update_button,#gravityflow_submit_button');
+    if (!wrapper || !input || !submit) return null;
     const wrapperStyle = getComputedStyle(wrapper);
     const inputStyle = getComputedStyle(input);
+    const submitStyle = getComputedStyle(submit);
     return {
       wrapper_border_radius: wrapperStyle.borderRadius,
       wrapper_background: wrapperStyle.backgroundColor,
@@ -226,65 +219,30 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input and 
       wrapper_box_shadow: wrapperStyle.boxShadow,
       input_height: input.getBoundingClientRect().height,
       input_border_radius: inputStyle.borderRadius,
+      submit_id: submit.id,
+      submit_height: submit.getBoundingClientRect().height,
+      submit_border_radius: submitStyle.borderRadius,
     };
   });
   const field5Visible = await page.locator('input[name="input_5"]:visible').count();
-  if (
-    !dialog
-    || state.current_step?.id !== correctionId
-    || state.current_step?.type !== 'user_input'
-    || state.current_step?.can_update !== true
-    || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5'])
-    || orientationCount !== 1
-    || gppOwnedInputs !== 0
-    || unauthorized !== 0
-    || visibleInputs.join(',') !== 'input_1'
-    || field5Visible !== 0
-    || print.visible_count !== 0
-    || !visual
-    || visual.wrapper_border_radius !== '14px'
-    || visual.wrapper_border_style !== 'solid'
-    || visual.wrapper_background !== 'rgb(255, 255, 255)'
-    || visual.wrapper_box_shadow === 'none'
-    || visual.input_height < 44
-    || visual.input_border_radius !== '8px'
-  ) {
+  if (!dialog || state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || state.current_step?.can_update !== true || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5']) || orientationCount !== 1 || gppOwnedInputs !== 0 || unauthorized !== 0 || visibleInputs.join(',') !== 'input_1' || field5Visible !== 0 || print.visible_count !== 0 || !visual || visual.wrapper_border_radius !== '14px' || visual.wrapper_border_style !== 'solid' || visual.wrapper_background !== 'rgb(255, 255, 255)' || visual.wrapper_box_shadow === 'none' || visual.input_height < 44 || visual.input_border_radius !== '8px' || visual.submit_id !== 'gravityflow_update_button' || visual.submit_height < 44 || visual.submit_border_radius !== '8px') {
     throw new Error(`Correction admission/composition failed: ${JSON.stringify({ dialog, state, visibleInputs, orientationCount, gppOwnedInputs, unauthorized, print, gtb, visual, field5Visible })}`);
   }
-  return {
-    dialog,
-    state,
-    visible_inputs: visibleInputs,
-    print,
-    gtb_stylesheets_observed: gtb,
-    gtb_coexistence_proof: 'computed correction-family tokens remain authoritative even if the separately scoped GTB asset is present',
-    visual,
-  };
+  return { dialog, state, visible_inputs: visibleInputs, print, gtb_stylesheets_observed: gtb, visual };
 });
 
 await test('SRWF-PROD-MR4-CONDITIONAL-001', 'native Gravity Forms conditional logic remains live', async () => {
   const input1 = page.locator('input[name="input_1"]').first();
   await input1.fill('SHOW-MR4');
-  await page.waitForFunction(() => {
-    const node = document.querySelector('input[name="input_5"]');
-    return Boolean(node && node.offsetParent !== null);
-  });
+  await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const field5 = page.locator('input[name="input_5"]').first();
   await field5.fill('CONDITIONAL-PRESERVED');
   await input1.fill('HIDE-MR4');
-  await page.waitForFunction(() => {
-    const node = document.querySelector('input[name="input_5"]');
-    return Boolean(node && node.offsetParent === null);
-  });
+  await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent === null); });
   await input1.fill('SHOW-MR4');
-  await page.waitForFunction(() => {
-    const node = document.querySelector('input[name="input_5"]');
-    return Boolean(node && node.offsetParent !== null);
-  });
+  await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const preserved = await field5.inputValue();
-  if (preserved !== 'CONDITIONAL-PRESERVED') {
-    throw new Error(`Native conditional field value was not preserved: ${preserved}`);
-  }
+  if (preserved !== 'CONDITIONAL-PRESERVED') throw new Error(`Native conditional field value was not preserved: ${preserved}`);
   return { controller: await input1.inputValue(), conditional_value: preserved };
 });
 
@@ -292,115 +250,70 @@ await test('SRWF-PROD-MR4-VALIDATION-001', 'native validation failure stays in c
   const input1 = page.locator('input[name="input_1"]').first();
   const field5 = page.locator('input[name="input_5"]').first();
   await input1.fill('SHOW-MR4');
-  await page.waitForFunction(() => {
-    const node = document.querySelector('input[name="input_5"]');
-    return Boolean(node && node.offsetParent !== null);
-  });
-  await field5.fill('');
-  const submit = page.locator(`#gform_submit_button_${formId},form[id^="gform_"] input[type="submit"],form[id^="gform_"] button[type="submit"]`).filter({ visible: true }).last();
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    submit.click(),
-  ]);
+  await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
+  await field5.fill('INVALID-MR4');
+  const submit = nativeCorrectionSubmit(page);
+  if (await submit.count() !== 1 || await submit.getAttribute('id') !== 'gravityflow_update_button') throw new Error('Pinned native User Input update button is unavailable.');
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), submit.click()]);
   const state = hostState(entryId);
   const restoredController = await page.locator('input[name="input_1"]').first().inputValue();
   const field5Node = page.locator('input[name="input_5"]').first();
   const field5Id = await field5Node.getAttribute('id');
+  const restoredInvalidValue = await field5Node.inputValue();
   const errorState = await page.evaluate(id => {
     const input = id ? document.getElementById(id) : null;
     const field = input?.closest('.gfield');
     const messages = field ? [...field.querySelectorAll('.gfield_validation_message,.validation_message')] : [];
-    return {
-      aria_invalid: input?.getAttribute('aria-invalid') || null,
-      field_error: Boolean(field?.classList.contains('gfield_error')),
-      visible_messages: messages.filter(node => node.offsetParent !== null).map(node => node.textContent.replace(/\s+/g, ' ').trim()),
-    };
+    return { aria_invalid: input?.getAttribute('aria-invalid') || null, field_error: Boolean(field?.classList.contains('gfield_error')), visible_messages: messages.filter(node => node.offsetParent !== null).map(node => node.textContent.replace(/\s+/g, ' ').trim()) };
   }, field5Id);
   const print = await printState(page);
-  if (
-    state.current_step?.id !== correctionId
-    || state.current_step?.type !== 'user_input'
-    || restoredController !== 'SHOW-MR4'
-    || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 1
-    || await field5Node.count() !== 1
-    || (!errorState.field_error && errorState.aria_invalid !== 'true' && errorState.visible_messages.length === 0)
-    || print.visible_count !== 0
-    || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 0
-  ) {
-    throw new Error(`Validation contract failed: ${JSON.stringify({ state, restoredController, errorState, print })}`);
+  if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || restoredController !== 'SHOW-MR4' || restoredInvalidValue !== 'INVALID-MR4' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 1 || await field5Node.count() !== 1 || (!errorState.field_error && errorState.aria_invalid !== 'true' && errorState.visible_messages.length === 0) || print.visible_count !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 0) {
+    throw new Error(`Validation contract failed: ${JSON.stringify({ state, restoredController, restoredInvalidValue, errorState, print })}`);
   }
-  return { state, restored_controller: restoredController, error_state: errorState, print };
+  return { state, restored_controller: restoredController, restored_invalid_value: restoredInvalidValue, error_state: errorState, print };
 });
 
-await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction stays usable at 1440/390/320 with native focus semantics', async () => {
+await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow and stays usable at 1440/390/320 with native focus semantics', async () => {
   const measurements = [];
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-    await page.waitForTimeout(50);
+    const responsiveEntryId = createReviewEntry(`RESP-${width}`);
+    await page.goto(frontendEntryUrl(responsiveEntryId), { waitUntil: 'networkidle' });
+    const baselineOverflow = await pageOverflow(page);
+    await accept(page, 'revert');
     const input = page.locator('input[name="input_1"]').first();
     await input.focus();
-    const focus = await input.evaluate(node => {
-      const style = getComputedStyle(node);
-      return { outline_style: style.outlineStyle, outline_width: style.outlineWidth };
-    });
+    const focus = await input.evaluate(node => { const style = getComputedStyle(node); return { outline_style: style.outlineStyle, outline_width: style.outlineWidth }; });
     const geometry = await correctionGeometry(page);
-    if (
-      geometry.overflow > 1
-      || !geometry.orientation
-      || !geometry.wrapper
-      || !geometry.input
-      || !geometry.submit
-      || geometry.input.left < -1
-      || geometry.input.right > width + 1
-      || geometry.submit.left < -1
-      || geometry.submit.right > width + 1
-      || geometry.input.height < 44
-      || geometry.submit.height < 44
-      || geometry.labels < 1
-      || focus.outline_style === 'none'
-      || parseFloat(focus.outline_width || '0') < 1
-    ) {
-      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ geometry, focus })}`);
+    const submit = nativeCorrectionSubmit(page);
+    if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || focus.outline_style === 'none' || parseFloat(focus.outline_width || '0') < 1) {
+      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus })}`);
     }
-    measurements.push({ width, geometry, focus });
-    if (width !== 1440) {
-      await page.screenshot({ path: `${artifactDir}/srwf-journey-mr4-correction-${width}.png`, fullPage: true });
-    }
+    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus });
+    if (width !== 1440) await page.screenshot({ path: `${artifactDir}/srwf-journey-mr4-correction-${width}.png`, fullPage: true });
   }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(frontendEntryUrl(entryId), { waitUntil: 'networkidle' });
   return measurements;
 });
 
 await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to Review and restores Review utilities', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(frontendEntryUrl(entryId), { waitUntil: 'networkidle' });
   const input1 = page.locator('input[name="input_1"]').first();
   await input1.fill('SHOW-MR4');
-  await page.waitForFunction(() => {
-    const node = document.querySelector('input[name="input_5"]');
-    return Boolean(node && node.offsetParent !== null);
-  });
+  await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const field5 = page.locator('input[name="input_5"]').first();
   await field5.fill('VALID-CONDITIONAL');
-  const submit = page.locator(`#gform_submit_button_${formId},form[id^="gform_"] input[type="submit"],form[id^="gform_"] button[type="submit"]`).filter({ visible: true }).last();
+  const submit = nativeCorrectionSubmit(page);
+  if (await submit.count() !== 1 || await submit.getAttribute('id') !== 'gravityflow_update_button') throw new Error('Pinned native User Input update button is unavailable for completion.');
   await submit.focus();
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
-    page.keyboard.press('Enter'),
-  ]);
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.keyboard.press('Enter')]);
   const state = hostState(entryId);
   const actions = await nativeActions(page);
   const print = await printState(page);
   const gtb = await gtbStyles(page);
-  if (
-    state.current_step?.id !== reviewId
-    || state.current_step?.type !== 'approval'
-    || state.field_1 !== 'SHOW-MR4'
-    || state.field_5 !== 'VALID-CONDITIONAL'
-    || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 0
-    || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 1
-    || actions.map(action => action.value).join(',') !== 'approved,rejected,revert'
-    || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick'))
-    || print.visible_count !== 1
-  ) {
+  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || state.field_1 !== 'SHOW-MR4' || state.field_5 !== 'VALID-CONDITIONAL' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 1 || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || print.visible_count !== 1) {
     throw new Error(`Correction completion/Review regression failed: ${JSON.stringify({ state, actions, print, gtb })}`);
   }
   return { state, actions, print, gtb_stylesheets_observed: gtb };
@@ -409,10 +322,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
 wpEval("delete_option('gpp_srwf_mr4_expand_editable_fields'); echo '1';");
 await browser.close();
 fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(
-  `${artifactDir}/srwf-journey-production-mr4-browser.json`,
-  JSON.stringify({ schema_version: '1.0.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
-);
+fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr4-browser.json`, JSON.stringify({ schema_version: '1.1.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
 const failed = results.filter(result => result.status !== 'PASS');
 if (failed.length) {
   console.error(JSON.stringify({ failed }, null, 2));
