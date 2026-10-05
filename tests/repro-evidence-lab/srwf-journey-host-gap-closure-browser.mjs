@@ -315,9 +315,39 @@ await capture('SRWF-GAP-RESULT-RAW-DETAIL-001','Terminal result versus native ra
   const state=await page.evaluate(()=>{
     const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden';};
     const table=document.querySelector('.entry-detail-view');
-    return {result_count:[...document.querySelectorAll('[data-gpp-entry-journey-result="approved"]')].filter(visible).length,native_table_present:Boolean(table),native_table_visible:Boolean(table&&visible(table)),native_table_display:table?getComputedStyle(table).display:null,status_box_visible:[...document.querySelectorAll('.gravityflow-status-box')].filter(visible).length,timeline_visible:[...document.querySelectorAll('.gravityflow-timeline')].filter(visible).length};
+    const workflowRegion=document.querySelector('#postbox-container-1');
+    const timelineRegion=document.querySelector('#postbox-container-2');
+    const identity=document.querySelector('[data-gpp-entry-journey-result="approved"] .gpp-entry-journey__case-context');
+    return {
+      result_count:[...document.querySelectorAll('[data-gpp-entry-journey-result="approved"]')].filter(visible).length,
+      identity_present:Boolean(identity),
+      native_table_present:Boolean(table),
+      native_table_visible:Boolean(table&&visible(table)),
+      native_table_display:table?getComputedStyle(table).display:null,
+      workflow_region_present:Boolean(workflowRegion),
+      workflow_region_visible:Boolean(workflowRegion&&visible(workflowRegion)),
+      timeline_region_present:Boolean(timelineRegion),
+      timeline_region_visible:Boolean(timelineRegion&&visible(timelineRegion)),
+      status_box_visible:[...document.querySelectorAll('.gravityflow-status-box')].filter(visible).length,
+      timeline_visible:[...document.querySelectorAll('.gravityflow-timeline')].filter(visible).length,
+      native_print_visible:[...document.querySelectorAll('.detail-view-print')].filter(visible).length,
+      gpp_print_visible:[...document.querySelectorAll('[data-gpp-print-utility="dossier"]')].filter(visible).length,
+    };
   });
-  return {entry_id:id,host:hostState(id),dom:state};
+  const closed = state.result_count===1
+    && state.identity_present===false
+    && state.native_table_present===true
+    && state.native_table_visible===false
+    && state.workflow_region_present===true
+    && state.workflow_region_visible===false
+    && state.timeline_region_present===true
+    && state.timeline_region_visible===false
+    && state.status_box_visible===0
+    && state.timeline_visible===0
+    && state.native_print_visible===0
+    && state.gpp_print_visible===1;
+  if(!closed) throw new Error(`MR-5 terminal-result-versus-raw-detail gap remains open: ${JSON.stringify(state)}`);
+  return {entry_id:id,host:hostState(id),dom:state,mr5_closed:true};
 });
 
 await capture('SRWF-GAP-E-CORRECTION-001','Native User Input validation/navigation/Print isolation',async()=>{
@@ -384,7 +414,7 @@ await capture('SRWF-GAP-G-STALE-TAB-001','Stale Approval action from a second ta
 
 await browser.close();
 
-const output={schema_version:'1.0.0',data_class:'SYNTHETIC_NON_PII',scope:'QUALIFICATION_ONLY',runtime:manifest.runtime,results};
+const output={schema_version:'1.1.0',data_class:'SYNTHETIC_NON_PII',scope:'QUALIFICATION_ONLY',runtime:manifest.runtime,results};
 fs.writeFileSync(`${artifactDir}/srwf-journey-host-gap-closure-browser.json`,JSON.stringify(output,null,2)+'\n');
 const errors=results.filter(r=>r.status==='ERROR');
 console.log(`SRWF_JOURNEY_HOST_GAP_CLOSURE_CAPTURED ${results.length}`);
