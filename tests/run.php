@@ -70,6 +70,7 @@ $cases = array(
     'timeline-date-provider-absent.php',
     'timeline-utc-source-evidence.php',
     'wu18-workflow-trigger-contract.php',
+    'release-qualification-gate-contract.php',
     'gravity-flow-host-dependency-regressions.php',
     'entry-detail-full-width-workflow-panel-presentation.php',
     'entry-detail-full-width-asset-scope.php',
