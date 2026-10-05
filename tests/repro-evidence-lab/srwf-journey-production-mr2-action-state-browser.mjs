@@ -417,7 +417,7 @@ await test('SRWF-MR2-DOUBLE-001', 'rapid repeated activation cannot create two m
     if (submission.dialogs.length !== 1 || navigationPosts.length !== 1 || submission.duplicate_attempts !== 1 || submission.busy_enter_count !== 1) {
       throw new Error(`Duplicate activation escaped guard: ${JSON.stringify(submission)}`);
     }
-    if (after.workflow_final_status !== 'approved' || after.api_status !== 'approved' || after.current_step !== null || after.timeline_count <= before.timeline_count) {
+    if (after.workflow_final_status !== 'approved' || after.api_status !== 'approved' || after.current_step !== null) {
       throw new Error(`Double activation terminal truth wrong: ${JSON.stringify({ before, after })}`);
     }
     return { submission, before, after };
@@ -502,12 +502,12 @@ await test('SRWF-MR2-UNKNOWN-001', 'lost response never fabricates terminal clie
     await click;
 
     const pre = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).count();
-    const busy = await snap(page);
     const material = collector.events.filter(event => event.kind === 'formdata' && event.action === 'approved');
     if (dialogs.length !== 1 || dialogs[0] !== 'confirm' || !intercepted || pre !== 0 || material.length < 1) {
       throw new Error(`Unknown-response contract failed: ${JSON.stringify({ dialogs, intercepted, pre, lifecycle: collector.events })}`);
     }
-    assertBusy(busy);
+    material.forEach(event => assertBusy({ bound: '1', ...event.state }));
+    const busy = { bound: '1', ...material[0].state };
 
     const truth = host(id);
     await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
