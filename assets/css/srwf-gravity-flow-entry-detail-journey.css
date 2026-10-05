@@ -264,9 +264,9 @@
 /*
  * Pinned Hello/GF/Flow runtime can zero the computed outline width after the
  * native control is reached through real keyboard traversal. Preserve a visible
- * focus indicator at the same server-admitted correction boundary using both
- * outline paint and an independent focus ring. These declarations do not alter
- * state, editability, geometry or submission behavior.
+ * focus indicator at the same server-admitted correction boundary only; the
+ * priority escalation is restricted to outline paint and does not alter state,
+ * editability, geometry or submission behavior.
  */
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:focus,
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:focus-visible,
@@ -284,7 +284,6 @@
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button:focus-visible {
     outline: 3px solid #1d4ed8 !important;
     outline-offset: 3px;
-    box-shadow: 0 0 0 3px #93c5fd !important;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_validation_errors,
