@@ -73,6 +73,42 @@ async function accept(page, value) {
   let dialogInfo=null; const dialog=new Promise(resolve=>page.once('dialog',async d=>{dialogInfo={type:d.type(),message:d.message()};await d.accept();resolve();}));
   await Promise.all([page.waitForNavigation({waitUntil:'networkidle'}),button.click(),dialog]); return dialogInfo;
 }
+async function terminalSurfaceInventory(page) {
+  return page.evaluate(() => {
+    const visible = node => !!node && node.offsetParent !== null && getComputedStyle(node).visibility !== 'hidden';
+    const describe = (node, index) => ({
+      index,
+      tag: node.tagName.toLowerCase(),
+      id: node.id || null,
+      class: typeof node.className === 'string' && node.className.trim() ? node.className.trim() : null,
+      visible: visible(node),
+      text: (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240)
+    });
+    const form = document.querySelector('.gravityflow_workflow_detail form');
+    const root = document.querySelector('.gravityflow_workflow_detail');
+    const selectors = {
+      result: '[data-gpp-entry-journey-result]',
+      dossier: '.gpp-entry-dossier[data-gpp-entry-detail="ready"]',
+      status_box: '.gravityflow-status-box',
+      native_print: '.detail-view-print',
+      gpp_print: '[data-gpp-print-utility="dossier"]',
+      timeline: '.gravityflow-timeline, .gravityflow_workflow_timeline, .gravityflow-timeline-container',
+      entry_table: '.entry-details, .gravityflow-entry-detail, table',
+      correction: '[data-gpp-entry-journey="correction"]',
+      native_back: '.gravityflow-back-link-container a.back-link',
+      gpp_return: 'a.gpp-entry-journey__return'
+    };
+    const counts = Object.fromEntries(Object.entries(selectors).map(([key, selector]) => {
+      const nodes = [...document.querySelectorAll(selector)];
+      return [key, { dom: nodes.length, visible: nodes.filter(visible).length }];
+    }));
+    return {
+      counts,
+      root_children: root ? [...root.children].map(describe) : [],
+      form_children: form ? [...form.children].map(describe) : []
+    };
+  });
+}
 
 const browser=await chromium.launch({headless:true}); const context=await browser.newContext({viewport:{width:1280,height:900}}); const page=await context.newPage();
 await login(page, manifest.users.operator.login, operatorPassword);
@@ -96,14 +132,14 @@ await test('SRWF-PROD-APPROVE-001','Approve read-back gates Approved result',asy
   const id=manifest.entries.approve; await page.goto(frontendEntryUrl(manifest.routes.shortcode,id),{waitUntil:'networkidle'}); const dialog=await accept(page,'approved'); const state=hostState(id);
   if(!dialog||state.current_step!==null||state.workflow_final_status!=='approved'||state.api_status!=='approved') throw new Error(`Approved truth missing: ${JSON.stringify({dialog,state})}`);
   const result=page.locator('[data-gpp-entry-journey-result="approved"]').first(); const text=await result.innerText(); if(await result.count()!==1||await result.getAttribute('role')!=='status'||!text.includes('پرونده تأیید شد')||!text.includes('Journey Approve')||!text.includes('JRN-PROD-APPROVE')) throw new Error(`Approved presentation wrong: ${text}`);
-  return {state,text,return_control:await assertReturn(page,manifest.routes.shortcode)};
+  return {state,text,terminal_surface:await terminalSurfaceInventory(page),return_control:await assertReturn(page,manifest.routes.shortcode)};
 });
 
 await test('SRWF-PROD-REJECT-001','Reject read-back gates Rejected business result',async()=>{
   const id=manifest.entries.reject; await page.goto(frontendEntryUrl(manifest.routes.shortcode,id),{waitUntil:'networkidle'}); const dialog=await accept(page,'rejected'); const state=hostState(id);
   if(!dialog||state.current_step!==null||state.workflow_final_status!=='rejected'||state.api_status!=='rejected') throw new Error(`Rejected truth missing: ${JSON.stringify({dialog,state})}`);
   const result=page.locator('[data-gpp-entry-journey-result="rejected"]').first(); const text=await result.innerText(); if(await result.count()!==1||!text.includes('پرونده رد شد')||/technical|خطای فنی|مشکل فنی/i.test(text)) throw new Error(`Rejected presentation wrong: ${text}`);
-  return {state,text,return_control:await assertReturn(page,manifest.routes.shortcode)};
+  return {state,text,terminal_surface:await terminalSurfaceInventory(page),return_control:await assertReturn(page,manifest.routes.shortcode)};
 });
 
 await test('SRWF-PROD-CORRECTION-001','Revert exposes only native authorized correction editor',async()=>{
