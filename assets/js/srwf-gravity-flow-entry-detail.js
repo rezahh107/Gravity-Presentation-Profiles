@@ -96,21 +96,28 @@
             event.stopImmediatePropagation();
         }, true);
 
-        form.addEventListener('submit', () => {
+        form.addEventListener('submit', event => {
             const action = hiddenStatus.value;
             if (!MATERIAL_REVIEW_ACTIONS.has(action) || busy) return;
 
-            busy = true;
-            actionRegion.dataset.gppReviewActionBusy = '1';
-            actionRegion.setAttribute('aria-busy', 'true');
-            feedback.hidden = false;
+            // Gravity Flow has already accepted its native confirmation and
+            // populated the host-owned action carrier before this submit event.
+            // Wait until every listener for this submit dispatch has had a chance
+            // to cancel it; only an uncancelled native submission becomes busy.
+            queueMicrotask(() => {
+                if (event.defaultPrevented || busy || !form.isConnected) return;
 
-            // Do not set the native disabled property here. Gravity Forms owns
-            // the accepted submission lifecycle and may still inspect the native
-            // submitter after this event. ARIA conveys the busy/unavailable state;
-            // the capture-phase click guard blocks only later user activations.
-            buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
-        }, true);
+                busy = true;
+                actionRegion.dataset.gppReviewActionBusy = '1';
+                actionRegion.setAttribute('aria-busy', 'true');
+                feedback.hidden = false;
+
+                // Keep the host submitter enabled for Gravity Forms' own accepted
+                // submission lifecycle. ARIA exposes temporary unavailability and
+                // the capture guard blocks only later user activations.
+                buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
+            });
+        });
 
         // A history restoration is a fresh operator interaction lifetime even
         // when the browser restores this exact DOM from bfcache.
