@@ -2,413 +2,58 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 
-const baseUrl = process.env.WU21_BASE_URL || 'http://127.0.0.1:8080';
-const artifactDir = process.env.WU21_ARTIFACT_DIR;
-const wpPath = process.env.WU21_WP_PATH;
-const wpCli = process.env.WU21_WP_CLI;
-const operatorPassword = 'wu21-bootstrap-pass-2026';
-if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned MR-2 environment is incomplete.');
+const baseUrl=process.env.WU21_BASE_URL||'http://127.0.0.1:8080';
+const artifactDir=process.env.WU21_ARTIFACT_DIR,wpPath=process.env.WU21_WP_PATH,wpCli=process.env.WU21_WP_CLI;
+if(!artifactDir||!wpPath||!wpCli)throw new Error('Pinned MR-2 environment is incomplete.');
+function wpEval(code){const r=spawnSync('php',[wpCli,`--path=${wpPath}`,'eval',code],{encoding:'utf8',env:process.env});if(r.status!==0)throw new Error(`${r.stderr}\n${r.stdout}`);return r.stdout.trim();}
+const manifest=JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_srwf_journey_host_manifest"),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
+const formId=Number(manifest.form_id),reviewId=Number(manifest.steps.review_id),correctionId=Number(manifest.steps.correction_id),operatorId=Number(manifest.users.operator.id);
+if(manifest.production_presentation?.entry_detail_setup_status!=='COMPLETED')throw new Error('Production Entry Detail presentation was not admitted.');
 
-function wpEval(code) {
-  const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
-  if (cp.status !== 0) throw new Error(`${cp.stderr}\n${cp.stdout}`);
-  return cp.stdout.trim();
+function urlFor(id){const u=new URL(manifest.routes.shortcode.url);u.searchParams.set('view','entry');u.searchParams.set('id',String(formId));u.searchParams.set('lid',String(id));return u.toString();}
+function createEntry(label){const safe=String(label).replace(/[^A-Z0-9_-]/gi,'-');const raw=wpEval(`wp_set_current_user(${operatorId});$id=GFAPI::add_entry(array('form_id'=>${formId},'created_by'=>${operatorId},'1'=>'MR2-${safe}','2'=>'Journey','3'=>'${safe}','4'=>'JRN-MR2-${safe}'));if(is_wp_error($id)||!$id){exit(2);}$api=new Gravity_Flow_API(${formId});$api->process_workflow((int)$id);$e=GFAPI::get_entry((int)$id);$r=$api->send_to_step($e,${reviewId});if(false===$r||is_wp_error($r)){exit(3);}echo (int)$id;`);const id=Number(raw);if(!Number.isInteger(id)||id<1)throw new Error(`Invalid entry: ${raw}`);return id;}
+function host(id){return JSON.parse(wpEval(`wp_set_current_user(${operatorId});if(!class_exists('Gravity_Flow_Entry_Detail'))require_once gravity_flow()->get_base_path().'/includes/pages/class-entry-detail.php';$e=GFAPI::get_entry(${Number(id)});$api=new Gravity_Flow_API(${formId});$s=$api->get_current_step($e);$t=$api->get_timeline($e);echo wp_json_encode(array('workflow_final_status'=>(string)gform_get_meta((int)$e['id'],'workflow_final_status'),'api_status'=>(string)$api->get_status($e),'current_step'=>$s?array('id'=>(int)$s->get_id(),'type'=>(string)$s->get_type(),'can_update'=>(bool)Gravity_Flow_Entry_Detail::can_update($s)):null,'timeline_count'=>is_array($t)?count($t):null),JSON_UNESCAPED_SLASHES);`));}
+async function auth(context){const rows=JSON.parse(wpEval(`$x=time()+3600;echo wp_json_encode(array(array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$x,'auth'),'expires'=>$x),array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$x,'logged_in'),'expires'=>$x)));`));await context.addCookies(rows.map(c=>({name:c.name,value:c.value,domain:'127.0.0.1',path:'/',expires:Number(c.expires),httpOnly:true,secure:false,sameSite:'Lax'})));}
+async function gotoReview(page,id){await page.goto(urlFor(id),{waitUntil:'networkidle'});const d=page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]').first();if(await d.count()!==1)throw new Error('Admitted Review missing.');const values=await page.locator('.gravityflow-action-buttons button').filter({visible:true}).evaluateAll(ns=>ns.map(n=>n.value));if(values.join(',')!=='approved,rejected,revert')throw new Error(`Native actions drifted: ${values}`);}
+async function probeSubmit(page){await page.evaluate(()=>{window.__mr2Submit=0;const f=document.querySelector('.gpp-entry-dossier[data-gpp-review-mode="read-only"]')?.closest('form');if(!f)throw new Error('Review form missing');f.addEventListener('submit',()=>window.__mr2Submit++,true);});}
+async function snap(page){return page.evaluate(()=>{const d=document.querySelector('.gpp-entry-dossier[data-gpp-review-mode="read-only"]'),r=d?.closest('form')?.querySelector('.gravityflow-action-buttons'),f=r?.querySelector('.gpp-review-action-busy-feedback'),bs=r?[...r.querySelectorAll('button[type="submit"]')].filter(b=>['approved','rejected','revert'].includes(b.value)):[];return{bound:d?.dataset.gppReviewActionBusyBound||null,busy:r?.dataset.gppReviewActionBusy||null,aria:r?.getAttribute('aria-busy')||null,feedback:f?{hidden:f.hidden,text:f.textContent.replace(/\s+/g,' ').trim(),role:f.getAttribute('role'),live:f.getAttribute('aria-live'),atomic:f.getAttribute('aria-atomic')}:null,buttons:bs.map(b=>({value:b.value,disabled:b.disabled,aria:b.getAttribute('aria-disabled')}))};});}
+function assertBusy(s){if(s.bound!=='1'||s.busy!=='1'||s.aria!=='true'||!s.feedback||s.feedback.hidden||s.feedback.text!=='در حال ثبت نتیجه…'||s.feedback.role!=='status'||s.feedback.live!=='polite'||s.feedback.atomic!=='true'||s.buttons.length!==3||s.buttons.some(b=>b.disabled||b.aria!=='true'))throw new Error(`Busy contract failed: ${JSON.stringify(s)}`);}
+function assertIdle(s){if(s.bound!=='1'||s.busy!==null||s.aria!==null||!s.feedback||!s.feedback.hidden||s.buttons.length!==3||s.buttons.some(b=>b.disabled||b.aria==='true'))throw new Error(`Idle contract failed: ${JSON.stringify(s)}`);}
+async function activate(page,button,keyboard=false){if(keyboard){await button.focus();await page.keyboard.press('Enter');return;}const b=await button.boundingBox();if(!b)throw new Error('No button geometry');await page.mouse.click(b.x+b.width/2,b.y+b.height/2);}
+async function wait(check,ms=5000){const end=Date.now()+ms;while(Date.now()<end){if(await check())return;await new Promise(r=>setTimeout(r,20));}throw new Error('MR-2 wait timeout');}
+
+async function accepted(page,value,{keyboard=false,duringBusy=null}={}){
+  await probeSubmit(page);let release;const gate=new Promise(r=>release=r);let posts=0,status=null;
+  const route=async rt=>{const q=rt.request();if(q.method()==='POST'&&q.isNavigationRequest()){posts++;await gate;}await rt.continue();};await page.route('**/*',route);
+  const response=r=>{const q=r.request();if(q.method()==='POST'&&q.isNavigationRequest())status=r.status();};page.on('response',response);
+  const dialogs=[];const initialDialog=new Promise((resolve,reject)=>page.once('dialog',async d=>{dialogs.push({type:d.type(),message:d.message()});try{await d.accept();resolve();}catch(e){reject(e);}}));
+  const button=page.locator(`.gravityflow-action-buttons button[value="${value}"]`).first();const nav=page.waitForNavigation({waitUntil:'domcontentloaded',timeout:15000}).then(()=>null).catch(e=>e);
+  let failure=null,result=null;try{
+    await activate(page,button,keyboard);await initialDialog;await page.waitForFunction(()=>document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy==='1');await wait(()=>posts===1);
+    const busy=await snap(page),submits=await page.evaluate(()=>window.__mr2Submit||0);assertBusy(busy);if(submits!==1||posts!==1||dialogs.length!==1||dialogs[0].type!=='confirm')throw new Error(`Submit boundary wrong: ${JSON.stringify({submits,posts,dialogs})}`);
+    let extra=null;if(duringBusy){const dup=[];const dl=async d=>{dup.push({type:d.type(),message:d.message()});await d.dismiss();};page.on('dialog',dl);try{extra=await duringBusy({button,getSubmits:()=>page.evaluate(()=>window.__mr2Submit||0),getPosts:()=>posts,getDialogs:()=>dup.length});}finally{page.off('dialog',dl);}if(dup.length)throw new Error(`Duplicate activation reached confirm: ${JSON.stringify(dup)}`);}
+    result={busy,submits,posts,dialogs,during_busy:extra};
+  }catch(e){failure=e;}finally{release();}
+  const navError=await nav;await page.unroute('**/*',route);page.off('response',response);if(failure)throw failure;if(navError)throw navError;await page.waitForLoadState('networkidle');return{...result,post_status:status};
 }
 
-const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_srwf_journey_host_manifest"), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'));
-const formId = Number(manifest.form_id);
-const reviewId = Number(manifest.steps.review_id);
-const correctionId = Number(manifest.steps.correction_id);
-const operatorId = Number(manifest.users.operator.id);
-if (manifest.production_presentation?.entry_detail_setup_status !== 'COMPLETED') throw new Error('Production Entry Detail presentation was not admitted in the lab.');
+const results=[];async function test(id,name,fn){try{results.push({id,name,status:'PASS',details:await fn()});}catch(e){results.push({id,name,status:'FAIL',details:{error:String(e?.stack||e).slice(0,12000)}});}}
+const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1280,height:900}});await auth(context);const page=await context.newPage();
 
-function frontendEntryUrl(entryId) {
-  const url = new URL(manifest.routes.shortcode.url);
-  url.searchParams.set('view', 'entry');
-  url.searchParams.set('id', String(formId));
-  url.searchParams.set('lid', String(entryId));
-  return url.toString();
-}
+await test('SRWF-MR2-CANCEL-001','Approve confirmation Cancel bypasses busy/submit',async()=>{const id=createEntry('CANCEL');await gotoReview(page,id);await probeSubmit(page);const before=host(id),dialogs=[];const dl=async d=>{dialogs.push(d.type());await d.dismiss();};page.on('dialog',dl);const b=page.locator('.gravityflow-action-buttons button[value="approved"]').first();await activate(page,b);await page.waitForTimeout(80);const mouse=await snap(page);await activate(page,b,true);await page.waitForTimeout(80);page.off('dialog',dl);const keyboard=await snap(page),after=host(id),submits=await page.evaluate(()=>window.__mr2Submit||0);assertIdle(mouse);assertIdle(keyboard);if(dialogs.length!==2||dialogs.some(x=>x!=='confirm')||submits!==0||JSON.stringify(before)!==JSON.stringify(after))throw new Error(`Cancel contract failed: ${JSON.stringify({dialogs,submits,before,after})}`);return{dialogs,submits,before,after};});
 
-function createReviewEntry(label) {
-  const safe = String(label).replace(/[^A-Z0-9_-]/gi, '-');
-  const raw = wpEval(`
-    wp_set_current_user(${operatorId});
-    $entry_id=GFAPI::add_entry(array(
-      'form_id'=>${formId}, 'created_by'=>${operatorId},
-      '1'=>'MR2-${safe}', '2'=>'Journey', '3'=>'${safe}', '4'=>'JRN-MR2-${safe}'
-    ));
-    if (is_wp_error($entry_id) || !$entry_id) { fwrite(STDERR, is_wp_error($entry_id)?$entry_id->get_error_message():'add_entry failed'); exit(2); }
-    $api=new Gravity_Flow_API(${formId});
-    $api->process_workflow((int)$entry_id);
-    $entry=GFAPI::get_entry((int)$entry_id);
-    $sent=$api->send_to_step($entry,${reviewId});
-    if (false===$sent || is_wp_error($sent)) { fwrite(STDERR,'send_to_step failed'); exit(3); }
-    echo (int)$entry_id;
-  `);
-  const id = Number(raw);
-  if (!Number.isInteger(id) || id < 1) throw new Error(`Invalid synthetic entry id: ${raw}`);
-  return id;
-}
+await test('SRWF-MR2-APPROVE-001','Approve busy once then authoritative Approved read-back',async()=>{const id=createEntry('APPROVE');await gotoReview(page,id);const submission=await accepted(page,'approved'),state=host(id),rendered=await page.locator('[data-gpp-entry-journey-result]').filter({visible:true}).evaluateAll(ns=>ns.map(n=>n.dataset.gppEntryJourneyResult));if(state.current_step!==null||state.workflow_final_status!=='approved'||state.api_status!=='approved'||rendered.join(',')!=='approved')throw new Error(`Approve truth mismatch: ${JSON.stringify({state,rendered})}`);return{submission,state,rendered};});
 
-function hostState(entryId) {
-  return JSON.parse(wpEval(`
-    wp_set_current_user(${operatorId});
-    if (!class_exists('Gravity_Flow_Entry_Detail')) require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
-    $entry=GFAPI::get_entry(${Number(entryId)});
-    $api=new Gravity_Flow_API(${formId});
-    $step=$api->get_current_step($entry);
-    $timeline=$api->get_timeline($entry);
-    echo wp_json_encode(array(
-      'workflow_final_status'=>(string)gform_get_meta((int)$entry['id'],'workflow_final_status'),
-      'api_status'=>(string)$api->get_status($entry),
-      'current_step'=>$step?array('id'=>(int)$step->get_id(),'type'=>(string)$step->get_type(),'can_update'=>(bool)Gravity_Flow_Entry_Detail::can_update($step)):null,
-      'timeline_count'=>is_array($timeline)?count($timeline):null
-    ),JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
-  `));
-}
+await test('SRWF-MR2-REJECT-001','Reject keyboard activation preserves business result',async()=>{const id=createEntry('REJECT');await gotoReview(page,id);const submission=await accepted(page,'rejected',{keyboard:true}),state=host(id),result=page.locator('[data-gpp-entry-journey-result="rejected"]').filter({visible:true}).first(),text=await result.innerText();if(state.current_step!==null||state.workflow_final_status!=='rejected'||state.api_status!=='rejected'||await result.count()!==1||/technical|خطای فنی|مشکل فنی/i.test(text))throw new Error(`Reject truth mismatch: ${JSON.stringify({state,text})}`);return{submission,state,text};});
 
-const results = [];
-async function test(id, name, fn) {
-  try { results.push({ id, name, status: 'PASS', details: await fn() }); }
-  catch (error) { results.push({ id, name, status: 'FAIL', details: { error: String(error?.stack || error).slice(0, 12000) } }); }
-}
+await test('SRWF-MR2-REVERT-001','Revert busy then native User Input',async()=>{const id=createEntry('REVERT');await gotoReview(page,id);const submission=await accepted(page,'revert'),state=host(id),orientation=await page.locator('[data-gpp-entry-journey="correction"]').filter({visible:true}).count(),mr3=await page.locator('[data-gpp-reject-reason],.gpp-reject-reason,.gpp-entry-reject-reason').count();if(state.current_step?.id!==correctionId||state.current_step?.type!=='user_input'||!state.current_step?.can_update||orientation!==1||mr3!==0)throw new Error(`Revert drift: ${JSON.stringify({state,orientation,mr3})}`);return{submission,state,orientation,mr3};});
 
-async function waitUntil(check, timeoutMs = 5000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return;
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
-  throw new Error(`Timed out after ${timeoutMs}ms waiting for MR-2 browser condition.`);
-}
+await test('SRWF-MR2-DOUBLE-001','rapid mouse/keyboard duplicate activation stays single-submit',async()=>{const id=createEntry('DOUBLE');await gotoReview(page,id);const submission=await accepted(page,'approved',{keyboard:true,duringBusy:async({button,getSubmits,getPosts,getDialogs})=>{await activate(page,button);await activate(page,button,true);await page.waitForTimeout(80);const counts={submits:await getSubmits(),posts:getPosts(),dialogs:getDialogs()};if(counts.submits!==1||counts.posts!==1||counts.dialogs!==0)throw new Error(`Duplicate escaped: ${JSON.stringify(counts)}`);return counts;}}),state=host(id);if(state.workflow_final_status!=='approved'||state.api_status!=='approved'||state.current_step!==null)throw new Error(`Double activation mutated wrong truth: ${JSON.stringify(state)}`);return{submission,state};});
 
-async function login(page) {
-  await page.context().clearCookies();
-  await page.goto(`${baseUrl}/wp-login.php`, { waitUntil: 'domcontentloaded' });
-  await page.fill('#user_login', manifest.users.operator.login);
-  await page.fill('#user_pass', operatorPassword);
-  await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
-  if (new URL(page.url()).pathname.endsWith('/wp-login.php')) throw new Error('Synthetic operator authentication failed.');
-}
+await test('SRWF-MR2-STALE-001','two-tab stale Reject cannot override Tab A Approved truth',async()=>{const id=createEntry('STALE'),a=await context.newPage(),b=await context.newPage();await Promise.all([gotoReview(a,id),gotoReview(b,id)]);const actionA=await accepted(a,'approved'),afterA=host(id);if(afterA.workflow_final_status!=='approved'||afterA.api_status!=='approved'||afterA.current_step!==null)throw new Error(`Tab A failed: ${JSON.stringify(afterA)}`);let response=null;b.on('response',r=>{const q=r.request();if(q.method()==='POST'&&q.isNavigationRequest())response={status:r.status(),url:r.url()};});const dialogs=[];const dp=new Promise((resolve,reject)=>b.once('dialog',async d=>{dialogs.push(d.type());try{await d.accept();resolve();}catch(e){reject(e);}}));const nav=b.waitForNavigation({waitUntil:'networkidle',timeout:15000}),btn=b.locator('.gravityflow-action-buttons button[value="rejected"]').first();await activate(b,btn);await dp;await nav;const afterB=host(id),rendered=await b.locator('[data-gpp-entry-journey-result]').filter({visible:true}).evaluateAll(ns=>ns.map(n=>n.dataset.gppEntryJourneyResult)),controls=await b.locator('.gravityflow-action-buttons button').filter({visible:true}).count();if(!response||dialogs.length!==1||dialogs[0]!=='confirm'||JSON.stringify(afterB)!==JSON.stringify(afterA)||rendered.join(',')!=='approved'||controls!==0)throw new Error(`Stale safety failed: ${JSON.stringify({afterA,afterB,response,dialogs,rendered,controls})}`);await Promise.all([a.close(),b.close()]);return{actionA,afterA,response,afterB,rendered,controls};});
 
-async function gotoReview(page, entryId) {
-  await page.goto(frontendEntryUrl(entryId), { waitUntil: 'networkidle' });
-  const dossier = page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]').first();
-  if (await dossier.count() !== 1) throw new Error('Admitted SRWF Review dossier missing.');
-  const actions = page.locator('.gravityflow-status-box .gravityflow-action-buttons button').filter({ visible: true });
-  const values = await actions.evaluateAll(nodes => nodes.map(node => node.value));
-  if (values.join(',') !== 'approved,rejected,revert') throw new Error(`Native Review actions drifted: ${JSON.stringify(values)}`);
-  return values;
-}
+await test('SRWF-MR2-UNKNOWN-001','lost response never fabricates terminal client success',async()=>{const id=createEntry('UNKNOWN');await gotoReview(page,id);let intercepted=null;const route=async rt=>{const q=rt.request();if(!intercepted&&q.method()==='POST'&&q.isNavigationRequest()){const r=await rt.fetch();intercepted={status:r.status()};await rt.abort('failed');return;}await rt.continue();};await page.route('**/*',route);let dialog=null;page.once('dialog',async d=>{dialog=d.type();await d.accept();});await activate(page,page.locator('.gravityflow-action-buttons button[value="approved"]').first()).catch(()=>{});await wait(()=>intercepted!==null).catch(()=>{});await page.waitForTimeout(120);await page.unroute('**/*',route);const pre=await page.locator('[data-gpp-entry-journey-result]').filter({visible:true}).count(),busy=await snap(page);if(dialog!=='confirm'||!intercepted||pre!==0||busy.busy!=='1')throw new Error(`Unknown contract failed: ${JSON.stringify({dialog,intercepted,pre,busy})}`);const truth=host(id);await page.reload({waitUntil:'networkidle'});const rendered=await page.locator('[data-gpp-entry-journey-result]').filter({visible:true}).evaluateAll(ns=>ns.map(n=>n.dataset.gppEntryJourneyResult));if(truth.workflow_final_status==='approved'&&truth.api_status==='approved'){if(rendered.join(',')!=='approved')throw new Error('Fresh approved truth missing after lost response');}else if(rendered.includes('approved')||rendered.includes('rejected'))throw new Error('Ambiguous truth fabricated terminal result');return{intercepted,busy,truth,rendered};});
 
-async function installSubmitProbe(page) {
-  await page.evaluate(() => {
-    window.__gppMr2SubmitCount = 0;
-    const dossier = document.querySelector('.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]');
-    const form = dossier?.closest('form');
-    if (!form) throw new Error('Review form missing for submit probe.');
-    form.addEventListener('submit', () => { window.__gppMr2SubmitCount += 1; }, true);
-  });
-}
+await test('SRWF-MR2-RESPONSIVE-001','desktop/mobile geometry, accessible idle feedback and action colors stay stable',async()=>{const id=createEntry('RESPONSIVE'),captures=[];for(const viewport of[{width:1280,height:900},{width:390,height:844},{width:320,height:760}]){await page.setViewportSize(viewport);await gotoReview(page,id);const idle=await snap(page);assertIdle(idle);const state=await page.evaluate(()=>{const r=document.querySelector('.gravityflow-action-buttons'),bs=[...document.querySelectorAll('.gravityflow-action-buttons button')].filter(n=>n.offsetParent!==null);return{overflow:document.documentElement.scrollWidth-window.innerWidth,width:r?.getBoundingClientRect().width||0,buttons:bs.map(b=>({value:b.value,bg:getComputedStyle(b).backgroundColor,w:b.getBoundingClientRect().width,h:b.getBoundingClientRect().height}))};});const colors=Object.fromEntries(state.buttons.map(b=>[b.value,b.bg]));if(state.overflow>1||state.width<1||state.buttons.length!==3||state.buttons.some(b=>b.w<1||b.h<44)||colors.approved!=='rgb(55, 155, 82)'||colors.rejected!=='rgb(229, 89, 103)'||colors.revert!=='rgb(252, 242, 216)')throw new Error(`Responsive regression: ${JSON.stringify({viewport,state})}`);captures.push({viewport,idle,state});}return captures;});
 
-async function submitCount(page) {
-  return page.evaluate(() => window.__gppMr2SubmitCount || 0);
-}
-
-async function busySnapshot(page) {
-  return page.evaluate(() => {
-    const dossier = document.querySelector('.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]');
-    const region = dossier?.closest('form')?.querySelector('.gravityflow-status-box .gravityflow-action-buttons');
-    const feedback = region?.querySelector('.gpp-review-action-busy-feedback');
-    const buttons = region ? [...region.querySelectorAll('button[type="submit"]')].filter(button => ['approved','rejected','revert'].includes(button.value)) : [];
-    return {
-      bound: dossier?.dataset.gppReviewActionBusyBound || null,
-      busy: region?.dataset.gppReviewActionBusy || null,
-      aria_busy: region?.getAttribute('aria-busy') || null,
-      feedback_count: feedback ? 1 : 0,
-      feedback_hidden: feedback ? feedback.hidden : null,
-      feedback_text: feedback?.textContent?.replace(/\s+/g, ' ').trim() || null,
-      feedback_role: feedback?.getAttribute('role') || null,
-      feedback_live: feedback?.getAttribute('aria-live') || null,
-      feedback_atomic: feedback?.getAttribute('aria-atomic') || null,
-      buttons: buttons.map(button => ({ value: button.value, disabled: button.disabled, aria_disabled: button.getAttribute('aria-disabled') })),
-    };
-  });
-}
-
-function assertBusy(snapshot) {
-  if (snapshot.bound !== '1' || snapshot.busy !== '1' || snapshot.aria_busy !== 'true') throw new Error(`Busy semantics missing: ${JSON.stringify(snapshot)}`);
-  if (snapshot.feedback_count !== 1 || snapshot.feedback_hidden !== false || snapshot.feedback_text !== 'در حال ثبت نتیجه…' || snapshot.feedback_role !== 'status' || snapshot.feedback_live !== 'polite' || snapshot.feedback_atomic !== 'true') throw new Error(`Accessible busy feedback wrong: ${JSON.stringify(snapshot)}`);
-  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled !== 'true')) throw new Error(`Material actions were not marked unavailable without changing native disabled state: ${JSON.stringify(snapshot)}`);
-}
-
-function assertIdle(snapshot) {
-  if (snapshot.bound !== '1' || snapshot.busy !== null || snapshot.aria_busy !== null) throw new Error(`Idle Review unexpectedly busy: ${JSON.stringify(snapshot)}`);
-  if (snapshot.feedback_count !== 1 || snapshot.feedback_hidden !== true) throw new Error(`Idle feedback contract wrong: ${JSON.stringify(snapshot)}`);
-  if (snapshot.buttons.length !== 3 || snapshot.buttons.some(button => button.disabled || button.aria_disabled === 'true')) throw new Error(`Idle material actions unavailable: ${JSON.stringify(snapshot)}`);
-}
-
-async function rawActivate(page, button, keyboard = false) {
-  if (keyboard) {
-    await button.focus();
-    await page.keyboard.press('Enter');
-    return;
-  }
-  const box = await button.boundingBox();
-  if (!box) throw new Error('Material action has no clickable geometry.');
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-}
-
-async function acceptedActionWithBusy(page, value, options = {}) {
-  await installSubmitProbe(page);
-  let releasePost;
-  const postGate = new Promise(resolve => { releasePost = resolve; });
-  let postCount = 0;
-  let postResponseStatus = null;
-
-  await page.route('**/*', async route => {
-    const request = route.request();
-    if (request.method() === 'POST' && request.isNavigationRequest()) {
-      postCount += 1;
-      await postGate;
-    }
-    await route.continue();
-  });
-
-  const responseListener = response => {
-    const request = response.request();
-    if (request.method() === 'POST' && request.isNavigationRequest()) postResponseStatus = response.status();
-  };
-  page.on('response', responseListener);
-
-  const dialogs = [];
-  const dialogListener = async dialog => {
-    dialogs.push({ type: dialog.type(), message: dialog.message() });
-    await dialog.accept();
-  };
-  page.on('dialog', dialogListener);
-
-  const button = page.locator(`.gravityflow-status-box .gravityflow-action-buttons button[value="${value}"]`).first();
-  if (await button.count() !== 1) throw new Error(`Missing native action ${value}`);
-  const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 })
-    .then(() => ({ ok: true }))
-    .catch(error => ({ ok: false, error: String(error?.stack || error) }));
-
-  let result;
-  try {
-    await rawActivate(page, button, Boolean(options.keyboard));
-    await page.waitForFunction(() => document.querySelector('.gravityflow-action-buttons')?.dataset.gppReviewActionBusy === '1', null, { timeout: 5000 });
-    await waitUntil(() => postCount === 1);
-
-    const busy = await busySnapshot(page);
-    const submitsWhileBusy = await submitCount(page);
-    assertBusy(busy);
-    if (submitsWhileBusy !== 1 || postCount !== 1 || dialogs.length !== 1 || dialogs[0].type !== 'confirm') throw new Error(`Accepted action did not cross the native submit boundary exactly once: ${JSON.stringify({ submitsWhileBusy, postCount, dialogs })}`);
-
-    let duringBusy = null;
-    if (typeof options.duringBusy === 'function') {
-      duringBusy = await options.duringBusy({ button, getSubmitCount: () => submitCount(page), getPostCount: () => postCount, getDialogCount: () => dialogs.length });
-    }
-    result = { busy, submits_while_busy: submitsWhileBusy, post_count: postCount, dialogs, during_busy: duringBusy };
-  } finally {
-    releasePost();
-  }
-
-  const navigationResult = await navigation;
-  await page.unroute('**/*');
-  page.off('response', responseListener);
-  page.off('dialog', dialogListener);
-  if (!navigationResult.ok) throw new Error(`Accepted native action did not complete navigation after POST release: ${navigationResult.error}`);
-  await page.waitForLoadState('networkidle');
-
-  return { ...result, post_response_status: postResponseStatus };
-}
-
-const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-const page = await context.newPage();
-await login(page);
-
-await test('SRWF-MR2-CANCEL-001', 'Approve native confirmation Cancel never enters GPP busy state', async () => {
-  const id = createReviewEntry('CANCEL');
-  await gotoReview(page, id);
-  await installSubmitProbe(page);
-  const before = hostState(id);
-  const dialogs = [];
-  const listener = async dialog => { dialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.dismiss(); };
-  page.on('dialog', listener);
-  const approve = page.locator('.gravityflow-action-buttons button[value="approved"]').first();
-  await rawActivate(page, approve, false);
-  await page.waitForTimeout(100);
-  const afterMouse = await busySnapshot(page);
-  await rawActivate(page, approve, true);
-  await page.waitForTimeout(100);
-  page.off('dialog', listener);
-  const afterKeyboard = await busySnapshot(page);
-  const after = hostState(id);
-  const submits = await submitCount(page);
-  assertIdle(afterMouse);
-  assertIdle(afterKeyboard);
-  if (dialogs.length !== 2 || dialogs.some(dialog => dialog.type !== 'confirm') || submits !== 0) throw new Error(`Cancel reached material submit boundary: ${JSON.stringify({ dialogs, submits })}`);
-  if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error(`Cancel mutated host truth: ${JSON.stringify({ before, after })}`);
-  return { dialogs, submits, before, after, idle_after_mouse: afterMouse, idle_after_keyboard: afterKeyboard };
-});
-
-await test('SRWF-MR2-APPROVE-001', 'accepted Approve enters one busy lifetime and final success still comes from fresh host truth', async () => {
-  const id = createReviewEntry('APPROVE');
-  await gotoReview(page, id);
-  const submission = await acceptedActionWithBusy(page, 'approved');
-  const state = hostState(id);
-  const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-gpp-entry-journey-result')));
-  if (state.current_step !== null || state.workflow_final_status !== 'approved' || state.api_status !== 'approved' || rendered.join(',') !== 'approved') throw new Error(`Approved fresh truth/result mismatch: ${JSON.stringify({ state, rendered })}`);
-  return { submission, state, rendered };
-});
-
-await test('SRWF-MR2-REJECT-001', 'accepted Reject uses the same busy lifetime and remains a business result', async () => {
-  const id = createReviewEntry('REJECT');
-  await gotoReview(page, id);
-  const submission = await acceptedActionWithBusy(page, 'rejected');
-  const state = hostState(id);
-  const result = page.locator('[data-gpp-entry-journey-result="rejected"]').filter({ visible: true }).first();
-  const text = await result.innerText();
-  if (state.current_step !== null || state.workflow_final_status !== 'rejected' || state.api_status !== 'rejected' || await result.count() !== 1 || /technical|خطای فنی|مشکل فنی/i.test(text)) throw new Error(`Rejected business result mismatch: ${JSON.stringify({ state, text })}`);
-  return { submission, state, text };
-});
-
-await test('SRWF-MR2-REVERT-001', 'native Revert uses bounded busy behavior and still enters native User Input', async () => {
-  const id = createReviewEntry('REVERT');
-  await gotoReview(page, id);
-  const submission = await acceptedActionWithBusy(page, 'revert');
-  const state = hostState(id);
-  const orientation = await page.locator('[data-gpp-entry-journey="correction"]').filter({ visible: true }).count();
-  const mr3 = await page.locator('[data-gpp-reject-reason], .gpp-reject-reason, .gpp-entry-reject-reason').count();
-  if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || !state.current_step?.can_update || orientation !== 1 || mr3 !== 0) throw new Error(`Revert/correction ownership drifted: ${JSON.stringify({ state, orientation, mr3 })}`);
-  return { submission, state, orientation, mr3_reason_ui_count: mr3 };
-});
-
-await test('SRWF-MR2-DOUBLE-001', 'rapid repeated mouse/keyboard activation cannot create a second material submission', async () => {
-  const id = createReviewEntry('DOUBLE');
-  await gotoReview(page, id);
-  const submission = await acceptedActionWithBusy(page, 'approved', {
-    keyboard: true,
-    duringBusy: async ({ button, getSubmitCount, getPostCount, getDialogCount }) => {
-      await rawActivate(page, button, false);
-      await rawActivate(page, button, true);
-      await page.waitForTimeout(80);
-      const counts = { submits: await getSubmitCount(), posts: getPostCount(), dialogs: getDialogCount() };
-      if (counts.submits !== 1 || counts.posts !== 1 || counts.dialogs !== 1) throw new Error(`Duplicate activation escaped busy guard: ${JSON.stringify(counts)}`);
-      return counts;
-    },
-  });
-  const state = hostState(id);
-  if (state.workflow_final_status !== 'approved' || state.api_status !== 'approved' || state.current_step !== null || submission.post_count !== 1 || submission.dialogs.length !== 1) throw new Error(`Double activation terminal state wrong: ${JSON.stringify({ submission, state })}`);
-  return { submission, state };
-});
-
-await test('SRWF-MR2-STALE-001', 'two-tab stale action remains host-authoritative and cannot fabricate a second GPP result', async () => {
-  const id = createReviewEntry('STALE');
-  const tabA = await context.newPage();
-  const tabB = await context.newPage();
-  await Promise.all([gotoReview(tabA, id), gotoReview(tabB, id)]);
-
-  const actionA = await acceptedActionWithBusy(tabA, 'approved');
-  const afterA = hostState(id);
-  if (afterA.workflow_final_status !== 'approved' || afterA.api_status !== 'approved' || afterA.current_step !== null) throw new Error(`Tab A did not establish Approved host truth: ${JSON.stringify(afterA)}`);
-
-  let staleResponse = null;
-  const responseListener = response => {
-    const request = response.request();
-    if (request.method() === 'POST' && request.isNavigationRequest()) staleResponse = { status: response.status(), url: response.url() };
-  };
-  tabB.on('response', responseListener);
-  const staleDialogs = [];
-  const dialogListener = async dialog => { staleDialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.accept(); };
-  tabB.on('dialog', dialogListener);
-  const staleButton = tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first();
-  const navigation = tabB.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
-  await rawActivate(tabB, staleButton, false);
-  await navigation;
-  tabB.off('response', responseListener);
-  tabB.off('dialog', dialogListener);
-
-  const afterB = hostState(id);
-  const rendered = await tabB.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-gpp-entry-journey-result')));
-  const staleControls = await tabB.locator('.gravityflow-status-box .gravityflow-action-buttons button').filter({ visible: true }).count();
-  if (!staleResponse || staleDialogs.length !== 1 || staleDialogs[0].type !== 'confirm') throw new Error(`Stale Tab B did not traverse the authentic host action boundary: ${JSON.stringify({ staleResponse, staleDialogs })}`);
-  if (afterB.workflow_final_status !== afterA.workflow_final_status || afterB.api_status !== afterA.api_status || afterB.current_step !== null || afterB.timeline_count !== afterA.timeline_count) throw new Error(`Unsafe stale duplicate mutation detected: ${JSON.stringify({ afterA, afterB })}`);
-  if (rendered.join(',') !== 'approved' || staleControls !== 0) throw new Error(`Tab B stale presentation remained authoritative or fabricated a result: ${JSON.stringify({ rendered, staleControls, afterA, afterB })}`);
-
-  await tabA.close();
-  await tabB.close();
-  return { actionA, after_tab_a: afterA, stale_response: staleResponse, stale_dialogs: staleDialogs, after_tab_b: afterB, rendered_after_readback: rendered, stale_controls_after_readback: staleControls };
-});
-
-await test('SRWF-MR2-UNKNOWN-001', 'lost action response keeps client intent non-terminal until fresh host read-back', async () => {
-  const id = createReviewEntry('UNKNOWN');
-  await gotoReview(page, id);
-  let intercepted = null;
-  await page.route('**/*', async route => {
-    const request = route.request();
-    if (!intercepted && request.method() === 'POST' && request.isNavigationRequest()) {
-      const response = await route.fetch();
-      intercepted = { status: response.status() };
-      await route.abort('failed');
-      return;
-    }
-    await route.continue();
-  });
-  let dialog = null;
-  page.once('dialog', async item => { dialog = { type: item.type() }; await item.accept(); });
-  const approve = page.locator('.gravityflow-action-buttons button[value="approved"]').first();
-  await rawActivate(page, approve, false).catch(() => {});
-  await waitUntil(() => intercepted !== null).catch(() => {});
-  await page.waitForTimeout(150);
-  await page.unroute('**/*');
-  const beforeReloadResults = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).count();
-  const busy = await busySnapshot(page);
-  if (!dialog || !intercepted || beforeReloadResults !== 0 || busy.busy !== '1') throw new Error(`Lost response fabricated or lost bounded in-flight state: ${JSON.stringify({ dialog, intercepted, beforeReloadResults, busy })}`);
-  const truth = hostState(id);
-  await page.reload({ waitUntil: 'networkidle' });
-  const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.getAttribute('data-gpp-entry-journey-result')));
-  if (truth.workflow_final_status === 'approved' && truth.api_status === 'approved') {
-    if (rendered.join(',') !== 'approved') throw new Error(`Fresh Approved truth not reflected after lost response: ${JSON.stringify({ truth, rendered })}`);
-  } else if (rendered.includes('approved') || rendered.includes('rejected')) {
-    throw new Error(`Ambiguous fresh truth fabricated terminal result: ${JSON.stringify({ truth, rendered })}`);
-  }
-  return { dialog, intercepted, busy_before_reload: busy, truth, rendered_after_fresh_readback: rendered };
-});
-
-await test('SRWF-MR2-RESPONSIVE-001', 'idle Review keeps existing action colors and bounded desktop/mobile geometry', async () => {
-  const id = createReviewEntry('RESPONSIVE');
-  const captures = [];
-  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 760 }]) {
-    await page.setViewportSize(viewport);
-    await gotoReview(page, id);
-    const state = await page.evaluate(() => {
-      const region = document.querySelector('.gravityflow-status-box .gravityflow-action-buttons');
-      const buttons = [...document.querySelectorAll('.gravityflow-action-buttons button')].filter(node => node.offsetParent !== null);
-      return {
-        document_overflow: document.documentElement.scrollWidth - window.innerWidth,
-        region_width: region?.getBoundingClientRect().width || 0,
-        feedback_hidden: region?.querySelector('.gpp-review-action-busy-feedback')?.hidden ?? null,
-        buttons: buttons.map(button => ({ value: button.value, background: getComputedStyle(button).backgroundColor, width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
-      };
-    });
-    const colors = Object.fromEntries(state.buttons.map(button => [button.value, button.background]));
-    if (state.document_overflow > 1 || state.region_width < 1 || state.feedback_hidden !== true || state.buttons.length !== 3 || state.buttons.some(button => button.width < 1 || button.height < 44)) throw new Error(`Responsive action geometry regressed: ${JSON.stringify({ viewport, state })}`);
-    if (colors.approved !== 'rgb(55, 155, 82)' || colors.rejected !== 'rgb(229, 89, 103)' || colors.revert !== 'rgb(252, 242, 216)') throw new Error(`Semantic action colors drifted: ${JSON.stringify({ viewport, colors })}`);
-    captures.push({ viewport, state });
-  }
-  return captures;
-});
-
-await browser.close();
-fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr2-action-state-browser.json`, JSON.stringify({ schema_version: '1.0.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
-const failed = results.filter(result => result.status !== 'PASS');
-if (failed.length) {
-  console.error(JSON.stringify({ failed }, null, 2));
-  process.exit(1);
-}
-console.log(`SRWF_JOURNEY_PRODUCTION_MR2_ACTION_STATE_PASS ${results.length}`);
+await browser.close();fs.mkdirSync(artifactDir,{recursive:true});fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr2-action-state-browser.json`,JSON.stringify({schema_version:'1.0.1',runtime:'REPRODUCIBLE_PINNED_LAB',results},null,2)+'\n');const failed=results.filter(r=>r.status!=='PASS');if(failed.length){console.error(JSON.stringify({failed},null,2));process.exit(1);}console.log(`SRWF_JOURNEY_PRODUCTION_MR2_ACTION_STATE_PASS ${results.length}`);
