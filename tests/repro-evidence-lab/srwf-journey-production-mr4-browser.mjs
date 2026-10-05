@@ -122,6 +122,21 @@ function nativeCorrectionSubmit(page) {
   return page.locator('#gravityflow_update_button:visible,#gravityflow_submit_button:visible').first();
 }
 
+async function commitTextByKeyboard(page, locator, value) {
+  await locator.focus();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type(value);
+  await page.keyboard.press('Tab');
+}
+
+async function focusByKeyboard(page, locator) {
+  await locator.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  const active = await locator.evaluate(node => document.activeElement === node);
+  if (!active) throw new Error('Native editable control could not be reached again through keyboard traversal.');
+}
+
 async function printState(page) {
   return page.evaluate(() => {
     const nodes = [...document.querySelectorAll('[data-gpp-print-utility="dossier"]')];
@@ -233,13 +248,13 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input and 
 
 await test('SRWF-PROD-MR4-CONDITIONAL-001', 'native Gravity Forms conditional logic remains live', async () => {
   const input1 = page.locator('input[name="input_1"]').first();
-  await input1.fill('SHOW-MR4');
+  await commitTextByKeyboard(page, input1, 'SHOW-MR4');
   await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const field5 = page.locator('input[name="input_5"]').first();
   await field5.fill('CONDITIONAL-PRESERVED');
-  await input1.fill('HIDE-MR4');
+  await commitTextByKeyboard(page, input1, 'HIDE-MR4');
   await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent === null); });
-  await input1.fill('SHOW-MR4');
+  await commitTextByKeyboard(page, input1, 'SHOW-MR4');
   await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const preserved = await field5.inputValue();
   if (preserved !== 'CONDITIONAL-PRESERVED') throw new Error(`Native conditional field value was not preserved: ${preserved}`);
@@ -249,7 +264,7 @@ await test('SRWF-PROD-MR4-CONDITIONAL-001', 'native Gravity Forms conditional lo
 await test('SRWF-PROD-MR4-VALIDATION-001', 'native validation failure stays in correction with submitted value preserved', async () => {
   const input1 = page.locator('input[name="input_1"]').first();
   const field5 = page.locator('input[name="input_5"]').first();
-  await input1.fill('SHOW-MR4');
+  await commitTextByKeyboard(page, input1, 'SHOW-MR4');
   await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   await field5.fill('INVALID-MR4');
   const submit = nativeCorrectionSubmit(page);
@@ -282,7 +297,7 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow
     const baselineOverflow = await pageOverflow(page);
     await accept(page, 'revert');
     const input = page.locator('input[name="input_1"]').first();
-    await input.focus();
+    await focusByKeyboard(page, input);
     const focus = await input.evaluate(node => { const style = getComputedStyle(node); return { outline_style: style.outlineStyle, outline_width: style.outlineWidth }; });
     const geometry = await correctionGeometry(page);
     const submit = nativeCorrectionSubmit(page);
@@ -301,7 +316,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(frontendEntryUrl(entryId), { waitUntil: 'networkidle' });
   const input1 = page.locator('input[name="input_1"]').first();
-  await input1.fill('SHOW-MR4');
+  await commitTextByKeyboard(page, input1, 'SHOW-MR4');
   await page.waitForFunction(() => { const node = document.querySelector('input[name="input_5"]'); return Boolean(node && node.offsetParent !== null); });
   const field5 = page.locator('input[name="input_5"]').first();
   await field5.fill('VALID-CONDITIONAL');
@@ -322,7 +337,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
 wpEval("delete_option('gpp_srwf_mr4_expand_editable_fields'); echo '1';");
 await browser.close();
 fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr4-browser.json`, JSON.stringify({ schema_version: '1.1.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
+fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr4-browser.json`, JSON.stringify({ schema_version: '1.2.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
 const failed = results.filter(result => result.status !== 'PASS');
 if (failed.length) {
   console.error(JSON.stringify({ failed }, null, 2));
