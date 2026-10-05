@@ -192,6 +192,34 @@ async function settle(promise, timeoutMs = 15000) {
   ]);
 }
 
+function waitForDialog(page, label, handleDialog, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      page.off('dialog', listener);
+      clearTimeout(timer);
+    };
+    const listener = async dialog => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        await handleDialog(dialog);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(`${label} timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+    page.on('dialog', listener);
+  });
+}
+
 async function accepted(page, value, { keyboard = false, duringBusy = null } = {}) {
   await installSubmitProbe(page);
   let releasePost;
@@ -216,15 +244,10 @@ async function accepted(page, value, { keyboard = false, duringBusy = null } = {
   page.on('response', responseListener);
 
   const dialogs = [];
-  const initialDialog = new Promise((resolve, reject) => page.once('dialog', async dialog => {
+  const initialDialog = waitForDialog(page, `Initial ${value} confirmation`, async dialog => {
     dialogs.push({ type: dialog.type(), message: dialog.message() });
-    try {
-      await dialog.accept();
-      resolve();
-    } catch (error) {
-      reject(error);
-    }
-  }));
+    await dialog.accept();
+  });
 
   const button = page.locator(`.gravityflow-action-buttons button[value="${value}"]`).first();
   const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).then(() => null).catch(error => error);
@@ -295,10 +318,15 @@ async function accepted(page, value, { keyboard = false, duringBusy = null } = {
 
 const results = [];
 async function test(id, name, fn) {
+  console.log(`MR2_TEST_START ${id}`);
   try {
-    results.push({ id, name, status: 'PASS', details: await fn() });
+    const details = await fn();
+    results.push({ id, name, status: 'PASS', details });
+    console.log(`MR2_TEST_PASS ${id}`);
   } catch (error) {
-    results.push({ id, name, status: 'FAIL', details: { error: String(error?.stack || error).slice(0, 16000) } });
+    const detail = { error: String(error?.stack || error).slice(0, 16000) };
+    results.push({ id, name, status: 'FAIL', details: detail });
+    console.error(`MR2_TEST_FAIL ${id} ${detail.error}`);
   }
 }
 
@@ -414,10 +442,10 @@ await test('SRWF-MR2-STALE-001', 'two-tab stale Reject cannot override Tab A App
   };
   tabB.on('response', responseListener);
   const dialogs = [];
-  const dialogPromise = new Promise((resolve, reject) => tabB.once('dialog', async dialog => {
+  const dialogPromise = waitForDialog(tabB, 'Stale-tab Reject confirmation', async dialog => {
     dialogs.push(dialog.type());
-    try { await dialog.accept(); resolve(); } catch (error) { reject(error); }
-  }));
+    await dialog.accept();
+  });
   const navigation = tabB.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
   const button = tabB.locator('.gravityflow-action-buttons button[value="rejected"]').first();
   const activation = settle(activate(tabB, button));
@@ -443,7 +471,7 @@ await test('SRWF-MR2-UNKNOWN-001', 'lost response never fabricates terminal clie
   const route = async interceptedRoute => {
     const request = interceptedRoute.request();
     if (!intercepted && request.method() === 'POST' && request.isNavigationRequest()) {
-      const response = await interceptedRoute.fetch();
+      const response = await interceptedRoute.fetch({ timeout: 5000 });
       intercepted = { status: response.status() };
       await interceptedRoute.abort('failed');
       return;
@@ -452,10 +480,10 @@ await test('SRWF-MR2-UNKNOWN-001', 'lost response never fabricates terminal clie
   };
   await page.route('**/*', route);
   let dialog = null;
-  const dialogPromise = new Promise((resolve, reject) => page.once('dialog', async item => {
+  const dialogPromise = waitForDialog(page, 'Lost-response Approve confirmation', async item => {
     dialog = item.type();
-    try { await item.accept(); resolve(); } catch (error) { reject(error); }
-  }));
+    await item.accept();
+  });
   const activation = settle(activate(page, page.locator('.gravityflow-action-buttons button[value="approved"]').first()));
   await dialogPromise;
   await waitFor(() => intercepted !== null, 5000).catch(() => {});
@@ -509,7 +537,7 @@ await browser.close();
 fs.mkdirSync(artifactDir, { recursive: true });
 fs.writeFileSync(
   `${artifactDir}/srwf-journey-production-mr2-action-state-browser.json`,
-  JSON.stringify({ schema_version: '1.1.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
+  JSON.stringify({ schema_version: '1.1.1', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
 );
 const failed = results.filter(result => result.status !== 'PASS');
 if (failed.length) {
