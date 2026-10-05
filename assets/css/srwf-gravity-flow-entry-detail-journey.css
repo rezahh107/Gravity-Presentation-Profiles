@@ -194,6 +194,7 @@
 
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-profile-id="srwf.operations.entry-detail.v1"]) .gpp-entry-review-action-status,
 .gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gpp-entry-review-action-status {
+    order: 12;
     box-sizing: border-box;
     margin: 14px 0 0;
     color: #475467;
