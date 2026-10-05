@@ -41,6 +41,9 @@ jobs:
       WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
+      WU21_HELLO_VERSION: '3.5.1'
+      WU21_HELLO_COMMIT: e86d30a7d64b2ab59373422a14933bba3621ee04
+      WU21_HELLO_SHA256: d5b36b9d33187bf8b9cd5ad324489aab7ad8c3a21b5f2e5df82c18964a026ce5
 
     steps:
       - name: Checkout exact PR Head
@@ -90,7 +93,7 @@ jobs:
           mkdir -p "$WU21_WP_PATH"
           php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=7.1.1 --force
           php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-srwf-journey-root --dbhost=127.0.0.1:3306 --skip-check
-          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='SRWF Journey Qualification' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='SRWF Journey Qualification' --admin_user=bootstrap_admin --admin_password='wu21-bootstrap-pass-2026' --admin_email=bootstrap@example.invalid --skip-email
           php "$WU21_WP_CLI" user create srwf_participant participant@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='srwf-participant-pass-2026'
           php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
@@ -128,6 +131,21 @@ jobs:
           mkdir -p "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme"
           cp -a /tmp/gravity-theme-builder/themes/srwf-registration/src/. "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/"
           grep -q '^ \* Version: 0\.1\.19$' "$WU21_WP_PATH/wp-content/plugins/srwf-registration-theme/srwf-registration-theme.php"
+
+      - name: Install exact WU21 Hello Elementor forward host
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/hello-elementor "$WU21_WP_PATH/wp-content/themes/hello-elementor"
+          curl -L --fail --retry 3 -o /tmp/hello-elementor.tar.gz "https://github.com/elementor/hello-theme/archive/$WU21_HELLO_COMMIT.tar.gz"
+          echo "$WU21_HELLO_SHA256  /tmp/hello-elementor.tar.gz" | sha256sum -c -
+          mkdir -p /tmp/hello-elementor
+          tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-elementor --strip-components=1
+          test "$(grep -m1 '^Version:' /tmp/hello-elementor/style.css | sed 's/^Version:[[:space:]]*//')" = "$WU21_HELLO_VERSION"
+          mv /tmp/hello-elementor "$WU21_WP_PATH/wp-content/themes/hello-elementor"
+          php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" theme get hello-elementor --field=version --path="$WU21_WP_PATH")" = "$WU21_HELLO_VERSION"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = 'hello-elementor'
 
       - name: Activate exact host packages
         shell: bash
@@ -222,6 +240,12 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr2-action-state-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-mr2-action-state-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==8||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
 
+          # MR-4 closes correction-mode Entry Detail composition while keeping
+          # Gravity Flow / Gravity Forms authoritative for the editable step.
+          node tests/repro-evidence-lab/srwf-journey-production-mr4-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr4-browser.json"
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-mr4-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==6||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
+
           # Gap-closure probes are evidence capture, not product-success assertions.
           # They may document a negative capability finding while the harness stays
           # green; only an inability to execute/capture the requested boundary fails.
@@ -234,7 +258,7 @@ jobs:
           # workflow steps that would otherwise alter their terminal topology.
           node tests/repro-evidence-lab/srwf-journey-production-negative-controls.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-negative-controls.json"
-          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
 
           kill "$server_pid" >/dev/null 2>&1 || true
           wait "$server_pid" 2>/dev/null || true
