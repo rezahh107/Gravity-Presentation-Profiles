@@ -117,7 +117,7 @@ gpp_journey_assert(
     'MR-5 terminal Approved/Rejected markup must omit repeated case identity while Unknown keeps its existing fail-closed context.'
 );
 
-$terminal_targets = ':is(.entry-detail-view, #gravityflow-status-box-container, .gravityflow-timeline, .detail-view-print)';
+$terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
 foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
     $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
     $terminal_boundary = '.gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
