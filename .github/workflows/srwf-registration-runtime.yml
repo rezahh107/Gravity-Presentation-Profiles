@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/srwf-registration-runtime.yml'
       - 'tests/fixtures/wu21-packages/**'
+      - 'tests/run.php'
       - 'gravity-presentation-profiles.php'
       - 'src/**'
       - 'profiles/srwf/registration/**'
