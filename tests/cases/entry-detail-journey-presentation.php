@@ -14,6 +14,34 @@ function gpp_journey_assert( $condition, $message ) {
     }
 }
 
+if ( ! function_exists( '__' ) ) {
+    function __( $text, $domain = null ) {
+        unset( $domain );
+        return $text;
+    }
+}
+if ( ! function_exists( 'esc_html__' ) ) {
+    function esc_html__( $text, $domain = null ) {
+        unset( $domain );
+        return htmlspecialchars( $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_html' ) ) {
+    function esc_html( $text ) {
+        return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+    function esc_attr( $text ) {
+        return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_url' ) ) {
+    function esc_url( $url ) {
+        return (string) $url;
+    }
+}
+
 $adapter = new ReflectionClass( EntryDetailJourneyPresentationAdapter::class );
 $classify = $adapter->getMethod( 'classifyHostTruth' );
 $classify->setAccessible( true );
@@ -33,6 +61,28 @@ foreach ( $cases as $case ) {
     $actual = $classify->invokeArgs( null, $case[0] );
     gpp_journey_assert( $case[1] === $actual, $case[2] . ' Actual: ' . var_export( $actual, true ) );
 }
+
+$result_markup = $adapter->getMethod( 'resultMarkup' );
+$result_markup->setAccessible( true );
+$synthetic_identity = array(
+    'name' => 'SYNTHETIC STUDENT',
+    'national_id' => '1234567890',
+    'entry_id' => 98765,
+);
+foreach ( array(
+    EntryDetailJourneyPresentationAdapter::STATE_APPROVED => 'پرونده تأیید شد',
+    EntryDetailJourneyPresentationAdapter::STATE_REJECTED => 'پرونده رد شد',
+) as $terminal_state => $expected_title ) {
+    $markup = $result_markup->invoke( null, $terminal_state, $synthetic_identity, '/my-tasks/', 'synthetic.profile', true );
+    gpp_journey_assert( false !== strpos( $markup, 'data-gpp-entry-journey-result="' . $terminal_state . '"' ), 'Terminal result marker missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false !== strpos( $markup, $expected_title ), 'Terminal result title missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false !== strpos( $markup, 'بازگشت به کارهای من' ), 'Terminal continuation missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false === strpos( $markup, 'gpp-entry-journey__case-context' ), 'Terminal case-context markup must be absent for ' . $terminal_state . '.' );
+    gpp_journey_assert( false === strpos( $markup, 'SYNTHETIC STUDENT' ) && false === strpos( $markup, '1234567890' ) && false === strpos( $markup, '98765' ), 'Terminal case identity leaked into markup for ' . $terminal_state . '.' );
+}
+$unknown_markup = $result_markup->invoke( null, EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, $synthetic_identity, '/my-tasks/', 'synthetic.profile', true );
+gpp_journey_assert( false !== strpos( $unknown_markup, 'data-gpp-entry-journey-result="unknown"' ), 'Unknown fail-closed marker is missing.' );
+gpp_journey_assert( false !== strpos( $unknown_markup, 'gpp-entry-journey__case-context' ) && false !== strpos( $unknown_markup, 'SYNTHETIC STUDENT' ) && false !== strpos( $unknown_markup, '1234567890' ), 'Unknown fail-closed context must remain available.' );
 
 $root = dirname( __DIR__, 2 );
 $php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailJourneyPresentationAdapter.php' );
