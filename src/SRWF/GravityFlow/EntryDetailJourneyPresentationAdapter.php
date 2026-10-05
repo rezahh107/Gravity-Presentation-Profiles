@@ -568,7 +568,9 @@ final class EntryDetailJourneyPresentationAdapter {
         $html .= self::stateIconMarkup( $state );
         $html .= '<h2 id="gpp-entry-journey-result-title">' . esc_html( $copy['title'] ) . '</h2>';
         $html .= '<p>' . esc_html( $copy['body'] ) . '</p>';
-        $html .= self::caseContextMarkup( $identity );
+        if ( self::STATE_UNKNOWN === $state ) {
+            $html .= self::caseContextMarkup( $identity );
+        }
         if ( $include_return ) {
             $html .= '<a class="gpp-entry-journey__return gpp-entry-journey-result__return" href="' . esc_url( $url ) . '">' . esc_html__( 'بازگشت به کارهای من', 'gravity-presentation-profiles' ) . '</a>';
         }
