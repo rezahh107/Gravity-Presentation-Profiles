@@ -307,6 +307,14 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow
     await accept(page, 'revert');
     const input = page.locator('input[name="input_1"]').first();
     const tabCount = await focusByKeyboard(page, input);
+    await page.waitForFunction(() => {
+      const node = document.querySelector('input[name="input_1"]');
+      if (!node || document.activeElement !== node) return false;
+      const style = getComputedStyle(node);
+      const outlineVisible = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth || '0') >= 1;
+      const focusRingVisible = style.boxShadow.includes('rgb(147, 197, 253)') && style.boxShadow.includes('0px 0px 0px 3px');
+      return outlineVisible || focusRingVisible;
+    }, null, { timeout: 1500 });
     const focus = await input.evaluate(node => {
       const style = getComputedStyle(node);
       return { outline_style: style.outlineStyle, outline_width: style.outlineWidth, box_shadow: style.boxShadow };
