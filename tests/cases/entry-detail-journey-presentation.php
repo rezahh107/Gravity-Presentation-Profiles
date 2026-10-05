@@ -14,6 +14,34 @@ function gpp_journey_assert( $condition, $message ) {
     }
 }
 
+if ( ! function_exists( '__' ) ) {
+    function __( $text, $domain = null ) {
+        unset( $domain );
+        return $text;
+    }
+}
+if ( ! function_exists( 'esc_html__' ) ) {
+    function esc_html__( $text, $domain = null ) {
+        unset( $domain );
+        return htmlspecialchars( $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_html' ) ) {
+    function esc_html( $text ) {
+        return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+    function esc_attr( $text ) {
+        return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+if ( ! function_exists( 'esc_url' ) ) {
+    function esc_url( $url ) {
+        return (string) $url;
+    }
+}
+
 $adapter = new ReflectionClass( EntryDetailJourneyPresentationAdapter::class );
 $classify = $adapter->getMethod( 'classifyHostTruth' );
 $classify->setAccessible( true );
@@ -33,6 +61,28 @@ foreach ( $cases as $case ) {
     $actual = $classify->invokeArgs( null, $case[0] );
     gpp_journey_assert( $case[1] === $actual, $case[2] . ' Actual: ' . var_export( $actual, true ) );
 }
+
+$result_markup = $adapter->getMethod( 'resultMarkup' );
+$result_markup->setAccessible( true );
+$synthetic_identity = array(
+    'name' => 'SYNTHETIC STUDENT',
+    'national_id' => '1234567890',
+    'entry_id' => 98765,
+);
+foreach ( array(
+    EntryDetailJourneyPresentationAdapter::STATE_APPROVED => 'پرونده تأیید شد',
+    EntryDetailJourneyPresentationAdapter::STATE_REJECTED => 'پرونده رد شد',
+) as $terminal_state => $expected_title ) {
+    $markup = $result_markup->invoke( null, $terminal_state, $synthetic_identity, '/my-tasks/', 'synthetic.profile', true );
+    gpp_journey_assert( false !== strpos( $markup, 'data-gpp-entry-journey-result="' . $terminal_state . '"' ), 'Terminal result marker missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false !== strpos( $markup, $expected_title ), 'Terminal result title missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false !== strpos( $markup, 'بازگشت به کارهای من' ), 'Terminal continuation missing for ' . $terminal_state . '.' );
+    gpp_journey_assert( false === strpos( $markup, 'gpp-entry-journey__case-context' ), 'Terminal case-context markup must be absent for ' . $terminal_state . '.' );
+    gpp_journey_assert( false === strpos( $markup, 'SYNTHETIC STUDENT' ) && false === strpos( $markup, '1234567890' ) && false === strpos( $markup, '98765' ), 'Terminal case identity leaked into markup for ' . $terminal_state . '.' );
+}
+$unknown_markup = $result_markup->invoke( null, EntryDetailJourneyPresentationAdapter::STATE_UNKNOWN, $synthetic_identity, '/my-tasks/', 'synthetic.profile', true );
+gpp_journey_assert( false !== strpos( $unknown_markup, 'data-gpp-entry-journey-result="unknown"' ), 'Unknown fail-closed marker is missing.' );
+gpp_journey_assert( false !== strpos( $unknown_markup, 'gpp-entry-journey__case-context' ) && false !== strpos( $unknown_markup, 'SYNTHETIC STUDENT' ) && false !== strpos( $unknown_markup, '1234567890' ), 'Unknown fail-closed context must remain available.' );
 
 $root = dirname( __DIR__, 2 );
 $php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailJourneyPresentationAdapter.php' );
@@ -103,6 +153,38 @@ gpp_journey_assert(
     && false !== strpos( $css, "stroke='%23fff'" ),
     'Decorative RTL return icon must be CSS-only and white on both return paths.'
 );
+
+$result_markup_start = strpos( $php, 'private static function resultMarkup' );
+$result_copy_start = strpos( $php, 'private static function resultCopy', $result_markup_start );
+gpp_journey_assert(
+    false !== $result_markup_start && false !== $result_copy_start && $result_copy_start > $result_markup_start,
+    'MR-5 result markup boundary could not be inspected.'
+);
+$result_markup_php = substr( $php, $result_markup_start, $result_copy_start - $result_markup_start );
+gpp_journey_assert(
+    false !== strpos( $result_markup_php, 'if ( self::STATE_UNKNOWN === $state )' )
+    && 1 === substr_count( $result_markup_php, '$html .= self::caseContextMarkup( $identity );' ),
+    'MR-5 terminal Approved/Rejected markup must omit repeated case identity while Unknown keeps its existing fail-closed context.'
+);
+
+$terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
+foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
+    $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
+    $terminal_boundary = '.gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    gpp_journey_assert(
+        false !== strpos( $css, $terminal_boundary . ' ' . $terminal_targets ),
+        'MR-5 terminal result must suppress only the proven competing native Entry Detail surfaces for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false === strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
+        'MR-5 terminal identity must be omitted by server markup, not implemented as CSS-only hiding for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false === strpos( $css, $terminal_boundary . ' .gpp-entry-print-utility' ),
+        'MR-5 terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
+    );
+}
+
 $correction_print_boundary = '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])';
 $correction_gpp_print_selector = $correction_print_boundary . ' .gpp-entry-print-utility';
 $correction_native_print_selector = $correction_print_boundary . ' .detail-view-print';
@@ -112,9 +194,8 @@ gpp_journey_assert(
     'MR-4 Print suppression must hide native and GPP Print surfaces under the same server-admitted correction marker.'
 );
 gpp_journey_assert(
-    1 === substr_count( $css, '.gpp-entry-print-utility' )
-    && 1 === substr_count( $css, '.detail-view-print' ),
-    'Journey CSS must not suppress either Print surface outside the single correction-only rule.'
+    1 === substr_count( $css, $correction_gpp_print_selector ),
+    'Journey CSS must keep GPP Print suppression confined to the single MR-4 correction boundary.'
 );
 gpp_journey_assert(
     false === strpos( $php, 'gpp-entry-journey__return-icon' )

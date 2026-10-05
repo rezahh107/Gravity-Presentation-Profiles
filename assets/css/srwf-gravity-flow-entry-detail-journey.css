@@ -193,6 +193,20 @@
 }
 
 /*
+ * MR-5 terminal convergence is admitted only by the server-emitted result
+ * marker produced from fresh Approved/Rejected host truth. Terminal case
+ * identity is omitted by the server renderer itself; CSS suppresses the
+ * authentic native workflow/status/action and Timeline sibling regions plus
+ * the duplicate raw Entry Detail/Print surfaces. The native nodes stay in the
+ * DOM and Gravity Flow remains their owner. The separately authorized GPP
+ * dossier Print utility is intentionally not selected here.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
+.gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print) {
+    display: none;
+}
+
+/*
  * MR-4 correction mode keeps Gravity Flow / Gravity Forms as the complete
  * editor owner. The server-owned correction orientation above is the admission
  * marker; :has() only harmonizes the already-rendered native User Input form.
