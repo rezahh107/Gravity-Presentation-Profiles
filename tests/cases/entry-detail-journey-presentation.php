@@ -103,6 +103,29 @@ gpp_journey_assert(
     && false !== strpos( $css, "stroke='%23fff'" ),
     'Decorative RTL return icon must be CSS-only and white on both return paths.'
 );
+
+$terminal_targets = ':is(.entry-detail-view, #gravityflow-status-box-container, .gravityflow-timeline, .detail-view-print)';
+foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
+    $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
+    $terminal_boundary = '.gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    gpp_journey_assert(
+        false !== strpos( $css, $terminal_boundary . ' ' . $terminal_targets ),
+        'MR-5 terminal result must suppress only the proven competing native Entry Detail surfaces for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false !== strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
+        'MR-5 terminal result must suppress repeated case identity for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false === strpos( $css, $terminal_boundary . ' .gpp-entry-print-utility' ),
+        'MR-5 terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
+    );
+}
+gpp_journey_assert(
+    false === strpos( $css, '.gpp-entry-journey-result[data-gpp-entry-journey-result="unknown"] .gpp-entry-journey__case-context' ),
+    'MR-5 identity suppression must not leak into Unknown fail-closed presentation.'
+);
+
 $correction_print_boundary = '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])';
 $correction_gpp_print_selector = $correction_print_boundary . ' .gpp-entry-print-utility';
 $correction_native_print_selector = $correction_print_boundary . ' .detail-view-print';
@@ -112,9 +135,8 @@ gpp_journey_assert(
     'MR-4 Print suppression must hide native and GPP Print surfaces under the same server-admitted correction marker.'
 );
 gpp_journey_assert(
-    1 === substr_count( $css, '.gpp-entry-print-utility' )
-    && 1 === substr_count( $css, '.detail-view-print' ),
-    'Journey CSS must not suppress either Print surface outside the single correction-only rule.'
+    1 === substr_count( $css, $correction_gpp_print_selector ),
+    'Journey CSS must keep GPP Print suppression confined to the single MR-4 correction boundary.'
 );
 gpp_journey_assert(
     false === strpos( $php, 'gpp-entry-journey__return-icon' )
