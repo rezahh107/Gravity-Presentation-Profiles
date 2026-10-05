@@ -192,6 +192,153 @@
     max-width: none;
 }
 
+/*
+ * MR-4 correction mode keeps Gravity Flow / Gravity Forms as the complete
+ * editor owner. The server-owned correction orientation above is the admission
+ * marker; :has() only harmonizes the already-rendered native User Input form.
+ * No native field is moved, cloned, hidden or made editable by this layer.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 1060px;
+    margin: 0 0 24px;
+    padding: 28px 32px;
+    border: 1px solid #e4e7ec;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
+    color: #172033;
+    font-family: inherit;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gform_wrapper {
+    max-width: none;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_fields,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gfield,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .ginput_container {
+    min-width: 0;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gfield_label {
+    color: #172033;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="text"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="email"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="tel"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="number"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="url"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="date"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-block-size: 44px;
+    padding: 10px 12px;
+    border: 1px solid #8690a1;
+    border-radius: 8px;
+    background: #fff;
+    color: #172033;
+    font: inherit;
+    line-height: 1.8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea {
+    min-block-size: 112px;
+    resize: vertical;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="file"] {
+    box-sizing: border-box;
+    max-width: 100%;
+    font: inherit;
+}
+
+/*
+ * Pinned Hello/GF/Flow runtime can zero the computed outline width after the
+ * native control is reached through real keyboard traversal. Preserve a visible
+ * focus indicator at the same server-admitted correction boundary only; the
+ * priority escalation is restricted to outline paint and does not alter state,
+ * editability, geometry or submission behavior.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper button:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button:focus,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button:focus-visible {
+    outline: 3px solid #1d4ed8 !important;
+    outline-offset: 3px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_validation_errors,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gfield_validation_message,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .validation_message {
+    box-sizing: border-box;
+    border-color: #efb1ad;
+    border-radius: 8px;
+    background: #fff7f6;
+    color: #b42318;
+    font: inherit;
+    line-height: 1.8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gravityflow-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 22px;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer input[type="submit"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button {
+    box-sizing: border-box;
+    min-block-size: 44px;
+    margin: 0;
+    padding: 8px 18px;
+    border: 1px solid #1d4ed8;
+    border-radius: 8px;
+    background: #1d4ed8;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.8;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+/*
+ * Print remains a separate native-authorized utility in Review, but neither
+ * native Gravity Flow Print nor the GPP dossier replacement is an operator
+ * action in qualified correction mode. Suppression is tied only to the same
+ * server-admitted correction marker; both DOM surfaces and all Print request /
+ * dossier behavior otherwise remain untouched.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-print-utility,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .detail-view-print {
+    display: none;
+}
+
 @media (max-width: 600px) {
     .gpp-entry-journey-nav,
     .gpp-entry-journey,
@@ -221,6 +368,21 @@
     .gpp-entry-journey__return,
     .gpp-entry-journey-result__return,
     .gravityflow-back-link-container a.back-link {
+        width: 100%;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper {
+        width: calc(100% - 25px);
+        max-width: none;
+        margin-inline: auto;
+        padding: 20px 16px;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer input[type="submit"],
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"],
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button,
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button,
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button {
         width: 100%;
     }
 }

@@ -19,9 +19,14 @@ if ( ! is_array( $manifest ) || empty( $manifest['form_id'] ) || empty( $manifes
 
 $control_source = __DIR__ . '/srwf-journey-production-host-control.php';
 $control_target = trailingslashit( WPMU_PLUGIN_DIR ) . 'gpp-srwf-journey-production-host-control.php';
+$mr4_control_source = __DIR__ . '/srwf-journey-production-mr4-host-control.php';
+$mr4_control_target = trailingslashit( WPMU_PLUGIN_DIR ) . 'gpp-srwf-journey-production-mr4-host-control.php';
 wp_mkdir_p( WPMU_PLUGIN_DIR );
 if ( ! is_readable( $control_source ) || ! copy( $control_source, $control_target ) ) {
     throw new RuntimeException( 'Unable to install the test-only journey host-args control.' );
+}
+if ( ! is_readable( $mr4_control_source ) || ! copy( $mr4_control_source, $mr4_control_target ) ) {
+    throw new RuntimeException( 'Unable to install the test-only MR-4 editable-fields control.' );
 }
 
 $form_id = (int) $manifest['form_id'];
@@ -30,11 +35,24 @@ if ( ! is_array( $form ) ) {
     throw new RuntimeException( 'Journey form is unavailable.' );
 }
 
+// Exercise the authentic GTB/GPP coexistence boundary rather than merely having
+// GTB installed. The exact GTB Registration build must see its own opt-in form
+// identity and still exclude Gravity Flow Entry Detail by rendering context.
+$classes = isset( $form['cssClass'] ) && is_string( $form['cssClass'] )
+    ? preg_split( '/\s+/', trim( $form['cssClass'] ), -1, PREG_SPLIT_NO_EMPTY )
+    : array();
+$classes = is_array( $classes ) ? $classes : array();
+if ( ! in_array( 'srwf-registration-theme', $classes, true ) ) {
+    $classes[] = 'srwf-registration-theme';
+}
+$form['cssClass'] = implode( ' ', array_values( array_unique( $classes ) ) );
+
 $identity_fields = array(
     'first_name' => 2,
     'last_name' => 3,
     'national_id' => 4,
 );
+$conditional_field_id = 5;
 $existing_ids = array();
 foreach ( $form['fields'] as $field ) {
     if ( is_object( $field ) && isset( $field->id ) ) {
@@ -58,9 +76,30 @@ foreach ( array(
         )
     );
 }
+if ( ! in_array( $conditional_field_id, $existing_ids, true ) ) {
+    $form['fields'][] = GF_Fields::create(
+        array(
+            'type' => 'text',
+            'id' => $conditional_field_id,
+            'label' => 'MR4 Conditional Detail',
+            'isRequired' => false,
+            'conditionalLogic' => array(
+                'actionType' => 'show',
+                'logicType' => 'all',
+                'rules' => array(
+                    array(
+                        'fieldId' => '1',
+                        'operator' => 'is',
+                        'value' => 'SHOW-MR4',
+                    ),
+                ),
+            ),
+        )
+    );
+}
 $result = GFAPI::update_form( $form );
 if ( is_wp_error( $result ) || true !== $result ) {
-    throw new RuntimeException( 'Unable to extend the synthetic journey form with identity fields.' );
+    throw new RuntimeException( 'Unable to extend the synthetic journey form with MR-4 fields.' );
 }
 
 foreach ( $manifest['entries'] as $label => $entry_id ) {
@@ -126,7 +165,10 @@ $manifest['production_presentation'] = array(
     'entry_detail_setup_status' => $setup['status'],
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
+    'conditional_field_id' => $conditional_field_id,
+    'gtb_registration_opt_in' => in_array( 'srwf-registration-theme', $classes, true ),
     'host_args_control' => basename( $control_target ),
+    'mr4_host_control' => basename( $mr4_control_target ),
 );
 update_option( 'gpp_srwf_journey_host_manifest', $manifest, false );
 

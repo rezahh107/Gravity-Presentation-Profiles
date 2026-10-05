@@ -99,6 +99,8 @@ function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id, $
             'assignees' => array( 'user_id|' . (int) $correction_assignee_id ),
             'assignee_policy' => 'all',
             'editable_fields' => array( '1' ),
+            'conditional_logic_editable_fields_enabled' => '1',
+            'conditional_logic_editable_fields_mode' => 'dynamic',
             'instructionsEnable' => '1',
             'instructionsValue' => 'Update the synthetic correction value and submit.',
             'default_status' => 'hidden',
@@ -150,6 +152,22 @@ function srwf_journey_add_steps( $form_id, $operator_id, $negative_control_id, $
                     'confirmation_prompt' => rgar( $review_meta, 'confirmation_prompt' ),
                     'revertEnable' => rgar( $review_meta, 'revertEnable' ),
                     'revertValue' => rgar( $review_meta, 'revertValue' ),
+                ),
+                JSON_UNESCAPED_SLASHES
+            )
+        );
+    }
+
+    if (
+        '1' !== (string) rgar( $correction_meta, 'conditional_logic_editable_fields_enabled' )
+        || 'dynamic' !== (string) rgar( $correction_meta, 'conditional_logic_editable_fields_mode' )
+    ) {
+        throw new RuntimeException(
+            'Host-effective User Input conditional-logic settings were not admitted at step creation: ' .
+            wp_json_encode(
+                array(
+                    'conditional_logic_editable_fields_enabled' => rgar( $correction_meta, 'conditional_logic_editable_fields_enabled' ),
+                    'conditional_logic_editable_fields_mode' => rgar( $correction_meta, 'conditional_logic_editable_fields_mode' ),
                 ),
                 JSON_UNESCAPED_SLASHES
             )
