@@ -328,12 +328,14 @@
 }
 
 /*
- * Print remains a separate native-authorized utility in Review, but it is not
- * an operator action in qualified correction mode. Suppression is tied only to
- * the same server-admitted correction marker; the Print request/dossier path is
- * otherwise untouched and no parallel correction-state evaluator is introduced.
+ * Print remains a separate native-authorized utility in Review, but neither
+ * native Gravity Flow Print nor the GPP dossier replacement is an operator
+ * action in qualified correction mode. Suppression is tied only to the same
+ * server-admitted correction marker; both DOM surfaces and all Print request /
+ * dossier behavior otherwise remain untouched.
  */
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-print-utility {
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-print-utility,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .detail-view-print {
     display: none;
 }
 

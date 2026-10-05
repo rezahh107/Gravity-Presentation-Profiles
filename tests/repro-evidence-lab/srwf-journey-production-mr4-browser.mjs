@@ -142,9 +142,45 @@ async function focusByKeyboard(page, locator) {
 
 async function printState(page) {
   return page.evaluate(() => {
-    const nodes = [...document.querySelectorAll('[data-gpp-print-utility="dossier"]')];
-    return { dom_count: nodes.length, visible_count: nodes.filter(node => node.offsetParent !== null && getComputedStyle(node).display !== 'none').length };
+    const isVisible = node => {
+      if (!node || node.offsetParent === null) return false;
+      const style = getComputedStyle(node);
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && parseFloat(style.opacity || '1') > 0;
+    };
+    const summarize = nodes => ({
+      dom_count: nodes.length,
+      visible_count: nodes.filter(isVisible).length,
+      displays: nodes.map(node => getComputedStyle(node).display),
+      visibilities: nodes.map(node => getComputedStyle(node).visibility),
+    });
+    const nativeNodes = [...document.querySelectorAll('.detail-view-print')];
+    const nativeAffordances = nativeNodes.flatMap(node => [...node.querySelectorAll('a,button,input,label,select,textarea')]);
+    const gppNodes = [...document.querySelectorAll('[data-gpp-print-utility="dossier"]')];
+    return {
+      native: {
+        ...summarize(nativeNodes),
+        affordance_dom_count: nativeAffordances.length,
+        affordance_visible_count: nativeAffordances.filter(isVisible).length,
+      },
+      gpp: summarize(gppNodes),
+    };
   });
+}
+
+function reviewPrintStateIsValid(print) {
+  return print.native.dom_count === 1
+    && print.native.visible_count === 0
+    && print.native.affordance_visible_count === 0
+    && print.gpp.dom_count === 1
+    && print.gpp.visible_count === 1;
+}
+
+function correctionPrintStateIsValid(print) {
+  return print.native.dom_count === 1
+    && print.native.visible_count === 0
+    && print.native.affordance_visible_count === 0
+    && print.gpp.dom_count === 1
+    && print.gpp.visible_count === 0;
 }
 
 async function gtbStyles(page) {
@@ -210,7 +246,7 @@ await test('SRWF-PROD-MR4-REVIEW-001', 'Review remains native-authoritative befo
   const actions = await nativeActions(page);
   const print = await printState(page);
   const gtb = await gtbStyles(page);
-  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').count() !== 1 || print.visible_count !== 1) {
+  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]').count() !== 1 || !reviewPrintStateIsValid(print)) {
     throw new Error(`Review baseline failed: ${JSON.stringify({ state, actions, print, gtb })}`);
   }
   return { active_theme: activeTheme, state, actions, print, gtb_stylesheets_observed: gtb };
@@ -249,7 +285,7 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input and 
     };
   });
   const field5Visible = await page.locator('input[name="input_5"]:visible').count();
-  if (!dialog || state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || state.current_step?.can_update !== true || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5']) || orientationCount !== 1 || gppOwnedInputs !== 0 || unauthorized !== 0 || visibleInputs.join(',') !== 'input_1' || field5Visible !== 0 || print.visible_count !== 0 || !visual || visual.wrapper_border_radius !== '14px' || visual.wrapper_border_style !== 'solid' || visual.wrapper_background !== 'rgb(255, 255, 255)' || visual.wrapper_box_shadow === 'none' || visual.input_height < 44 || visual.input_border_radius !== '8px' || visual.submit_id !== 'gravityflow_update_button' || visual.submit_height < 44 || visual.submit_border_radius !== '8px') {
+  if (!dialog || state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || state.current_step?.can_update !== true || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5']) || orientationCount !== 1 || gppOwnedInputs !== 0 || unauthorized !== 0 || visibleInputs.join(',') !== 'input_1' || field5Visible !== 0 || !correctionPrintStateIsValid(print) || !visual || visual.wrapper_border_radius !== '14px' || visual.wrapper_border_style !== 'solid' || visual.wrapper_background !== 'rgb(255, 255, 255)' || visual.wrapper_box_shadow === 'none' || visual.input_height < 44 || visual.input_border_radius !== '8px' || visual.submit_id !== 'gravityflow_update_button' || visual.submit_height < 44 || visual.submit_border_radius !== '8px') {
     throw new Error(`Correction admission/composition failed: ${JSON.stringify({ dialog, state, visibleInputs, orientationCount, gppOwnedInputs, unauthorized, print, gtb, visual, field5Visible })}`);
   }
   return { dialog, state, visible_inputs: visibleInputs, print, gtb_stylesheets_observed: gtb, visual };
@@ -291,7 +327,7 @@ await test('SRWF-PROD-MR4-VALIDATION-001', 'native validation failure stays in c
     return { aria_invalid: input?.getAttribute('aria-invalid') || null, field_error: Boolean(field?.classList.contains('gfield_error')), visible_messages: messages.filter(node => node.offsetParent !== null).map(node => node.textContent.replace(/\s+/g, ' ').trim()) };
   }, field5Id);
   const print = await printState(page);
-  if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || restoredController !== 'SHOW-MR4' || restoredInvalidValue !== 'INVALID-MR4' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 1 || await field5Node.count() !== 1 || (!errorState.field_error && errorState.aria_invalid !== 'true' && errorState.visible_messages.length === 0) || print.visible_count !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 0) {
+  if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || restoredController !== 'SHOW-MR4' || restoredInvalidValue !== 'INVALID-MR4' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 1 || await field5Node.count() !== 1 || (!errorState.field_error && errorState.aria_invalid !== 'true' && errorState.visible_messages.length === 0) || !correctionPrintStateIsValid(print) || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 0) {
     throw new Error(`Validation contract failed: ${JSON.stringify({ state, restoredController, restoredInvalidValue, errorState, print })}`);
   }
   return { state, restored_controller: restoredController, restored_invalid_value: restoredInvalidValue, error_state: errorState, print };
@@ -320,11 +356,12 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow
       return { outline_style: style.outlineStyle, outline_width: style.outlineWidth, box_shadow: style.boxShadow };
     });
     const geometry = await correctionGeometry(page);
+    const print = await printState(page);
     const submit = nativeCorrectionSubmit(page);
-    if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || !hasVisibleFocusIndicator(focus)) {
-      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount })}`);
+    if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || !hasVisibleFocusIndicator(focus) || !correctionPrintStateIsValid(print)) {
+      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount, print })}`);
     }
-    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount });
+    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount, print });
     if (width !== 1440) await page.screenshot({ path: `${artifactDir}/srwf-journey-mr4-correction-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -348,7 +385,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
   const actions = await nativeActions(page);
   const print = await printState(page);
   const gtb = await gtbStyles(page);
-  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || state.field_1 !== 'SHOW-MR4' || state.field_5 !== 'VALID-CONDITIONAL' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 1 || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || print.visible_count !== 1) {
+  if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || state.field_1 !== 'SHOW-MR4' || state.field_5 !== 'VALID-CONDITIONAL' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 1 || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || !reviewPrintStateIsValid(print)) {
     throw new Error(`Correction completion/Review regression failed: ${JSON.stringify({ state, actions, print, gtb })}`);
   }
   return { state, actions, print, gtb_stylesheets_observed: gtb };
@@ -357,7 +394,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
 wpEval("delete_option('gpp_srwf_mr4_expand_editable_fields'); echo '1';");
 await browser.close();
 fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr4-browser.json`, JSON.stringify({ schema_version: '1.2.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
+fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr4-browser.json`, JSON.stringify({ schema_version: '1.3.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n');
 const failed = results.filter(result => result.status !== 'PASS');
 if (failed.length) {
   console.error(JSON.stringify({ failed }, null, 2));
