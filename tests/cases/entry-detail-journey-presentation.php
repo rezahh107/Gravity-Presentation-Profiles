@@ -103,9 +103,15 @@ gpp_journey_assert(
     && false !== strpos( $css, "stroke='%23fff'" ),
     'Decorative RTL return icon must be CSS-only and white on both return paths.'
 );
+$correction_print_selector = '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-print-utility';
 gpp_journey_assert(
-    false === strpos( $css, '.gpp-entry-print-utility' ),
-    'Journey refinement must not restyle the existing Print utility.'
+    false !== strpos( $css, $correction_print_selector )
+    && false !== strpos( $css, $correction_print_selector . " {\n    display: none;\n}" ),
+    'MR-4 Print suppression must be presentation-only and scoped to the server-admitted correction marker.'
+);
+gpp_journey_assert(
+    1 === substr_count( $css, '.gpp-entry-print-utility' ),
+    'Journey CSS must not generally restyle the existing Print utility outside the single correction-only suppression rule.'
 );
 gpp_journey_assert(
     false === strpos( $php, 'gpp-entry-journey__return-icon' )
