@@ -130,11 +130,14 @@ async function commitTextByKeyboard(page, locator, value) {
 }
 
 async function focusByKeyboard(page, locator) {
-  await locator.focus();
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Tab');
-  const active = await locator.evaluate(node => document.activeElement === node);
-  if (!active) throw new Error('Native editable control could not be reached again through keyboard traversal.');
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  for (let index = 0; index < 80; index += 1) {
+    await page.keyboard.press('Tab');
+    if (await locator.evaluate(node => document.activeElement === node)) return index + 1;
+  }
+  throw new Error('Native editable control is not reachable through document keyboard traversal.');
 }
 
 async function printState(page) {
@@ -297,14 +300,14 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow
     const baselineOverflow = await pageOverflow(page);
     await accept(page, 'revert');
     const input = page.locator('input[name="input_1"]').first();
-    await focusByKeyboard(page, input);
+    const tabCount = await focusByKeyboard(page, input);
     const focus = await input.evaluate(node => { const style = getComputedStyle(node); return { outline_style: style.outlineStyle, outline_width: style.outlineWidth }; });
     const geometry = await correctionGeometry(page);
     const submit = nativeCorrectionSubmit(page);
     if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || focus.outline_style === 'none' || parseFloat(focus.outline_width || '0') < 1) {
-      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus })}`);
+      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount })}`);
     }
-    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus });
+    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount });
     if (width !== 1440) await page.screenshot({ path: `${artifactDir}/srwf-journey-mr4-correction-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
