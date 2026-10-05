@@ -46,8 +46,8 @@ add_filter(
 );
 
 // Exercise Gravity Forms' authentic field-validation/error rendering boundary
-// with a deterministic synthetic value. GPP remains completely outside this
-// decision and only styles the native validation UI that Gravity Forms emits.
+// with a deterministic synthetic invalid value. GPP remains completely outside
+// this decision and only styles the native validation UI Gravity Forms emits.
 add_filter(
     'gform_field_validation',
     static function ( $result, $value, $form, $field ) {
@@ -56,7 +56,7 @@ add_filter(
             return $result;
         }
 
-        if ( 'INVALID-MR4' === (string) $value ) {
+        if ( '' === trim( (string) $value ) || 'INVALID-MR4' === (string) $value ) {
             $result['is_valid'] = false;
             $result['message'] = 'MR4 synthetic native validation failure.';
         }
