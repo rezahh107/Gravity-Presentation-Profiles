@@ -53,7 +53,7 @@
             ? [...actionRegion.querySelectorAll('button[type="submit"]')].filter(button => MATERIAL_REVIEW_ACTIONS.has(button.value))
             : [];
 
-        if (!form || !hiddenStatus || !actionRegion || buttons.length === 0) return;
+        if (!form || !hiddenStatus || !hiddenStatus.name || !actionRegion || buttons.length === 0) return;
 
         const feedback = document.createElement('span');
         feedback.className = 'gpp-review-action-busy-feedback';
@@ -94,9 +94,9 @@
             actionRegion.setAttribute('aria-busy', 'true');
             feedback.hidden = false;
 
-            // The host-owned action value has already been copied into the
-            // submitted form payload. Keep the native controls in the DOM and
-            // expose temporary unavailability without replacing host submission.
+            // The host-owned action value is already present in the material
+            // payload. Keep native controls enabled for Gravity Forms while
+            // exposing temporary unavailability to the operator.
             buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
         };
 
@@ -110,18 +110,14 @@
         }, true);
 
         form.addEventListener('formdata', event => {
-            const submittedAction = event.formData?.get('gravityflow_approval_new_status_step');
-            const action = typeof submittedAction === 'string' && submittedAction !== ''
-                ? submittedAction
-                : hiddenStatus.value;
+            const submittedAction = event.formData?.get(hiddenStatus.name);
+            if (typeof submittedAction !== 'string' || !MATERIAL_REVIEW_ACTIONS.has(submittedAction)) return;
 
-            if (!MATERIAL_REVIEW_ACTIONS.has(action)) return;
-
-            // Gravity Flow has already accepted native confirmation and populated
-            // its hidden action carrier. Gravity Forms 3.1.1.1 may prevent the
-            // preceding submit event while continuing submission itself, so the
-            // browser's formdata boundary is the first non-intercepting point at
-            // which the material payload is actually being constructed.
+            // Gravity Flow first copies the confirmed action into its named hidden
+            // carrier. Gravity Forms 3.1.1.1 may suppress the browser submit event
+            // while continuing its own submission lifecycle, so formdata is the
+            // first non-intercepting boundary that proves the host-owned action is
+            // actually present in a material payload.
             markBusy();
         });
 
