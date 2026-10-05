@@ -3,7 +3,7 @@
  * Test-only MR-4 control. When explicitly enabled by the browser scenario, use
  * Gravity Flow's native editable-fields filter to expose the synthetic
  * conditional field through the active User Input step. Production GPP code is
- * not involved in editable-field membership or validation.
+ * not involved in editable-field membership, conditional logic or validation.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit( 1 );
@@ -33,6 +33,14 @@ add_filter(
             || ! gpp_srwf_mr4_test_control_matches( $step->get_form_id(), $step->get_id() ) ) {
             return $editable_fields;
         }
+
+        // Gravity Flow User Input intentionally disables a field's Gravity Forms
+        // conditional logic unless this host-owned step setting is enabled. The
+        // MR-4 browser control must exercise the authentic enabled behavior rather
+        // than treating the default "show all editable fields" mode as a GPP bug.
+        // Gravity_Flow_Step exposes feed settings through its native magic setter;
+        // this mutates only the in-memory synthetic qualification step instance.
+        $step->conditional_logic_editable_fields_enabled = '1';
 
         $editable_fields = is_array( $editable_fields ) ? array_values( array_map( 'strval', $editable_fields ) ) : array();
         if ( ! in_array( '5', $editable_fields, true ) ) {
