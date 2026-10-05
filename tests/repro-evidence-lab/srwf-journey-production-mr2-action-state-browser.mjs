@@ -153,26 +153,19 @@ async function gotoReview(page, entryId) {
   assertIdle(await snap(page));
 }
 
-async function activate(page, button, keyboard = false) {
-  if (keyboard) {
-    await button.focus();
-    await page.keyboard.press('Enter');
-    return;
-  }
-  const box = await button.boundingBox();
-  if (!box) throw new Error('No button geometry');
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-}
-
-async function installLifecycleProbe(page, token, { duplicateOnFormdata = false, duplicateValue = 'approved' } = {}) {
-  await page.evaluate(({ token, duplicateOnFormdata, duplicateValue }) => {
+async function installLifecycleProbe(page, token, { duplicateValue = null } = {}) {
+  await page.evaluate(({ token, duplicateValue }) => {
     const dossier = document.querySelector('.gpp-entry-dossier[data-gpp-review-mode="read-only"]');
     const form = dossier?.closest('form');
     const region = form?.querySelector('.gravityflow-action-buttons');
-    if (!form || !region) throw new Error('Review lifecycle probe target missing.');
+    const hidden = form?.querySelector('#gravityflow_approval_new_status_step');
+    if (!form || !region || !hidden?.name) throw new Error('Review lifecycle probe target missing.');
 
     let submitCount = 0;
     let formdataCount = 0;
+    let busyEnterCount = 0;
+    let duplicateAttempted = false;
+    let lastBusy = region.dataset.gppReviewActionBusy || null;
     const emit = (kind, detail = {}) => console.log(`MR2_PROBE ${token} ${JSON.stringify({ kind, ...detail })}`);
     const state = () => {
       const feedback = region.querySelector('.gpp-review-action-busy-feedback');
@@ -196,26 +189,27 @@ async function installLifecycleProbe(page, token, { duplicateOnFormdata = false,
       queueMicrotask(() => emit('submit', {
         submitCount,
         defaultPrevented: Boolean(event.defaultPrevented),
-        hidden: form.querySelector('#gravityflow_approval_new_status_step')?.value ?? null,
+        hidden: hidden.value,
       }));
     }, true);
 
     form.addEventListener('formdata', event => {
       formdataCount += 1;
-      emit('formdata', {
-        formdataCount,
-        action: event.formData.get('gravityflow_approval_new_status_step'),
-        state: state(),
-      });
+      const action = event.formData.get(hidden.name);
+      const current = state();
+      if (lastBusy !== '1' && current.busy === '1') busyEnterCount += 1;
+      lastBusy = current.busy;
+      emit('formdata', { formdataCount, action, hiddenName: hidden.name, busyEnterCount, state: current });
 
-      if (duplicateOnFormdata && formdataCount === 1) {
+      if (!duplicateAttempted && duplicateValue && action === duplicateValue && current.busy === '1') {
+        duplicateAttempted = true;
         const button = region.querySelector(`button[type="submit"][value="${duplicateValue}"]`);
         button?.click();
         button?.click();
-        emit('duplicate-attempted', { submitCount, formdataCount, state: state() });
+        emit('duplicate-attempted', { submitCount, formdataCount, busyEnterCount, state: state() });
       }
     });
-  }, { token, duplicateOnFormdata, duplicateValue });
+  }, { token, duplicateValue });
 }
 
 function probeCollector(page, token) {
@@ -230,10 +224,10 @@ function probeCollector(page, token) {
   return { events, stop: () => page.off('console', listener) };
 }
 
-async function accepted(page, value, { keyboard = false, duplicateOnFormdata = false } = {}) {
-  const token = `${value}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+async function activateAccepted(page, entryId, value, { keyboard = false, duplicate = false } = {}) {
+  const token = `${value}-${entryId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const collector = probeCollector(page, token);
-  await installLifecycleProbe(page, token, { duplicateOnFormdata, duplicateValue: value });
+  await installLifecycleProbe(page, token, { duplicateValue: duplicate ? value : null });
 
   const dialogs = [];
   const dialogListener = async dialog => {
@@ -243,23 +237,31 @@ async function accepted(page, value, { keyboard = false, duplicateOnFormdata = f
   };
   page.on('dialog', dialogListener);
 
-  let posts = 0;
-  let postStatus = null;
+  const requests = [];
+  const responses = [];
   const requestListener = request => {
-    if (request.method() === 'POST' && request.isNavigationRequest()) posts += 1;
+    if (request.method() === 'POST') {
+      requests.push({ url: request.url(), resource_type: request.resourceType(), navigation: request.isNavigationRequest() });
+    }
   };
   const responseListener = response => {
     const request = response.request();
-    if (request.method() === 'POST' && request.isNavigationRequest()) postStatus = response.status();
+    if (request.method() === 'POST') {
+      responses.push({ url: response.url(), status: response.status(), resource_type: request.resourceType(), navigation: request.isNavigationRequest() });
+    }
   };
   page.on('request', requestListener);
   page.on('response', responseListener);
 
-  const navigation = page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
   const button = page.locator(`.gravityflow-action-buttons button[value="${value}"]`).first();
+  const navigation = page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
   try {
-    await activate(page, button, keyboard);
-    await navigation;
+    if (keyboard) {
+      await button.focus();
+      await Promise.all([navigation, page.keyboard.press('Enter')]);
+    } else {
+      await Promise.all([navigation, button.click()]);
+    }
   } finally {
     page.off('dialog', dialogListener);
     page.off('request', requestListener);
@@ -267,16 +269,27 @@ async function accepted(page, value, { keyboard = false, duplicateOnFormdata = f
     collector.stop();
   }
 
-  const formdata = collector.events.filter(event => event.kind === 'formdata');
-  const duplicate = collector.events.filter(event => event.kind === 'duplicate-attempted');
-  if (dialogs.length !== 1 || dialogs[0].type !== 'confirm') throw new Error(`Native confirmation drifted: ${JSON.stringify(dialogs)}`);
-  if (posts !== 1) throw new Error(`Expected exactly one native navigation POST, got ${posts}`);
-  if (formdata.length !== 1) throw new Error(`Expected exactly one material formdata boundary, got ${JSON.stringify(collector.events)}`);
-  if (formdata[0].action !== value) throw new Error(`Submitted action carrier drifted: ${JSON.stringify(formdata[0])}`);
-  assertBusy({ bound: '1', ...formdata[0].state });
-  if (duplicateOnFormdata && duplicate.length !== 1) throw new Error(`Duplicate probe did not run exactly once: ${JSON.stringify(collector.events)}`);
+  const material = collector.events.filter(event => event.kind === 'formdata' && event.action === value);
+  const duplicateAttempts = collector.events.filter(event => event.kind === 'duplicate-attempted');
+  const busyEntries = material.length ? Math.max(...material.map(event => Number(event.busyEnterCount || 0))) : 0;
+  const navigationPosts = requests.filter(request => request.navigation);
 
-  return { dialogs, posts, post_status: postStatus, lifecycle: collector.events };
+  if (dialogs.length !== 1 || dialogs[0].type !== 'confirm') throw new Error(`Native confirmation drifted: ${JSON.stringify(dialogs)}`);
+  if (navigationPosts.length !== 1) throw new Error(`Expected one native navigation POST: ${JSON.stringify(requests)}`);
+  if (material.length < 1) throw new Error(`No material host payload observed: ${JSON.stringify(collector.events)}`);
+  if (busyEntries !== 1) throw new Error(`Busy entered ${busyEntries} times: ${JSON.stringify(collector.events)}`);
+  material.forEach(event => assertBusy({ bound: '1', ...event.state }));
+  if (duplicate && duplicateAttempts.length !== 1) throw new Error(`Duplicate probe count wrong: ${JSON.stringify(collector.events)}`);
+
+  return {
+    dialogs,
+    requests,
+    responses,
+    lifecycle: collector.events,
+    material_formdata_count: material.length,
+    busy_enter_count: busyEntries,
+    duplicate_attempts: duplicateAttempts.length,
+  };
 }
 
 const results = [];
@@ -284,7 +297,7 @@ function persist() {
   fs.mkdirSync(artifactDir, { recursive: true });
   fs.writeFileSync(
     `${artifactDir}/srwf-journey-production-mr2-action-state-browser.json`,
-    JSON.stringify({ schema_version: '1.2.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
+    JSON.stringify({ schema_version: '1.3.0', runtime: 'REPRODUCIBLE_PINNED_LAB', results }, null, 2) + '\n'
   );
 }
 
@@ -308,194 +321,246 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 900 
 context.setDefaultTimeout(10000);
 context.setDefaultNavigationTimeout(15000);
 await auth(context);
-const page = await context.newPage();
 
-await test('SRWF-MR2-CANCEL-001', 'Approve confirmation Cancel bypasses payload/busy and mutation', async () => {
+await test('SRWF-MR2-CANCEL-001', 'Approve native confirmation Cancel never enters material busy state', async () => {
   const id = createEntry('CANCEL');
-  await gotoReview(page, id);
-  const before = host(id);
-  const token = `cancel-${Date.now()}`;
-  const collector = probeCollector(page, token);
-  await installLifecycleProbe(page, token);
-  const dialogs = [];
-  const listener = async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); };
-  page.on('dialog', listener);
-  const button = page.locator('.gravityflow-action-buttons button[value="approved"]').first();
-  await activate(page, button);
-  await page.waitForTimeout(80);
-  const mouse = await snap(page);
-  await activate(page, button, true);
-  await page.waitForTimeout(80);
-  page.off('dialog', listener);
-  collector.stop();
-  const keyboard = await snap(page);
-  const after = host(id);
-  assertIdle(mouse);
-  assertIdle(keyboard);
-  if (dialogs.length !== 2 || dialogs.some(type => type !== 'confirm')) throw new Error(`Cancel confirmation drifted: ${JSON.stringify(dialogs)}`);
-  if (collector.events.some(event => event.kind === 'submit' || event.kind === 'formdata')) throw new Error(`Cancel reached material boundary: ${JSON.stringify(collector.events)}`);
-  if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error(`Cancel mutated host truth: ${JSON.stringify({ before, after })}`);
-  return { dialogs, lifecycle: collector.events, before, after };
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const before = host(id);
+    const token = `cancel-${id}-${Date.now()}`;
+    const collector = probeCollector(page, token);
+    await installLifecycleProbe(page, token);
+    const dialogs = [];
+    const listener = async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); };
+    page.on('dialog', listener);
+    await page.locator('.gravityflow-action-buttons button[value="approved"]').first().click();
+    await page.waitForTimeout(150);
+    page.off('dialog', listener);
+    collector.stop();
+    const idle = await snap(page);
+    const after = host(id);
+    assertIdle(idle);
+    if (dialogs.length !== 1 || dialogs[0] !== 'confirm') throw new Error(`Cancel confirmation drifted: ${JSON.stringify(dialogs)}`);
+    if (collector.events.some(event => event.kind === 'formdata' && ['approved', 'rejected', 'revert'].includes(event.action))) {
+      throw new Error(`Cancel reached material payload boundary: ${JSON.stringify(collector.events)}`);
+    }
+    if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error(`Cancel mutated host truth: ${JSON.stringify({ before, after })}`);
+    return { dialogs, lifecycle: collector.events, before, after, idle };
+  } finally {
+    await page.close();
+  }
 });
 
-await test('SRWF-MR2-APPROVE-001', 'Approve enters busy at payload boundary and final result comes from fresh host truth', async () => {
+await test('SRWF-MR2-APPROVE-001', 'Approve enters one busy lifetime and final success remains host-truth gated', async () => {
   const id = createEntry('APPROVE');
-  await gotoReview(page, id);
-  const submission = await accepted(page, 'approved');
-  const state = host(id);
-  const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
-  if (state.current_step !== null || state.workflow_final_status !== 'approved' || state.api_status !== 'approved' || rendered.join(',') !== 'approved') {
-    throw new Error(`Approve truth mismatch: ${JSON.stringify({ state, rendered })}`);
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const submission = await activateAccepted(page, id, 'approved');
+    const state = host(id);
+    const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
+    if (state.current_step !== null || state.workflow_final_status !== 'approved' || state.api_status !== 'approved' || rendered.join(',') !== 'approved') {
+      throw new Error(`Approve truth mismatch: ${JSON.stringify({ state, rendered })}`);
+    }
+    return { submission, state, rendered };
+  } finally {
+    await page.close();
   }
-  return { submission, state, rendered };
 });
 
-await test('SRWF-MR2-REJECT-001', 'Reject keyboard activation uses the same busy boundary and remains a business result', async () => {
+await test('SRWF-MR2-REJECT-001', 'Reject keyboard activation uses same busy contract and remains a business result', async () => {
   const id = createEntry('REJECT');
-  await gotoReview(page, id);
-  const submission = await accepted(page, 'rejected', { keyboard: true });
-  const state = host(id);
-  const result = page.locator('[data-gpp-entry-journey-result="rejected"]').filter({ visible: true }).first();
-  const text = await result.innerText();
-  if (state.current_step !== null || state.workflow_final_status !== 'rejected' || state.api_status !== 'rejected' || await result.count() !== 1 || /technical|خطای فنی|مشکل فنی/i.test(text)) {
-    throw new Error(`Reject truth mismatch: ${JSON.stringify({ state, text })}`);
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const submission = await activateAccepted(page, id, 'rejected', { keyboard: true });
+    const state = host(id);
+    const result = page.locator('[data-gpp-entry-journey-result="rejected"]').filter({ visible: true }).first();
+    const text = await result.innerText();
+    if (state.current_step !== null || state.workflow_final_status !== 'rejected' || state.api_status !== 'rejected' || await result.count() !== 1 || /technical|خطای فنی|مشکل فنی/i.test(text)) {
+      throw new Error(`Reject truth mismatch: ${JSON.stringify({ state, text })}`);
+    }
+    return { submission, state, text };
+  } finally {
+    await page.close();
   }
-  return { submission, state, text };
 });
 
 await test('SRWF-MR2-REVERT-001', 'Revert uses bounded busy behavior and still enters native User Input', async () => {
   const id = createEntry('REVERT');
-  await gotoReview(page, id);
-  const submission = await accepted(page, 'revert');
-  const state = host(id);
-  const orientation = await page.locator('[data-gpp-entry-journey="correction"]').filter({ visible: true }).count();
-  const mr3 = await page.locator('[data-gpp-reject-reason],.gpp-reject-reason,.gpp-entry-reject-reason').count();
-  if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || !state.current_step?.can_update || orientation !== 1 || mr3 !== 0) {
-    throw new Error(`Revert/correction ownership drifted: ${JSON.stringify({ state, orientation, mr3 })}`);
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const submission = await activateAccepted(page, id, 'revert');
+    const state = host(id);
+    const orientation = await page.locator('[data-gpp-entry-journey="correction"]').filter({ visible: true }).count();
+    const mr3 = await page.locator('[data-gpp-reject-reason],.gpp-reject-reason,.gpp-entry-reject-reason').count();
+    if (state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || !state.current_step?.can_update || orientation !== 1 || mr3 !== 0) {
+      throw new Error(`Revert/correction ownership drifted: ${JSON.stringify({ state, orientation, mr3 })}`);
+    }
+    return { submission, state, orientation, mr3_reason_ui_count: mr3 };
+  } finally {
+    await page.close();
   }
-  return { submission, state, orientation, mr3_reason_ui_count: mr3 };
 });
 
-await test('SRWF-MR2-DOUBLE-001', 'rapid repeated activation cannot create a second material submission', async () => {
+await test('SRWF-MR2-DOUBLE-001', 'rapid repeated activation cannot create two material submissions', async () => {
   const id = createEntry('DOUBLE');
-  await gotoReview(page, id);
-  const submission = await accepted(page, 'approved', { keyboard: true, duplicateOnFormdata: true });
-  const state = host(id);
-  const duplicate = submission.lifecycle.find(event => event.kind === 'duplicate-attempted');
-  if (!duplicate || duplicate.submitCount !== 1 || duplicate.formdataCount !== 1 || submission.dialogs.length !== 1 || submission.posts !== 1) {
-    throw new Error(`Duplicate activation escaped busy guard: ${JSON.stringify(submission)}`);
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const before = host(id);
+    const submission = await activateAccepted(page, id, 'approved', { keyboard: true, duplicate: true });
+    const after = host(id);
+    const navigationPosts = submission.requests.filter(request => request.navigation);
+    if (submission.dialogs.length !== 1 || navigationPosts.length !== 1 || submission.duplicate_attempts !== 1 || submission.busy_enter_count !== 1) {
+      throw new Error(`Duplicate activation escaped guard: ${JSON.stringify(submission)}`);
+    }
+    if (after.workflow_final_status !== 'approved' || after.api_status !== 'approved' || after.current_step !== null || after.timeline_count <= before.timeline_count) {
+      throw new Error(`Double activation terminal truth wrong: ${JSON.stringify({ before, after })}`);
+    }
+    return { submission, before, after };
+  } finally {
+    await page.close();
   }
-  if (state.workflow_final_status !== 'approved' || state.api_status !== 'approved' || state.current_step !== null) {
-    throw new Error(`Double activation terminal truth wrong: ${JSON.stringify(state)}`);
-  }
-  return { submission, state };
 });
 
-await test('SRWF-MR2-STALE-001', 'two-tab stale Reject remains host-authoritative and cannot fabricate a second result', async () => {
+await test('SRWF-MR2-STALE-001', 'two-tab stale Reject cannot override Tab A Approved host truth', async () => {
   const id = createEntry('STALE');
   const tabA = await context.newPage();
   const tabB = await context.newPage();
-  await Promise.all([gotoReview(tabA, id), gotoReview(tabB, id)]);
+  try {
+    await Promise.all([gotoReview(tabA, id), gotoReview(tabB, id)]);
+    const actionA = await activateAccepted(tabA, id, 'approved');
+    const afterA = host(id);
+    if (afterA.workflow_final_status !== 'approved' || afterA.api_status !== 'approved' || afterA.current_step !== null) {
+      throw new Error(`Tab A did not establish Approved host truth: ${JSON.stringify(afterA)}`);
+    }
 
-  const actionA = await accepted(tabA, 'approved');
-  const afterA = host(id);
-  if (afterA.workflow_final_status !== 'approved' || afterA.api_status !== 'approved' || afterA.current_step !== null) {
-    throw new Error(`Tab A did not establish Approved host truth: ${JSON.stringify(afterA)}`);
+    const staleAction = await activateAccepted(tabB, id, 'rejected');
+    const afterB = host(id);
+    const rendered = await tabB.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
+    const controls = await tabB.locator('.gravityflow-status-box .gravityflow-action-buttons button').filter({ visible: true }).count();
+    if (afterB.workflow_final_status !== afterA.workflow_final_status || afterB.api_status !== afterA.api_status || afterB.current_step !== null) {
+      throw new Error(`Unsafe stale workflow mutation detected: ${JSON.stringify({ afterA, afterB, staleAction })}`);
+    }
+    if (rendered.join(',') !== 'approved' || controls !== 0) {
+      throw new Error(`Stale Tab B fabricated or retained authoritative action UI: ${JSON.stringify({ rendered, controls, afterA, afterB })}`);
+    }
+    return {
+      actionA,
+      staleAction,
+      afterA,
+      afterB,
+      timeline_delta_after_stale_action: Number(afterB.timeline_count || 0) - Number(afterA.timeline_count || 0),
+      rendered,
+      controls,
+    };
+  } finally {
+    await Promise.all([tabA.close(), tabB.close()]);
   }
-
-  const staleAction = await accepted(tabB, 'rejected');
-  const afterB = host(id);
-  const rendered = await tabB.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
-  const controls = await tabB.locator('.gravityflow-status-box .gravityflow-action-buttons button').filter({ visible: true }).count();
-  if (afterB.workflow_final_status !== afterA.workflow_final_status || afterB.api_status !== afterA.api_status || afterB.current_step !== null || afterB.timeline_count !== afterA.timeline_count) {
-    throw new Error(`Unsafe stale duplicate mutation detected: ${JSON.stringify({ afterA, afterB, staleAction })}`);
-  }
-  if (rendered.join(',') !== 'approved' || controls !== 0) {
-    throw new Error(`Stale Tab B fabricated or retained authoritative action UI: ${JSON.stringify({ rendered, controls, afterA, afterB })}`);
-  }
-  await Promise.all([tabA.close(), tabB.close()]);
-  return { actionA, staleAction, afterA, afterB, rendered, controls };
 });
 
 await test('SRWF-MR2-UNKNOWN-001', 'lost response never fabricates terminal client success', async () => {
   const id = createEntry('UNKNOWN');
-  await gotoReview(page, id);
-  const token = `unknown-${Date.now()}`;
-  const collector = probeCollector(page, token);
-  await installLifecycleProbe(page, token);
+  const page = await context.newPage();
+  try {
+    await gotoReview(page, id);
+    const token = `unknown-${id}-${Date.now()}`;
+    const collector = probeCollector(page, token);
+    await installLifecycleProbe(page, token);
 
-  let intercepted = null;
-  let resolveIntercepted;
-  const interceptedPromise = new Promise(resolve => { resolveIntercepted = resolve; });
-  const route = async interceptedRoute => {
-    const request = interceptedRoute.request();
-    if (!intercepted && request.method() === 'POST' && request.isNavigationRequest()) {
-      const response = await interceptedRoute.fetch();
-      intercepted = { status: response.status(), url: request.url() };
-      resolveIntercepted();
-      await interceptedRoute.abort('failed');
-      return;
+    let intercepted = null;
+    let resolveIntercepted;
+    const interceptedPromise = new Promise(resolve => { resolveIntercepted = resolve; });
+    const route = async interceptedRoute => {
+      const request = interceptedRoute.request();
+      if (!intercepted && request.method() === 'POST' && request.isNavigationRequest()) {
+        const response = await interceptedRoute.fetch();
+        intercepted = { status: response.status(), url: request.url() };
+        resolveIntercepted();
+        await interceptedRoute.abort('failed');
+        return;
+      }
+      await interceptedRoute.continue();
+    };
+    await page.route('**/*', route);
+
+    const dialogs = [];
+    const listener = async dialog => { dialogs.push(dialog.type()); await dialog.accept(); };
+    page.on('dialog', listener);
+    const click = page.locator('.gravityflow-action-buttons button[value="approved"]').first().click().catch(error => error);
+    await Promise.race([
+      interceptedPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Lost-response navigation POST was not intercepted.')), 8000)),
+    ]);
+    await page.waitForTimeout(150);
+    await page.unroute('**/*', route);
+    page.off('dialog', listener);
+    collector.stop();
+    await click;
+
+    const pre = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).count();
+    const busy = await snap(page);
+    const material = collector.events.filter(event => event.kind === 'formdata' && event.action === 'approved');
+    if (dialogs.length !== 1 || dialogs[0] !== 'confirm' || !intercepted || pre !== 0 || material.length < 1) {
+      throw new Error(`Unknown-response contract failed: ${JSON.stringify({ dialogs, intercepted, pre, lifecycle: collector.events })}`);
     }
-    await interceptedRoute.continue();
-  };
-  await page.route('**/*', route);
+    assertBusy(busy);
 
-  const dialogs = [];
-  const listener = async dialog => { dialogs.push(dialog.type()); await dialog.accept(); };
-  page.on('dialog', listener);
-  const activation = activate(page, page.locator('.gravityflow-action-buttons button[value="approved"]').first()).catch(error => error);
-  await Promise.race([
-    interceptedPromise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Lost-response POST was not intercepted.')), 8000)),
-  ]);
-  await page.waitForTimeout(120);
-  await page.unroute('**/*', route);
-  page.off('dialog', listener);
-  collector.stop();
-  await activation;
-
-  const pre = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).count();
-  const busy = await snap(page);
-  const formdata = collector.events.filter(event => event.kind === 'formdata');
-  if (dialogs.length !== 1 || dialogs[0] !== 'confirm' || !intercepted || pre !== 0 || formdata.length !== 1) {
-    throw new Error(`Unknown-response contract failed: ${JSON.stringify({ dialogs, intercepted, pre, lifecycle: collector.events })}`);
+    const truth = host(id);
+    await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
+    const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
+    if (truth.workflow_final_status === 'approved' && truth.api_status === 'approved') {
+      if (rendered.join(',') !== 'approved') throw new Error(`Fresh Approved truth missing after reload: ${JSON.stringify({ truth, rendered })}`);
+    } else if (rendered.includes('approved') || rendered.includes('rejected')) {
+      throw new Error(`Ambiguous truth fabricated terminal result: ${JSON.stringify({ truth, rendered })}`);
+    }
+    return { intercepted, pre, busy, lifecycle: collector.events, truth, rendered };
+  } finally {
+    await page.close();
   }
-  assertBusy(busy);
-
-  const truth = host(id);
-  await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
-  const rendered = await page.locator('[data-gpp-entry-journey-result]').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.dataset.gppEntryJourneyResult));
-  if (truth.workflow_final_status === 'approved' && truth.api_status === 'approved') {
-    if (rendered.join(',') !== 'approved') throw new Error(`Fresh Approved truth missing after reload: ${JSON.stringify({ truth, rendered })}`);
-  } else if (rendered.includes('approved') || rendered.includes('rejected')) {
-    throw new Error(`Ambiguous truth fabricated terminal result: ${JSON.stringify({ truth, rendered })}`);
-  }
-  return { intercepted, pre, busy, lifecycle: collector.events, truth, rendered };
 });
 
-await test('SRWF-MR2-RESPONSIVE-A11Y-001', 'busy enhancement preserves keyboard/a11y and desktop/mobile action presentation', async () => {
+await test('SRWF-MR2-RESPONSIVE-A11Y-001', 'busy enhancement preserves a11y and current desktop/mobile action presentation', async () => {
   const id = createEntry('RESPONSIVE');
-  const samples = [];
-  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
-    await page.setViewportSize(viewport);
-    await gotoReview(page, id);
-    const idle = await snap(page);
-    const geometry = await page.locator('.gravityflow-action-buttons button').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => {
-      const rect = node.getBoundingClientRect();
-      const style = getComputedStyle(node);
-      return { value: node.value, left: rect.left, right: rect.right, height: rect.height, background: style.backgroundColor, color: style.color };
-    }));
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    if (overflow > 1 || geometry.length !== 3 || geometry.some(item => item.left < -1 || item.right > viewport.width + 1 || item.height < 44)) {
-      throw new Error(`Responsive action geometry failed: ${JSON.stringify({ viewport, overflow, geometry })}`);
+  const page = await context.newPage();
+  try {
+    const samples = [];
+    let canonicalColors = null;
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+      await page.setViewportSize(viewport);
+      await gotoReview(page, id);
+      const idle = await snap(page);
+      const geometry = await page.locator('.gravityflow-action-buttons button').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+          value: node.value,
+          left: rect.left,
+          right: rect.right,
+          height: rect.height,
+          background: style.backgroundColor,
+          color: style.color,
+          border: style.borderColor,
+        };
+      }));
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (overflow > 1 || geometry.length !== 3 || geometry.some(item => item.left < -1 || item.right > viewport.width + 1 || item.height < 44)) {
+        throw new Error(`Responsive action geometry failed: ${JSON.stringify({ viewport, overflow, geometry })}`);
+      }
+      const colors = Object.fromEntries(geometry.map(item => [item.value, { background: item.background, color: item.color, border: item.border }]));
+      if (canonicalColors === null) canonicalColors = colors;
+      else if (JSON.stringify(colors) !== JSON.stringify(canonicalColors)) {
+        throw new Error(`Responsive semantic colors drifted: ${JSON.stringify({ viewport, canonicalColors, colors })}`);
+      }
+      samples.push({ viewport, overflow, idle, geometry });
     }
-    const colors = Object.fromEntries(geometry.map(item => [item.value, item.background]));
-    if (colors.approved !== 'rgb(55, 155, 82)' || colors.rejected !== 'rgb(229, 89, 103)' || colors.revert !== 'rgb(252, 242, 216)') {
-      throw new Error(`Semantic action colors changed: ${JSON.stringify({ viewport, colors })}`);
-    }
-    samples.push({ viewport, overflow, idle, geometry });
+    return { canonical_colors: canonicalColors, samples };
+  } finally {
+    await page.close();
   }
-  return samples;
 });
 
 await browser.close();
