@@ -30,6 +30,18 @@ if ( ! is_array( $form ) ) {
     throw new RuntimeException( 'Journey form is unavailable.' );
 }
 
+// Exercise the authentic GTB/GPP coexistence boundary rather than merely having
+// GTB installed. The exact GTB Registration build must see its own opt-in form
+// identity and still exclude Gravity Flow Entry Detail by rendering context.
+$classes = isset( $form['cssClass'] ) && is_string( $form['cssClass'] )
+    ? preg_split( '/\s+/', trim( $form['cssClass'] ), -1, PREG_SPLIT_NO_EMPTY )
+    : array();
+$classes = is_array( $classes ) ? $classes : array();
+if ( ! in_array( 'srwf-registration-theme', $classes, true ) ) {
+    $classes[] = 'srwf-registration-theme';
+}
+$form['cssClass'] = implode( ' ', array_values( array_unique( $classes ) ) );
+
 $identity_fields = array(
     'first_name' => 2,
     'last_name' => 3,
@@ -126,6 +138,7 @@ $manifest['production_presentation'] = array(
     'entry_detail_setup_status' => $setup['status'],
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
+    'gtb_registration_opt_in' => in_array( 'srwf-registration-theme', preg_split( '/\s+/', trim( (string) $form['cssClass'] ) ), true ),
     'host_args_control' => basename( $control_target ),
 );
 update_option( 'gpp_srwf_journey_host_manifest', $manifest, false );
