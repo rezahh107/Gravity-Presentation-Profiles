@@ -157,6 +157,12 @@ async function pageOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 }
 
+function hasVisibleFocusIndicator(focus) {
+  const outlineVisible = focus.outline_style !== 'none' && parseFloat(focus.outline_width || '0') >= 1;
+  const gppFocusRingVisible = focus.box_shadow.includes('rgb(147, 197, 253)') && focus.box_shadow.includes('0px 0px 0px 3px');
+  return outlineVisible || gppFocusRingVisible;
+}
+
 async function correctionGeometry(page) {
   return page.evaluate(() => {
     const orientation = document.querySelector('[data-gpp-entry-journey="correction"]');
@@ -301,10 +307,13 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction adds no overflow
     await accept(page, 'revert');
     const input = page.locator('input[name="input_1"]').first();
     const tabCount = await focusByKeyboard(page, input);
-    const focus = await input.evaluate(node => { const style = getComputedStyle(node); return { outline_style: style.outlineStyle, outline_width: style.outlineWidth }; });
+    const focus = await input.evaluate(node => {
+      const style = getComputedStyle(node);
+      return { outline_style: style.outlineStyle, outline_width: style.outlineWidth, box_shadow: style.boxShadow };
+    });
     const geometry = await correctionGeometry(page);
     const submit = nativeCorrectionSubmit(page);
-    if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || focus.outline_style === 'none' || parseFloat(focus.outline_width || '0') < 1) {
+    if (geometry.overflow > baselineOverflow + 1 || !geometry.orientation || !geometry.wrapper || !geometry.input || !geometry.submit || geometry.orientation.left < -1 || geometry.orientation.right > width + 1 || geometry.wrapper.left < -1 || geometry.wrapper.right > width + 1 || geometry.input.left < -1 || geometry.input.right > width + 1 || geometry.submit.left < -1 || geometry.submit.right > width + 1 || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || !hasVisibleFocusIndicator(focus)) {
       throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount })}`);
     }
     measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount });
