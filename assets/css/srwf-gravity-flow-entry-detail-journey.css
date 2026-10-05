@@ -264,7 +264,10 @@
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:focus-visible,
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select:focus-visible,
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea:focus-visible,
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper button:focus-visible {
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button:focus-visible,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button:focus-visible {
     outline: 3px solid #1d4ed8;
     outline-offset: 3px;
 }
@@ -281,7 +284,8 @@
     line-height: 1.8;
 }
 
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer {
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gravityflow-action-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
@@ -290,7 +294,10 @@
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer input[type="submit"],
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"] {
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button,
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button {
     box-sizing: border-box;
     min-block-size: 44px;
     margin: 0;
@@ -356,7 +363,10 @@
     }
 
     .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer input[type="submit"],
-    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"] {
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_footer button[type="submit"],
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_update_button,
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_submit_button,
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button {
         width: 100%;
     }
 }
