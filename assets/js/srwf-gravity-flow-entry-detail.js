@@ -87,6 +87,19 @@
             });
         };
 
+        const markBusy = () => {
+            if (busy) return;
+            busy = true;
+            actionRegion.dataset.gppReviewActionBusy = '1';
+            actionRegion.setAttribute('aria-busy', 'true');
+            feedback.hidden = false;
+
+            // The host-owned action value has already been copied into the
+            // submitted form payload. Keep the native controls in the DOM and
+            // expose temporary unavailability without replacing host submission.
+            buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
+        };
+
         form.addEventListener('click', event => {
             if (!busy) return;
             const button = event.target.closest('button[type="submit"]');
@@ -96,27 +109,20 @@
             event.stopImmediatePropagation();
         }, true);
 
-        form.addEventListener('submit', event => {
-            const action = hiddenStatus.value;
-            if (!MATERIAL_REVIEW_ACTIONS.has(action) || busy) return;
+        form.addEventListener('formdata', event => {
+            const submittedAction = event.formData?.get('gravityflow_approval_new_status_step');
+            const action = typeof submittedAction === 'string' && submittedAction !== ''
+                ? submittedAction
+                : hiddenStatus.value;
 
-            // Gravity Flow has already accepted its native confirmation and
-            // populated the host-owned action carrier before this submit event.
-            // Wait until every listener for this submit dispatch has had a chance
-            // to cancel it; only an uncancelled native submission becomes busy.
-            queueMicrotask(() => {
-                if (event.defaultPrevented || busy || !form.isConnected) return;
+            if (!MATERIAL_REVIEW_ACTIONS.has(action)) return;
 
-                busy = true;
-                actionRegion.dataset.gppReviewActionBusy = '1';
-                actionRegion.setAttribute('aria-busy', 'true');
-                feedback.hidden = false;
-
-                // Keep the host submitter enabled for Gravity Forms' own accepted
-                // submission lifecycle. ARIA exposes temporary unavailability and
-                // the capture guard blocks only later user activations.
-                buttons.forEach(button => button.setAttribute('aria-disabled', 'true'));
-            });
+            // Gravity Flow has already accepted native confirmation and populated
+            // its hidden action carrier. Gravity Forms 3.1.1.1 may prevent the
+            // preceding submit event while continuing submission itself, so the
+            // browser's formdata boundary is the first non-intercepting point at
+            // which the material payload is actually being constructed.
+            markBusy();
         });
 
         // A history restoration is a fresh operator interaction lifetime even
