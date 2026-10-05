@@ -34,14 +34,9 @@ add_filter(
             return $editable_fields;
         }
 
-        // Gravity Flow User Input intentionally disables a field's Gravity Forms
-        // conditional logic unless this host-owned step setting is enabled. The
-        // MR-4 browser control must exercise the authentic enabled behavior rather
-        // than treating the default "show all editable fields" mode as a GPP bug.
-        // Gravity_Flow_Step exposes feed settings through its native magic setter;
-        // this mutates only the in-memory synthetic qualification step instance.
-        $step->conditional_logic_editable_fields_enabled = '1';
-
+        // Conditional logic enablement comes from the persisted User Input feed
+        // configured by the pinned host fixture. This hook owns only synthetic
+        // editable-field membership so the runtime can prove the host setting.
         $editable_fields = is_array( $editable_fields ) ? array_values( array_map( 'strval', $editable_fields ) ) : array();
         if ( ! in_array( '5', $editable_fields, true ) ) {
             $editable_fields[] = '5';
