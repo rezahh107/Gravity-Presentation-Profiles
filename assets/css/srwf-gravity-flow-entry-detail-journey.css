@@ -192,6 +192,20 @@
     max-width: none;
 }
 
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-profile-id="srwf.operations.entry-detail.v1"]) .gpp-entry-review-action-status,
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"][data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gpp-entry-review-action-status {
+    box-sizing: border-box;
+    margin: 14px 0 0;
+    color: #475467;
+    font-size: 14px;
+    line-height: 1.75;
+    font-weight: 600;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-dossier[data-gpp-entry-detail="ready"][data-gpp-review-mode="read-only"]) .gravityflow-action-buttons[data-gpp-material-action-busy="1"] {
+    cursor: wait;
+}
+
 @media (max-width: 600px) {
     .gpp-entry-journey-nav,
     .gpp-entry-journey,
