@@ -104,6 +104,19 @@ gpp_journey_assert(
     'Decorative RTL return icon must be CSS-only and white on both return paths.'
 );
 
+$result_markup_start = strpos( $php, 'private static function resultMarkup' );
+$result_copy_start = strpos( $php, 'private static function resultCopy', $result_markup_start );
+gpp_journey_assert(
+    false !== $result_markup_start && false !== $result_copy_start && $result_copy_start > $result_markup_start,
+    'MR-5 result markup boundary could not be inspected.'
+);
+$result_markup_php = substr( $php, $result_markup_start, $result_copy_start - $result_markup_start );
+gpp_journey_assert(
+    false !== strpos( $result_markup_php, 'if ( self::STATE_UNKNOWN === $state )' )
+    && 1 === substr_count( $result_markup_php, '$html .= self::caseContextMarkup( $identity );' ),
+    'MR-5 terminal Approved/Rejected markup must omit repeated case identity while Unknown keeps its existing fail-closed context.'
+);
+
 $terminal_targets = ':is(.entry-detail-view, #gravityflow-status-box-container, .gravityflow-timeline, .detail-view-print)';
 foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
     $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
@@ -113,18 +126,14 @@ foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
         'MR-5 terminal result must suppress only the proven competing native Entry Detail surfaces for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
-        false !== strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
-        'MR-5 terminal result must suppress repeated case identity for ' . $terminal_state . '.'
+        false === strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
+        'MR-5 terminal identity must be omitted by server markup, not implemented as CSS-only hiding for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
         false === strpos( $css, $terminal_boundary . ' .gpp-entry-print-utility' ),
         'MR-5 terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
     );
 }
-gpp_journey_assert(
-    false === strpos( $css, '.gpp-entry-journey-result[data-gpp-entry-journey-result="unknown"] .gpp-entry-journey__case-context' ),
-    'MR-5 identity suppression must not leak into Unknown fail-closed presentation.'
-);
 
 $correction_print_boundary = '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])';
 $correction_gpp_print_selector = $correction_print_boundary . ' .gpp-entry-print-utility';
