@@ -54,8 +54,8 @@
         const form = dossier.closest('form');
         if (!form) return;
 
-        const actionRegion = form.querySelector('.gravityflow-status-box .gravityflow-action-buttons');
-        const carrier = actionRegion?.querySelector('#gravityflow_approval_new_status_step');
+        const actionRegion = form.querySelector('.gravityflow-action-buttons');
+        const carrier = form.querySelector('#gravityflow_approval_new_status_step');
         const buttons = actionRegion
             ? [...actionRegion.querySelectorAll('button[type="submit"][value]')]
                 .filter(button => materialActions.has(button.value))
@@ -107,7 +107,7 @@
             });
         };
 
-        form.addEventListener('submit', event => {
+        form.addEventListener('submit', () => {
             const action = carrier.value;
             if (!materialActions.has(action)) return;
 
