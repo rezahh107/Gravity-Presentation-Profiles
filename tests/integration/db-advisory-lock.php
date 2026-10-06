@@ -52,6 +52,22 @@ function gpp_db_lock_scalar( $connection, $sql, $lock_name ) {
     return $value;
 }
 
+function gpp_db_lock_wait_for_acquisition( $connection, $lock_name, $timeout_ms ) {
+    $deadline = hrtime( true ) + ( (int) $timeout_ms * 1000000 );
+
+    do {
+        if ( 1 === (int) gpp_db_lock_scalar( $connection, 'SELECT GET_LOCK(?, 0)', $lock_name ) ) {
+            return true;
+        }
+
+        if ( hrtime( true ) >= $deadline ) {
+            return false;
+        }
+
+        usleep( 1000 );
+    } while ( true );
+}
+
 $host     = gpp_db_lock_env( 'GPP_DB_HOST', '127.0.0.1' );
 $port     = (int) gpp_db_lock_env( 'GPP_DB_PORT', '3306' );
 $user     = gpp_db_lock_env( 'GPP_DB_USER', 'root' );
@@ -109,11 +125,19 @@ if ( 0 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT GET_LOCK(?, 0)', $lo
     gpp_db_lock_fail( 'Connection B acquired or ambiguously handled a lock held by connection A.' );
 }
 
+// Falsification: a bounded retry must still fail while A genuinely owns the lock.
+if ( gpp_db_lock_wait_for_acquisition( $connection_b, $lock, 5 ) ) {
+    gpp_db_lock_fail( 'Connection B acquired the advisory lock while connection A still owned it.' );
+}
+
 // Close A without RELEASE_LOCK(). Session termination must recover the lock.
+// mysqli::close() can return just before another session observes server-side
+// teardown. Retry only the zero-timeout GET_LOCK probe, with a strict deadline,
+// so a short teardown race does not look like a permanently stuck orphan lock.
 $connection_a->close();
 
-if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT GET_LOCK(?, 0)', $lock ) ) {
-    gpp_db_lock_fail( 'Connection B did not acquire the lock after connection A terminated.' );
+if ( ! gpp_db_lock_wait_for_acquisition( $connection_b, $lock, 250 ) ) {
+    gpp_db_lock_fail( 'Connection B did not recover the abandoned lock within the bounded session-termination window.' );
 }
 
 if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT RELEASE_LOCK(?)', $lock ) ) {
@@ -122,4 +146,4 @@ if ( 1 !== (int) gpp_db_lock_scalar( $connection_b, 'SELECT RELEASE_LOCK(?)', $l
 
 $connection_b->close();
 
-echo 'GPP_DB_ADVISORY_LOCK_PASS variant=' . $variant . ' server=' . $server . ' recursive=same-session orphan_recovery=session-termination' . PHP_EOL;
+echo 'GPP_DB_ADVISORY_LOCK_PASS variant=' . $variant . ' server=' . $server . ' recursive=same-session orphan_recovery=session-termination-bounded' . PHP_EOL;
