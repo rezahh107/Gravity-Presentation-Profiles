@@ -87,7 +87,7 @@ jobs:
           passes=0
           failures=0
           : > /tmp/original-results.log
-          for i in $(seq 1 25); do
+          for i in $(seq 1 250); do
             export GPP_DB_VARIANT="$MATRIX_LABEL-original-$i"
             if php tests/integration/db-advisory-lock.php >>/tmp/original-results.log 2>&1; then
               passes=$((passes + 1))
@@ -95,12 +95,12 @@ jobs:
               failures=$((failures + 1))
             fi
           done
-          cat /tmp/original-results.log
           echo "original_passes=$passes"
           echo "original_failures=$failures"
+          if [ "$failures" -gt 0 ]; then grep 'GPP_DB_ADVISORY_LOCK_FAIL' /tmp/original-results.log || true; fi
           printf 'passes=%s\nfailures=%s\n' "$passes" "$failures" > /tmp/original-summary.txt
 
-      - name: Measure session teardown and orphan recovery
+      - name: Measure direct post-close race and bounded orphan recovery
         shell: bash
         env:
           GPP_DB_HOST: 127.0.0.1
@@ -109,7 +109,7 @@ jobs:
           GPP_DB_PASSWORD: gpp
           GPP_DB_NAME: gpp_lock_test
           GPP_DB_VARIANT: ${{ matrix.label }}
-          GPP_DB_DIAG_ITERATIONS: '60'
+          GPP_DB_DIAG_ITERATIONS: '5000'
           GPP_DB_DIAG_TIMEOUT_MS: '2000'
           GPP_DB_DIAG_POLL_US: '1000'
           GPP_DB_DIAG_OUTPUT: /tmp/advisory-lock-diagnostic.json
