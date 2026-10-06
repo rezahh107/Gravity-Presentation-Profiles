@@ -118,25 +118,46 @@ function comparable(url) {
 
 async function waitForInboxRow(page, entryId) {
   await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
-  await page.waitForFunction(id => Boolean(document.querySelector(`[data-js="gflow-inbox"] .ag-row[row-id="${String(id)}"]`)), entryId, { timeout: 30000 });
+  await page.waitForFunction(id => {
+    const row = document.querySelector(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${CSS.escape(String(id))}"]`);
+    return Boolean(row && row.querySelector('.ag-cell[col-id]'));
+  }, String(entryId), { timeout: 30000 });
 }
 
 async function inboxSnapshot(page, entryId, width) {
   return page.evaluate(({ id, viewportWidth }) => {
     const visible = node => !!node && node.offsetParent !== null && getComputedStyle(node).visibility !== 'hidden';
     const root = document.querySelector('[data-js="gflow-inbox"]');
-    const row = root?.querySelector(`.ag-row[row-id="${String(id)}"]`);
+    const row = root?.querySelector(`.ag-center-cols-container .ag-row[row-id="${CSS.escape(String(id))}"]`);
     const headers = [...(root?.querySelectorAll('.ag-header-cell[col-id]') || [])].filter(visible).map(node => {
       const rect = node.getBoundingClientRect();
-      return { id: node.getAttribute('col-id'), text: node.textContent.replace(/\s+/g, ' ').trim(), left: rect.left, right: rect.right, width: rect.width };
+      const textNode = node.querySelector('.ag-header-cell-text') || node;
+      return {
+        id: node.getAttribute('col-id'),
+        text: node.textContent.replace(/\s+/g, ' ').trim(),
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        text_direction: getComputedStyle(textNode).direction,
+      };
     }).sort((a, b) => a.left - b.left);
     const cells = [...(row?.querySelectorAll('.ag-cell[col-id]') || [])].filter(visible).map(node => {
       const rect = node.getBoundingClientRect();
-      return { id: node.getAttribute('col-id'), left: rect.left, right: rect.right, width: rect.width };
+      return {
+        id: node.getAttribute('col-id'),
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        text_direction: getComputedStyle(node).direction,
+      };
     }).sort((a, b) => a.left - b.left);
     const horizontal = root?.querySelector('.ag-body-horizontal-scroll-viewport');
-    const pageDirection = getComputedStyle(document.body).direction;
     const htmlDirection = document.documentElement.getAttribute('dir') || getComputedStyle(document.documentElement).direction;
+    const axisSelectors = ['.ag-root-wrapper', '.ag-center-cols-viewport', '.ag-header-viewport', '.ag-body-horizontal-scroll-viewport'];
+    const axisDirections = Object.fromEntries(axisSelectors.map(selector => {
+      const node = root?.querySelector(selector);
+      return [selector, node ? getComputedStyle(node).direction : null];
+    }));
     let maxDelta = null;
     if (viewportWidth >= 1000 && headers.length === 5 && cells.length === 5) {
       maxDelta = 0;
@@ -148,7 +169,10 @@ async function inboxSnapshot(page, entryId, width) {
     }
     return {
       html_direction: htmlDirection,
-      body_direction: pageDirection,
+      body_direction_observed: getComputedStyle(document.body).direction,
+      ag_ltr: Boolean(root?.querySelector('.ag-ltr')),
+      ag_rtl: Boolean(root?.querySelector('.ag-rtl')),
+      axis_directions: axisDirections,
       native_inbox_count: document.querySelectorAll('.gflow-inbox.gflow-grid.gflow-common').length,
       replacement_count: document.querySelectorAll('[data-gpp-replacement-inbox],.gpp-custom-inbox-app,.gpp-inbox-card').length,
       manual_refresh_count: document.querySelectorAll('[data-gpp-inbox-manual-refresh]').length,
@@ -171,19 +195,33 @@ function assertInboxSnapshot(snapshot, width) {
   const expectedLabels = ['عملیات', 'تاریخ و ساعت ثبت', 'مدرسه و پایه', 'کد ملی', 'نام دانش‌آموز'];
   const ids = snapshot.headers.map(item => item.id);
   const labels = snapshot.headers.map(item => item.text);
-  if (snapshot.html_direction !== 'rtl' || snapshot.body_direction !== 'rtl'
+  const desktop = width >= 1000;
+  const columnShapeValid = desktop
+    ? JSON.stringify(ids) === JSON.stringify(expectedIds) && JSON.stringify(labels) === JSON.stringify(expectedLabels)
+    : ids.length > 0
+      && ids.every((id, index) => id === expectedIds[index])
+      && labels.every((label, index) => label === expectedLabels[index]);
+  const axisDirections = Object.values(snapshot.axis_directions || {});
+  const rtlTextValid = snapshot.headers.length > 0
+    && snapshot.headers.every(item => item.text_direction === 'rtl')
+    && snapshot.cells.length > 0
+    && snapshot.cells.every(item => item.text_direction === 'rtl');
+
+  if (snapshot.html_direction !== 'rtl'
+    || snapshot.ag_ltr !== true || snapshot.ag_rtl !== false
+    || axisDirections.length !== 4 || axisDirections.some(direction => direction !== 'ltr')
+    || !rtlTextValid
     || snapshot.native_inbox_count !== 1 || snapshot.replacement_count !== 0
     || snapshot.manual_refresh_count !== 1 || snapshot.native_search_count !== 1
     || snapshot.native_pager_count !== 1 || snapshot.horizontal_scroll_count !== 1
     || snapshot.document_overflow > 1 || snapshot.gtb_stylesheets !== 0
-    || JSON.stringify(ids) !== JSON.stringify(expectedIds)
-    || JSON.stringify(labels) !== JSON.stringify(expectedLabels)) {
+    || !columnShapeValid) {
     throw new Error(`Inbox composition failed at ${width}: ${JSON.stringify(snapshot)}`);
   }
-  if (width >= 1000 && (snapshot.cells.length !== 5 || snapshot.max_header_body_delta === null || snapshot.max_header_body_delta > 1)) {
+  if (desktop && (snapshot.cells.length !== 5 || snapshot.max_header_body_delta === null || snapshot.max_header_body_delta > 1)) {
     throw new Error(`Inbox header/body geometry drifted at ${width}: ${JSON.stringify(snapshot)}`);
   }
-  if (width < 1000 && snapshot.horizontal_scroll_width <= snapshot.horizontal_client_width) {
+  if (!desktop && snapshot.horizontal_scroll_width <= snapshot.horizontal_client_width) {
     throw new Error(`Narrow Inbox lost its one native horizontal overflow boundary at ${width}: ${JSON.stringify(snapshot)}`);
   }
 }
@@ -207,7 +245,7 @@ async function openFromInbox(page, entryId, width, exerciseRefresh = false) {
     assertInboxSnapshot(snapshot, width);
   }
 
-  const link = page.locator(`[data-js="gflow-inbox"] .ag-row[row-id="${String(entryId)}"] .gflow-inbox__entry-cell-link`).first();
+  const link = page.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${String(entryId)}"] .gflow-inbox__entry-cell-link`).first();
   if (await link.count() !== 1) throw new Error(`Native Entry Detail link missing for ${entryId}.`);
   await Promise.all([page.waitForURL(/view=entry/, { timeout: 30000 }), link.click()]);
   const current = new URL(page.url());
@@ -436,13 +474,31 @@ async function returnToInbox(page, width) {
   }
   if (comparable(current.toString()) !== comparable(inboxUrl)) throw new Error(`Return did not reach canonical Inbox: ${current}`);
   await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
-  const basic = await page.evaluate(() => ({
-    overflow: document.documentElement.scrollWidth - window.innerWidth,
-    native: document.querySelectorAll('.gflow-inbox.gflow-grid.gflow-common').length,
-    pager: document.querySelectorAll('[data-js="gflow-inbox"] .ag-paging-panel').length,
-    direction: getComputedStyle(document.body).direction,
-  }));
-  if (basic.overflow > 1 || basic.native !== 1 || basic.pager !== 1 || basic.direction !== 'rtl') throw new Error(`Returned Inbox is not usable at ${width}: ${JSON.stringify(basic)}`);
+  const basic = await page.evaluate(() => {
+    const root = document.querySelector('[data-js="gflow-inbox"]');
+    const axisSelectors = ['.ag-root-wrapper', '.ag-center-cols-viewport', '.ag-header-viewport', '.ag-body-horizontal-scroll-viewport'];
+    return {
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      native: document.querySelectorAll('.gflow-inbox.gflow-grid.gflow-common').length,
+      pager: document.querySelectorAll('[data-js="gflow-inbox"] .ag-paging-panel').length,
+      html_direction: document.documentElement.getAttribute('dir') || getComputedStyle(document.documentElement).direction,
+      body_direction_observed: getComputedStyle(document.body).direction,
+      ag_ltr: Boolean(root?.querySelector('.ag-ltr')),
+      ag_rtl: Boolean(root?.querySelector('.ag-rtl')),
+      axis_directions: Object.fromEntries(axisSelectors.map(selector => {
+        const node = root?.querySelector(selector);
+        return [selector, node ? getComputedStyle(node).direction : null];
+      })),
+      header_text_direction: root?.querySelector('.ag-header-cell-text') ? getComputedStyle(root.querySelector('.ag-header-cell-text')).direction : null,
+    };
+  });
+  const axisDirections = Object.values(basic.axis_directions || {});
+  if (basic.overflow > 1 || basic.native !== 1 || basic.pager !== 1 || basic.html_direction !== 'rtl'
+    || basic.ag_ltr !== true || basic.ag_rtl !== false
+    || axisDirections.length !== 4 || axisDirections.some(direction => direction !== 'ltr')
+    || basic.header_text_direction !== 'rtl') {
+    throw new Error(`Returned Inbox is not usable at ${width}: ${JSON.stringify(basic)}`);
+  }
   return { url: current.toString(), basic };
 }
 
