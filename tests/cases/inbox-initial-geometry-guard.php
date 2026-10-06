@@ -178,7 +178,7 @@ gpp_assert_true( false !== strpos( $source, "addEventListener('columnResized'" )
 gpp_assert_true( false !== strpos( $source, "removeEventListener('columnResized'" ), 'Grid resize listener must be removable on API identity replacement.' );
 gpp_assert_true( false !== strpos( $source, "event.source === 'sizeColumnsToFit'" ), 'Native/GPP fit provenance source classification is missing.' );
 gpp_assert_same( 1, substr_count( $source, 'window.setTimeout(' ), 'Live grow recovery must use one bounded debounce timer implementation.' );
-gpp_assert_true( false !== strpos( $source, 'GROW_DEBOUNCE_MS = 180' ), 'Grow debounce policy must remain explicit and bounded.' );
+gpp_assert_true( false !== strpos( $source, 'GROW_SETTLE_MS = 180' ), 'Grow settle policy must remain explicit and bounded.' );
 gpp_assert_true( false !== strpos( $source, 'GROW_MIN_DELTA_PX = 24' ), 'Material grow threshold must remain explicit and bounded.' );
 
 gpp_assert_true( false === strpos( $source, '3.1.0' ), 'Qualification dependency identity must not become a production exact-version gate.' );
