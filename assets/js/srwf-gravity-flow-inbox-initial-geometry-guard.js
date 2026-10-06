@@ -54,10 +54,10 @@
             continue;
         }
 
-        const previous = options.onGridSizeChanged;
-        const hostResizeCallback = options.onColumnResized;
-        if ((previous != null && typeof previous !== 'function')
-            || (hostResizeCallback != null && typeof hostResizeCallback !== 'function')) {
+        const previousGridSizeChanged = options.onGridSizeChanged;
+        const previousColumnsChanged = options.onColumnEverythingChanged;
+        if ((previousGridSizeChanged != null && typeof previousGridSizeChanged !== 'function')
+            || (previousColumnsChanged != null && typeof previousColumnsChanged !== 'function')) {
             continue;
         }
 
@@ -66,9 +66,11 @@
         let unknownMountConsumed = false;
         let resizeListenerApi = null;
         let resizeListener = null;
+        let initialOpportunityConsumed = false;
         let growTimer = null;
         let growRecoveryConsumed = false;
         let mountProvenance = null;
+        let mountDisabled = false;
 
         const clearGrowTimer = () => {
             if (growTimer !== null) {
@@ -136,8 +138,7 @@
                     || new Set(record.displayed.map(column => String(column.id))).size !== record.displayed.length
                     || record.displayed.some(column => !expectedIds.includes(String(column.id))
                         || !Number.isFinite(column.width) || column.width <= 0)
-                    || (record.kind === 'auto_fit'
-                        && (!Number.isFinite(record.usable_width) || record.usable_width <= 0))) {
+                    || !Number.isFinite(record.usable_width) || record.usable_width <= 0) {
                     clearStoredProvenance();
                     return null;
                 }
@@ -163,14 +164,14 @@
             return true;
         };
 
-        const makeRecord = (kind, geometry) => ({
+        const makeRecord = geometry => ({
             v: PROVENANCE_VERSION,
-            kind,
+            kind: 'auto_fit',
             form_id: contract.form_id,
             grid_id: gridId,
             column_ids: expectedIds.slice(),
             displayed: geometry.columns.map(column => ({id: column.id, width: column.width})),
-            ...(kind === 'auto_fit' ? {usable_width: geometry.usableWidth} : {}),
+            usable_width: geometry.usableWidth,
         });
 
         const inspectGeometry = params => {
@@ -268,7 +269,7 @@
             params.api.sizeColumnsToFit();
             const fitted = inspectGeometry(params);
             if (fitted) {
-                writeStoredProvenance(makeRecord('auto_fit', fitted));
+                writeStoredProvenance(makeRecord(fitted));
             } else {
                 mountProvenance = null;
                 clearStoredProvenance();
@@ -292,25 +293,59 @@
                 && typeof resizeListenerApi.removeEventListener === 'function') {
                 resizeListenerApi.removeEventListener('columnResized', resizeListener);
             }
+
             resizeListenerApi = params.api;
+            initialOpportunityConsumed = false;
+            growRecoveryConsumed = false;
+            mountDisabled = false;
+            clearGrowTimer();
+
             resizeListener = event => {
-                if (!event || event.finished !== true) {
+                if (!event || event.finished !== true || mountDisabled) {
                     return;
                 }
-                const geometry = inspectGeometry({api: params.api, columnApi: event.columnApi || params.columnApi});
-                if (!geometry) {
-                    mountProvenance = null;
-                    clearStoredProvenance();
-                    clearGrowTimer();
+                if (!document.contains(root)
+                    || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
                     return;
                 }
+
+                const geometry = inspectGeometry({
+                    api: event.api || params.api,
+                    columnApi: event.columnApi || params.columnApi,
+                });
+
                 if (event.source === 'sizeColumnsToFit') {
-                    writeStoredProvenance(makeRecord('auto_fit', geometry));
+                    if (geometry) {
+                        writeStoredProvenance(makeRecord(geometry));
+                    } else {
+                        mountProvenance = null;
+                        clearStoredProvenance();
+                        clearGrowTimer();
+                    }
                     return;
                 }
-                // Any completed non-fit width mutation revokes GPP provenance.
-                // Native persistence remains authoritative for the resulting
-                // manual/API width state and later reloads.
+
+                const stored = parseStoredProvenance();
+                const record = stored || mountProvenance;
+                if (!record) {
+                    return;
+                }
+
+                // Native startup restore is also reported as source=api and is
+                // not distinguishable from an unrelated API call. Before the
+                // first size opportunity we therefore defer that decision and
+                // validate the resulting width signature at onGridSizeChanged.
+                if (geometry && recordMatchesGeometry(record, geometry)) {
+                    mountProvenance = record;
+                    return;
+                }
+                if (!initialOpportunityConsumed && event.source === 'api') {
+                    return;
+                }
+
+                // A completed non-fit width mutation that materially changes
+                // the recorded width signature revokes only GPP provenance.
+                // Gravity Flow remains owner of the resulting native state.
                 mountProvenance = null;
                 clearStoredProvenance();
                 clearGrowTimer();
@@ -319,7 +354,8 @@
         };
 
         const scheduleGrowRecovery = params => {
-            if (growRecoveryConsumed || !params || !params.api || params.api !== currentMountApi) {
+            if (mountDisabled || growRecoveryConsumed || !params || !params.api
+                || params.api !== currentMountApi) {
                 return;
             }
             const geometry = inspectGeometry(params);
@@ -337,7 +373,7 @@
             clearGrowTimer();
             growTimer = window.setTimeout(() => {
                 growTimer = null;
-                if (growRecoveryConsumed || !document.contains(root)
+                if (mountDisabled || growRecoveryConsumed || !document.contains(root)
                     || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
                     return;
                 }
@@ -352,6 +388,30 @@
             }, GROW_SETTLE_MS);
         };
 
+        // Candidate A proved that columnEverythingChanged cannot distinguish a
+        // native restore from unrelated API mutation. It is used here only as
+        // the exact public pre-ready lifecycle point already observed in the
+        // pinned runtime, so a public columnResized listener exists before
+        // Gravity Flow's onGridReady restore/sizeColumnsToFit work begins.
+        options.onColumnEverythingChanged = function () {
+            const args = arguments;
+            const params = args[0];
+            const result = typeof previousColumnsChanged === 'function'
+                ? Reflect.apply(previousColumnsChanged, this, args)
+                : undefined;
+
+            if (!params || params.source !== 'gridInitializing' || !params.api) {
+                return result;
+            }
+            if (!document.contains(root)
+                || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
+                return result;
+            }
+
+            installResizeListener(params);
+            return result;
+        };
+
         options.onGridSizeChanged = function () {
             const args = arguments;
             const params = args[0];
@@ -359,6 +419,11 @@
             let newApiIdentity = false;
 
             if (params && params.api) {
+                // Fallback listener installation keeps later manual invalidation
+                // available even if an otherwise-supported host omits the exact
+                // early callback. It cannot recover a fit event already missed.
+                installResizeListener(params);
+
                 if (currentMountApi === null && !unknownMountConsumed) {
                     currentMountApi = params.api;
                     firstOpportunity = true;
@@ -376,14 +441,26 @@
             if (newApiIdentity) {
                 clearGrowTimer();
                 growRecoveryConsumed = false;
-                mountProvenance = null;
+                mountDisabled = false;
+            }
+            if (firstOpportunity) {
+                initialOpportunityConsumed = true;
             }
 
-            const result = typeof previous === 'function'
-                ? Reflect.apply(previous, this, args)
-                : undefined;
+            let result;
+            try {
+                result = typeof previousGridSizeChanged === 'function'
+                    ? Reflect.apply(previousGridSizeChanged, this, args)
+                    : undefined;
+            } catch (error) {
+                if (firstOpportunity) {
+                    mountDisabled = true;
+                    clearGrowTimer();
+                }
+                throw error;
+            }
 
-            if (!params || !params.api) {
+            if (mountDisabled || !params || !params.api) {
                 return result;
             }
 
@@ -391,8 +468,6 @@
                 || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
                 return result;
             }
-
-            installResizeListener(params);
 
             if (!firstOpportunity) {
                 scheduleGrowRecovery(params);
@@ -409,6 +484,7 @@
                 mountProvenance = stored;
             } else if (stored) {
                 clearStoredProvenance();
+                mountProvenance = null;
             }
 
             // Preserve Candidate C's released rule: any fit-capable overflow is
@@ -424,7 +500,6 @@
             if (growCandidate(record, geometry)) {
                 growRecoveryConsumed = true;
                 fitAndRecord(params, 'initial-provenance-grow');
-                return result;
             }
 
             return result;
