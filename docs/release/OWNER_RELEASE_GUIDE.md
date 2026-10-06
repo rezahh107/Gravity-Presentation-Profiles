@@ -32,7 +32,7 @@ Do not hard-code a future release version in this guide unless the Owner has sep
 
 The workflow binds the release to the exact current integrated source, resolves the next version from release/tag history, prepares only the release metadata/version candidate, runs the canonical required qualification set on that exact candidate SHA, builds one canonical WordPress ZIP, validates and installs that exact ZIP, creates its SHA-256, rechecks conflicts, publishes the GitHub Release, downloads the published asset again, verifies it, and smoke-tests the downloaded consumer artifact.
 
-The canonical exact-candidate qualification waiter includes repository CI plus the admitted runtime lanes for WU21, SRWF Registration, the integrated SRWF Journey host, WU18 Entry Detail, and WU19 A4 Print. The release workflow must not duplicate those Journey assertions in a second release path.
+The canonical exact-candidate qualification waiter includes repository CI plus the admitted runtime lanes for WU21, SRWF Registration, the integrated SRWF Journey host, WU18 Entry Detail, and WU19 A4 Print. The release workflow must not duplicate those Journey assertions in a second release path. Inside the Journey lane, every positive canonical journey—including MR-6—runs before the topology-mutating split-assignee negative control so release evidence cannot be contaminated by that disposable test mutation.
 
 Only after consumer-facing verification succeeds does the workflow create a small development-continuation commit that returns the two source version declarations to `0.0.0-dev`. The completed changelog release section, tag, GitHub Release, and released ZIP remain tied to the exact production candidate.
 
