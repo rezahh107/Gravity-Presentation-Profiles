@@ -12,8 +12,8 @@
     }
 
     const PROVENANCE_VERSION = 1;
-    const STORAGE_PREFIX = 'gpp:srwf-inbox-fit:v1:';
-    const GROW_SETTLE_MS = 180;
+    const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:';
+    const GROW_DEBOUNCE_MS = 180;
     const GROW_MIN_DELTA_PX = 24;
     const WIDTH_TOLERANCE_PX = 1;
 
@@ -21,11 +21,6 @@
         && ids.length === expectedIds.length
         && new Set(ids).size === ids.length
         && ids.every(id => expectedIds.includes(String(id)));
-
-    const sameOrderedIds = (actual, expected) => Array.isArray(actual)
-        && Array.isArray(expected)
-        && actual.length === expected.length
-        && actual.every((id, index) => String(id) === String(expected[index]));
 
     const admittedDisplayedShape = ids => Array.isArray(ids)
         && ids.length > 0
@@ -41,27 +36,6 @@
             return false;
         }
         return String(formId) === String(contract.form_id);
-    };
-
-    const storage = () => {
-        try {
-            return window.localStorage || null;
-        } catch (error) {
-            return null;
-        }
-    };
-
-    const safeRemove = key => {
-        const target = storage();
-        if (!target || typeof target.removeItem !== 'function') {
-            return;
-        }
-        try {
-            target.removeItem(key);
-        } catch (error) {
-            // Provenance is disposable presentation state. Storage failure must
-            // never affect the native Grid or the existing overflow repair.
-        }
     };
 
     const roots = Array.from(document.querySelectorAll(
@@ -80,105 +54,127 @@
             continue;
         }
 
-        const previousSize = options.onGridSizeChanged;
-        const previousResize = options.onColumnResized;
-        if ((previousSize != null && typeof previousSize !== 'function')
-            || (previousResize != null && typeof previousResize !== 'function')) {
+        const previous = options.onGridSizeChanged;
+        if (previous != null && typeof previous !== 'function') {
             continue;
         }
 
-        const storageKey = `${STORAGE_PREFIX}${contract.form_id}:${gridId}`;
+        const provenanceKey = `${PROVENANCE_PREFIX}${contract.form_id}:${gridId}`;
         let currentMountApi = null;
         let unknownMountConsumed = false;
-        let firstSizeOpportunityConsumed = false;
-        let firstSizeDeliveryInProgress = false;
-        let growRecoveryUsed = false;
+        let resizeListenerApi = null;
+        let resizeListener = null;
         let growTimer = null;
-        let gppFitInProgress = false;
+        let growRecoveryConsumed = false;
+        let mountProvenance = null;
 
         const clearGrowTimer = () => {
-            if (growTimer !== null && typeof window.clearTimeout === 'function') {
+            if (growTimer !== null) {
                 window.clearTimeout(growTimer);
+                growTimer = null;
             }
-            growTimer = null;
         };
 
-        const clearProvenance = () => {
-            clearGrowTimer();
-            safeRemove(storageKey);
-        };
-
-        const readProvenance = () => {
-            const target = storage();
-            if (!target || typeof target.getItem !== 'function') {
+        const storage = () => {
+            try {
+                return window.localStorage || null;
+            } catch (error) {
                 return null;
             }
+        };
 
+        const clearStoredProvenance = () => {
+            const area = storage();
+            if (!area) {
+                return;
+            }
+            try {
+                area.removeItem(provenanceKey);
+            } catch (error) {
+                // Presentation provenance is disposable. Native Grid behavior wins.
+            }
+        };
+
+        const writeStoredProvenance = record => {
+            mountProvenance = record;
+            const area = storage();
+            if (!area) {
+                return;
+            }
+            try {
+                area.setItem(provenanceKey, JSON.stringify(record));
+            } catch (error) {
+                // Live-mount recovery can still use mountProvenance; reload recovery fails closed.
+            }
+        };
+
+        const parseStoredProvenance = () => {
+            const area = storage();
+            if (!area) {
+                return null;
+            }
             let raw;
             try {
-                raw = target.getItem(storageKey);
+                raw = area.getItem(provenanceKey);
             } catch (error) {
                 return null;
             }
             if (!raw) {
                 return null;
             }
-
-            let value;
             try {
-                value = JSON.parse(raw);
+                const record = JSON.parse(raw);
+                if (!record || record.v !== PROVENANCE_VERSION
+                    || String(record.form_id) !== String(contract.form_id)
+                    || record.grid_id !== gridId
+                    || !sameShape(record.column_ids)
+                    || record.kind !== 'auto_fit'
+                    || !Array.isArray(record.displayed)
+                    || record.displayed.length === 0
+                    || new Set(record.displayed.map(column => String(column.id))).size !== record.displayed.length
+                    || record.displayed.some(column => !expectedIds.includes(String(column.id))
+                        || !Number.isFinite(column.width) || column.width <= 0)
+                    || (record.kind === 'auto_fit'
+                        && (!Number.isFinite(record.usable_width) || record.usable_width <= 0))) {
+                    clearStoredProvenance();
+                    return null;
+                }
+                return record;
             } catch (error) {
-                safeRemove(storageKey);
+                clearStoredProvenance();
                 return null;
             }
-
-            if (!value || value.version !== PROVENANCE_VERSION
-                || String(value.form_id) !== String(contract.form_id)
-                || String(value.grid_id) !== String(gridId)
-                || !Array.isArray(value.column_ids)
-                || !sameShape(value.column_ids.map(String))
-                || !Array.isArray(value.displayed_ids)
-                || !admittedDisplayedShape(value.displayed_ids.map(String))
-                || !Array.isArray(value.widths)
-                || value.widths.length !== value.displayed_ids.length
-                || value.widths.some(width => !Number.isFinite(width) || width <= 0)
-                || !Number.isFinite(value.usable_width) || value.usable_width <= 0) {
-                safeRemove(storageKey);
-                return null;
-            }
-
-            return value;
         };
 
-        const writeProvenance = snapshot => {
-            const target = storage();
-            if (!target || typeof target.setItem !== 'function') {
-                return;
+        const recordMatchesGeometry = (record, geometry) => {
+            if (!record || !geometry || record.displayed.length !== geometry.columns.length) {
+                return false;
             }
-
-            const value = {
-                version: PROVENANCE_VERSION,
-                form_id: String(contract.form_id),
-                grid_id: String(gridId),
-                column_ids: expectedIds.slice(),
-                displayed_ids: snapshot.geometry.map(column => column.id),
-                widths: snapshot.geometry.map(column => column.width),
-                usable_width: snapshot.usableWidth,
-            };
-
-            try {
-                target.setItem(storageKey, JSON.stringify(value));
-            } catch (error) {
-                // Native state is still authoritative; provenance is optional.
+            for (let index = 0; index < geometry.columns.length; index += 1) {
+                const expected = record.displayed[index];
+                const actual = geometry.columns[index];
+                if (String(expected.id) !== actual.id
+                    || Math.abs(expected.width - actual.width) > WIDTH_TOLERANCE_PX) {
+                    return false;
+                }
             }
+            return true;
         };
+
+        const makeRecord = (kind, geometry) => ({
+            v: PROVENANCE_VERSION,
+            kind,
+            form_id: contract.form_id,
+            grid_id: gridId,
+            column_ids: expectedIds.slice(),
+            displayed: geometry.columns.map(column => ({id: column.id, width: column.width})),
+            ...(kind === 'auto_fit' ? {usable_width: geometry.usableWidth} : {}),
+        });
 
         const inspectGeometry = params => {
-            if (!params || !params.api || !document.contains(root)
-                || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
+            if (!params || !params.api) {
                 return null;
             }
-
             if ((options.domLayout != null && options.domLayout !== 'normal')
                 || (options.rowModelType != null && options.rowModelType !== 'clientSide')
                 || options.autoSizeStrategy != null
@@ -210,7 +206,7 @@
                 return null;
             }
 
-            const geometry = [];
+            const columns = [];
             for (const column of displayed) {
                 if (!column || [
                     'getColId',
@@ -229,7 +225,7 @@
                     return null;
                 }
 
-                geometry.push({
+                columns.push({
                     id: String(column.getColId()),
                     width: column.getActualWidth(),
                     min: column.getMinWidth(),
@@ -240,196 +236,193 @@
                 });
             }
 
-            if (!admittedDisplayedShape(geometry.map(column => column.id))
-                || geometry.some(column => column.pinned != null)
-                || geometry.some(column => !Number.isFinite(column.flex) || column.flex !== 0)
-                || geometry.some(column => column.suppressSizeToFit
-                    || !Number.isFinite(column.width) || column.width <= 0
-                    || !Number.isFinite(column.min) || column.min <= 0
-                    || column.width < column.min
-                    || (column.max != null && (!Number.isFinite(column.max)
-                        || column.max < column.min || column.width > column.max)))) {
+            if (!admittedDisplayedShape(columns.map(column => column.id))) {
+                return null;
+            }
+            if (columns.some(column => column.pinned != null)) {
+                return null;
+            }
+            if (columns.some(column => !Number.isFinite(column.flex) || column.flex !== 0)) {
+                return null;
+            }
+            if (columns.some(column => column.suppressSizeToFit
+                || !Number.isFinite(column.width) || column.width <= 0
+                || !Number.isFinite(column.min) || column.min <= 0
+                || column.width < column.min
+                || (column.max != null && (!Number.isFinite(column.max)
+                    || column.max < column.min || column.width > column.max)))) {
                 return null;
             }
 
             return {
-                state,
-                geometry,
+                columns,
+                displayedWidth: columns.reduce((sum, column) => sum + column.width, 0),
+                minimumWidth: columns.reduce((sum, column) => sum + column.min, 0),
                 usableWidth,
-                displayedWidth: geometry.reduce((sum, column) => sum + column.width, 0),
-                minimumWidth: geometry.reduce((sum, column) => sum + column.min, 0),
             };
         };
 
-        const matchingProvenance = snapshot => {
-            const value = readProvenance();
-            if (!value) {
-                return null;
+        const fitAndRecord = (params, reason) => {
+            params.api.sizeColumnsToFit();
+            const fitted = inspectGeometry(params);
+            if (fitted) {
+                writeStoredProvenance(makeRecord('auto_fit', fitted));
+            } else {
+                mountProvenance = null;
+                clearStoredProvenance();
             }
-
-            const ids = snapshot.geometry.map(column => column.id);
-            if (!sameOrderedIds(value.displayed_ids, ids)
-                || value.widths.some((width, index) => Math.abs(width - snapshot.geometry[index].width) > WIDTH_TOLERANCE_PX)) {
-                clearProvenance();
-                return null;
-            }
-
-            return value;
+            return reason;
         };
 
-        const fitAndRecord = params => {
-            gppFitInProgress = true;
-            try {
-                params.api.sizeColumnsToFit();
-            } finally {
-                gppFitInProgress = false;
-            }
+        const growCandidate = (record, geometry) => record
+            && record.kind === 'auto_fit'
+            && recordMatchesGeometry(record, geometry)
+            && geometry.minimumWidth <= geometry.usableWidth
+            && geometry.usableWidth - record.usable_width >= GROW_MIN_DELTA_PX
+            && geometry.usableWidth - geometry.displayedWidth >= GROW_MIN_DELTA_PX;
 
-            const after = inspectGeometry(params);
-            if (after) {
-                writeProvenance(after);
-            } else {
-                clearProvenance();
+        const installResizeListener = params => {
+            if (!params || !params.api || resizeListenerApi === params.api
+                || typeof params.api.addEventListener !== 'function') {
+                return;
             }
+            if (resizeListenerApi && resizeListener
+                && typeof resizeListenerApi.removeEventListener === 'function') {
+                resizeListenerApi.removeEventListener('columnResized', resizeListener);
+            }
+            resizeListenerApi = params.api;
+            resizeListener = event => {
+                if (!event || event.finished !== true) {
+                    return;
+                }
+                const geometry = inspectGeometry({api: params.api, columnApi: event.columnApi || params.columnApi});
+                if (!geometry) {
+                    mountProvenance = null;
+                    clearStoredProvenance();
+                    clearGrowTimer();
+                    return;
+                }
+                if (event.source === 'sizeColumnsToFit') {
+                    writeStoredProvenance(makeRecord('auto_fit', geometry));
+                    return;
+                }
+                // Any completed non-fit width mutation revokes GPP provenance.
+                // Native persistence remains authoritative for the resulting
+                // manual/API width state and later reloads.
+                mountProvenance = null;
+                clearStoredProvenance();
+                clearGrowTimer();
+            };
+            params.api.addEventListener('columnResized', resizeListener);
         };
 
         const scheduleGrowRecovery = params => {
-            if (growRecoveryUsed || typeof window.setTimeout !== 'function') {
+            if (growRecoveryConsumed || !params || !params.api || params.api !== currentMountApi) {
+                return;
+            }
+            const geometry = inspectGeometry(params);
+            if (!geometry) {
+                clearGrowTimer();
+                return;
+            }
+            const stored = parseStoredProvenance();
+            const record = stored || mountProvenance;
+            if (!growCandidate(record, geometry)) {
+                clearGrowTimer();
                 return;
             }
 
             clearGrowTimer();
-            const api = params.api;
             growTimer = window.setTimeout(() => {
                 growTimer = null;
-                if (growRecoveryUsed || currentMountApi !== api) {
+                if (growRecoveryConsumed || !document.contains(root)
+                    || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
                     return;
                 }
-
-                const snapshot = inspectGeometry(params);
-                if (!snapshot || snapshot.displayedWidth > snapshot.usableWidth + WIDTH_TOLERANCE_PX) {
+                const current = inspectGeometry(params);
+                const latestStored = parseStoredProvenance();
+                const latest = latestStored || mountProvenance;
+                if (!current || !growCandidate(latest, current)) {
                     return;
                 }
-
-                const provenance = matchingProvenance(snapshot);
-                if (!provenance
-                    || snapshot.usableWidth < provenance.usable_width + GROW_MIN_DELTA_PX) {
-                    return;
-                }
-
-                growRecoveryUsed = true;
-                fitAndRecord(params);
-            }, GROW_SETTLE_MS);
-        };
-
-        options.onColumnResized = function () {
-            const args = arguments;
-            const params = args[0];
-
-            // Gravity Flow restores its persisted column state with source=api
-            // before the first Grid-size opportunity. That startup restore must
-            // not erase valid GPP fit provenance needed for direct reload.
-            // After startup, any width mutation not made by this guard revokes
-            // GPP provenance so manual/API choices remain host-owned.
-            const belongsToCurrentMount = params && params.api && params.api === currentMountApi;
-            if (firstSizeOpportunityConsumed && belongsToCurrentMount
-                && !firstSizeDeliveryInProgress && !gppFitInProgress) {
-                clearProvenance();
-            }
-
-            return typeof previousResize === 'function'
-                ? Reflect.apply(previousResize, this, args)
-                : undefined;
+                growRecoveryConsumed = true;
+                fitAndRecord(params, 'live-grow');
+            }, GROW_DEBOUNCE_MS);
         };
 
         options.onGridSizeChanged = function () {
             const args = arguments;
             const params = args[0];
             let firstOpportunity = false;
+            let newApiIdentity = false;
 
-            // Consume before invoking either the previous callback or any sizing
-            // operation so exceptions/reentrancy cannot create retries.
             if (params && params.api) {
                 if (currentMountApi === null && !unknownMountConsumed) {
                     currentMountApi = params.api;
                     firstOpportunity = true;
-                    growRecoveryUsed = false;
-                    clearGrowTimer();
+                    newApiIdentity = true;
                 } else if (currentMountApi !== null && currentMountApi !== params.api) {
                     currentMountApi = params.api;
                     firstOpportunity = true;
-                    growRecoveryUsed = false;
-                    clearGrowTimer();
+                    newApiIdentity = true;
                 }
             } else if (currentMountApi === null && !unknownMountConsumed) {
                 unknownMountConsumed = true;
                 firstOpportunity = true;
+            }
+
+            if (newApiIdentity) {
                 clearGrowTimer();
+                growRecoveryConsumed = false;
+                mountProvenance = null;
             }
 
-            if (firstOpportunity) {
-                firstSizeOpportunityConsumed = true;
-            }
-
-            let result;
-            if (firstOpportunity) {
-                firstSizeDeliveryInProgress = true;
-            }
-            try {
-                result = typeof previousSize === 'function'
-                    ? Reflect.apply(previousSize, this, args)
-                    : undefined;
-            } finally {
-                if (firstOpportunity) {
-                    firstSizeDeliveryInProgress = false;
-                }
-            }
+            const result = typeof previous === 'function'
+                ? Reflect.apply(previous, this, args)
+                : undefined;
 
             if (!params || !params.api) {
                 return result;
             }
 
-            const snapshot = inspectGeometry(params);
-            if (!snapshot) {
-                if (firstOpportunity) {
-                    clearProvenance();
-                }
+            if (!document.contains(root)
+                || !root.closest('[data-gpp-inbox-surface="gravity_flow.inbox"]')) {
                 return result;
             }
 
-            if (firstOpportunity) {
-                if (snapshot.displayedWidth > snapshot.usableWidth + WIDTH_TOLERANCE_PX) {
-                    if (snapshot.minimumWidth <= snapshot.usableWidth) {
-                        fitAndRecord(params);
-                    }
-                    return result;
-                }
+            installResizeListener(params);
 
-                const provenance = matchingProvenance(snapshot);
-                if (provenance
-                    && snapshot.usableWidth >= provenance.usable_width + GROW_MIN_DELTA_PX) {
-                    growRecoveryUsed = true;
-                    fitAndRecord(params);
-                }
-                return result;
-            }
-
-            if (snapshot.displayedWidth > snapshot.usableWidth + WIDTH_TOLERANCE_PX) {
-                // Preserve the existing live-shrink policy. A later initial
-                // restore may normalize fit-capable overflow.
-                clearGrowTimer();
-                return result;
-            }
-
-            const provenance = matchingProvenance(snapshot);
-            if (!provenance) {
-                return result;
-            }
-
-            if (snapshot.usableWidth >= provenance.usable_width + GROW_MIN_DELTA_PX) {
+            if (!firstOpportunity) {
                 scheduleGrowRecovery(params);
-            } else {
-                clearGrowTimer();
+                return result;
+            }
+
+            const geometry = inspectGeometry(params);
+            if (!geometry) {
+                return result;
+            }
+
+            const stored = parseStoredProvenance();
+            if (stored && recordMatchesGeometry(stored, geometry)) {
+                mountProvenance = stored;
+            } else if (stored) {
+                clearStoredProvenance();
+            }
+
+            // Preserve Candidate C's released rule: any fit-capable overflow is
+            // normalized exactly once on the initial native mount opportunity.
+            if (geometry.displayedWidth > geometry.usableWidth + WIDTH_TOLERANCE_PX) {
+                if (geometry.minimumWidth <= geometry.usableWidth) {
+                    fitAndRecord(params, 'initial-overflow');
+                }
+                return result;
+            }
+
+            const record = mountProvenance;
+            if (growCandidate(record, geometry)) {
+                growRecoveryConsumed = true;
+                fitAndRecord(params, 'initial-provenance-grow');
+                return result;
             }
 
             return result;
