@@ -87,10 +87,13 @@ gpp_journey_assert( false !== strpos( $unknown_markup, 'gpp-entry-journey__case-
 $root = dirname( __DIR__, 2 );
 $php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailJourneyPresentationAdapter.php' );
 $primary_php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailPresentationAdapter.php' );
+$reachability_php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailRequestReachability.php' );
+$admin_context_php = file_get_contents( $root . '/src/SRWF/GravityFlow/EntryDetailAdminPresentationContext.php' );
 $css = file_get_contents( $root . '/assets/css/srwf-gravity-flow-entry-detail-journey.css' );
 $bootstrap = file_get_contents( $root . '/src/Bootstrap.php' );
 
 gpp_journey_assert( false !== strpos( $bootstrap, 'EntryDetailJourneyPresentationAdapter::register();' ), 'Journey adapter is not production-reachable from Bootstrap.' );
+gpp_journey_assert( false !== strpos( $bootstrap, 'EntryDetailAdminPresentationContext::register();' ), 'Admin Entry Detail presentation context is not production-reachable from Bootstrap.' );
 gpp_journey_assert( false !== strpos( $php, 'GFAPI::get_entry' ), 'Journey result truth must fresh-read the entry.' );
 gpp_journey_assert( false !== strpos( $php, 'get_current_step' ) && false !== strpos( $php, 'get_status' ) && false !== strpos( $php, 'workflow_final_status' ), 'Journey result truth must use current-step, API-status and final-status read-back.' );
 gpp_journey_assert( false !== strpos( $php, 'Gravity_Flow_Entry_Detail::can_update' ), 'Correction must defer current-operator authority to Gravity Flow.' );
@@ -127,6 +130,22 @@ gpp_journey_assert( false === strpos( $php, 'STATE_TECHNICAL_ERROR' ) && false =
 gpp_journey_assert( false === strpos( $php, 'window.confirm' ) && false === strpos( $php, 'preventDefault' ) && false === strpos( $php, 'wp_ajax_' ), 'GPP must not replace native confirmation/action transport.' );
 gpp_journey_assert( false === strpos( $php, 'update_option(' ) && false === strpos( $php, 'add_option(' ) && false === strpos( $php, 'set_transient(' ), 'Journey adapter must remain stateless.' );
 gpp_journey_assert( false === strpos( $php, 'wp_insert_post' ) && false === strpos( $php, 'page_id' ), 'Production journey must not create or hard-code environment Page IDs.' );
+
+gpp_journey_assert(
+    false !== strpos( $reachability_php, 'public static function isAdminInboxEntryDetail()' )
+    && false !== strpos( $reachability_php, "'gravityflow-inbox' === \$page" )
+    && false !== strpos( $admin_context_php, "add_filter( 'admin_body_class'" )
+    && false !== strpos( $admin_context_php, 'EntryDetailRequestReachability::isAdminInboxEntryDetail()' )
+    && false !== strpos( $admin_context_php, "const BODY_CLASS = 'gpp-srwf-entry-detail-admin-context';" ),
+    'Terminal repair must derive its admin presentation context from the existing authentic request boundary.'
+);
+gpp_journey_assert(
+    false === strpos( $admin_context_php, 'current_user_can' )
+    && false === strpos( $admin_context_php, 'GFAPI::current_user_can_any' )
+    && false === strpos( $admin_context_php, 'gravityflow_workflow_detail_admin_actions' ),
+    'GPP presentation context must not create or mirror the host authorization policy.'
+);
+
 gpp_journey_assert( false !== strpos( $css, ':focus-visible' ), 'Journey return control requires visible keyboard focus.' );
 gpp_journey_assert(
     false !== strpos( $css, '.gravityflow-back-link-container a.back-link' )
@@ -167,21 +186,32 @@ gpp_journey_assert(
     'MR-5 terminal Approved/Rejected markup must omit repeated case identity while Unknown keeps its existing fail-closed context.'
 );
 
-$terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
+$frontend_terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
+$admin_terminal_targets = ':is(.entry-detail-view, #postbox-container-2, .detail-view-print)';
 foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
     $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
-    $terminal_boundary = '.gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    $frontend_boundary = 'body:not(.gpp-srwf-entry-detail-admin-context) .gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    $admin_boundary = 'body.gpp-srwf-entry-detail-admin-context .gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
     gpp_journey_assert(
-        false !== strpos( $css, $terminal_boundary . ' ' . $terminal_targets ),
-        'MR-5 terminal result must suppress only the proven competing native Entry Detail surfaces for ' . $terminal_state . '.'
+        false !== strpos( $css, $frontend_boundary . ' ' . $frontend_terminal_targets ),
+        'Frontend terminal Result-only suppression must retain all established competing native targets for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false !== strpos( $css, $admin_boundary . ' ' . $admin_terminal_targets ),
+        'Admin terminal suppression must preserve the host-owned status/management container for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false === strpos( $css, $admin_boundary . ' ' . $frontend_terminal_targets ),
+        'Admin terminal context must not suppress #postbox-container-1 for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
         false === strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
         'MR-5 terminal identity must be omitted by server markup, not implemented as CSS-only hiding for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
-        false === strpos( $css, $terminal_boundary . ' .gpp-entry-print-utility' ),
-        'MR-5 terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
+        false === strpos( $css, $frontend_boundary . ' .gpp-entry-print-utility' )
+        && false === strpos( $css, $admin_boundary . ' .gpp-entry-print-utility' ),
+        'Terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
     );
 }
 
