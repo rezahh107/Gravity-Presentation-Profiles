@@ -12,13 +12,23 @@ const minima = {id: 80, '1': 100, '3': 100, '6': 100, date_created: 150};
 const staleWidths = [165, 528, 414, 355, 410];
 
 assert.equal(source.split(placeholder).length - 1, 1);
-for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'columnEverythingChanged', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
+for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
   assert.equal(source.includes(forbidden), false, forbidden);
 }
-for (const required of ["const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:'", "addEventListener('columnResized'", "removeEventListener('columnResized'", "event.source === 'sizeColumnsToFit'", 'GROW_SETTLE_MS = 180', 'GROW_MIN_DELTA_PX = 24']) {
+for (const required of [
+  "const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:'",
+  'options.onColumnEverythingChanged = function',
+  "params.source !== 'gridInitializing'",
+  "addEventListener('columnResized'",
+  "removeEventListener('columnResized'",
+  "event.source === 'sizeColumnsToFit'",
+  'GROW_SETTLE_MS = 180',
+  'GROW_MIN_DELTA_PX = 24',
+]) {
   assert.equal(source.includes(required), true, required);
 }
 assert.equal(source.includes('options.onColumnResized = function'), false, 'host-owned GridOptions resize callback must not be replaced');
+assert.equal(source.includes("params.source === 'api'"), false, 'source=api must not be positively classified as restore provenance');
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const stateFrom = widths => contract.column_ids.map((colId, index) => ({colId, width: widths[index], hide: false, sort: null, sortIndex: null, pinned: null}));
@@ -38,8 +48,11 @@ function fixture(overrides = {}) {
   let nextTimer = 1;
   let sizeCalls = 0;
   let priorCalls = 0;
+  let earlyCalls = 0;
   let priorThrows = Boolean(overrides.priorThrowsOnce);
+  let initialized = false;
   const priorReturn = {native: true};
+  const earlyReturn = {early: true};
   let params;
 
   const root = {
@@ -83,10 +96,15 @@ function fixture(overrides = {}) {
     if (priorThrows) { priorThrows = false; throw new Error('native-prior-failure'); }
     return priorReturn;
   };
+  const previousEarly = overrides.previousEarly === null ? null : function () {
+    earlyCalls += 1;
+    return earlyReturn;
+  };
   const options = {
     columnDefs: (overrides.columnDefs ?? contract.column_ids).map(field => ({field})),
     searchArgs: {form_id: overrides.formId ?? '101'},
     onGridSizeChanged: overrides.nonCallablePrevious ? 'invalid' : previous,
+    onColumnEverythingChanged: overrides.nonCallableEarly ? 'invalid' : previousEarly,
   };
   for (const key of ['domLayout', 'rowModelType', 'autoSizeStrategy', 'suppressHorizontalScroll']) {
     if (Object.prototype.hasOwnProperty.call(overrides, key)) options[key] = overrides[key];
@@ -105,20 +123,44 @@ function fixture(overrides = {}) {
   };
   vm.runInNewContext(source.replace(placeholder, JSON.stringify(contract)), {window, document, gflow_config, Reflect, Number, Array, Object, String, Set, JSON, Math}, {filename: productionPath});
 
+  const initialize = () => {
+    if (initialized || typeof options.onColumnEverythingChanged !== 'function') return undefined;
+    initialized = true;
+    return options.onColumnEverythingChanged.call({api}, {type: 'columnEverythingChanged', source: 'gridInitializing', api, columnApi}, 'early-second');
+  };
+
   return {
-    state, center, storage, params, options, api, columnApi, priorReturn,
-    deliver() { return options.onGridSizeChanged.call({api}, params, 'second'); },
-    resize(sourceName, finished = true) { emit('columnResized', {type: 'columnResized', source: sourceName, finished, api, columnApi}); },
+    state, center, storage, params, options, api, columnApi, priorReturn, earlyReturn,
+    initialize,
+    deliver() { initialize(); return options.onGridSizeChanged.call({api}, params, 'second'); },
+    resize(sourceName, finished = true) { initialize(); emit('columnResized', {type: 'columnResized', source: sourceName, finished, api, columnApi}); },
     setWidths(widths) { state.forEach((entry, index) => { entry.width = widths[index]; }); },
     setCenter(width) { center.clientWidth = width; },
     flushTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
     pendingTimers: () => timers.size,
     sizeCalls: () => sizeCalls,
     priorCalls: () => priorCalls,
+    earlyCalls: () => earlyCalls,
   };
 }
 
-// Released one-shot initial overflow behavior remains intact and composes prior callback.
+// Exact early lifecycle composition preserves a pre-existing callback and
+// captures a native startup sizeColumnsToFit before onGridSizeChanged.
+{
+  const f = fixture();
+  assert.equal(f.initialize(), f.earlyReturn);
+  assert.equal(f.earlyCalls(), 1);
+  f.api.sizeColumnsToFit();
+  assert.equal(f.sizeCalls(), 1);
+  const record = JSON.parse(f.storage.getItem(provenanceKey));
+  assert.equal(record.kind, 'auto_fit');
+  assert.ok(Math.abs(record.usable_width - f.center.clientWidth) <= 1);
+  f.deliver();
+  assert.equal(f.sizeCalls(), 1, 'initial Grid-size opportunity repeated an already-fitting native startup fit');
+}
+
+// Production reachability preserves the released initial overflow behavior and
+// composes the pre-existing onGridSizeChanged callback.
 {
   const f = fixture();
   assert.equal(f.deliver(), f.priorReturn);
@@ -130,6 +172,13 @@ function fixture(overrides = {}) {
   assert.equal(f.sizeCalls(), 1);
 }
 { const f = fixture({priorThrowsOnce: true}); assert.throws(() => f.deliver(), /native-prior-failure/); f.deliver(); assert.equal(f.sizeCalls(), 0); }
+
+// Invalid public callback shapes fail closed before production composition.
+for (const overrides of [{nonCallablePrevious: true}, {nonCallableEarly: true}]) {
+  const f = fixture(overrides);
+  assert.equal(typeof f.options.onGridSizeChanged, overrides.nonCallablePrevious ? 'string' : 'function');
+  assert.equal(f.sizeCalls(), 0);
+}
 
 // Legitimate minimum-impossible overflow and unsupported sizing modes remain native/fail-closed.
 for (const width of [390, 320]) { const f = fixture({centerWidth: width}); f.deliver(); assert.equal(f.sizeCalls(), 0); }
@@ -146,7 +195,7 @@ for (const overrides of [{pinnedById: {'1': 'left'}}, {flexById: {'1': 1}}, {dom
   assert.deepEqual(f.state.map(entry => entry.width), widths);
 }
 
-// Narrow GPP fit provenance survives a new mount and authorizes direct wider reload recovery.
+// Narrow GPP/native fit provenance survives a new mount and authorizes direct wider reload recovery.
 {
   const storage = new MemoryStorage();
   const narrow = fixture({storage, centerWidth: 1286});
@@ -157,6 +206,25 @@ for (const overrides of [{pinnedById: {'1': 'left'}}, {flexById: {'1': 1}}, {dom
   wide.deliver();
   assert.equal(wide.sizeCalls(), 1);
   assert.ok(Math.abs(wide.state.reduce((sum, entry) => sum + entry.width, 0) - 1526) <= 1);
+}
+
+// Startup source=api is not treated as a restore discriminator. Matching width
+// signatures preserve provenance; a mismatched startup API state is rejected by
+// the first geometry evaluation rather than guessed from the event source.
+{
+  const storage = new MemoryStorage();
+  const narrow = fixture({storage, centerWidth: 1286});
+  narrow.deliver();
+  const record = storage.getItem(provenanceKey);
+  const wide = fixture({storage, centerWidth: 1526, state: stateFrom(narrow.state.map(entry => entry.width))});
+  wide.initialize();
+  wide.resize('api', true);
+  assert.equal(storage.getItem(provenanceKey), record);
+  wide.setWidths([100, 220, 220, 220, 220]);
+  wide.resize('api', true);
+  assert.equal(storage.getItem(provenanceKey), record, 'startup api mismatch was prematurely classified');
+  wide.deliver();
+  assert.notEqual(storage.getItem(provenanceKey), record, 'first effective geometry did not reject mismatched startup API widths');
 }
 
 // Same-mount grow is settled/debounced and can fit at most once.
@@ -174,12 +242,15 @@ for (const overrides of [{pinnedById: {'1': 'left'}}, {flexById: {'1': 1}}, {dom
   assert.equal(f.sizeCalls(), 2);
 }
 
-// Completed manual/API width mutations revoke GPP provenance through the public
-// Grid event seam; the manual widths remain untouched live and after reload.
+// Completed manual/API width mutations revoke GPP provenance only when the
+// material width signature changes; manual widths remain untouched live/reload.
 {
   const storage = new MemoryStorage();
   const f = fixture({storage, centerWidth: 1286});
   f.deliver();
+  const same = f.storage.getItem(provenanceKey);
+  f.resize('api', true);
+  assert.equal(f.storage.getItem(provenanceKey), same, 'same-width API event revoked provenance');
   const manual = f.state.map(entry => entry.width);
   manual[1] -= 120;
   f.setWidths(manual);
@@ -205,12 +276,15 @@ for (const overrides of [{pinnedById: {'1': 'left'}}, {flexById: {'1': 1}}, {dom
 }
 
 const result = {status: 'PASS', mode: 'PRODUCTION_BIDIRECTIONAL_FIT_ISOLATED_CONTRACT', assertions: {
+  early_native_fit_provenance_captured: true,
+  early_callback_semantics_preserved: true,
   released_initial_overflow_preserved: true,
   prior_callback_semantics_preserved: true,
   minimum_overflow_preserved: true,
   unsupported_sizing_fails_closed: true,
   unproven_underfill_unchanged: true,
   direct_reload_grow_recovery: true,
+  startup_api_not_restore_discriminator: true,
   live_grow_debounced_once: true,
   manual_resize_revokes_provenance: true,
   malformed_provenance_discarded: true,
