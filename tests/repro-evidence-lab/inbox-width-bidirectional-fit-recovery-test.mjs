@@ -15,7 +15,7 @@ assert.equal(source.split(placeholder).length - 1, 1);
 for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'columnEverythingChanged', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
   assert.equal(source.includes(forbidden), false, forbidden);
 }
-for (const required of ["const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:'", "addEventListener('columnResized'", "removeEventListener('columnResized'", "event.source === 'sizeColumnsToFit'", 'GROW_DEBOUNCE_MS = 180', 'GROW_MIN_DELTA_PX = 24']) {
+for (const required of ["const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:'", "addEventListener('columnResized'", "removeEventListener('columnResized'", "event.source === 'sizeColumnsToFit'", 'GROW_SETTLE_MS = 180', 'GROW_MIN_DELTA_PX = 24']) {
   assert.equal(source.includes(required), true, required);
 }
 assert.equal(source.includes('options.onColumnResized = function'), false, 'host-owned GridOptions resize callback must not be replaced');
