@@ -6,6 +6,8 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-06
+
 ### Added
 
 - Added the bounded one-shot SRWF Inbox initial-geometry guard: on an admitted native Gravity Flow / AG Grid mount, saved fit-capable width overflow is normalized once through the public `sizeColumnsToFit()` API while native Grid state/ownership, legitimate narrow overflow, manual user resizing and later Live Refresh lifecycle remain host-owned.
