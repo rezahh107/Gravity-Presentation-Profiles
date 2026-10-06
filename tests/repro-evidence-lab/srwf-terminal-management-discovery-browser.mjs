@@ -148,17 +148,56 @@ async function assertFrontendResultOnly(page, state) {
   return inv;
 }
 
+async function restartApprovedThroughNativeAdmin(page, entryId) {
+  await page.goto(adminEntryUrl(entryId), { waitUntil:'networkidle' });
+  await assertAdminManagement(page, 'approved');
+  const before = hostState(entryId, manifest.users.operator.id);
+  if (before.current_step !== null || before.api_status !== 'approved' || before.workflow_final_status !== 'approved') {
+    throw new Error(`Approved terminal precondition missing before native restart: ${JSON.stringify(before)}`);
+  }
+
+  await page.selectOption('#gravityflow-admin-action', 'restart_workflow');
+  const dialogs = [];
+  const dialogHandler = async dialog => {
+    dialogs.push({ type:dialog.type(), message:dialog.message() });
+    await dialog.accept();
+  };
+  page.on('dialog', dialogHandler);
+  try {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil:'networkidle' }),
+      page.locator('[name="_gravityflow_admin_action"]').click(),
+    ]);
+  } finally {
+    page.off('dialog', dialogHandler);
+  }
+
+  const after = hostState(entryId, manifest.users.operator.id);
+  if (after.current_step === null || after.api_status === 'approved' || after.workflow_final_status === 'approved') {
+    throw new Error(`Native Restart Workflow did not leave Approved terminal state: ${JSON.stringify({ before, after, dialogs })}`);
+  }
+
+  await page.reload({ waitUntil:'networkidle' });
+  const reloaded = await inventory(page);
+  if (reloaded.counts.result.visible !== 0 || reloaded.counts.status_box.visible !== 1) {
+    throw new Error(`Restarted entry did not return to active native Entry Detail after reload: ${JSON.stringify(reloaded.counts)}`);
+  }
+
+  return { entry_id:entryId, before, after, dialogs, reloaded };
+}
+
 const browser = await chromium.launch({ headless:true });
 const context = await browser.newContext({ viewport:{ width:1280, height:900 } });
 const page = await context.newPage();
 const result = {
-  schema_version: '2.0.0',
+  schema_version: '2.1.0',
   scope: 'QUALIFICATION_AND_PRODUCTION_REGRESSION',
   data_class: 'SYNTHETIC_NON_PII',
   runtime: { gravity_forms:'3.1.1.1', gravity_flow:'3.1.0' },
   entries: {},
   negative_control: null,
   frontend_terminal: null,
+  native_mutation: null,
 };
 
 try {
@@ -191,6 +230,8 @@ try {
   await page.reload({ waitUntil:'networkidle' });
   const reloadFrontend = await assertFrontendResultOnly(page, 'rejected');
   result.frontend_terminal = { entry_id:entries.rejected, first:firstFrontend, reloaded:reloadFrontend };
+
+  result.native_mutation = await restartApprovedThroughNativeAdmin(page, entries.approved);
 } finally {
   await browser.close();
   fs.writeFileSync(
