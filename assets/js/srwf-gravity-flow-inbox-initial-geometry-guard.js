@@ -13,7 +13,7 @@
 
     const PROVENANCE_VERSION = 1;
     const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:';
-    const GROW_DEBOUNCE_MS = 180;
+    const GROW_SETTLE_MS = 180;
     const GROW_MIN_DELTA_PX = 24;
     const WIDTH_TOLERANCE_PX = 1;
 
@@ -55,7 +55,9 @@
         }
 
         const previous = options.onGridSizeChanged;
-        if (previous != null && typeof previous !== 'function') {
+        const hostResizeCallback = options.onColumnResized;
+        if ((previous != null && typeof previous !== 'function')
+            || (hostResizeCallback != null && typeof hostResizeCallback !== 'function')) {
             continue;
         }
 
@@ -347,7 +349,7 @@
                 }
                 growRecoveryConsumed = true;
                 fitAndRecord(params, 'live-grow');
-            }, GROW_DEBOUNCE_MS);
+            }, GROW_SETTLE_MS);
         };
 
         options.onGridSizeChanged = function () {
