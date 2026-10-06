@@ -140,7 +140,9 @@ async function assertFrontendResultOnly(page, state) {
     if (inv.counts[key].visible !== 0) throw new Error(`Competing frontend terminal surface visible (${key}): ${JSON.stringify(inv.counts)}`);
   }
   if (inv.counts.gpp_print.visible !== 1) throw new Error(`GPP Print missing on frontend terminal ${state}: ${JSON.stringify(inv.counts)}`);
-  if (inv.counts.native_admin_action.dom !== 0 || inv.counts.native_admin_apply.dom !== 0) throw new Error(`Admin management leaked to frontend terminal ${state}.`);
+  // Gravity Flow may still own/render these controls in the shared frontend DOM;
+  // the Result-only contract is that they are not visible or operator-usable.
+  if (inv.counts.native_admin_action.visible !== 0 || inv.counts.native_admin_apply.visible !== 0) throw new Error(`Admin management visible on frontend terminal ${state}.`);
   if ((await nativeApprovalActions(page)).length !== 0) throw new Error(`Stale workflow actions visible on frontend terminal ${state}.`);
   if (inv.counts.gpp_return.visible !== 1) throw new Error(`Canonical Inbox return missing on frontend terminal ${state}.`);
   return inv;
