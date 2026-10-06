@@ -83,13 +83,13 @@ function gpp_guard_reset() {
 }
 
 InboxInitialGeometryGuard::register();
-gpp_assert_same( 1, count( $GLOBALS['gpp_guard_filters'] ), 'Candidate C should observe exactly one existing native Inbox column seam.' );
-gpp_assert_same( 'gravityflow_columns_inbox_table', $GLOBALS['gpp_guard_filters'][0][0], 'Candidate C scope must be derived from the native Inbox column pipeline.' );
-gpp_assert_same( PHP_INT_MAX, $GLOBALS['gpp_guard_filters'][0][2], 'Candidate C must observe the resolved SRWF header projection at the final column priority.' );
-gpp_assert_same( 2, $GLOBALS['gpp_guard_filters'][0][3], 'Candidate C column observer accepted-args contract mismatch.' );
-gpp_assert_same( 1, count( $GLOBALS['gpp_guard_actions'] ), 'Candidate C should attach through one pre-construction footer lifecycle action.' );
-gpp_assert_same( 'wp_print_footer_scripts', $GLOBALS['gpp_guard_actions'][0][0], 'Candidate C must use the qualified pre-construction script seam.' );
-gpp_assert_same( 0, $GLOBALS['gpp_guard_actions'][0][2], 'Candidate C must inject before WordPress prints the enqueued Gravity Flow footer script.' );
+gpp_assert_same( 1, count( $GLOBALS['gpp_guard_filters'] ), 'Geometry guard should observe exactly one existing native Inbox column seam.' );
+gpp_assert_same( 'gravityflow_columns_inbox_table', $GLOBALS['gpp_guard_filters'][0][0], 'Guard scope must be derived from the native Inbox column pipeline.' );
+gpp_assert_same( PHP_INT_MAX, $GLOBALS['gpp_guard_filters'][0][2], 'Guard must observe the resolved SRWF header projection at final column priority.' );
+gpp_assert_same( 2, $GLOBALS['gpp_guard_filters'][0][3], 'Guard column observer accepted-args contract mismatch.' );
+gpp_assert_same( 1, count( $GLOBALS['gpp_guard_actions'] ), 'Guard should attach through one pre-construction footer lifecycle action.' );
+gpp_assert_same( 'wp_print_footer_scripts', $GLOBALS['gpp_guard_actions'][0][0], 'Guard must use the qualified pre-construction script seam.' );
+gpp_assert_same( 0, $GLOBALS['gpp_guard_actions'][0][2], 'Guard must inject before the native Gravity Flow footer script.' );
 
 $config = gpp_guard_config( 101 );
 gpp_guard_set_header_configs( array( 101 => $config ) );
@@ -97,7 +97,7 @@ $contract = InboxTableHeaderPresentation::initialGeometryContract( array( 'form_
 gpp_assert_same(
     array( 'form_id' => 101, 'column_ids' => array( 'id', '1', '3', '6', 'date_created' ) ),
     $contract,
-    'Candidate C must derive form/column identity from the same resolved SRWF binding configuration as the table header.'
+    'Guard must derive form/column identity from the same resolved SRWF binding as the table header.'
 );
 gpp_assert_same( null, InboxTableHeaderPresentation::initialGeometryContract( array( 'form_id' => 202 ) ), 'Wrong-form scope must fail closed.' );
 gpp_assert_same( null, InboxTableHeaderPresentation::initialGeometryContract( array() ), 'Missing native form scope must fail closed.' );
@@ -106,15 +106,15 @@ gpp_guard_reset();
 $columns = gpp_guard_projected_columns();
 gpp_assert_same( $columns, InboxInitialGeometryGuard::captureResolvedContract( $columns, array( 'form_id' => 101 ) ), 'Scope observation must not mutate host columns.' );
 InboxInitialGeometryGuard::attachBeforeNativeGridConstruction();
-gpp_assert_same( 1, count( $GLOBALS['gpp_guard_inline'] ), 'Resolved authorized SRWF Inbox must receive one production pre-construction guard attachment.' );
-gpp_assert_same( 'gravityflow_theme_js', $GLOBALS['gpp_guard_inline'][0][0], 'Production guard must attach to Gravity Flow frontend theme construction handle.' );
-gpp_assert_same( 'before', $GLOBALS['gpp_guard_inline'][0][2], 'Production guard must run before native Grid construction.' );
+gpp_assert_same( 1, count( $GLOBALS['gpp_guard_inline'] ), 'Resolved authorized SRWF Inbox must receive one pre-construction guard attachment.' );
+gpp_assert_same( 'gravityflow_theme_js', $GLOBALS['gpp_guard_inline'][0][0], 'Guard must attach to Gravity Flow frontend construction handle.' );
+gpp_assert_same( 'before', $GLOBALS['gpp_guard_inline'][0][2], 'Guard must run before native Grid construction.' );
 $inline = $GLOBALS['gpp_guard_inline'][0][1];
-gpp_assert_true( false === strpos( $inline, InboxInitialGeometryGuard::CONTRACT_PLACEHOLDER ), 'Production inline guard leaked its unresolved contract placeholder.' );
-gpp_assert_true( false !== strpos( $inline, '"form_id":101' ), 'Production guard lost the authoritative bound form identity.' );
-gpp_assert_true( false !== strpos( $inline, '"column_ids":["id","1","3","6","date_created"]' ), 'Production guard lost authoritative bound column identities.' );
-gpp_assert_true( false !== strpos( $inline, 'options.searchArgs.form_id' ), 'Production guard must positively match native Grid searchArgs form identity.' );
-gpp_assert_true( false !== strpos( $inline, 'params.api.sizeColumnsToFit()' ), 'Production guard sole admitted native sizing operation is missing.' );
+gpp_assert_true( false === strpos( $inline, InboxInitialGeometryGuard::CONTRACT_PLACEHOLDER ), 'Inline guard leaked unresolved contract placeholder.' );
+gpp_assert_true( false !== strpos( $inline, '"form_id":101' ), 'Guard lost the authoritative bound form identity.' );
+gpp_assert_true( false !== strpos( $inline, '"column_ids":["id","1","3","6","date_created"]' ), 'Guard lost authoritative bound column identities.' );
+gpp_assert_true( false !== strpos( $inline, 'options.searchArgs.form_id' ), 'Guard must positively match native Grid searchArgs form identity.' );
+gpp_assert_same( 1, substr_count( $inline, 'params.api.sizeColumnsToFit()' ), 'Guard must keep one public native sizing operation.' );
 
 gpp_guard_reset();
 $wrong_columns = $columns;
@@ -126,20 +126,20 @@ gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Correct wrapper/form co
 gpp_guard_reset();
 InboxInitialGeometryGuard::captureResolvedContract( $columns, array( 'form_id' => 202 ) );
 InboxInitialGeometryGuard::attachBeforeNativeGridConstruction();
-gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Active profile with wrong native form must not attach Candidate C.' );
+gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Active profile with wrong native form must not attach the guard.' );
 
 gpp_guard_reset();
 gpp_guard_set_header_configs( array() );
 InboxInitialGeometryGuard::captureResolvedContract( $columns, array( 'form_id' => 101 ) );
 InboxInitialGeometryGuard::attachBeforeNativeGridConstruction();
-gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Inactive/missing resolved SRWF binding must not attach Candidate C.' );
+gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Inactive/missing resolved SRWF binding must not attach the guard.' );
 
 gpp_guard_reset();
 gpp_guard_set_header_configs( array( 101 => $config ) );
 $GLOBALS['gpp_guard_script_enqueued'] = false;
 InboxInitialGeometryGuard::captureResolvedContract( $columns, array( 'form_id' => 101 ) );
 InboxInitialGeometryGuard::attachBeforeNativeGridConstruction();
-gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Candidate C must not inject when the qualified native frontend construction handle is absent.' );
+gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Guard must not inject when the native frontend construction handle is absent.' );
 
 gpp_guard_reset();
 $config_202 = gpp_guard_config( 202, '11', '13', '16' );
@@ -147,17 +147,22 @@ gpp_guard_set_header_configs( array( 101 => $config, 202 => $config_202 ) );
 InboxInitialGeometryGuard::captureResolvedContract( $columns, array( 'form_id' => 101 ) );
 InboxInitialGeometryGuard::captureResolvedContract( gpp_guard_projected_columns( '11', '13', '16' ), array( 'form_id' => 202 ) );
 InboxInitialGeometryGuard::attachBeforeNativeGridConstruction();
-gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Multiple different resolved Inbox targets in one request must fail closed instead of creating a Grid registry.' );
+gpp_assert_same( array(), $GLOBALS['gpp_guard_inline'], 'Multiple different resolved Inbox targets in one request must fail closed.' );
 
 $source = file_get_contents( dirname( __DIR__, 2 ) . '/' . InboxInitialGeometryGuard::SCRIPT_RELATIVE_PATH );
-gpp_assert_true( is_string( $source ), 'Production Candidate C JavaScript source could not be read.' );
-gpp_assert_same( 1, substr_count( $source, InboxInitialGeometryGuard::CONTRACT_PLACEHOLDER ), 'Production Candidate C source must expose exactly one bounded contract placeholder.' );
+gpp_assert_true( is_string( $source ), 'Production geometry JavaScript source could not be read.' );
+gpp_assert_same( 1, substr_count( $source, InboxInitialGeometryGuard::CONTRACT_PLACEHOLDER ), 'Production source must expose exactly one bounded contract placeholder.' );
+gpp_assert_same( 1, substr_count( $source, 'window.localStorage' ), 'Presentation provenance must use one bounded localStorage capability access.' );
+gpp_assert_true( false !== strpos( $source, "const STORAGE_PREFIX = 'gpp:srwf-inbox-fit:v1:'" ), 'Presentation provenance storage namespace is missing.' );
+gpp_assert_true( false !== strpos( $source, 'options.onColumnResized = function' ), 'Manual/API width invalidation callback composition is missing.' );
+gpp_assert_true( false !== strpos( $source, 'GROW_SETTLE_MS = 180' ), 'Bounded grow settle policy is missing.' );
+gpp_assert_true( false !== strpos( $source, 'GROW_MIN_DELTA_PX = 24' ), 'Material grow threshold is missing.' );
+gpp_assert_same( 1, substr_count( $source, 'params.api.sizeColumnsToFit()' ), 'Public sizeColumnsToFit must remain the sole sizing mutation.' );
+
 foreach ( array(
-    'localStorage',
     'sessionStorage',
     'ResizeObserver',
     'MutationObserver',
-    'setTimeout(',
     'setInterval(',
     'onGridReady',
     'onColumnEverythingChanged',
@@ -165,11 +170,13 @@ foreach ( array(
     'setColumnWidth',
     'applyColumnState',
     'enableRtl',
+    "addEventListener('resize'",
+    'addEventListener("resize"',
 ) as $forbidden ) {
-    gpp_assert_true( false === strpos( $source, $forbidden ), 'Production Candidate C reintroduced prohibited mechanism: ' . $forbidden );
+    gpp_assert_true( false === strpos( $source, $forbidden ), 'Production geometry guard reintroduced prohibited mechanism: ' . $forbidden );
 }
 
 gpp_assert_true( false === strpos( $source, '3.1.0' ), 'Qualification dependency identity must not become a production exact-version gate.' );
-gpp_assert_true( false === strpos( $source, 'columnEverythingChanged' ), 'Restore-event provenance discrimination must remain outside Candidate C.' );
+gpp_assert_true( false === strpos( $source, 'columnEverythingChanged' ), 'Restore-event provenance discrimination must remain outside production admission.' );
 
 echo "INBOX_INITIAL_GEOMETRY_GUARD_TESTS_PASS\n";
