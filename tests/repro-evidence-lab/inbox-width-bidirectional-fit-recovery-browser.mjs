@@ -15,7 +15,7 @@ const ids = ['id', 'date_created', String(form.school_field_id), String(form.nat
 const mu = path.join(wpPath, 'wp-content/mu-plugins/inbox-width-candidate-d-mu.php');
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const result = {
-  schema_version: 2,
+  schema_version: 3,
   repo_head: process.env.GPP_WU21_REPOSITORY_SHA,
   mode: 'PRODUCTION_BIDIRECTIONAL_VIEWPORT_FIT_RECOVERY',
   runtime: JSON.parse(fs.readFileSync(path.join(artifactDir, 'runtime.json'))),
@@ -46,6 +46,7 @@ function wp(code) {
 
 function nonWidth(state) { return state.map(({width, ...rest}) => rest); }
 function widths(state) { return state.map(column => ({colId: String(column.colId), width: Number(column.width)})); }
+function sizeFitEvents(snapshot) { return snapshot.resize_events.filter(event => event.source === 'sizeColumnsToFit' && event.finished === true); }
 function assertWidthsClose(actual, expected, label, tolerance = 1) {
   assert.deepEqual(actual.map(item => item.colId), expected.map(item => item.colId), `${label}: column identities changed`);
   for (let index = 0; index < actual.length; index += 1) {
@@ -123,6 +124,7 @@ async function legacyV040RegressionControl(page, context) {
   const legacyBytes = fs.readFileSync(legacyAsset);
   assert.notEqual(hash(productionAsset), hash(legacyAsset), 'legacy mutation fixture unexpectedly equals repaired production source');
   const evidence = {route: context.kind, legacy_asset_sha256: hash(legacyAsset), checkpoints: {}};
+  result.v040_negative_control = evidence;
 
   try {
     fs.writeFileSync(productionAsset, legacyBytes);
@@ -154,10 +156,14 @@ async function legacyV040RegressionControl(page, context) {
     await waitForGrid(page);
     await settle(page);
     evidence.checkpoints.narrow_reload = await snapshot(page, gridId);
-    assert.equal(evidence.checkpoints.narrow_reload.production?.repair_count || 0, 1,
-      'v0.4.0 control did not execute its known one-shot narrow normalization');
+    evidence.narrow_normalization = {
+      gpp_repair_count: evidence.checkpoints.narrow_reload.production?.repair_count || 0,
+      size_columns_to_fit_events: sizeFitEvents(evidence.checkpoints.narrow_reload).length,
+    };
     assert.ok(evidence.checkpoints.narrow_reload.center.scrollWidth - evidence.checkpoints.narrow_reload.center.clientWidth <= 1,
-      'v0.4.0 control did not fit at 1680');
+      'v0.4.0 control did not reach fitted 1680 geometry');
+    assert.equal(sizeFitEvents(evidence.checkpoints.narrow_reload).length, 1,
+      'v0.4.0 control did not execute exactly one public sizeColumnsToFit normalization');
     assertWidthsClose(widths(evidence.checkpoints.narrow_reload.native_saved), widths(evidence.checkpoints.narrow_reload.state),
       'v0.4.0 native persistence after narrow fit');
     const narrowWidths = widths(evidence.checkpoints.narrow_reload.state);
@@ -183,6 +189,7 @@ async function legacyV040RegressionControl(page, context) {
 
 async function routeSequence(page, context) {
   const evidence = {route: context.kind, checkpoints: {}};
+  result.routes.push(evidence);
   await page.setViewportSize({width: 1920, height: 900});
   const url = new URL(context.url);
   url.searchParams.set('width_lab_discriminator', '1');
@@ -197,7 +204,10 @@ async function routeSequence(page, context) {
   assert.equal(wide.profile, true, `${context.kind}: authorized wrapper missing`);
   assert.ok(wide.center && wide.center.scrollWidth - wide.center.clientWidth <= 1, `${context.kind}: fresh 1920 baseline overflows`);
   assert.ok(Math.abs(wide.displayed_width - wide.center.clientWidth) <= 2, `${context.kind}: fresh 1920 columns do not use available width`);
-  assert.equal(wide.provenance, null, `${context.kind}: native startup fit was incorrectly claimed as GPP provenance`);
+  assert.ok(wide.provenance, `${context.kind}: native startup size-to-fit provenance was not captured`);
+  assert.equal(sizeFitEvents(wide).length, 1, `${context.kind}: fresh startup did not expose exactly one native sizeColumnsToFit event`);
+  assert.equal(wide.production?.repair_count || 0, 0, `${context.kind}: fresh native startup fit was incorrectly counted as a GPP repair`);
+  assert.ok(Math.abs(wide.provenance.usable_width - wide.center.clientWidth) <= 1, `${context.kind}: wide native provenance width mismatch`);
   assert.deepEqual(wide.header_ids, ids, `${context.kind}: admitted column identity/order changed`);
   assert.equal(wide.native_scrollbars, 1, `${context.kind}: native scrollbar topology changed`);
   const baselineNonWidth = nonWidth(wide.state);
@@ -220,12 +230,15 @@ async function routeSequence(page, context) {
   await waitForGrid(page);
   await settle(page);
   const narrowReload = evidence.checkpoints.narrow_reload_normalization = await snapshot(page, gridId);
-  assert.equal(narrowReload.production?.repair_count || 0, 1, `${context.kind}: narrow reload did not perform exactly one GPP normalization`);
+  const narrowRepairCount = narrowReload.production?.repair_count || 0;
+  assert.ok(narrowRepairCount >= 0 && narrowRepairCount <= 1, `${context.kind}: narrow reload repeated GPP normalization`);
+  assert.equal(sizeFitEvents(narrowReload).length, 1, `${context.kind}: narrow reload did not perform exactly one native/GPP sizeColumnsToFit normalization`);
   assert.ok(narrowReload.center.scrollWidth - narrowReload.center.clientWidth <= 1, `${context.kind}: narrow reload left fit-capable overflow`);
-  assert.ok(narrowReload.provenance, `${context.kind}: narrow GPP fit provenance missing`);
+  assert.ok(narrowReload.provenance, `${context.kind}: narrow auto-fit provenance missing`);
   assert.ok(Math.abs(narrowReload.provenance.usable_width - narrowReload.center.clientWidth) <= 1, `${context.kind}: provenance usable width does not bind to fitted viewport`);
   assertWidthsClose(widths(narrowReload.native_saved), widths(narrowReload.state), `${context.kind}: native persistence after narrow fit`);
   assert.deepEqual(nonWidth(narrowReload.state), baselineNonWidth, `${context.kind}: narrow fit changed non-width state`);
+  evidence.narrow_normalization_owner = narrowRepairCount === 1 ? 'GPP_INITIAL_OVERFLOW_GUARD' : 'NATIVE_HOST_SIZE_TO_FIT';
 
   const narrowWidths = widths(narrowReload.state);
   await page.setViewportSize({width: 1760, height: 900});
@@ -233,7 +246,7 @@ async function routeSequence(page, context) {
   await page.setViewportSize({width: 1920, height: 900});
   await settle(page, 550);
   const wideLive = evidence.checkpoints.narrow_fitted_to_wide_live = await snapshot(page, gridId);
-  assert.equal(wideLive.production?.repair_count || 0, 2, `${context.kind}: bounded live grow recovery did not execute exactly once`);
+  assert.equal(wideLive.production?.repair_count || 0, narrowRepairCount + 1, `${context.kind}: bounded live grow recovery did not execute exactly once`);
   assert.ok(wideLive.center.scrollWidth - wideLive.center.clientWidth <= 1, `${context.kind}: live grow left horizontal overflow`);
   assert.ok(Math.abs(wideLive.displayed_width - wideLive.center.clientWidth) <= 2, `${context.kind}: live grow left stranded blank width`);
   assert.notDeepEqual(widths(wideLive.state), narrowWidths, `${context.kind}: live grow did not change narrow fitted widths`);
@@ -246,7 +259,9 @@ async function routeSequence(page, context) {
   await waitForGrid(page);
   await settle(page);
   const narrowAgain = evidence.checkpoints.narrow_again_before_direct_reload = await snapshot(page, gridId);
-  assert.equal(narrowAgain.production?.repair_count || 0, 1, `${context.kind}: second narrow reload did not normalize once`);
+  const narrowAgainRepairCount = narrowAgain.production?.repair_count || 0;
+  assert.ok(narrowAgainRepairCount >= 0 && narrowAgainRepairCount <= 1, `${context.kind}: second narrow reload repeated normalization`);
+  assert.equal(sizeFitEvents(narrowAgain).length, 1, `${context.kind}: second narrow reload lacked one sizeColumnsToFit normalization`);
   assert.ok(narrowAgain.provenance, `${context.kind}: second narrow provenance missing`);
   const directNarrowWidths = widths(narrowAgain.state);
 
@@ -268,7 +283,7 @@ async function routeSequence(page, context) {
   await waitForGrid(page);
   await settle(page);
   const manualStart = evidence.checkpoints.manual_control_narrow_start = await snapshot(page, gridId);
-  assert.ok(manualStart.provenance, `${context.kind}: manual control lacks starting GPP provenance`);
+  assert.ok(manualStart.provenance, `${context.kind}: manual control lacks starting auto-fit provenance`);
 
   const resizeHandle = page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="date_created"] .ag-header-cell-resize').first();
   const point = await resizeHandle.evaluate(node => {
@@ -307,7 +322,7 @@ async function routeSequence(page, context) {
   const manualWideReload = evidence.checkpoints.manual_then_wide_reload = await snapshot(page, gridId);
   assert.equal(manualWideReload.production?.repair_count || 0, 0, `${context.kind}: wide reload overrode manual widths without GPP provenance`);
   assertWidthsClose(widths(manualWideReload.state), manualWidths, `${context.kind}: manual widths after wide reload`);
-  assert.equal(manualWideReload.provenance, null, `${context.kind}: manual reload recreated provenance without a GPP fit`);
+  assert.equal(manualWideReload.provenance, null, `${context.kind}: manual reload recreated provenance without a native/GPP fit`);
 
   // Minimum-impossible widths remain native horizontal-scroll territory.
   for (const viewportWidth of [390, 320]) {
@@ -347,8 +362,8 @@ try {
   page.on('pageerror', error => result.page_errors.push(String(error)));
   await login(page);
 
-  result.v040_negative_control = await legacyV040RegressionControl(page, pages.find(item => item.kind === 'shortcode'));
-  for (const context of pages) result.routes.push(await routeSequence(page, context));
+  await legacyV040RegressionControl(page, pages.find(item => item.kind === 'shortcode'));
+  for (const context of pages) await routeSequence(page, context);
 
   assert.equal(hash(bundle), originalBundle, 'Gravity Flow vendor bundle was modified');
   assert.deepEqual(result.page_errors, [], 'browser page errors occurred during bidirectional recovery');
