@@ -15,7 +15,7 @@ const ids = ['id', 'date_created', String(form.school_field_id), String(form.nat
 const mu = path.join(wpPath, 'wp-content/mu-plugins/inbox-width-candidate-d-mu.php');
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const result = {
-  schema_version: 1,
+  schema_version: 2,
   repo_head: process.env.GPP_WU21_REPOSITORY_SHA,
   mode: 'PRODUCTION_BIDIRECTIONAL_VIEWPORT_FIT_RECOVERY',
   runtime: JSON.parse(fs.readFileSync(path.join(artifactDir, 'runtime.json'))),
@@ -62,12 +62,10 @@ async function snapshot(page, gridId) {
     const production = window.__gppCandidateCProduction;
     const state = window.__gppWidthControl?.inspect()?.state || null;
     const provenanceKey = `gpp:srwf-inbox-fit:v1:${formId}:${gridId}`;
-    const nativeRaw = localStorage.getItem(gridId);
-    const provenanceRaw = localStorage.getItem(provenanceKey);
-    let nativeSaved = null;
-    let provenance = null;
-    try { nativeSaved = nativeRaw ? JSON.parse(nativeRaw) : null; } catch (error) { nativeSaved = {parse_error: String(error)}; }
-    try { provenance = provenanceRaw ? JSON.parse(provenanceRaw) : null; } catch (error) { provenance = {parse_error: String(error)}; }
+    const parse = raw => {
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch (error) { return {parse_error: String(error)}; }
+    };
     const displayed = state?.filter(column => !column.hide) || [];
     return {
       grid_id: gridId,
@@ -75,10 +73,11 @@ async function snapshot(page, gridId) {
       center: center ? {clientWidth: center.clientWidth, scrollWidth: center.scrollWidth} : null,
       displayed_width: displayed.reduce((sum, column) => sum + Number(column.width || 0), 0),
       state,
-      native_saved: nativeSaved,
-      provenance,
+      native_saved: parse(localStorage.getItem(gridId)),
+      provenance: parse(localStorage.getItem(provenanceKey)),
       production: production ? JSON.parse(JSON.stringify(production)) : null,
       resize_events: report?.resize_events ? JSON.parse(JSON.stringify(report.resize_events)) : [],
+      controls: window.__gppWidthControl?.trace ? JSON.parse(JSON.stringify(window.__gppWidthControl.trace)) : [],
       rows: root ? root.querySelectorAll('.ag-center-cols-container .ag-row').length : null,
       pager_text: root?.querySelector('.ag-paging-panel')?.textContent?.replace(/\s+/g, ' ').trim() || null,
       header_ids: root ? [...root.querySelectorAll('.ag-header-cell[col-id]')].map(node => node.getAttribute('col-id')) : [],
@@ -88,6 +87,7 @@ async function snapshot(page, gridId) {
 }
 
 async function settle(page, ms = 500) { await page.waitForTimeout(ms); }
+
 async function cleanStorageAndReload(page, gridId) {
   await page.evaluate(({gridId, formId}) => {
     localStorage.removeItem(gridId);
@@ -96,6 +96,24 @@ async function cleanStorageAndReload(page, gridId) {
   await page.reload({waitUntil: 'networkidle'});
   await waitForGrid(page);
   await settle(page);
+}
+
+async function establishNativePersistedWideState(page, gridId, state, label) {
+  const accepted = await page.evaluate(({label, state}) => window.__gppWidthControl.run(label, state), {label, state});
+  assert.equal(accepted, true, `${label}: public applyColumnState fixture was rejected`);
+  await settle(page, 250);
+  const saved = await page.evaluate(id => {
+    const raw = localStorage.getItem(id);
+    return raw ? JSON.parse(raw) : null;
+  }, gridId);
+  assert.ok(Array.isArray(saved), `${label}: Gravity Flow did not persist the public current-state application`);
+  assert.deepEqual(nonWidth(saved), nonWidth(state), `${label}: native persistence changed non-width state`);
+  assertWidthsClose(widths(saved), widths(state), `${label}: persisted wide state`);
+  return {
+    method: 'public_columnApi_applyColumnState_current_state_then_native_persistence',
+    control_label: label,
+    state: saved,
+  };
 }
 
 async function legacyV040RegressionControl(page, context) {
@@ -119,6 +137,13 @@ async function legacyV040RegressionControl(page, context) {
     assert.ok(Math.abs(evidence.checkpoints.wide.displayed_width - evidence.checkpoints.wide.center.clientWidth) <= 2,
       'v0.4.0 control did not begin from a fitted 1920 baseline');
 
+    // The synthetic WU21 host does not persist its clean startup fit by itself.
+    // Establish the Owner-observed precondition through the public AG Grid state
+    // API and prove Gravity Flow itself persisted that exact native state.
+    evidence.persisted_wide_precondition = await establishNativePersistedWideState(
+      page, gridId, evidence.checkpoints.wide.state, 'v040_owner_sequence_wide_persisted_state'
+    );
+
     await page.setViewportSize({width: 1680, height: 900});
     await settle(page, 300);
     evidence.checkpoints.narrow_live = await snapshot(page, gridId);
@@ -133,6 +158,8 @@ async function legacyV040RegressionControl(page, context) {
       'v0.4.0 control did not execute its known one-shot narrow normalization');
     assert.ok(evidence.checkpoints.narrow_reload.center.scrollWidth - evidence.checkpoints.narrow_reload.center.clientWidth <= 1,
       'v0.4.0 control did not fit at 1680');
+    assertWidthsClose(widths(evidence.checkpoints.narrow_reload.native_saved), widths(evidence.checkpoints.narrow_reload.state),
+      'v0.4.0 native persistence after narrow fit');
     const narrowWidths = widths(evidence.checkpoints.narrow_reload.state);
 
     await page.setViewportSize({width: 1920, height: 900});
@@ -177,6 +204,10 @@ async function routeSequence(page, context) {
   const baselineRows = wide.rows;
   const baselinePager = wide.pager_text;
 
+  evidence.persisted_wide_precondition = await establishNativePersistedWideState(
+    page, gridId, wide.state, `${context.kind}_owner_sequence_wide_persisted_state`
+  );
+
   const repairsAtWide = wide.production?.repair_count || 0;
   await page.setViewportSize({width: 1680, height: 900});
   await settle(page, 350);
@@ -218,6 +249,7 @@ async function routeSequence(page, context) {
   assert.equal(narrowAgain.production?.repair_count || 0, 1, `${context.kind}: second narrow reload did not normalize once`);
   assert.ok(narrowAgain.provenance, `${context.kind}: second narrow provenance missing`);
   const directNarrowWidths = widths(narrowAgain.state);
+
   await page.setViewportSize({width: 1920, height: 900});
   await page.reload({waitUntil: 'networkidle'});
   await waitForGrid(page);
@@ -276,6 +308,18 @@ async function routeSequence(page, context) {
   assert.equal(manualWideReload.production?.repair_count || 0, 0, `${context.kind}: wide reload overrode manual widths without GPP provenance`);
   assertWidthsClose(widths(manualWideReload.state), manualWidths, `${context.kind}: manual widths after wide reload`);
   assert.equal(manualWideReload.provenance, null, `${context.kind}: manual reload recreated provenance without a GPP fit`);
+
+  // Minimum-impossible widths remain native horizontal-scroll territory.
+  for (const viewportWidth of [390, 320]) {
+    await page.setViewportSize({width: viewportWidth, height: 900});
+    await page.reload({waitUntil: 'networkidle'});
+    await waitForGrid(page);
+    await settle(page);
+    const minimumOverflow = evidence.checkpoints[`minimum_overflow_${viewportWidth}`] = await snapshot(page, gridId);
+    assert.equal(minimumOverflow.production?.repair_count || 0, 0, `${context.kind}: ${viewportWidth}px minimum overflow triggered a GPP fit`);
+    assert.ok(minimumOverflow.center.scrollWidth > minimumOverflow.center.clientWidth, `${context.kind}: ${viewportWidth}px legitimate horizontal overflow was removed`);
+    assert.equal(minimumOverflow.provenance, null, `${context.kind}: ${viewportWidth}px minimum overflow manufactured GPP provenance`);
+  }
 
   for (const [name, checkpoint] of Object.entries(evidence.checkpoints)) {
     assert.equal(checkpoint.rows, baselineRows, `${context.kind}/${name}: row count changed`);
