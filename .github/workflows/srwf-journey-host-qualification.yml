@@ -265,16 +265,9 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-host-gap-closure-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-host-gap-closure-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==9||j.results.some(x=>x.status!=="CAPTURED")) process.exit(1);'
 
-          # Execute the exact-head negative controls only after the canonical
-          # production journey scenarios, because split-assignee setup adds
-          # workflow steps that would otherwise alter their terminal topology.
-          node tests/repro-evidence-lab/srwf-journey-production-negative-controls.mjs
-          test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-negative-controls.json"
-          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
-
-          # MR-6 runs last so its Inbox admission/RTL fixture cannot perturb the
-          # historical qualification probes above. It reuses the same pinned
-          # Hello Elementor host and the same production setup services.
+          # MR-6 is the last positive canonical journey after the historical
+          # probes and before the topology-mutating split-assignee control. It
+          # reuses the same pinned Hello Elementor host and production services.
           php "$WU21_WP_CLI" theme activate hello-elementor --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = 'hello-elementor'
           set +e
@@ -287,10 +280,20 @@ jobs:
           fi
           set -e
 
-          # Always restore the historical theme before leaving the disposable lab,
-          # including when MR-6 setup/browser acceptance fails.
+          # Restore the historical theme before the intentionally destructive
+          # split-assignee negative control, including if MR-6 captured failure.
           php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
+
+          # Execute exact-head negative controls only after every canonical
+          # positive journey. The split-assignee case mutates the shared form by
+          # adding workflow steps and intentionally has no topology cleanup.
+          node tests/repro-evidence-lab/srwf-journey-production-negative-controls.mjs
+          test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-negative-controls.json"
+          node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-negative-controls.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); const ids=["SRWF-PROD-BACK-LINK-FORCE-ON-001","SRWF-PROD-BACK-LINK-FORCE-OFF-001","SRWF-PROD-BACK-LINK-CONTROL-RESET-001","SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001"]; if(!Array.isArray(j.results)||j.results.length!==ids.length||ids.some(id=>!j.results.some(x=>x.id===id&&x.status==="PASS"))) process.exit(1);'
+
+          # Enforce the independently captured MR-6 result only after the
+          # negative controls have also executed and produced their evidence.
           test "$mr6_setup_status" -eq 0
           test "$mr6_status" -eq 0
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr6-setup.json"
