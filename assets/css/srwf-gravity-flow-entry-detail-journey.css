@@ -194,16 +194,16 @@
 
 /*
  * Terminal convergence remains Result-only on the supported frontend operator
- * surface. The explicit server-established admin request-context class narrows
- * wp-admin suppression so Gravity Flow can keep its own terminal status/admin
- * management container. GPP does not infer or grant management authorization;
- * it only stops hiding host-rendered controls on the authentic admin surface.
- * The separately authorized GPP dossier Print utility is not selected here.
+ * surface. The native WordPress wp-admin body class narrows suppression so
+ * Gravity Flow can keep its own terminal status/admin management container.
+ * GPP does not infer or grant management authorization; it only stops hiding
+ * host-rendered controls on the authentic admin surface. The separately
+ * authorized GPP dossier Print utility is not selected here.
  */
-body:not(.gpp-srwf-entry-detail-admin-context) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
-body:not(.gpp-srwf-entry-detail-admin-context) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
-body.gpp-srwf-entry-detail-admin-context .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print),
-body.gpp-srwf-entry-detail-admin-context .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print) {
+body:not(.wp-admin) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
+body:not(.wp-admin) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
+body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print),
+body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print) {
     display: none;
 }
 
