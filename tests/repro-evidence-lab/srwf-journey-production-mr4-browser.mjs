@@ -18,3 +18,4 @@ if (sourceProbe.status !== 0) {
 }
 
 await import('./srwf-correction-ux-browser.mjs');
+await import('./srwf-correction-ux-candidate-browser.mjs');
