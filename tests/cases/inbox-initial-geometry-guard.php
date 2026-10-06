@@ -159,8 +159,6 @@ foreach ( array(
     'MutationObserver',
     'setInterval(',
     'onGridReady',
-    'onColumnEverythingChanged',
-    'columnEverythingChanged',
     'setColumnWidth',
     'applyColumnState',
     'enableRtl',
@@ -168,20 +166,24 @@ foreach ( array(
     gpp_assert_true( false === strpos( $source, $forbidden ), 'Production geometry guard reintroduced prohibited mechanism: ' . $forbidden );
 }
 
-// The Owner-required direct-reload repair now admits one disposable GPP-owned
-// presentation provenance record. Lock it to the exact bounded implementation:
-// one namespaced localStorage family, native public resize events, and one
-// debounced grow callback. Native Grid state itself remains untouched.
+// The Owner-required direct-reload repair admits one disposable GPP-owned
+// presentation provenance record. Lock it to the bounded implementation:
+// one namespaced localStorage family, one early public Grid lifecycle callback
+// used only to install the public resize listener, and one debounced grow
+// callback. Native Grid state itself remains untouched.
 gpp_assert_same( 1, substr_count( $source, "const PROVENANCE_PREFIX = 'gpp:srwf-inbox-fit:v1:'" ), 'Geometry provenance namespace must be singular and versioned.' );
 gpp_assert_same( 1, substr_count( $source, 'window.localStorage' ), 'Geometry guard must use exactly one browser-storage acquisition seam.' );
+gpp_assert_same( 1, substr_count( $source, 'options.onColumnEverythingChanged = function' ), 'Early native-fit observer must compose exactly one public GridOptions lifecycle callback.' );
+gpp_assert_true( false !== strpos( $source, "params.source !== 'gridInitializing'" ), 'Early listener installation must remain bound to the qualified gridInitializing lifecycle.' );
 gpp_assert_true( false !== strpos( $source, "addEventListener('columnResized'" ), 'Manual/native resize provenance must use the public Grid event seam.' );
 gpp_assert_true( false !== strpos( $source, "removeEventListener('columnResized'" ), 'Grid resize listener must be removable on API identity replacement.' );
 gpp_assert_true( false !== strpos( $source, "event.source === 'sizeColumnsToFit'" ), 'Native/GPP fit provenance source classification is missing.' );
+gpp_assert_true( false !== strpos( $source, "!initialOpportunityConsumed && event.source === 'api'" ), 'Startup API restore must be deferred to width-signature validation rather than guessed from event source.' );
 gpp_assert_same( 1, substr_count( $source, 'window.setTimeout(' ), 'Live grow recovery must use one bounded debounce timer implementation.' );
 gpp_assert_true( false !== strpos( $source, 'GROW_SETTLE_MS = 180' ), 'Grow settle policy must remain explicit and bounded.' );
 gpp_assert_true( false !== strpos( $source, 'GROW_MIN_DELTA_PX = 24' ), 'Material grow threshold must remain explicit and bounded.' );
 
 gpp_assert_true( false === strpos( $source, '3.1.0' ), 'Qualification dependency identity must not become a production exact-version gate.' );
-gpp_assert_true( false === strpos( $source, 'columnEverythingChanged' ), 'Restore-event provenance discrimination must remain outside production repair.' );
+gpp_assert_true( false === strpos( $source, "params.source === 'api'" ), 'Production must not positively classify source=api as native restore provenance.' );
 
 echo "INBOX_INITIAL_GEOMETRY_GUARD_TESTS_PASS\n";
