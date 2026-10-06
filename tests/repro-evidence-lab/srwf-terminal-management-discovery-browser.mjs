@@ -22,6 +22,13 @@ const entries = {
   approved: Number(manifest.entries.approve),
   rejected: Number(manifest.entries.reject),
 };
+const frontendEntryUrl = entryId => {
+  const url = new URL(manifest.routes.shortcode.url);
+  url.searchParams.set('view', 'entry');
+  url.searchParams.set('id', String(formId));
+  url.searchParams.set('lid', String(entryId));
+  return url.toString();
+};
 const adminEntryUrl = entryId => `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id=${formId}&lid=${entryId}`;
 
 function hostState(entryId, userId) {
@@ -47,6 +54,24 @@ async function login(page, user, pass) {
   await page.fill('#user_pass', pass);
   await Promise.all([page.waitForNavigation({ waitUntil:'domcontentloaded' }), page.click('#wp-submit')]);
   if (new URL(page.url()).pathname.endsWith('/wp-login.php')) throw new Error(`Authentication failed for synthetic user ${user}.`);
+}
+
+async function completeReview(page, entryId, state) {
+  await page.goto(frontendEntryUrl(entryId), { waitUntil:'networkidle' });
+  const button = page.locator(`.gravityflow-status-box .gravityflow-action-buttons button[value="${state}"]`).first();
+  if (await button.count() !== 1) throw new Error(`Missing native ${state} action before terminal discovery.`);
+  let dialogInfo = null;
+  const dialog = new Promise(resolve => page.once('dialog', async d => {
+    dialogInfo = { type:d.type(), message:d.message() };
+    await d.accept();
+    resolve();
+  }));
+  await Promise.all([page.waitForNavigation({ waitUntil:'networkidle' }), button.click(), dialog]);
+  const host = hostState(entryId, manifest.users.operator.id);
+  if (host.current_step !== null || host.workflow_final_status !== state || host.api_status !== state) {
+    throw new Error(`Native ${state} action did not establish terminal truth: ${JSON.stringify({ dialogInfo, host })}`);
+  }
+  return { dialog:dialogInfo, host };
 }
 
 async function inventory(page) {
@@ -109,25 +134,19 @@ const result = {
   schema_version: '1.0.0',
   scope: 'QUALIFICATION_ONLY',
   data_class: 'SYNTHETIC_NON_PII',
-  runtime: {
-    gravity_forms: '3.1.1.1',
-    gravity_flow: '3.1.0',
-  },
+  runtime: { gravity_forms:'3.1.1.1', gravity_flow:'3.1.0' },
   entries: {},
   negative_control: null,
 };
 
 await login(page, manifest.users.operator.login, adminPassword);
 for (const [state, entryId] of Object.entries(entries)) {
-  const host = hostState(entryId, manifest.users.operator.id);
-  if (host.current_step !== null || host.workflow_final_status !== state || host.api_status !== state) {
-    throw new Error(`Expected terminal ${state} host truth before discovery: ${JSON.stringify(host)}`);
-  }
+  const terminalized = await completeReview(page, entryId, state);
   await page.goto(adminEntryUrl(entryId), { waitUntil:'networkidle' });
   const first = await inventory(page);
   await page.reload({ waitUntil:'networkidle' });
   const reloaded = await inventory(page);
-  result.entries[state] = { entry_id:entryId, host, first, reloaded };
+  result.entries[state] = { entry_id:entryId, terminalized, first, reloaded };
 }
 
 await login(page, manifest.users.negative_control.login, negativePassword);
