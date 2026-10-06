@@ -392,7 +392,7 @@
         // native restore from unrelated API mutation. It is used here only as
         // the exact public pre-ready lifecycle point already observed in the
         // pinned runtime, so a public columnResized listener exists before
-        // Gravity Flow's onGridReady restore/sizeColumnsToFit work begins.
+        // Gravity Flow's ready-time restore/sizeColumnsToFit work begins.
         options.onColumnEverythingChanged = function () {
             const args = arguments;
             const params = args[0];
