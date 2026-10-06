@@ -3,12 +3,15 @@
 namespace GravityPresentationProfiles\SRWF\GravityFlow;
 
 /**
- * Composes one bounded initial-mount geometry guard into the native SRWF Inbox.
+ * Composes the bounded SRWF Inbox initial/grow geometry guard into native Grid lifecycle.
  *
- * Gravity Flow/AG Grid remain authoritative for construction, widths, state,
- * persistence and later resize lifecycle. This adapter only authorizes the
- * already-qualified pre-construction callback composition for one resolved
- * SRWF form/column contract and never stores a Grid API or column state.
+ * Gravity Flow/AG Grid remain authoritative for construction, column state,
+ * persistence and ordinary resize lifecycle. This adapter only authorizes the
+ * pre-construction callback composition for one resolved SRWF form/column
+ * contract. The browser asset may retain a disposable, namespaced presentation
+ * provenance signature for widths produced by native size-to-fit so a later
+ * wider mount can distinguish them from newly observed non-GPP/manual widths;
+ * it never replaces or writes the host's native Grid-state record.
  */
 final class InboxInitialGeometryGuard {
     const SCRIPT_RELATIVE_PATH = 'assets/js/srwf-gravity-flow-inbox-initial-geometry-guard.js';
@@ -27,10 +30,10 @@ final class InboxInitialGeometryGuard {
         // never create a second binding or column authority here.
         add_filter( 'gravityflow_columns_inbox_table', array( __CLASS__, 'captureResolvedContract' ), PHP_INT_MAX, 2 );
 
-        // PR #133 qualified this exact lifecycle: add a real Function to the
-        // localized GridOptions before Gravity Flow's frontend theme script
-        // constructs the native Grid. WordPress prints footer scripts later in
-        // this hook, so priority 0 keeps the composition pre-construction.
+        // The qualified lifecycle adds real Functions to localized GridOptions
+        // before Gravity Flow's frontend theme script constructs the native Grid.
+        // WordPress prints footer scripts later in this hook, so priority 0 keeps
+        // the bounded composition pre-construction.
         add_action( 'wp_print_footer_scripts', array( __CLASS__, 'attachBeforeNativeGridConstruction' ), 0 );
     }
 
@@ -59,7 +62,7 @@ final class InboxInitialGeometryGuard {
 
         // The authoritative header projection preserves exactly one hidden
         // native human-readable date companion in addition to the five Grid
-        // columns. Any extra/missing identity is outside Candidate C's scope.
+        // columns. Any extra/missing identity is outside this guard's scope.
         if ( 6 !== count( $columns ) || ! array_key_exists( 'date_created_human_readable', $columns ) ) {
             return $columns;
         }
