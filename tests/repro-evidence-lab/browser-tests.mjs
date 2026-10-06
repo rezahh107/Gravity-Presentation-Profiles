@@ -17,6 +17,7 @@ await import('./inbox-width-candidate-c-browser.mjs');
 await import('./inbox-width-candidate-c-teardown.mjs');
 await import('./inbox-width-bidirectional-fit-recovery-browser.mjs');
 await import('./inbox-width-legacy-v040-carry-forward-qualification-browser.mjs');
+await import('./inbox-width-legacy-v040-carry-forward-evidence-bridge.mjs');
 
 globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1') };
 await import('./authoring-prompt-admin-browser-tests.mjs');
