@@ -28,7 +28,9 @@ if ( '3.1.0' !== (string) $flow['Version'] || '3.1.1.1' !== (string) $gf['Versio
 
 $needles = array(
     'Admin Actions',
+    'gravityflow_workflow_detail_admin_actions',
     'gravityflow_admin_actions',
+    'maybe_display_entry_detail_admin_actions',
     'restart_workflow',
     'restart workflow',
     'restart_step',
@@ -122,6 +124,7 @@ if ( ! $admin || ! $negative ) {
 }
 
 $capability_names = array(
+    'gravityflow_workflow_detail_admin_actions',
     'gravityflow_admin_actions',
     'gravityflow_status_view_all',
     'gravityflow_status_view_own',
@@ -131,16 +134,19 @@ $capability_names = array(
 $capability_matrix = array();
 foreach ( array( 'admin' => $admin, 'negative_control' => $negative ) as $label => $user ) {
     wp_set_current_user( (int) $user->ID );
-    $record = array( 'user_id' => (int) $user->ID );
+    $record = array( 'user_id' => (int) $user->ID, 'raw_wp' => array(), 'gfapi_any' => array() );
     foreach ( $capability_names as $capability ) {
-        $record[ $capability ] = current_user_can( $capability );
+        $record['raw_wp'][ $capability ] = current_user_can( $capability );
+        $record['gfapi_any'][ $capability ] = method_exists( 'GFAPI', 'current_user_can_any' )
+            ? (bool) GFAPI::current_user_can_any( $capability )
+            : null;
     }
     $capability_matrix[ $label ] = $record;
 }
 wp_set_current_user( 0 );
 
 $result = array(
-    'schema_version' => '1.0.0',
+    'schema_version' => '1.1.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'scope' => 'QUALIFICATION_ONLY',
     'runtime' => array(
@@ -152,6 +158,7 @@ $result = array(
     'package_identity' => array(
         'gravity_flow_main_sha256' => hash_file( 'sha256', $flow_root . '/gravityflow.php' ),
     ),
+    'entry_detail_admin_action_gate' => 'GFAPI::current_user_can_any(gravityflow_workflow_detail_admin_actions)',
     'source_hits' => $hits,
     'reflection' => $reflection,
     'capability_matrix' => $capability_matrix,
