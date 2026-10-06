@@ -2,15 +2,14 @@ await import('./browser-tests-core.mjs');
 await import('./manual-inbox-refresh-browser-test.mjs');
 
 // Candidate C production verification runs inside the same pinned WU21 runtime
-// as the native Inbox suite. The first module exercises the shipped guard in an
-// isolated GridOptions seam; the second drives authentic shortcode + Block
-// Inboxes against the real production adapter/asset and Gravity Flow runtime.
-// The bidirectional recovery module adds the released-v0.4.0 negative control
-// plus authentic wide/narrow/reload/grow/manual-width regression sequences.
-// The final module is an explicit fail-hard teardown/readback boundary for the
-// synthetic binding falsifier so later shared-runtime qualifications cannot
-// inherit Candidate C test state.
+// as the native Inbox suite. The original module preserves the shipped one-shot
+// regression gates; the bidirectional unit module adds provenance/grow controls;
+// the browser modules drive authentic shortcode + Block Inboxes against the real
+// production adapter/asset and pinned Gravity Flow runtime. The final module is
+// an explicit fail-hard teardown/readback boundary for the synthetic binding
+// falsifier so later shared-runtime qualifications cannot inherit test state.
 await import('./inbox-width-candidate-c-test.mjs');
+await import('./inbox-width-bidirectional-fit-recovery-test.mjs');
 await import('./inbox-width-candidate-c-browser.mjs');
 await import('./inbox-width-bidirectional-fit-recovery-browser.mjs');
 await import('./inbox-width-candidate-c-teardown.mjs');
