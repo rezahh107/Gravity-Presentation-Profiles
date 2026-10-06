@@ -1,0 +1,132 @@
+name: MariaDB Advisory Lock Qualification
+
+on:
+  push:
+    branches:
+      - fix/mariadb-advisory-lock-ci-drift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Qualify advisory lock (${{ matrix.label }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: mariadb-11.4.8-canonical
+            image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+            expected_server_prefix: 11.4.8
+          - label: mariadb-11.4.13-observed-ci
+            image: mariadb:11.4@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+            expected_server_prefix: 11.4.13
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: gpp
+          MYSQL_DATABASE: gpp_lock_test
+        ports:
+          - 3306/tcp
+    steps:
+      - name: Checkout qualification branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Assert exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - name: Set up exact PHP with mysqli
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2.34'
+          coverage: none
+          extensions: mysqli
+
+      - name: Record exact runtime identity
+        shell: bash
+        env:
+          DB_PORT: ${{ job.services.database.ports[3306] }}
+          EXPECTED_SERVER_PREFIX: ${{ matrix.expected_server_prefix }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          test "$(php -r 'echo PHP_VERSION;')" = '8.2.34'
+          php -r 'printf("mysqli_client=%s\n", mysqli_get_client_info());'
+          echo "configured_image=$IMAGE"
+          docker image inspect "$IMAGE" --format 'repo_digests={{json .RepoDigests}} image_id={{.Id}}'
+          php -r '
+            mysqli_report(MYSQLI_REPORT_OFF);
+            $db = new mysqli("127.0.0.1", "root", "gpp", "gpp_lock_test", (int)getenv("DB_PORT"));
+            if ($db->connect_errno) { fwrite(STDERR, $db->connect_error . "\n"); exit(1); }
+            $v = $db->query("SELECT VERSION()")->fetch_row()[0];
+            echo "server_version=$v\n";
+            if (0 !== strpos($v, getenv("EXPECTED_SERVER_PREFIX"))) { fwrite(STDERR, "unexpected server identity\n"); exit(1); }
+          '
+
+      - name: Reproduce original zero-timeout contract repeatedly
+        shell: bash
+        env:
+          GPP_DB_HOST: 127.0.0.1
+          GPP_DB_PORT: ${{ job.services.database.ports[3306] }}
+          GPP_DB_USER: root
+          GPP_DB_PASSWORD: gpp
+          GPP_DB_NAME: gpp_lock_test
+          MATRIX_LABEL: ${{ matrix.label }}
+        run: |
+          set -euo pipefail
+          passes=0
+          failures=0
+          : > /tmp/original-results.log
+          for i in $(seq 1 25); do
+            export GPP_DB_VARIANT="$MATRIX_LABEL-original-$i"
+            if php tests/integration/db-advisory-lock.php >>/tmp/original-results.log 2>&1; then
+              passes=$((passes + 1))
+            else
+              failures=$((failures + 1))
+            fi
+          done
+          cat /tmp/original-results.log
+          echo "original_passes=$passes"
+          echo "original_failures=$failures"
+          printf 'passes=%s\nfailures=%s\n' "$passes" "$failures" > /tmp/original-summary.txt
+
+      - name: Measure session teardown and orphan recovery
+        shell: bash
+        env:
+          GPP_DB_HOST: 127.0.0.1
+          GPP_DB_PORT: ${{ job.services.database.ports[3306] }}
+          GPP_DB_USER: root
+          GPP_DB_PASSWORD: gpp
+          GPP_DB_NAME: gpp_lock_test
+          GPP_DB_VARIANT: ${{ matrix.label }}
+          GPP_DB_DIAG_ITERATIONS: '60'
+          GPP_DB_DIAG_TIMEOUT_MS: '2000'
+          GPP_DB_DIAG_POLL_US: '1000'
+          GPP_DB_DIAG_OUTPUT: /tmp/advisory-lock-diagnostic.json
+        run: |
+          set -euo pipefail
+          php tests/integration/db-advisory-lock-diagnostic.php
+          test -s /tmp/advisory-lock-diagnostic.json
+          cat /tmp/advisory-lock-diagnostic.json
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mariadb-advisory-lock-${{ matrix.label }}-${{ github.run_id }}
+          path: |
+            /tmp/original-results.log
+            /tmp/original-summary.txt
+            /tmp/advisory-lock-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 30
