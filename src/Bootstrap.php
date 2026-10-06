@@ -8,7 +8,6 @@ use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController;
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
 use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
-use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailAdminPresentationContext;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailJourneyPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailPresentationAdapter;
@@ -72,7 +71,6 @@ final class Bootstrap {
         InboxTableHeaderPresentation::register();
         InboxInitialGeometryGuard::register();
         InboxBlockCompositionBridge::register();
-        EntryDetailAdminPresentationContext::register();
         EntryDetailJourneyPresentationAdapter::register();
         EntryDetailPresentationAdapter::register();
         EntryDetailFullWidthPresentationAdapter::register();
