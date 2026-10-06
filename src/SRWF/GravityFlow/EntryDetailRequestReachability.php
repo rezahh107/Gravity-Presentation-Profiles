@@ -19,27 +19,11 @@ final class EntryDetailRequestReachability {
         }
 
         if ( function_exists( 'is_admin' ) && is_admin() ) {
-            return self::isAdminInboxEntryDetail();
+            $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+            return 'gravityflow-inbox' === $page;
         }
 
         return self::frontendHostReachable();
-    }
-
-    /**
-     * Request-context signal only; this is not an authorization predicate.
-     * Gravity Flow remains responsible for whether the current user may view
-     * Entry Detail or receive any admin-management controls inside it.
-     */
-    public static function isAdminInboxEntryDetail() {
-        if ( ! function_exists( 'is_admin' ) || ! is_admin() ) {
-            return false;
-        }
-
-        $view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
-        $lid = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
-        $page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-
-        return 'entry' === $view && $lid > 0 && 'gravityflow-inbox' === $page;
     }
 
     private static function frontendHostReachable() {
