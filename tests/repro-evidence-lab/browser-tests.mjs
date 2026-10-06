@@ -3,16 +3,19 @@ await import('./manual-inbox-refresh-browser-test.mjs');
 
 // Candidate C production verification runs inside the same pinned WU21 runtime
 // as the native Inbox suite. The original module preserves the shipped one-shot
-// regression gates; the bidirectional unit module adds provenance/grow controls;
-// the browser modules drive authentic shortcode + Block Inboxes against the real
-// production adapter/asset and pinned Gravity Flow runtime. The final module is
-// an explicit fail-hard teardown/readback boundary for the synthetic binding
-// falsifier so later shared-runtime qualifications cannot inherit test state.
+// regression gates; the bidirectional unit module adds provenance/grow controls.
+// Candidate C's synthetic binding falsifier predates its exact-delta cleanup and
+// can leave the shared runtime ambiguous when a whole-option restore is
+// ineffective. Run the fail-hard teardown/readback immediately after Candidate C
+// and before the bidirectional browser qualification, so the latter can only run
+// against the authoritative mirrored five-column SRWF binding. The final browser
+// module then drives authentic shortcode + Block Inboxes against the real
+// production adapter/asset and pinned Gravity Flow runtime.
 await import('./inbox-width-candidate-c-test.mjs');
 await import('./inbox-width-bidirectional-fit-recovery-test.mjs');
 await import('./inbox-width-candidate-c-browser.mjs');
-await import('./inbox-width-bidirectional-fit-recovery-browser.mjs');
 await import('./inbox-width-candidate-c-teardown.mjs');
+await import('./inbox-width-bidirectional-fit-recovery-browser.mjs');
 
 globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1') };
 await import('./authoring-prompt-admin-browser-tests.mjs');
