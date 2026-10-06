@@ -2,9 +2,23 @@
 
 All notable changes to Gravity Presentation Profiles will be documented here.
 
-The project intends to follow Semantic Versioning once production releases begin.
+The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
+
+### Added
+
+- Added the bounded one-shot SRWF Inbox initial-geometry guard: on an admitted native Gravity Flow / AG Grid mount, saved fit-capable width overflow is normalized once through the public `sizeColumnsToFit()` API while native Grid state/ownership, legitimate narrow overflow, manual user resizing and later Live Refresh lifecycle remain host-owned.
+
+### Changed
+
+- Added the integrated SRWF Journey host qualification to the canonical exact-candidate release gate so future publication reuses the same fail-closed Journey runtime evidence instead of a second release-specific acceptance path.
+
+### Fixed
+
+- Hardened Review action-state presentation around Gravity Flow's native action payload lifecycle with accessible busy feedback and bounded duplicate-activation prevention, while fresh host read-back remains the only terminal truth.
+- Converged Correction mode with the Entry Detail visual family around native Gravity Forms User Input, preserving host validation, conditional logic and editability while suppressing Print presentation only while correction is active.
+- Converged authoritative Approved/Rejected outcomes to one result-only surface by removing repeated case identity and suppressing competing completed-case host regions while retaining the authorized GPP dossier Print and one canonical return to Inbox.
 
 ## [0.3.3] - 2026-10-03
 
