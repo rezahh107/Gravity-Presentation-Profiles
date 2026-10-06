@@ -34,6 +34,8 @@ The workflow binds the release to the exact current integrated source, resolves 
 
 The canonical exact-candidate qualification waiter includes repository CI plus the admitted runtime lanes for WU21, SRWF Registration, the integrated SRWF Journey host, WU18 Entry Detail, and WU19 A4 Print. The release workflow must not duplicate those Journey assertions in a second release path. Inside the Journey lane, every positive canonical journey—including MR-6—runs before the topology-mutating split-assignee negative control so release evidence cannot be contaminated by that disposable test mutation.
 
+The release-side single-owner control is mechanically bounded rather than universal. `release.yml` must contain exactly one supported canonical waiter path/invocation. It must not directly reference the Journey workflow by its current filename/name, and it must not directly execute any literal repository-owned Journey PHP/MJS entrypoint currently referenced by the canonical Journey workflow. The contract does not claim semantic detection of arbitrary future aliases, generated command strings, opaque wrapper scripts, numeric workflow IDs, or other representations outside that bounded set; such a new representation must extend the contract before it becomes a supported release path.
+
 Only after consumer-facing verification succeeds does the workflow create a small development-continuation commit that returns the two source version declarations to `0.0.0-dev`. The completed changelog release section, tag, GitHub Release, and released ZIP remain tied to the exact production candidate.
 
 A release is reported complete only after both the downloaded artifact and the final return of `main` to the locked development version verify successfully.
