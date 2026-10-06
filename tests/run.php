@@ -57,6 +57,7 @@ $cases = array(
     'entry-detail-review-architecture.php',
     'entry-detail-journey-presentation.php',
     'srwf-journey-mr6-contract.php',
+    'srwf-journey-workflow-isolation-contract.php',
     'entry-detail-asset-versioning.php',
     'entry-detail-report-card-selection.php',
     'entry-detail-print-utility-availability.php',
