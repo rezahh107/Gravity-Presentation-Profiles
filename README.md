@@ -2,7 +2,7 @@
 
 A reusable WordPress presentation layer for applying opt-in visual profiles to Gravity Forms and Gravity Flow surfaces while preserving native behavior, data, and workflow ownership.
 
-> **Status:** Core presentation, portable package/binding lifecycle, native Gravity Flow Inbox/Entry Detail/Print presentation, Mapping & Binding Health, local Diagnostics, Manual Inbox Refresh, the Fixed Offline General LLM Authoring Prompt, and Automated Production Release System V1 are implemented with pinned reproducible runtime evidence. The Owner has resolved the first-release product decisions as personal/private use, `GPL-2.0-or-later`, WordPress `6.8.3+`, PHP `8.2+`, Gravity Forms `3.1.1.1+`, Gravity Flow `3.1.0+`, and first production version `0.1.0`. No production release has been published yet.
+> **Status:** Core presentation, portable package/binding lifecycle, native Gravity Flow Inbox/Entry Detail/Print presentation, Mapping & Binding Health, local Diagnostics, Manual Inbox Refresh, the Fixed Offline General LLM Authoring Prompt, and Automated Production Release System V1 are implemented with pinned reproducible runtime evidence. Production releases already exist; normal development source remains `0.0.0-dev`, and any future production publication still requires a separate explicit Owner action. The current Owner-qualified floors are WordPress `6.8.3+`, PHP `8.2+`, Gravity Forms `3.1.1.1+`, and Gravity Flow `3.1.0+`.
 
 ## Purpose
 
@@ -132,7 +132,7 @@ The ZIP contains only `LICENSE` plus runtime files selected by the release allow
 
 The WordPress plugin-header `Version` is canonical for a prepared production candidate. The Gravity Forms Add-On `_version` declaration is a machine-checked mirror. Normal source development remains `0.0.0-dev`; release automation prepares the production version only after a separate explicit Owner publication action.
 
-The approved first production version is `0.1.0`, but it is intentionally **not** written into normal source. The future first publication path remains the existing `GPP Production Release` workflow with `mode = publish`, `release_intent = first`, and `first_version = 0.1.0`; that action creates and qualifies the exact versioned candidate itself. GitHub Immutable Releases and the read-only Administration token check must also pass before publication.
+Production release history already exists. Future publication uses the existing `GPP Production Release` workflow with `mode = publish` and an Owner-approved routine `release_intent = patch`, `minor`, or `major`. The workflow derives the concrete next version from live production tag/release history; `release_intent = first` is no longer the normal publication path for this repository. GitHub Immutable Releases and the read-only Administration token check must also pass before publication.
 
 See [`docs/release/OWNER_RELEASE_GUIDE.md`](docs/release/OWNER_RELEASE_GUIDE.md).
 

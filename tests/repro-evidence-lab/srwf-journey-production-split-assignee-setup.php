@@ -71,6 +71,8 @@ $result = array(
     'correction_id' => (int) $correction_id,
     'review_assignee' => 'user_id|' . $operator_id,
     'correction_assignee' => 'user_id|' . $negative_id,
+    'topology_mutation_scope' => 'shared_form_until_end_of_run',
+    'topology_cleanup' => false,
 );
 update_option( 'gpp_srwf_journey_split_assignee_manifest', $result, false );
 echo wp_json_encode( $result, JSON_UNESCAPED_SLASHES ) . "\n";

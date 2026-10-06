@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/wu18-entry-detail-runtime.yml'
       - 'tests/fixtures/wu21-packages/**'
+      - 'tests/run.php'
       - 'src/**'
       - 'assets/**'
       - 'tests/cases/entry-detail-presentation-model.php'

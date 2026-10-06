@@ -56,6 +56,8 @@ $cases = array(
     'entry-detail-presentation-model.php',
     'entry-detail-review-architecture.php',
     'entry-detail-journey-presentation.php',
+    'srwf-journey-mr6-contract.php',
+    'srwf-journey-workflow-isolation-contract.php',
     'entry-detail-asset-versioning.php',
     'entry-detail-report-card-selection.php',
     'entry-detail-print-utility-availability.php',
@@ -70,6 +72,8 @@ $cases = array(
     'timeline-date-provider-absent.php',
     'timeline-utc-source-evidence.php',
     'wu18-workflow-trigger-contract.php',
+    // Release qualification ownership includes bounded mutation/falsification controls.
+    'release-qualification-gate-contract.php',
     'gravity-flow-host-dependency-regressions.php',
     'entry-detail-full-width-workflow-panel-presentation.php',
     'entry-detail-full-width-asset-scope.php',

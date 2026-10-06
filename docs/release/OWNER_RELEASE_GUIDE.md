@@ -1,8 +1,10 @@
 # Owner Release Guide
 
-## Current first-release state
+## Current release state
 
-Automated Production Release System V1 is implemented. The Owner-approved first production version is `0.1.0`, and the repository now materializes these product prerequisites:
+Automated Production Release System V1 is implemented and this repository already has immutable production releases. At the MR-6 baseline, the published history includes `v0.3.2` and `v0.3.3`; do not treat this document as authority for which release is latest at a future publication time. Before any publication decision, verify the current GitHub Release/tag history and let the repository release resolver derive the concrete next version from that live history.
+
+The current Owner-approved product prerequisites remain:
 
 - product context: personal/private use;
 - license: `GPL-2.0-or-later`;
@@ -11,38 +13,36 @@ Automated Production Release System V1 is implemented. The Owner-approved first 
 - minimum Gravity Forms: `3.1.1.1`;
 - minimum Gravity Flow: `3.1.0`.
 
-No production release has been published yet. Normal source must remain at `0.0.0-dev` until the separate explicit Owner publication action. Public repository or artifact visibility does not itself create a broad public-support commitment.
+Normal source must remain at `0.0.0-dev` between releases. Public repository or artifact visibility does not itself create a broad public-support commitment.
 
-## First production release
+## Routine production publication
 
-When the Owner separately authorizes the first production publication, open GitHub Actions → **GPP Production Release** → **Run workflow** on `main` and choose exactly:
-
-- `mode = publish`;
-- `release_intent = first`;
-- `first_version = 0.1.0`.
-
-Do not manually edit the normal source version, create `v0.1.0`, create a `[0.1.0]` changelog section, build a production candidate, or create a GitHub Release beforehand. The publication workflow creates and qualifies the exact versioned candidate only after that explicit Owner action.
-
-## Routine releases after the first release
-
-For later releases, choose:
+Future production publication is a separate explicit Owner action. When the Owner authorizes publication, open GitHub Actions → **GPP Production Release** → **Run workflow** on `main` and choose exactly:
 
 - `mode = publish`;
-- `release_intent = patch`, `minor`, or `major`.
+- `release_intent = patch`, `minor`, or `major`, according to the Owner-approved release decision.
 
-The workflow derives the exact next version from production release history. You do not need to edit version files, create a Git tag, build a ZIP, calculate a checksum, or upload Release assets.
+The workflow derives the concrete next SemVer from live production tag/release history. Do not manually edit the normal source version, create the production tag, create a changelog release section, build a production candidate, or create a GitHub Release beforehand.
+
+`release_intent = first` exists only for a repository with no production release/tag history. It is no longer the normal valid Owner path for this repository and must not be used for a routine successor release.
+
+Do not hard-code a future release version in this guide unless the Owner has separately authorized that exact publication decision.
 
 ## What happens automatically
 
-The workflow binds the release to the exact current integrated source, prepares only the release metadata/version candidate, runs the required repository/runtime qualification on that exact candidate, builds one canonical WordPress ZIP, validates and installs that exact ZIP, creates its SHA-256, rechecks conflicts, publishes the GitHub Release, downloads the published asset again, verifies it, and smoke-tests the downloaded consumer artifact.
+The workflow binds the release to the exact current integrated source, resolves the next version from release/tag history, prepares only the release metadata/version candidate, runs the canonical required qualification set on that exact candidate SHA, builds one canonical WordPress ZIP, validates and installs that exact ZIP, creates its SHA-256, rechecks conflicts, publishes the GitHub Release, downloads the published asset again, verifies it, and smoke-tests the downloaded consumer artifact.
 
-Only after that consumer-facing verification succeeds does the workflow create a small development-continuation commit that returns the two source version declarations to `0.0.0-dev`. The completed changelog release section, tag, GitHub Release, and released ZIP remain tied to the exact production candidate.
+The canonical exact-candidate qualification waiter includes repository CI plus the admitted runtime lanes for WU21, SRWF Registration, the integrated SRWF Journey host, WU18 Entry Detail, and WU19 A4 Print. The release workflow must not duplicate those Journey assertions in a second release path. Inside the Journey lane, every positive canonical journey—including MR-6—runs before the topology-mutating split-assignee negative control so release evidence cannot be contaminated by that disposable test mutation.
+
+The release-side single-owner control is mechanically bounded rather than universal. `release.yml` must contain exactly one supported canonical waiter path/invocation. It must not directly reference the Journey workflow by its current filename/name, and it must not directly execute any literal repository-owned Journey PHP/MJS entrypoint currently referenced by the canonical Journey workflow. The contract does not claim semantic detection of arbitrary future aliases, generated command strings, opaque wrapper scripts, numeric workflow IDs, or other representations outside that bounded set; such a new representation must extend the contract before it becomes a supported release path.
+
+Only after consumer-facing verification succeeds does the workflow create a small development-continuation commit that returns the two source version declarations to `0.0.0-dev`. The completed changelog release section, tag, GitHub Release, and released ZIP remain tied to the exact production candidate.
 
 A release is reported complete only after both the downloaded artifact and the final return of `main` to the locked development version verify successfully.
 
-## Repository prerequisites now resolved
+## Repository prerequisites
 
-The repository publication-prerequisite gate now expects and validates:
+The repository publication-prerequisite gate expects and validates:
 
 1. a non-empty `LICENSE` carrying the selected GNU GPL v2 terms;
 2. `release/compatibility.json` with the exact Owner-approved numeric dotted floors;
@@ -50,8 +50,6 @@ The repository publication-prerequisite gate now expects and validates:
 4. normal development source at `0.0.0-dev` with `[Unreleased]` still present.
 
 The negative gates remain fail-closed for a missing/empty license, missing compatibility policy, absent required compatibility key, malformed/placeholder floor, metadata mismatch, and invalid source-version state.
-
-The first production version `0.1.0` is an approved publication input, not a normal-development source version.
 
 ## Platform prerequisite still separate
 
@@ -69,7 +67,7 @@ The dry-run does **not** create a production tag, GitHub Release, production-ver
 
 A successful production workflow means the exact released ZIP was source-bound, qualified, validated, activated in the pinned WordPress/Gravity runtime, checksum-verified, published, re-downloaded, verified again, smoke-tested after download, and the repository was safely returned to its `0.0.0-dev` development version state without changing release identity.
 
-A successful release dry-run proves only its non-production, synthetic-version path and the exercised release/package/runtime checks. It does **not** prove an actual `0.1.0` publication, GitHub consumer-channel re-download, target-production equivalence, physical-printer equivalence, or remaining Registration production-specific evidence.
+A successful release dry-run proves only its non-production, synthetic-version path and the exercised release/package/runtime checks. It does **not** prove an actual future publication, GitHub consumer-channel re-download for that future release, target-production equivalence, physical-printer equivalence, or Owner-site acceptance.
 
 ## If publication fails
 

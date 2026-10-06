@@ -12,6 +12,7 @@ WORKFLOWS=(
   'ci.yml'
   'wu21-repro-evidence-lab.yml'
   'srwf-registration-runtime.yml'
+  'srwf-journey-host-qualification.yml'
   'wu18-entry-detail-runtime.yml'
   'wu19-a4-print-runtime.yml'
 )
