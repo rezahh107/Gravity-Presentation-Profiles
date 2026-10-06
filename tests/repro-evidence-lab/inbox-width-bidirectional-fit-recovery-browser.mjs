@@ -339,7 +339,11 @@ async function routeSequence(page, context) {
   for (const [name, checkpoint] of Object.entries(evidence.checkpoints)) {
     assert.equal(checkpoint.rows, baselineRows, `${context.kind}/${name}: row count changed`);
     assert.equal(checkpoint.pager_text, baselinePager, `${context.kind}/${name}: pager changed`);
-    assert.deepEqual(checkpoint.header_ids, ids, `${context.kind}/${name}: column identities/order changed`);
+    assert.deepEqual(checkpoint.state.map(column => String(column.colId)), ids, `${context.kind}/${name}: Grid state column identities/order changed`);
+    assert.ok(checkpoint.state.every(column => column.hide !== true), `${context.kind}/${name}: Grid state unexpectedly hid an admitted column`);
+    const renderedCanonicalOrder = ids.filter(id => checkpoint.header_ids.includes(id));
+    assert.deepEqual(checkpoint.header_ids, renderedCanonicalOrder, `${context.kind}/${name}: rendered header virtualization exposed an unexpected column/order`);
+    assert.ok(checkpoint.header_ids.length > 0, `${context.kind}/${name}: rendered header virtualization produced no admitted header cells`);
     assert.equal(checkpoint.native_scrollbars, 1, `${context.kind}/${name}: native scrollbar count changed`);
   }
 
