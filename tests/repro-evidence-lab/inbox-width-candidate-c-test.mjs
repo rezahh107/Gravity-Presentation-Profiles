@@ -9,12 +9,24 @@ const placeholder = '__GPP_INITIAL_GEOMETRY_CONTRACT__';
 const contract = { form_id: 101, column_ids: ['id', '1', '3', '6', 'date_created'] };
 
 assert.equal(source.split(placeholder).length - 1, 1, 'production guard must expose exactly one contract placeholder');
-for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'columnEverythingChanged', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
+for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
     assert.equal(source.includes(forbidden), false, `production guard contains prohibited mechanism ${forbidden}`);
 }
-for (const required of ['localStorage', 'onColumnResized', 'GROW_SETTLE_MS', 'GROW_MIN_DELTA_PX']) {
+for (const required of [
+    'localStorage',
+    'options.onColumnEverythingChanged = function',
+    "params.source !== 'gridInitializing'",
+    "addEventListener('columnResized'",
+    'GROW_SETTLE_MS',
+    'GROW_MIN_DELTA_PX',
+]) {
     assert.equal(source.includes(required), true, `production recovery is missing ${required}`);
 }
+assert.equal(
+    source.includes('options.onColumnResized = function'),
+    false,
+    'production recovery must not replace the host-owned resize callback'
+);
 
 const defaultState = () => [
     { colId: 'id', width: 165, hide: false, sort: null, sortIndex: null, pinned: null },
