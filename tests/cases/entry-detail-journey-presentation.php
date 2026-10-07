@@ -259,11 +259,11 @@ gpp_journey_assert(
 gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
 gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );
 gpp_journey_assert(
-    false !== strpos( $css, '#post-body-content' )
+    false !== strpos( $css, '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])' )
     && false !== strpos( $css, 'padding-inline: clamp(16px, 2vw, 32px)' )
     && false !== strpos( $css, 'max-inline-size: 1060px' )
     && false !== strpos( $css, 'margin-inline: auto' ),
-    'Correction geometry must repair the native main-content boundary with logical gutter and bounded centering.'
+    'Correction geometry must repair the admitted Gravity Flow form boundary with logical gutter and bounded centering.'
 );
 gpp_journey_assert(
     false === strpos( $css, 'data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gform_wrapper' ),
