@@ -135,6 +135,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     mode = 'hold';
     holdRemaining = 1;
     await waitFor(() => held, pollTimeout, 'production-visible-held-response');
+    const heldContainsValueUpdate = Boolean(held.shape?.update.includes(String(valueEntryId)));
 
     wpEval(`
       $m=get_option('gpp_wu21_fixture_manifest');
@@ -187,11 +188,12 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
 
     evidence.production_visible_value_race = {
-      status: productionValueRendered ? 'OBSERVED' : 'NOT_PROVEN',
+      status: productionValueRendered && heldContainsValueUpdate ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: valueEntryId,
       semantic_surface: 'student.full_name',
       authoritative_components: ['student.first_name', 'student.last_name'],
       old_value_rendered: productionValueRendered,
+      held_response_update_contains_entry: heldContainsValueUpdate,
       old_text: oldText,
       fresh_text: freshText,
       stale_text_after_older_response: staleText,
@@ -199,9 +201,9 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       recovered_next_poll: recoveredNextPoll,
       final_text: await rowText(page, valueEntryId),
       host_membership_final: hostContains(valueEntryId),
-      not_proven_reason: productionValueRendered
-        ? null
-        : 'The authoritative SRWF student.full_name composition was not visible on the rendered Inbox row.',
+      not_proven_reason: !productionValueRendered
+        ? 'The authoritative SRWF student.full_name composition was not visible on the rendered Inbox row.'
+        : (!heldContainsValueUpdate ? 'The held native response did not contain the SRWF row in update, so the value-ordering race was not formed.' : null),
     };
 
     wpEval(`GFAPI::delete_entry(${valueEntryId});`);
@@ -274,11 +276,13 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     const hostAfterMove = hostContains(assignmentId);
     mode = 'pass';
     const newerMembershipStart = responses.length;
-    await waitFor(
-      () => responses.length > newerMembershipStart,
+    const newerMembershipResponse = await waitFor(
+      () => responses.slice(newerMembershipStart).find((item) => item.shape) || null,
       pollTimeout,
       'assignment-newer-poll'
     );
+    const newerMembershipExcludesEntry = !newerMembershipResponse.shape.add.includes(String(assignmentId))
+      && !newerMembershipResponse.shape.update.includes(String(assignmentId));
     const absentBeforeRelease = !(await rowPresent(page, assignmentId));
 
     if (typeof releaseHeld !== 'function') throw new Error('assignment held response cannot be released');
@@ -299,19 +303,25 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
 
     evidence.assignment_membership_race = {
-      status: heldContainsAdd ? 'OBSERVED' : 'NOT_PROVEN',
+      status: heldContainsAdd && hostBeforeMove === true && hostAfterMove === false && newerMembershipExcludesEntry && absentBeforeRelease ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: assignmentId,
       held_response_add_contains_entry: heldContainsAdd,
       host_membership_before_move: hostBeforeMove,
       host_membership_after_move: hostAfterMove,
+      newer_response_shape: newerMembershipResponse.shape,
+      newer_response_excludes_entry: newerMembershipExcludesEntry,
       row_absent_before_release: absentBeforeRelease,
       stale_row_present_after_older_response: staleMembershipPresent,
       transient_membership_reversion: transientMembershipReversion,
       recovered_next_poll: membershipRecoveredNextPoll,
       final_row_absent: !(await rowPresent(page, assignmentId)),
-      not_proven_reason: heldContainsAdd
-        ? null
-        : 'The held native response did not contain the assignment row in add, so the membership-changing race was not formed.',
+      not_proven_reason: !heldContainsAdd
+        ? 'The held native response did not contain the assignment row in add, so the membership-changing race was not formed.'
+        : (hostBeforeMove !== true || hostAfterMove !== false
+          ? 'Authoritative operator membership did not transition true-to-false.'
+          : (!newerMembershipExcludesEntry || !absentBeforeRelease
+            ? 'The newer native response/UI did not establish host-authoritative absence before the older add was released.'
+            : null)),
     };
   } finally {
     mode = 'pass';
