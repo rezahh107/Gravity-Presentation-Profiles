@@ -1,5 +1,6 @@
 await import('./browser-tests-core.mjs');
 await import('./manual-inbox-refresh-browser-test.mjs');
+await import('./live-refresh-runtime-qualification.mjs');
 await import('./live-refresh-qualification-browser.mjs');
 
 // Candidate C production verification runs inside the same pinned WU21 runtime
