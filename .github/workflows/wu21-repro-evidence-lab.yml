@@ -305,8 +305,10 @@ jobs:
         run: |
           set -euo pipefail
           node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
-          GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
+          command -v xvfb-run >/dev/null
+          GPP_LRQ_HEADED=1 GPP_DEFER_P06_QUALIFICATION=1 xvfb-run -a node tests/repro-evidence-lab/browser-tests.mjs
           test -s "$WU21_ARTIFACT_DIR/live-refresh-qualification.json"
+          node -e 'const fs=require("fs");const p=process.env.WU21_ARTIFACT_DIR+"/live-refresh-qualification.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));const allowed=new Set(["NATIVE_LIVE_REFRESH_SUFFICIENT","BOUNDED_GPP_HARDENING_JUSTIFIED","HOST_LIMITATION_REQUIRES_OWNER_DECISION","QUALIFICATION_INCOMPLETE"]);if(j.contract?.name!=="LIVE REFRESH RUNTIME CONTRACT"||!allowed.has(j.contract?.final_disposition)){console.error("Invalid Live Refresh runtime contract",j.contract);process.exit(1)}'
 
       - name: Complete deferred P06 mutation qualification before integrated visual host
         shell: bash
