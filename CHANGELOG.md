@@ -6,6 +6,8 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-07
+
 ### Changed
 
 - Refined the admitted SRWF Inbox Correction / User Input experience with bounded centered gutters, Persian RTL field presentation with semantic LTR exceptions, and the native action labeled `اصلاح اطلاعات`; unrelated Status and User Input contexts retain their native presentation.
