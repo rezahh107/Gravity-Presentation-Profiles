@@ -387,7 +387,6 @@ function nativeSubmissionSignatureIsValid(signature) {
     && signature?.button?.onclick.includes("jQuery('#action').val('update')")
     && signature?.button?.onclick.includes(`jQuery('#gform_${formId}').submit()`)
     && requiredHidden.every(name => hidden.has(name))
-    && semanticStateTransport
     && hidden.get('_gravityflow_admin_action_nonce')?.has_value === true;
 }
 
