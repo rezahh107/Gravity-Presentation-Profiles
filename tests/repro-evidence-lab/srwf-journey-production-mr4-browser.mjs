@@ -375,7 +375,7 @@ async function nativeSubmissionSignature(page) {
 
 function nativeSubmissionSignatureIsValid(signature) {
   const hidden = new Map((signature?.hidden || []).map(item => [item.name, item]));
-  const requiredHidden = ['_gravityflow_admin_action_nonce', 'action', 'gravityflow_status', 'gravityflow_submit', 'step_id', 'state_1', 'gforms_save_entry'];
+  const requiredHidden = ['_gravityflow_admin_action_nonce', 'action', 'gravityflow_status', 'gravityflow_submit', 'step_id', `state_${formId}`, 'gforms_save_entry'];
   return signature?.form?.id === `gform_${formId}`
     && signature?.form?.method === 'post'
     && signature?.button?.id === 'gravityflow_update_button'
@@ -531,7 +531,7 @@ await test('SRWF-PROD-MR4-CTA-IDENTITY-001', 'native User Input CTA relabel pres
     && filteredState.current_step?.can_update === true;
   const hiddenNames = filtered?.hidden?.map(item => item.name).filter(Boolean) || [];
   const nonceTransport = hiddenNames.includes('_gravityflow_admin_action_nonce');
-  const workflowTransport = ['gravityflow_status', 'gravityflow_submit', 'step_id', 'state_1', 'gforms_save_entry']
+  const workflowTransport = ['gravityflow_status', 'gravityflow_submit', 'step_id', `state_${formId}`, 'gforms_save_entry']
     .every(name => hiddenNames.includes(name));
 
   if (!identityPreserved || !labelChanged || !statePreserved || !nonceTransport || !workflowTransport) {
