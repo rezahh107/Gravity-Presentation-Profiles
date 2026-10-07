@@ -422,6 +422,12 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
         padding-inline: 0;
     }
 
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-journey--correction {
+        inline-size: calc(100% - 25px);
+        max-inline-size: none;
+        margin-inline: auto;
+    }
+
     .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper {
         inline-size: calc(100% - 25px);
         max-inline-size: none;
