@@ -316,6 +316,28 @@ jobs:
         run: |
           set -euo pipefail
           node tests/repro-evidence-lab/p06-inbox-asset-reachability-browser-test.mjs
+          test -s "$WU21_ARTIFACT_DIR/live-refresh-materiality.json"
+          test -s "$WU21_ARTIFACT_DIR/live-refresh-qualification.json"
+          node -e '
+            const fs = require("fs");
+            const root = process.env.WU21_ARTIFACT_DIR;
+            const qualification = JSON.parse(fs.readFileSync(root + "/live-refresh-qualification.json", "utf8"));
+            const materiality = JSON.parse(fs.readFileSync(root + "/live-refresh-materiality.json", "utf8"));
+            const allowed = new Set(["NATIVE_LIVE_REFRESH_SUFFICIENT","BOUNDED_GPP_HARDENING_JUSTIFIED","HOST_LIMITATION_REQUIRES_OWNER_DECISION","QUALIFICATION_INCOMPLETE"]);
+            const contract = qualification.contract || {};
+            if (
+              contract.name !== "LIVE REFRESH RUNTIME CONTRACT" ||
+              contract.schema_version !== "1.1.0" ||
+              !allowed.has(contract.final_disposition) ||
+              contract.next_action_disposition !== contract.final_disposition ||
+              contract.reducer_falsification?.ok !== true ||
+              contract.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION" ||
+              materiality.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION"
+            ) {
+              console.error("Invalid repaired Live Refresh qualification contract", { contract, materiality });
+              process.exit(1);
+            }
+          '
 
       - name: Execute bounded Inbox Visual Design V2 qualification
         shell: bash
@@ -519,6 +541,7 @@ jobs:
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
             /tmp/wu21-artifacts/live-refresh-qualification.json
+            /tmp/wu21-artifacts/live-refresh-materiality.json
             /tmp/wu21-artifacts/wu17-*.json
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
