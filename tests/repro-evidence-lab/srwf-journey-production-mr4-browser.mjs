@@ -672,7 +672,19 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
   await field6.fill('operator@example.invalid');
   const submit = nativeCorrectionSubmit(page);
   if (await submit.count() !== 1 || await submit.getAttribute('id') !== 'gravityflow_update_button') throw new Error('Pinned native User Input update button is unavailable for completion.');
-  await submit.focus();
+  const submitTabCount = await focusByKeyboard(page, submit);
+  const submitFocus = await submit.evaluate(node => {
+    const style = getComputedStyle(node);
+    return {
+      active: node === document.activeElement,
+      outline_style: style.outlineStyle,
+      outline_width: style.outlineWidth,
+      box_shadow: style.boxShadow,
+    };
+  });
+  if (!submitFocus.active || !hasVisibleFocusIndicator(submitFocus)) {
+    throw new Error(`Native correction submit is not keyboard reachable with visible focus: ${JSON.stringify({ submitTabCount, submitFocus })}`);
+  }
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.keyboard.press('Enter')]);
   const state = hostState(entryId);
   const actions = await nativeActions(page);
@@ -681,7 +693,7 @@ await test('SRWF-PROD-MR4-COMPLETE-001', 'native keyboard completion returns to 
   if (state.current_step?.id !== reviewId || state.current_step?.type !== 'approval' || state.field_1 !== 'SHOW-MR4' || state.field_5 !== 'VALID-CONDITIONAL' || state.field_6 !== 'operator@example.invalid' || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 0 || await page.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count() !== 1 || actions.map(action => action.value).join(',') !== 'approved,rejected,revert' || !actions.every(action => action.onclick.includes('handleApprovalStepButtonClick')) || !reviewPrintStateIsValid(print)) {
     throw new Error(`Correction completion/Review regression failed: ${JSON.stringify({ state, actions, print, gtb })}`);
   }
-  return { state, actions, print, gtb_stylesheets_observed: gtb };
+  return { state, actions, print, gtb_stylesheets_observed: gtb, submit_tab_count: submitTabCount, submit_focus: submitFocus };
 });
 
 wpEval("delete_option('gpp_srwf_mr4_expand_editable_fields'); delete_option('gpp_srwf_mr4_native_cta_baseline'); echo '1';");
