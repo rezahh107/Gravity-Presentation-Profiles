@@ -248,6 +248,8 @@ $entries = array(
     'reject' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'REJECT' ),
     'revert' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'REVERT' ),
     'invalid' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'INVALID' ),
+    'status_shortcode' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'STATUS-SHORTCODE' ),
+    'status_block' => srwf_journey_add_entry_seeded_at_review( $form_id, $operator->ID, $steps['review_id'], 'STATUS-BLOCK' ),
 );
 
 $shortcode_page_id = wp_insert_post(
@@ -263,6 +265,23 @@ if ( is_wp_error( $shortcode_page_id ) ) {
     throw new RuntimeException( $shortcode_page_id->get_error_message() );
 }
 $shortcode_url = get_permalink( $shortcode_page_id );
+
+$status_shortcode_page_id = wp_insert_post(
+    array(
+        'post_title' => 'SRWF Qualified Status Shortcode',
+        'post_status' => 'publish',
+        'post_type' => 'page',
+        'post_content' => '[gravityflow page="status"]',
+    ),
+    true
+);
+if ( is_wp_error( $status_shortcode_page_id ) ) {
+    throw new RuntimeException( $status_shortcode_page_id->get_error_message() );
+}
+$status_shortcode_page = array(
+    'page_id' => (int) $status_shortcode_page_id,
+    'url' => (string) get_permalink( $status_shortcode_page_id ),
+);
 
 $registry = WP_Block_Type_Registry::get_instance();
 $block_page = null;
@@ -285,8 +304,28 @@ if ( is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $r
     );
 }
 
+$status_block_page = null;
+if ( is_object( $registry ) && method_exists( $registry, 'is_registered' ) && $registry->is_registered( 'gravityflow/status' ) ) {
+    $status_block_page_id = wp_insert_post(
+        array(
+            'post_title' => 'SRWF Qualified Status Block',
+            'post_status' => 'publish',
+            'post_type' => 'page',
+            'post_content' => '<!-- wp:gravityflow/status /-->',
+        ),
+        true
+    );
+    if ( is_wp_error( $status_block_page_id ) ) {
+        throw new RuntimeException( $status_block_page_id->get_error_message() );
+    }
+    $status_block_page = array(
+        'page_id' => (int) $status_block_page_id,
+        'url' => (string) get_permalink( $status_block_page_id ),
+    );
+}
+
 $manifest = array(
-    'schema_version' => '1.2.0',
+    'schema_version' => '1.3.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'scope' => 'QUALIFICATION_ONLY',
     'runtime' => array(
@@ -307,6 +346,8 @@ $manifest = array(
         'admin_inbox_url' => admin_url( 'admin.php?page=gravityflow-inbox' ),
         'shortcode' => array( 'page_id' => (int) $shortcode_page_id, 'url' => (string) $shortcode_url ),
         'block' => $block_page,
+        'status_shortcode' => $status_shortcode_page,
+        'status_block' => $status_block_page,
     ),
     'source_contract' => array(
         'approval_class' => 'includes/steps/class-step-approval.php',
