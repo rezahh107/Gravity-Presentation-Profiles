@@ -337,12 +337,12 @@ async function correctionAndValidation(page, entryId, width) {
   const dialog = await accept(page, 'revert');
   let state = hostState(entryId);
   const editable = [...new Set(await page.locator('input[name^="input_"]:visible,textarea[name^="input_"]:visible,select[name^="input_"]:visible').evaluateAll(nodes => nodes.map(node => node.getAttribute('name')).filter(Boolean)))].sort();
-  const unauthorized = await page.locator('input[name="input_2"]:visible,input[name="input_3"]:visible,input[name="input_4"]:visible,input[name="input_6"]:visible,input[name="input_7"]:visible,input[name="input_8"]:visible').count();
+  const unauthorized = await page.locator('input[name="input_2"]:visible,input[name="input_3"]:visible,input[name="input_4"]:visible').count();
   const print = await printState(page);
   const gtb = await gtbStyles(page);
   if (!dialog || state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || state.current_step?.can_update !== true
-    || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5'])
-    || editable.join(',') !== 'input_1' || unauthorized !== 0
+    || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5', '6', '7', '8'])
+    || editable.join(',') !== 'input_1,input_6,input_7,input_8' || unauthorized !== 0
     || await page.locator('[data-gpp-entry-journey="correction"]:visible').count() !== 1
     || await page.locator('.gpp-entry-journey input,.gpp-entry-journey textarea,.gpp-entry-journey select').count() !== 0
     || print.gpp_visible !== 0 || print.native_visible !== 0 || gtb !== 0) {
