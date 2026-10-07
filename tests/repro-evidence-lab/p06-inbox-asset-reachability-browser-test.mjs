@@ -209,3 +209,5 @@ try {
 }
 
 process.stdout.write(`P06_ASSET_REACHABILITY_BROWSER_PASS=${JSON.stringify(results)}\n`);
+
+// LRQ contract repair hook.
