@@ -211,6 +211,14 @@ final class EntryDetailJourneyPresentationAdapter {
             return $text;
         }
 
+        // Generic Entry Detail reachability also includes frontend Status
+        // surfaces. The Owner-approved Correction journey does not. Reuse the
+        // same canonical Inbox/admin journey admission as the presenter before
+        // relabelling Gravity Flow's native User Input control.
+        if ( null === self::canonicalInboxContext() ) {
+            return $text;
+        }
+
         $entry_id = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
         if ( $entry_id < 1 || ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_entry' ) ) {
             return $text;
