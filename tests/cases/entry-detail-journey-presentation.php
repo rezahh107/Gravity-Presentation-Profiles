@@ -115,7 +115,39 @@ foreach ( array( 'new VisualPackageLifecycle', 'new BindingSetLifecycle', 'WordP
         'Journey adapter must not duplicate Entry Detail lifecycle/model admission: ' . $duplicated_lifecycle_marker
     );
 }
+gpp_journey_assert(
+    false !== strpos( $php, "add_filter( 'gravityflow_update_button_text_user_input'" )
+    && false !== strpos( $php, 'filterCorrectionUpdateButtonText' )
+    && false !== strpos( $php, "'اصلاح اطلاعات'" ),
+    'Correction CTA must use the native Gravity Flow User Input text filter and the Owner-approved Persian label.'
+);
+gpp_journey_assert(
+    false === strpos( $php, "add_filter( 'gravityflow_update_button_user_input'" )
+    && false === strpos( $php, 'custom submit endpoint' ),
+    'Correction CTA must not replace native button HTML or introduce a custom submission path.'
+);
 gpp_journey_assert( false !== strpos( $php, 'gravityflow_back_link_url_entry_detail' ), 'Native Gravity Flow back-link route must be canonicalized through its supported filter.' );
+gpp_journey_assert(
+    false !== strpos( $php, 'EntryDetailPresentationAdapter::admittedPresentationModel' )
+    && false !== strpos( $php, 'self::freshHostTruth' )
+    && false !== strpos( $php, 'self::STATE_CORRECTION' )
+    && false !== strpos( $php, '(string) $current_step->get_id() !== (string) $step->get_id()' ),
+    'Correction CTA scope must reuse canonical admission and fresh host truth rather than introducing parallel state.'
+);
+$cta_filter_start = strpos( $php, 'public static function filterCorrectionUpdateButtonText' );
+$cta_filter_end = strpos( $php, '/**', $cta_filter_start );
+gpp_journey_assert(
+    false !== $cta_filter_start && false !== $cta_filter_end && $cta_filter_end > $cta_filter_start,
+    'Correction CTA filter boundary could not be inspected.'
+);
+$cta_filter_php = substr( $php, $cta_filter_start, $cta_filter_end - $cta_filter_start );
+gpp_journey_assert(
+    false !== strpos( $cta_filter_php, 'EntryDetailRequestReachability::isReachable()' )
+    && false !== strpos( $cta_filter_php, 'null === self::canonicalInboxContext()' )
+    && false !== strpos( $cta_filter_php, 'self::freshHostTruth' )
+    && strpos( $cta_filter_php, 'null === self::canonicalInboxContext()' ) < strpos( $cta_filter_php, 'self::freshHostTruth' ),
+    'Correction CTA must reuse the canonical Journey route boundary before host-truth classification; generic Entry Detail reachability alone is too broad.'
+);
 gpp_journey_assert( false !== strpos( $php, 'admin.php?page=gravityflow-inbox' ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
 gpp_journey_assert( false !== strpos( $php, "if ( 'inbox' === \$page )" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
 gpp_journey_assert( false === strpos( $php, "array( 'inbox', 'status' )" ), 'Gravity Flow Status pages must not be treated as canonical My Tasks routes.' );
@@ -212,6 +244,28 @@ gpp_journey_assert(
     false === strpos( $php, 'gpp-entry-journey__return-icon' )
     && false === strpos( $php, 'aria-label="' . 'بازگشت به کارهای من' . '"' ),
     'Return icon must not add duplicate accessible naming or icon markup to the action name.'
+);
+gpp_journey_assert(
+    false !== strpos( $css, '#post-body-content' )
+    && false !== strpos( $css, 'padding-inline: clamp(16px, 2vw, 32px)' )
+    && false !== strpos( $css, 'max-inline-size: 1060px' )
+    && false !== strpos( $css, 'margin: 0 auto 24px' )
+    && false !== strpos( $css, 'margin-inline: auto' ),
+    'Correction geometry must repair only the native main-content boundary with logical gutter and bounded centering.'
+);
+gpp_journey_assert(
+    false === strpos( $css, 'data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gform_wrapper' ),
+    'Correction full-width profile must not reopen the bounded editor width.'
+);
+gpp_journey_assert(
+    false !== strpos( $css, '.gform_wrapper .gform_fields' )
+    && false !== strpos( $css, '.gform_wrapper .gfield' )
+    && false !== strpos( $css, '.gform_wrapper .gfield_label' )
+    && false !== strpos( $css, 'direction: rtl' )
+    && false !== strpos( $css, 'input[type="text"]:not([dir="ltr"])' )
+    && false !== strpos( $css, 'unicode-bidi: plaintext' )
+    && false !== strpos( $css, 'input:is([type="email"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"]'),
+    'Correction RTL presentation and semantic LTR/bidi-safe exceptions are incomplete.'
 );
 gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
 gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );

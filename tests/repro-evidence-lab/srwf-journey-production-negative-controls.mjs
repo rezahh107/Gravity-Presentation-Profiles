@@ -43,6 +43,69 @@ function hostState(entryId, userId) {
   `));
 }
 
+function semanticControlIdentity(signature) {
+  if (!signature?.form || !signature?.button) return null;
+  return {
+    form: signature.form,
+    button: {
+      id: signature.button.id,
+      name: signature.button.name,
+      type: signature.button.type,
+      formaction: signature.button.formaction,
+      formmethod: signature.button.formmethod,
+      onclick: signature.button.onclick,
+    },
+    hidden: signature.hidden,
+    successful_names: signature.successful_names,
+  };
+}
+
+async function correctionControlSignature(page) {
+  return page.evaluate(() => {
+    const form = document.querySelector('.gravityflow_workflow_detail form');
+    const button = document.querySelector('#gravityflow_update_button');
+    const hidden = form ? [...form.querySelectorAll('input[type="hidden"]')]
+      .filter(node => node.name || node.id)
+      .map(node => ({ name: node.name || '', id: node.id || '', nonempty: Boolean(node.value) }))
+      .sort((a, b) => `${a.name}:${a.id}`.localeCompare(`${b.name}:${b.id}`)) : [];
+    const successfulNames = form ? [...form.querySelectorAll('input,select,textarea,button')]
+      .filter(node => node.name && !node.disabled)
+      .map(node => ({ tag: node.tagName.toLowerCase(), type: node.getAttribute('type') || '', name: node.name, id: node.id || '' }))
+      .sort((a, b) => `${a.name}:${a.id}`.localeCompare(`${b.name}:${b.id}`)) : [];
+    return {
+      form: form ? {
+        id: form.id || '',
+        action: form.getAttribute('action') || '',
+        method: (form.getAttribute('method') || '').toLowerCase(),
+      } : null,
+      button: button ? {
+        id: button.id || '',
+        name: button.getAttribute('name') || '',
+        type: button.getAttribute('type') || '',
+        value: 'value' in button ? button.value : '',
+        text: (button.textContent || '').replace(/\s+/g, ' ').trim(),
+        formaction: button.getAttribute('formaction'),
+        formmethod: button.getAttribute('formmethod'),
+        onclick: button.getAttribute('onclick'),
+      } : null,
+      hidden,
+      successful_names: successfulNames,
+    };
+  });
+}
+
+async function statusSurfaceState(page) {
+  return page.evaluate(() => ({
+    url: location.href,
+    workflow_detail_count: document.querySelectorAll('.gravityflow_workflow_detail').length,
+    entry_detail_count: document.querySelectorAll('.entry-detail-view').length,
+    gform_wrapper_count: document.querySelectorAll('.gravityflow_workflow_detail .gform_wrapper').length,
+    native_update_count: document.querySelectorAll('#gravityflow_update_button').length,
+    correction_marker_count: document.querySelectorAll('[data-gpp-entry-journey="correction"]').length,
+    body_sample: (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 1200),
+  }));
+}
+
 function frontendEntryUrl(route, entryId) {
   const url = new URL(route.url);
   url.searchParams.set('view', 'entry');
@@ -231,6 +294,113 @@ async function accept(page, value) {
   return dialogInfo;
 }
 
+async function proveStatusNativeCta(page, statusRoute, entryId, representation) {
+  if (!statusRoute) {
+    return {
+      runtime_status: 'NOT_PROVEN',
+      representation,
+      reason: 'gravityflow/status block is not registered in the pinned Gravity Flow runtime',
+    };
+  }
+
+  const operatorId = Number(manifest.users.operator.id);
+  const expectedAssignee = `user_id|${operatorId}`;
+  await login(page, manifest.users.operator.login, operatorPassword);
+  await page.goto(frontendEntryUrl(route, entryId), { waitUntil: 'networkidle' });
+  const reviewState = hostState(entryId, operatorId);
+  if (reviewState.current_step?.type !== 'approval') {
+    throw new Error(`${representation}: fixture did not begin at native Review: ${JSON.stringify(reviewState)}`);
+  }
+  const dialog = await accept(page, 'revert');
+  const correctionState = hostState(entryId, operatorId);
+  if (
+    !dialog
+    || correctionState.current_step?.id !== Number(manifest.steps.correction_id)
+    || correctionState.current_step?.type !== 'user_input'
+    || correctionState.current_step?.can_update !== true
+    || JSON.stringify(correctionState.current_step?.assignees) !== JSON.stringify([expectedAssignee])
+  ) {
+    throw new Error(`${representation}: native Revert did not establish the qualified same-operator Correction: ${JSON.stringify({ dialog, correctionState })}`);
+  }
+
+  const statusUrl = frontendEntryUrl(statusRoute, entryId);
+  await page.goto(statusUrl, { waitUntil: 'networkidle' });
+  const surface = await statusSurfaceState(page);
+  const filtered = await correctionControlSignature(page);
+  const hasHostDetail = surface.workflow_detail_count > 0 && surface.gform_wrapper_count > 0;
+  const hasNativeUpdate = filtered?.button?.id === 'gravityflow_update_button';
+
+  if (!hasHostDetail || !hasNativeUpdate) {
+    if (surface.correction_marker_count !== 0) {
+      throw new Error(`${representation}: unsupported Status control path still admitted the GPP Correction journey: ${JSON.stringify(surface)}`);
+    }
+    return {
+      runtime_status: 'NOT_PROVEN',
+      representation,
+      reason: !hasHostDetail
+        ? 'pinned host did not expose authentic Status Entry Detail for this current User Input'
+        : 'pinned host exposed Status Entry Detail but not an updateable native User Input control',
+      status_url: statusUrl,
+      correction_state: correctionState,
+      surface,
+      filtered,
+    };
+  }
+
+  if (
+    surface.correction_marker_count !== 0
+    || filtered.button.value === 'اصلاح اطلاعات'
+    || filtered.button.text === 'اصلاح اطلاعات'
+  ) {
+    throw new Error(`${representation}: Status surface leaked GPP Correction CTA/journey admission: ${JSON.stringify({ surface, filtered, correctionState })}`);
+  }
+
+  try {
+    wpEval("update_option('gpp_srwf_mr4_native_cta_baseline','1',false); echo '1';");
+    await page.reload({ waitUntil: 'networkidle' });
+    const baseline = await correctionControlSignature(page);
+    const baselineSurface = await statusSurfaceState(page);
+
+    wpEval("delete_option('gpp_srwf_mr4_native_cta_baseline'); echo '1';");
+    await page.reload({ waitUntil: 'networkidle' });
+    const after = await correctionControlSignature(page);
+    const afterSurface = await statusSurfaceState(page);
+
+    const baselineIdentity = semanticControlIdentity(baseline);
+    const afterIdentity = semanticControlIdentity(after);
+    const identityPreserved = JSON.stringify(baselineIdentity) === JSON.stringify(afterIdentity);
+    const labelsRemainNative = baseline?.button?.value !== 'اصلاح اطلاعات'
+      && baseline?.button?.text !== 'اصلاح اطلاعات'
+      && after?.button?.value !== 'اصلاح اطلاعات'
+      && after?.button?.text !== 'اصلاح اطلاعات';
+
+    if (
+      !identityPreserved
+      || !labelsRemainNative
+      || baselineSurface.correction_marker_count !== 0
+      || afterSurface.correction_marker_count !== 0
+    ) {
+      throw new Error(`${representation}: GPP altered native Status submission presentation/semantics: ${JSON.stringify({ baseline, after, baselineSurface, afterSurface, identityPreserved, labelsRemainNative })}`);
+    }
+
+    return {
+      runtime_status: 'PROVEN',
+      representation,
+      status_url: statusUrl,
+      correction_state: correctionState,
+      surface: afterSurface,
+      native_before_gpp_filter: baseline,
+      native_with_gpp_filter: after,
+      native_semantic_identity_before: baselineIdentity,
+      native_semantic_identity_after: afterIdentity,
+      semantic_identity_preserved: identityPreserved,
+      native_label_preserved: labelsRemainNative,
+    };
+  } finally {
+    wpEval("delete_option('gpp_srwf_mr4_native_cta_baseline'); echo '1';");
+  }
+}
+
 const results = [];
 async function test(id, name, fn) {
   try {
@@ -248,6 +418,7 @@ await login(page, manifest.users.operator.login, operatorPassword);
 const route = manifest.routes.shortcode;
 const stableEntryId = Number(manifest.entries.revert);
 clearControlMode();
+wpEval("delete_option('gpp_srwf_mr4_native_cta_baseline'); echo '1';");
 await page.goto(frontendEntryUrl(route, stableEntryId), { waitUntil: 'networkidle' });
 const baselineControls = await returnControls(page);
 if ([...baselineControls.gpp, ...baselineControls.native].length !== 1) throw new Error(`Baseline return control is not singular: ${JSON.stringify(baselineControls)}`);
@@ -283,6 +454,24 @@ await test('SRWF-PROD-BACK-LINK-CONTROL-RESET-001', 'Back-link test modes do not
   return { control_mode: '__MISSING__', baseline: baselineControls, after_reset: controls };
 });
 
+await test('SRWF-PROD-STATUS-SHORTCODE-CTA-NEGATIVE-001', 'Status shortcode keeps same-operator User Input CTA host-native', async () => {
+  return proveStatusNativeCta(
+    page,
+    manifest.routes.status_shortcode,
+    Number(manifest.entries.status_shortcode),
+    'gravityflow status shortcode'
+  );
+});
+
+await test('SRWF-PROD-STATUS-BLOCK-CTA-NEGATIVE-001', 'registered Status block keeps same-operator User Input CTA host-native', async () => {
+  return proveStatusNativeCta(
+    page,
+    manifest.routes.status_block,
+    Number(manifest.entries.status_block),
+    'gravityflow/status block'
+  );
+});
+
 await test('SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001', 'split-assignee User Input is not labeled SAME-OPERATOR Correction', async () => {
   if (controlMode() !== '__MISSING__') throw new Error('Back-link control leaked into split-assignee scenario.');
   const split = JSON.parse(wpEvalFile('tests/repro-evidence-lab/srwf-journey-production-split-assignee-setup.php'));
@@ -308,11 +497,25 @@ await test('SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001', 'split-assignee User Input i
   const negativeCorrection = hostState(split.entry_id, negativeId);
   const negativeOrientation = await page.locator('[data-gpp-entry-journey="correction"]').count();
   const editable = await page.locator('input[name="input_1"]:visible').count();
-  if (negativeCorrection.current_step?.id !== Number(split.correction_id) || negativeCorrection.current_step?.type !== 'user_input' || JSON.stringify(negativeCorrection.current_step?.assignees) !== JSON.stringify([`user_id|${negativeId}`]) || !negativeCorrection.current_step?.can_update || editable !== 1 || negativeOrientation !== 0) {
-    throw new Error(`Different-assignee authorized User Input was mislabeled SAME-OPERATOR Correction: ${JSON.stringify({ negativeCorrection, editable, negativeOrientation })}`);
+  const nativeUpdate = page.locator('#gravityflow_update_button:visible,#gravityflow_submit_button:visible').first();
+  const nativeUpdateLabel = await nativeUpdate.count() === 1
+    ? { id: await nativeUpdate.getAttribute('id'), value: await nativeUpdate.getAttribute('value'), text: (await nativeUpdate.textContent() || '').replace(/\s+/g, ' ').trim() }
+    : null;
+  if (
+    negativeCorrection.current_step?.id !== Number(split.correction_id)
+    || negativeCorrection.current_step?.type !== 'user_input'
+    || JSON.stringify(negativeCorrection.current_step?.assignees) !== JSON.stringify([`user_id|${negativeId}`])
+    || !negativeCorrection.current_step?.can_update
+    || editable !== 1
+    || negativeOrientation !== 0
+    || !nativeUpdateLabel
+    || nativeUpdateLabel.value === 'اصلاح اطلاعات'
+    || nativeUpdateLabel.text === 'اصلاح اطلاعات'
+  ) {
+    throw new Error(`Different-assignee authorized User Input was mislabeled SAME-OPERATOR Correction: ${JSON.stringify({ negativeCorrection, editable, negativeOrientation, nativeUpdateLabel })}`);
   }
 
-  return { split, live_review: reviewState, live_operator_correction: operatorCorrection, live_negative_correction: negativeCorrection, operator_orientation_count: operatorOrientation, negative_orientation_count: negativeOrientation, negative_editable_input_count: editable };
+  return { split, live_review: reviewState, live_operator_correction: operatorCorrection, live_negative_correction: negativeCorrection, operator_orientation_count: operatorOrientation, negative_orientation_count: negativeOrientation, negative_editable_input_count: editable, native_update_label: nativeUpdateLabel };
 });
 
 clearControlMode();

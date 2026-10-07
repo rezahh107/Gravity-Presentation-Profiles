@@ -213,11 +213,25 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
  * marker; :has() only harmonizes the already-rendered native User Input form.
  * No native field is moved, cloned, hidden or made editable by this layer.
  */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #post-body-content {
+    box-sizing: border-box;
+    inline-size: 100%;
+    padding-inline: clamp(16px, 2vw, 32px);
+    direction: rtl;
+    text-align: start;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-journey--correction {
+    inline-size: 100%;
+    max-inline-size: 1060px;
+    margin-inline: auto;
+}
+
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper {
     box-sizing: border-box;
-    width: 100%;
-    max-width: 1060px;
-    margin: 0 0 24px;
+    inline-size: 100%;
+    max-inline-size: 1060px;
+    margin: 0 auto 24px;
     padding: 28px 32px;
     border: 1px solid #e4e7ec;
     border-radius: 14px;
@@ -225,16 +239,16 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
     box-shadow: 0 2px 4px rgba(23, 32, 51, .05);
     color: #172033;
     font-family: inherit;
-}
-
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gform_wrapper {
-    max-width: none;
+    direction: rtl;
+    text-align: start;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gform_fields,
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gfield,
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .ginput_container {
     min-width: 0;
+    direction: rtl;
+    text-align: right;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper .gfield_label {
@@ -242,6 +256,24 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
     font: inherit;
     font-weight: 600;
     line-height: 1.8;
+    direction: rtl;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="text"]:not([dir="ltr"]):not([inputmode="numeric"]):not([inputmode="decimal"]):not([inputmode="tel"]):not([inputmode="email"]):not([inputmode="url"]),
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea:not([dir="ltr"]),
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select:not([dir="ltr"]) {
+    direction: rtl;
+    text-align: right;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input:is([type="email"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"], [dir="ltr"], [inputmode="numeric"], [inputmode="decimal"], [inputmode="tel"], [inputmode="email"], [inputmode="url"]),
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper textarea[dir="ltr"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper select[dir="ltr"],
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper :is(.gfield--type-email, .gfield--type-phone, .gfield--type-number, .gfield--type-date, .gfield--type-time, .gfield--type-ir_national_id) :is(input, textarea, select) {
+    direction: ltr;
+    text-align: left;
+    unicode-bidi: plaintext;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper input[type="text"],
@@ -386,9 +418,19 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
         width: 100%;
     }
 
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #post-body-content {
+        padding-inline: 0;
+    }
+
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-journey--correction {
+        inline-size: calc(100% - 25px);
+        max-inline-size: none;
+        margin-inline: auto;
+    }
+
     .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gform_wrapper {
-        width: calc(100% - 25px);
-        max-width: none;
+        inline-size: calc(100% - 25px);
+        max-inline-size: none;
         margin-inline: auto;
         padding: 20px 16px;
     }
