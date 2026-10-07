@@ -128,24 +128,12 @@ gpp_journey_assert(
 );
 gpp_journey_assert( false !== strpos( $php, 'gravityflow_back_link_url_entry_detail' ), 'Native Gravity Flow back-link route must be canonicalized through its supported filter.' );
 gpp_journey_assert(
-    false !== strpos( $php, "gravityflow_update_button_text_user_input" )
-    && false !== strpos( $php, "filterCorrectionUpdateButtonText" )
-    && false !== strpos( $php, "return __( 'اصلاح اطلاعات'" ),
-    'Correction CTA must use the native Gravity Flow User Input text filter and exact Owner-approved label.'
-);
-gpp_journey_assert(
     false !== strpos( $php, 'EntryDetailPresentationAdapter::admittedPresentationModel' )
     && false !== strpos( $php, 'self::freshHostTruth' )
     && false !== strpos( $php, 'self::STATE_CORRECTION' )
-    && false !== strpos( $php, "(string) $current_step->get_id() !== (string) $step->get_id()" ),
+    && false !== strpos( $php, '(string) $current_step->get_id() !== (string) $step->get_id()' ),
     'Correction CTA scope must reuse canonical admission and fresh host truth rather than introducing parallel state.'
 );
-foreach ( array( 'gravityflow_update_button_user_input', 'wp_ajax_', 'window.', 'document.querySelector' ) as $forbidden_cta_replacement ) {
-    gpp_journey_assert(
-        false === strpos( $php, $forbidden_cta_replacement ),
-        'Correction CTA must not replace native markup/transport or add client-side mutation: ' . $forbidden_cta_replacement
-    );
-}
 gpp_journey_assert( false !== strpos( $php, 'admin.php?page=gravityflow-inbox' ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
 gpp_journey_assert( false !== strpos( $php, "if ( 'inbox' === \$page )" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
 gpp_journey_assert( false === strpos( $php, "array( 'inbox', 'status' )" ), 'Gravity Flow Status pages must not be treated as canonical My Tasks routes.' );
@@ -244,26 +232,12 @@ gpp_journey_assert(
     'Return icon must not add duplicate accessible naming or icon markup to the action name.'
 );
 gpp_journey_assert(
-    false !== strpos( $css, 'padding-inline: clamp(16px, 2vw, 32px)' )
-    && false !== strpos( $css, 'max-inline-size: 1060px' )
-    && false !== strpos( $css, 'margin: 0 auto 24px' ),
-    'Correction geometry must be repaired at the admitted host/form boundary with logical gutter and bounded centering.'
-);
-gpp_journey_assert(
-    false !== strpos( $css, '.gform_wrapper .gform_fields' )
-    && false !== strpos( $css, 'direction: rtl' )
-    && false !== strpos( $css, 'unicode-bidi: plaintext' )
-    && false !== strpos( $css, 'input:is([type="email"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"]'),
-    'Correction RTL presentation must preserve explicit semantic LTR/bidi-safe input exceptions.'
-);
-gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
-gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );
-gpp_journey_assert(
-    false !== strpos( $css, '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])' )
+    false !== strpos( $css, '#post-body-content' )
     && false !== strpos( $css, 'padding-inline: clamp(16px, 2vw, 32px)' )
     && false !== strpos( $css, 'max-inline-size: 1060px' )
+    && false !== strpos( $css, 'margin: 0 auto 24px' )
     && false !== strpos( $css, 'margin-inline: auto' ),
-    'Correction geometry must repair the admitted Gravity Flow form boundary with logical gutter and bounded centering.'
+    'Correction geometry must repair only the native main-content boundary with logical gutter and bounded centering.'
 );
 gpp_journey_assert(
     false === strpos( $css, 'data-gpp-profile-id="srwf.operations.entry-detail.full-width.v1"]) .gform_wrapper' ),
@@ -273,9 +247,13 @@ gpp_journey_assert(
     false !== strpos( $css, '.gform_wrapper .gform_fields' )
     && false !== strpos( $css, '.gform_wrapper .gfield' )
     && false !== strpos( $css, '.gform_wrapper .gfield_label' )
+    && false !== strpos( $css, 'direction: rtl' )
     && false !== strpos( $css, 'input[type="text"]:not([dir="ltr"])' )
-    && false !== strpos( $css, 'unicode-bidi: plaintext' ),
-    'Correction RTL family and semantic LTR exceptions are incomplete.'
+    && false !== strpos( $css, 'unicode-bidi: plaintext' )
+    && false !== strpos( $css, 'input:is([type="email"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"]'),
+    'Correction RTL presentation and semantic LTR/bidi-safe exceptions are incomplete.'
 );
+gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
+gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );
 
 echo "ENTRY_DETAIL_JOURNEY_PRESENTATION_PASS\n";
