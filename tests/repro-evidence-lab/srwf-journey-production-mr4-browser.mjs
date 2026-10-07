@@ -301,6 +301,8 @@ async function correctionGeometry(page) {
     const field = input?.closest('.gfield') || null;
     const label = input?.labels?.[0] || field?.querySelector('.gfield_label') || null;
     const email = document.querySelector('input[name="input_6"]');
+    const textarea = document.querySelector('textarea[name="input_7"]');
+    const select = document.querySelector('select[name="input_8"]');
     const submit = document.querySelector('#gravityflow_update_button,#gravityflow_submit_button');
     const rect = element => element ? element.getBoundingClientRect() : null;
     const simplify = value => value ? { left: value.left, right: value.right, width: value.width, height: value.height } : null;
@@ -331,6 +333,10 @@ async function correctionGeometry(page) {
       input_style: style(input),
       email: simplify(rect(email)),
       email_style: style(email),
+      textarea: simplify(rect(textarea)),
+      textarea_style: style(textarea),
+      select: simplify(rect(select)),
+      select_style: style(select),
       submit: simplify(rect(submit)),
       submit_id: submit?.id || null,
       labels: input?.labels?.length || 0,
@@ -457,14 +463,92 @@ await test('SRWF-PROD-MR4-CORRECTION-001', 'Revert admits native User Input with
     && geometry.field_style?.direction === 'rtl'
     && geometry.label_style?.direction === 'rtl'
     && geometry.input_style?.direction === 'rtl'
-    && geometry.input_style?.text_align === 'right';
+    && geometry.input_style?.text_align === 'right'
+    && geometry.textarea_style?.direction === 'rtl'
+    && geometry.textarea_style?.text_align === 'right'
+    && geometry.select_style?.direction === 'rtl'
+    && geometry.select_style?.text_align === 'right';
   const ltrOk = geometry.email_style?.direction === 'ltr'
     && geometry.email_style?.text_align === 'left'
     && geometry.email_style?.unicode_bidi === 'plaintext';
-  if (!dialog || state.current_step?.id !== correctionId || state.current_step?.type !== 'user_input' || state.current_step?.can_update !== true || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5', '6']) || orientationCount !== 1 || gppOwnedInputs !== 0 || unauthorized !== 0 || visibleInputs.join(',') !== 'input_1,input_6' || field5Visible !== 0 || !correctionPrintStateIsValid(print) || !visual || visual.wrapper_border_radius !== '14px' || visual.wrapper_border_style !== 'solid' || visual.wrapper_background !== 'rgb(255, 255, 255)' || visual.wrapper_box_shadow === 'none' || visual.input_height < 44 || visual.input_border_radius !== '8px' || visual.submit_id !== 'gravityflow_update_button' || visual.submit_height < 44 || visual.submit_border_radius !== '8px' || !nativeSubmissionSignatureIsValid(signature) || !rtlOk || !ltrOk) {
+  if (
+    !dialog
+    || state.current_step?.id !== correctionId
+    || state.current_step?.type !== 'user_input'
+    || state.current_step?.can_update !== true
+    || JSON.stringify(state.current_step?.editable_fields?.map(String).sort()) !== JSON.stringify(['1', '5', '6', '7', '8'])
+    || orientationCount !== 1
+    || gppOwnedInputs !== 0
+    || unauthorized !== 0
+    || visibleInputs.join(',') !== 'input_1,input_6,input_7,input_8'
+    || field5Visible !== 0
+    || !correctionPrintStateIsValid(print)
+    || !visual
+    || visual.wrapper_border_radius !== '14px'
+    || visual.wrapper_border_style !== 'solid'
+    || visual.wrapper_background !== 'rgb(255, 255, 255)'
+    || visual.wrapper_box_shadow === 'none'
+    || visual.input_height < 44
+    || visual.input_border_radius !== '8px'
+    || visual.submit_id !== 'gravityflow_update_button'
+    || visual.submit_height < 44
+    || visual.submit_border_radius !== '8px'
+    || !nativeSubmissionSignatureIsValid(signature)
+    || !rtlOk
+    || !ltrOk
+  ) {
     throw new Error(`Correction admission/composition failed: ${JSON.stringify({ dialog, state, visibleInputs, orientationCount, gppOwnedInputs, unauthorized, print, gtb, visual, geometry, field5Visible, signature, rtlOk, ltrOk })}`);
   }
   return { dialog, state, visible_inputs: visibleInputs, print, gtb_stylesheets_observed: gtb, visual, geometry, native_submission_signature: signature, rtl_ok: rtlOk, semantic_ltr_ok: ltrOk };
+});
+
+await test('SRWF-PROD-MR4-CTA-IDENTITY-001', 'native User Input CTA relabel preserves exact semantic form/button transport identity', async () => {
+  const ctaEntryId = createReviewEntry('CTA-IDENTITY');
+  await page.goto(frontendEntryUrl(ctaEntryId), { waitUntil: 'networkidle' });
+  await accept(page, 'revert');
+
+  wpEval("update_option('gpp_srwf_mr4_native_cta_baseline','1',false); echo '1';");
+  await page.reload({ waitUntil: 'networkidle' });
+  const baseline = await correctionControlSignature(page);
+  const baselineState = hostState(ctaEntryId);
+
+  wpEval("delete_option('gpp_srwf_mr4_native_cta_baseline'); echo '1';");
+  await page.reload({ waitUntil: 'networkidle' });
+  const filtered = await correctionControlSignature(page);
+  const filteredState = hostState(ctaEntryId);
+
+  const baselineIdentity = semanticControlIdentity(baseline);
+  const filteredIdentity = semanticControlIdentity(filtered);
+  const identityPreserved = JSON.stringify(baselineIdentity) === JSON.stringify(filteredIdentity);
+  const labelChanged = (filtered?.button?.value === 'اصلاح اطلاعات' || filtered?.button?.text === 'اصلاح اطلاعات')
+    && baseline?.button?.value !== 'اصلاح اطلاعات'
+    && baseline?.button?.text !== 'اصلاح اطلاعات';
+  const statePreserved = baselineState.current_step?.id === correctionId
+    && filteredState.current_step?.id === correctionId
+    && baselineState.current_step?.type === 'user_input'
+    && filteredState.current_step?.type === 'user_input'
+    && baselineState.current_step?.can_update === true
+    && filteredState.current_step?.can_update === true;
+  const hiddenNames = filtered?.hidden?.map(item => item.name).filter(Boolean) || [];
+  const nonceTransport = hiddenNames.includes('_gravityflow_admin_action_nonce');
+  const workflowTransport = ['gravityflow_status', 'gravityflow_submit', 'step_id', 'state_1', 'gforms_save_entry']
+    .every(name => hiddenNames.includes(name));
+
+  if (!identityPreserved || !labelChanged || !statePreserved || !nonceTransport || !workflowTransport) {
+    throw new Error(`CTA identity contract failed: ${JSON.stringify({ identityPreserved, labelChanged, statePreserved, nonceTransport, workflowTransport, baseline, filtered, baselineState, filteredState })}`);
+  }
+
+  return {
+    baseline,
+    filtered,
+    baseline_semantic_identity: baselineIdentity,
+    filtered_semantic_identity: filteredIdentity,
+    identity_preserved: identityPreserved,
+    label_changed: labelChanged,
+    state_preserved: statePreserved,
+    nonce_transport_present: nonceTransport,
+    workflow_transport_present: workflowTransport,
+  };
 });
 
 await test('SRWF-PROD-MR4-CONDITIONAL-001', 'native Gravity Forms conditional logic remains live', async () => {
@@ -539,11 +623,36 @@ await test('SRWF-PROD-MR4-RESPONSIVE-KEYBOARD-001', 'correction is centered/boun
     const contentInsetEnd = geometry.content && geometry.wrapper ? geometry.content.right - geometry.wrapper.right : -1;
     const centeredWithinContent = !desktop || Math.abs(contentInsetStart - contentInsetEnd) <= 2;
     const usefulDesktopGutter = !desktop || (contentInsetStart >= 16 && contentInsetEnd >= 16 && geometry.wrapper.width <= 1062 && geometry.orientation.width <= 1062);
-    const withinViewport = [geometry.orientation, geometry.wrapper, geometry.input, geometry.email, geometry.submit].every(rect => rect && rect.left >= -1 && rect.right <= width + 1);
-    if (geometry.overflow > baselineOverflow + 1 || !geometry.content || !withinViewport || !centeredWithinContent || !usefulDesktopGutter || geometry.input.height < 44 || geometry.submit.height < 44 || geometry.submit_id !== 'gravityflow_update_button' || geometry.labels < 1 || await submit.count() !== 1 || !hasVisibleFocusIndicator(focus) || !correctionPrintStateIsValid(print) || geometry.input_style?.direction !== 'rtl' || geometry.email_style?.direction !== 'ltr') {
-      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount, print, contentInsetStart, contentInsetEnd, centeredWithinContent, usefulDesktopGutter, withinViewport })}`);
+    const mobileGutter = desktop || (
+      contentInsetStart >= 11
+      && contentInsetEnd >= 11
+      && geometry.orientation.left >= 11
+      && (width - geometry.orientation.right) >= 11
+    );
+    const withinViewport = [geometry.orientation, geometry.wrapper, geometry.input, geometry.email, geometry.textarea, geometry.select, geometry.submit]
+      .every(rect => rect && rect.left >= -1 && rect.right <= width + 1);
+    if (
+      geometry.overflow > baselineOverflow + 1
+      || !geometry.content
+      || !withinViewport
+      || !centeredWithinContent
+      || !usefulDesktopGutter
+      || !mobileGutter
+      || geometry.input.height < 44
+      || geometry.submit.height < 44
+      || geometry.submit_id !== 'gravityflow_update_button'
+      || geometry.labels < 1
+      || await submit.count() !== 1
+      || !hasVisibleFocusIndicator(focus)
+      || !correctionPrintStateIsValid(print)
+      || geometry.input_style?.direction !== 'rtl'
+      || geometry.textarea_style?.direction !== 'rtl'
+      || geometry.select_style?.direction !== 'rtl'
+      || geometry.email_style?.direction !== 'ltr'
+    ) {
+      throw new Error(`Responsive/keyboard contract failed at ${width}: ${JSON.stringify({ baselineOverflow, geometry, focus, tabCount, print, contentInsetStart, contentInsetEnd, centeredWithinContent, usefulDesktopGutter, mobileGutter, withinViewport })}`);
     }
-    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount, print, content_inset_start: contentInsetStart, content_inset_end: contentInsetEnd, centered_within_content: centeredWithinContent });
+    measurements.push({ width, baseline_overflow: baselineOverflow, correction_overflow: geometry.overflow, geometry, focus, tab_count: tabCount, print, content_inset_start: contentInsetStart, content_inset_end: contentInsetEnd, centered_within_content: centeredWithinContent, useful_desktop_gutter: usefulDesktopGutter, mobile_gutter: mobileGutter });
     await page.screenshot({ path: `${artifactDir}/srwf-journey-mr4-correction-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 1680, height: 1080 });
