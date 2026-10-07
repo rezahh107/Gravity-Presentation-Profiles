@@ -308,11 +308,25 @@ await test('SRWF-PROD-SPLIT-ASSIGNEE-NEGATIVE-001', 'split-assignee User Input i
   const negativeCorrection = hostState(split.entry_id, negativeId);
   const negativeOrientation = await page.locator('[data-gpp-entry-journey="correction"]').count();
   const editable = await page.locator('input[name="input_1"]:visible').count();
-  if (negativeCorrection.current_step?.id !== Number(split.correction_id) || negativeCorrection.current_step?.type !== 'user_input' || JSON.stringify(negativeCorrection.current_step?.assignees) !== JSON.stringify([`user_id|${negativeId}`]) || !negativeCorrection.current_step?.can_update || editable !== 1 || negativeOrientation !== 0) {
-    throw new Error(`Different-assignee authorized User Input was mislabeled SAME-OPERATOR Correction: ${JSON.stringify({ negativeCorrection, editable, negativeOrientation })}`);
+  const nativeUpdate = page.locator('#gravityflow_update_button:visible,#gravityflow_submit_button:visible').first();
+  const nativeUpdateLabel = await nativeUpdate.count() === 1
+    ? { id: await nativeUpdate.getAttribute('id'), value: await nativeUpdate.getAttribute('value'), text: (await nativeUpdate.textContent() || '').replace(/\s+/g, ' ').trim() }
+    : null;
+  if (
+    negativeCorrection.current_step?.id !== Number(split.correction_id)
+    || negativeCorrection.current_step?.type !== 'user_input'
+    || JSON.stringify(negativeCorrection.current_step?.assignees) !== JSON.stringify([`user_id|${negativeId}`])
+    || !negativeCorrection.current_step?.can_update
+    || editable !== 1
+    || negativeOrientation !== 0
+    || !nativeUpdateLabel
+    || nativeUpdateLabel.value === 'اصلاح اطلاعات'
+    || nativeUpdateLabel.text === 'اصلاح اطلاعات'
+  ) {
+    throw new Error(`Different-assignee authorized User Input was mislabeled SAME-OPERATOR Correction: ${JSON.stringify({ negativeCorrection, editable, negativeOrientation, nativeUpdateLabel })}`);
   }
 
-  return { split, live_review: reviewState, live_operator_correction: operatorCorrection, live_negative_correction: negativeCorrection, operator_orientation_count: operatorOrientation, negative_orientation_count: negativeOrientation, negative_editable_input_count: editable };
+  return { split, live_review: reviewState, live_operator_correction: operatorCorrection, live_negative_correction: negativeCorrection, operator_orientation_count: operatorOrientation, negative_orientation_count: negativeOrientation, negative_editable_input_count: editable, native_update_label: nativeUpdateLabel };
 });
 
 clearControlMode();
