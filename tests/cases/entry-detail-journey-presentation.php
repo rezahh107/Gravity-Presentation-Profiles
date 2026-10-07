@@ -134,6 +134,20 @@ gpp_journey_assert(
     && false !== strpos( $php, '(string) $current_step->get_id() !== (string) $step->get_id()' ),
     'Correction CTA scope must reuse canonical admission and fresh host truth rather than introducing parallel state.'
 );
+$cta_filter_start = strpos( $php, 'public static function filterCorrectionUpdateButtonText' );
+$cta_filter_end = strpos( $php, '/**', $cta_filter_start );
+gpp_journey_assert(
+    false !== $cta_filter_start && false !== $cta_filter_end && $cta_filter_end > $cta_filter_start,
+    'Correction CTA filter boundary could not be inspected.'
+);
+$cta_filter_php = substr( $php, $cta_filter_start, $cta_filter_end - $cta_filter_start );
+gpp_journey_assert(
+    false !== strpos( $cta_filter_php, 'EntryDetailRequestReachability::isReachable()' )
+    && false !== strpos( $cta_filter_php, 'null === self::canonicalInboxContext()' )
+    && false !== strpos( $cta_filter_php, 'self::freshHostTruth' )
+    && strpos( $cta_filter_php, 'null === self::canonicalInboxContext()' ) < strpos( $cta_filter_php, 'self::freshHostTruth' ),
+    'Correction CTA must reuse the canonical Journey route boundary before host-truth classification; generic Entry Detail reachability alone is too broad.'
+);
 gpp_journey_assert( false !== strpos( $php, 'admin.php?page=gravityflow-inbox' ) && false !== strpos( $php, 'get_permalink' ), 'Canonical admin/frontend Inbox authorities are missing.' );
 gpp_journey_assert( false !== strpos( $php, "if ( 'inbox' === \$page )" ) && false !== strpos( $php, "'gravityflow/inbox'" ), 'Frontend canonical routing must admit only actual Inbox shortcode/Block pages.' );
 gpp_journey_assert( false === strpos( $php, "array( 'inbox', 'status' )" ), 'Gravity Flow Status pages must not be treated as canonical My Tasks routes.' );
