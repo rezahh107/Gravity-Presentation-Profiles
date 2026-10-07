@@ -9,9 +9,24 @@ const placeholder = '__GPP_INITIAL_GEOMETRY_CONTRACT__';
 const contract = { form_id: 101, column_ids: ['id', '1', '3', '6', 'date_created'] };
 
 assert.equal(source.split(placeholder).length - 1, 1, 'production guard must expose exactly one contract placeholder');
-for (const forbidden of ['localStorage', 'sessionStorage', 'ResizeObserver', 'MutationObserver', 'setTimeout(', 'setInterval(', 'onGridReady', 'columnEverythingChanged', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
+for (const forbidden of ['sessionStorage', 'ResizeObserver', 'MutationObserver', 'setInterval(', 'onGridReady', 'setColumnWidth', 'applyColumnState', 'enableRtl']) {
     assert.equal(source.includes(forbidden), false, `production guard contains prohibited mechanism ${forbidden}`);
 }
+for (const required of [
+    'localStorage',
+    'options.onColumnEverythingChanged = function',
+    "params.source !== 'gridInitializing'",
+    "addEventListener('columnResized'",
+    'GROW_SETTLE_MS',
+    'GROW_MIN_DELTA_PX',
+]) {
+    assert.equal(source.includes(required), true, `production recovery is missing ${required}`);
+}
+assert.equal(
+    source.includes('options.onColumnResized = function'),
+    false,
+    'production recovery must not replace the host-owned resize callback'
+);
 
 const defaultState = () => [
     { colId: 'id', width: 165, hide: false, sort: null, sortIndex: null, pinned: null },
@@ -277,8 +292,8 @@ for (const [label, overrides] of [
     assert.equal(fixture.sizeCalls(), 0, 'later same-mount lifecycle re-entered Candidate C');
 }
 
-// Candidate C classifies final effective geometry, not provenance. A previous
-// callback can change widths before the one-shot evaluation.
+// Candidate C still classifies final effective initial geometry. Wider recovery
+// is separately provenance-gated by the new regression tests.
 {
     const fixture = buildFixture({
         state: defaultState().map((entry, index) => ({ ...entry, width: [80, 200, 200, 200, 200][index] })),
@@ -296,7 +311,7 @@ for (const [label, overrides] of [
         },
     });
     deliver(fixture);
-    assert.equal(fixture.sizeCalls(), 0, 'provenance-free guard repaired geometry that prior callback made fitting');
+    assert.equal(fixture.sizeCalls(), 0, 'unprovenanced guard repaired geometry that prior callback made fitting');
 }
 
 // New native API identity gets one new opportunity; same old identity remains inert.
@@ -356,8 +371,8 @@ const result = {
         mobile_minimum_overflow_unchanged: true,
         pinned_flex_and_unsupported_modes_fail_closed: true,
         scope_falsification: true,
-        later_same_mount_lifecycle_inert: true,
-        provenance_not_classified: true,
+        later_same_mount_lifecycle_inert_without_provenance: true,
+        initial_effective_geometry_classification_preserved: true,
         new_api_identity_new_opportunity: true,
         hidden_and_non_width_state_preserved: true,
         malformed_native_state_not_reset: true,
