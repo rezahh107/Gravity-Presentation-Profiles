@@ -6,6 +6,15 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+### Changed
+
+- Refined the admitted SRWF Inbox Correction / User Input experience with bounded centered gutters, Persian RTL field presentation with semantic LTR exceptions, and the native action labeled `اصلاح اطلاعات`; unrelated Status and User Input contexts retain their native presentation.
+
+### Fixed
+
+- Restored authorized wp-admin terminal management access for Approved/Rejected entries while ordinary frontend terminal presentation remains Result-only; Restart Workflow and Send to step remain native Gravity Flow controls.
+- Fixed prospective supported-Inbox width recovery so widths legitimately auto-fitted at a narrower viewport can use wider available space on a later admitted mount without overriding legitimate manual/API width choices; already-persisted v0.4.0 stranded width state is not migrated or automatically repaired.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added
