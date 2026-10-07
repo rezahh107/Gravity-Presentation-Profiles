@@ -193,16 +193,17 @@
 }
 
 /*
- * MR-5 terminal convergence is admitted only by the server-emitted result
- * marker produced from fresh Approved/Rejected host truth. Terminal case
- * identity is omitted by the server renderer itself; CSS suppresses the
- * authentic native workflow/status/action and Timeline sibling regions plus
- * the duplicate raw Entry Detail/Print surfaces. The native nodes stay in the
- * DOM and Gravity Flow remains their owner. The separately authorized GPP
- * dossier Print utility is intentionally not selected here.
+ * Terminal convergence remains Result-only on the supported frontend operator
+ * surface. The native WordPress wp-admin body class narrows suppression so
+ * Gravity Flow can keep its own terminal status/admin management container.
+ * GPP does not infer or grant management authorization; it only stops hiding
+ * host-rendered controls on the authentic admin surface. The separately
+ * authorized GPP dossier Print utility is not selected here.
  */
-.gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
-.gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print) {
+body:not(.wp-admin) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
+body:not(.wp-admin) .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print),
+body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="approved"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print),
+body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[data-gpp-entry-journey-result="rejected"]) :is(.entry-detail-view, #postbox-container-2, .detail-view-print) {
     display: none;
 }
 

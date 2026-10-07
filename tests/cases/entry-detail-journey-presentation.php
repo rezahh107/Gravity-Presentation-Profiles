@@ -167,21 +167,32 @@ gpp_journey_assert(
     'MR-5 terminal Approved/Rejected markup must omit repeated case identity while Unknown keeps its existing fail-closed context.'
 );
 
-$terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
+$frontend_terminal_targets = ':is(.entry-detail-view, #postbox-container-1, #postbox-container-2, .detail-view-print)';
+$admin_terminal_targets = ':is(.entry-detail-view, #postbox-container-2, .detail-view-print)';
 foreach ( array( 'approved', 'rejected' ) as $terminal_state ) {
     $terminal_marker = '.gpp-entry-journey-result[data-gpp-entry-journey-result="' . $terminal_state . '"]';
-    $terminal_boundary = '.gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    $frontend_boundary = 'body:not(.wp-admin) .gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
+    $admin_boundary = 'body.wp-admin .gravityflow_workflow_detail form:has(' . $terminal_marker . ')';
     gpp_journey_assert(
-        false !== strpos( $css, $terminal_boundary . ' ' . $terminal_targets ),
-        'MR-5 terminal result must suppress only the proven competing native Entry Detail surfaces for ' . $terminal_state . '.'
+        false !== strpos( $css, $frontend_boundary . ' ' . $frontend_terminal_targets ),
+        'Frontend terminal Result-only suppression must retain all established competing native targets for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false !== strpos( $css, $admin_boundary . ' ' . $admin_terminal_targets ),
+        'Admin terminal suppression must preserve the host-owned status/management container for ' . $terminal_state . '.'
+    );
+    gpp_journey_assert(
+        false === strpos( $css, $admin_boundary . ' ' . $frontend_terminal_targets ),
+        'Admin terminal context must not suppress #postbox-container-1 for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
         false === strpos( $css, $terminal_marker . ' .gpp-entry-journey__case-context' ),
         'MR-5 terminal identity must be omitted by server markup, not implemented as CSS-only hiding for ' . $terminal_state . '.'
     );
     gpp_journey_assert(
-        false === strpos( $css, $terminal_boundary . ' .gpp-entry-print-utility' ),
-        'MR-5 terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
+        false === strpos( $css, $frontend_boundary . ' .gpp-entry-print-utility' )
+        && false === strpos( $css, $admin_boundary . ' .gpp-entry-print-utility' ),
+        'Terminal convergence must preserve the separately authorized GPP dossier Print utility for ' . $terminal_state . '.'
     );
 }
 
