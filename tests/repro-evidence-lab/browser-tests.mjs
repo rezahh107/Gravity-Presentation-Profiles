@@ -1,5 +1,6 @@
 await import('./browser-tests-core.mjs');
 await import('./manual-inbox-refresh-browser-test.mjs');
+
 // Candidate C production verification runs inside the same pinned WU21 runtime
 // as the native Inbox suite. The original module preserves the shipped one-shot
 // regression gates; the bidirectional unit module adds provenance/grow controls.
