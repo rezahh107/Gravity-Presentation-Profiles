@@ -183,6 +183,20 @@ try {
   results.negative_controls.print = await inboxAssetState(page);
   assertStylesAbsent(results.negative_controls.print, 'Gravity Flow Print');
 
+  const { runLiveRefreshMateriality } = await import('./live-refresh-materiality.mjs');
+  const { repairLiveRefreshContract } = await import('./live-refresh-contract-repair.mjs');
+  results.live_refresh_materiality = await runLiveRefreshMateriality({
+    page,
+    wpEval,
+    manifest,
+    baseUrl,
+    artifactDir,
+  });
+  results.live_refresh_contract_repair = repairLiveRefreshContract({
+    artifactDir,
+    materiality: results.live_refresh_materiality,
+  });
+
   setInboxProfileActive(false);
   profileDeactivated = true;
 
@@ -209,5 +223,3 @@ try {
 }
 
 process.stdout.write(`P06_ASSET_REACHABILITY_BROWSER_PASS=${JSON.stringify(results)}\n`);
-
-// LRQ contract repair hook.
