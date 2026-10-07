@@ -41,6 +41,9 @@ add_filter(
         if ( ! in_array( '5', $editable_fields, true ) ) {
             $editable_fields[] = '5';
         }
+        if ( ! in_array( '6', $editable_fields, true ) ) {
+            $editable_fields[] = '6';
+        }
 
         return $editable_fields;
     },
