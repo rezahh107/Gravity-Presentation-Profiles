@@ -36,6 +36,10 @@ async function rowPresent(page, id) {
   return (await page.locator(`${rowsSelector}[row-id="${id}"]`).count()) === 1;
 }
 
+async function cellText(page, id, columnId) {
+  return page.locator(`${rowsSelector}[row-id="${id}"] .ag-cell[col-id="${columnId}"]`).innerText().catch(() => '');
+}
+
 export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUrl, artifactDir }) {
   const evidence = {
     schema_version: '1.0.0',
@@ -104,6 +108,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       return Number(grids[0]?.fetch_interval || 30);
     });
     const pollTimeout = Math.max(70000, intervalSeconds * 2200);
+    const visibleFieldId = String(manifest?.forms?.[0]?.first_name_field_id || '');
+    if (!visibleFieldId) throw new Error('SRWF production-visible first-name field is unavailable.');
 
     valueEntryId = Number(wpEval(`
       $m=get_option('gpp_wu21_fixture_manifest');
@@ -112,8 +118,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       $entry=[
         'form_id'=>(int)$f['form_id'],
         'created_by'=>(int)$m['operator']['id'],
-        (string)$f['first_name_field_id']=>'WU21 Alpha',
-        (string)$f['last_name_field_id']=>'LRQVISIBLEOLD',
+        (string)$f['first_name_field_id']=>'LRQVISIBLEOLD',
+        (string)$f['last_name_field_id']=>'Race Student',
         (string)$f['photo_field_id']=>$seed[(string)$f['photo_field_id']]??'',
         (string)$f['national_id_field_id']=>'LRQ-VISIBLE-RACE',
         (string)$f['grade_group_field_id']=>'پایه آزمایشی',
@@ -128,7 +134,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
     await waitFor(() => rowPresent(page, valueEntryId), pollTimeout, 'production-visible-entry-add');
     const oldText = await rowText(page, valueEntryId);
-    const productionValueRendered = oldText.includes('WU21 Alpha') && oldText.includes('LRQVISIBLEOLD');
+    const oldCellText = await cellText(page, valueEntryId, visibleFieldId);
+    const productionValueRendered = oldCellText.includes('LRQVISIBLEOLD');
 
     held = null;
     releaseHeld = null;
@@ -142,7 +149,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       $f=$m['forms'][0];
       $e=GFAPI::get_entry(${valueEntryId});
       if(is_wp_error($e)) throw new RuntimeException($e->get_error_message());
-      $e[(string)$f['last_name_field_id']] = 'LRQVISIBLEFRESH';
+      $e[(string)$f['first_name_field_id']] = 'LRQVISIBLEFRESH';
       $r=GFAPI::update_entry($e);
       if(is_wp_error($r)) throw new RuntimeException($r->get_error_message());
     `);
@@ -155,11 +162,12 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       'production-visible-newer-response'
     );
     await waitFor(
-      async () => (await rowText(page, valueEntryId)).includes('LRQVISIBLEFRESH'),
+      async () => (await cellText(page, valueEntryId, visibleFieldId)).includes('LRQVISIBLEFRESH'),
       pollTimeout,
       'production-visible-newer-render'
     );
     const freshText = await rowText(page, valueEntryId);
+    const freshCellText = await cellText(page, valueEntryId, visibleFieldId);
 
     if (typeof releaseHeld !== 'function') throw new Error('production-visible held response cannot be released');
     releaseHeld();
@@ -167,7 +175,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
     await waitFor(
       async () => {
-        const text = await rowText(page, valueEntryId);
+        const text = await cellText(page, valueEntryId, visibleFieldId);
         return text.includes('LRQVISIBLEOLD') ? text : null;
       },
       15000,
@@ -175,12 +183,13 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     ).catch(() => null);
 
     const staleText = await rowText(page, valueEntryId);
-    const transientReversion = staleText.includes('LRQVISIBLEOLD') && !staleText.includes('LRQVISIBLEFRESH');
+    const staleCellText = await cellText(page, valueEntryId, visibleFieldId);
+    const transientReversion = staleCellText.includes('LRQVISIBLEOLD') && !staleCellText.includes('LRQVISIBLEFRESH');
     let recoveredNextPoll = !transientReversion;
 
     if (transientReversion) {
       await waitFor(
-        async () => (await rowText(page, valueEntryId)).includes('LRQVISIBLEFRESH'),
+        async () => (await cellText(page, valueEntryId, visibleFieldId)).includes('LRQVISIBLEFRESH'),
         pollTimeout,
         'production-visible-recovery'
       );
@@ -190,19 +199,23 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     evidence.production_visible_value_race = {
       status: productionValueRendered && heldContainsValueUpdate ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: valueEntryId,
-      semantic_surface: 'student.full_name',
-      authoritative_components: ['student.first_name', 'student.last_name'],
+      semantic_surface: 'student.first_name',
+      production_column_id: visibleFieldId,
       old_value_rendered: productionValueRendered,
       held_response_update_contains_entry: heldContainsValueUpdate,
-      old_text: oldText,
-      fresh_text: freshText,
-      stale_text_after_older_response: staleText,
+      old_row_text: oldText,
+      old_cell_text: oldCellText,
+      fresh_row_text: freshText,
+      fresh_cell_text: freshCellText,
+      stale_row_text_after_older_response: staleText,
+      stale_cell_text_after_older_response: staleCellText,
       transient_reversion: transientReversion,
       recovered_next_poll: recoveredNextPoll,
-      final_text: await rowText(page, valueEntryId),
+      final_row_text: await rowText(page, valueEntryId),
+      final_cell_text: await cellText(page, valueEntryId, visibleFieldId),
       host_membership_final: hostContains(valueEntryId),
       not_proven_reason: !productionValueRendered
-        ? 'The authoritative SRWF student.full_name composition was not visible on the rendered Inbox row.'
+        ? 'The authoritative SRWF student.first_name field was not visible in its current production Inbox column.'
         : (!heldContainsValueUpdate ? 'The held native response did not contain the SRWF row in update, so the value-ordering race was not formed.' : null),
     };
 
