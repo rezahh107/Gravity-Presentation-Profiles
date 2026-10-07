@@ -305,7 +305,7 @@ jobs:
         run: |
           set -euo pipefail
           node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
-          GPP_DEFER_LRQ_QUALIFICATION=1 GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
+          GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
           command -v xvfb-run >/dev/null
           GPP_LRQ_HEADED=1 xvfb-run -a node tests/repro-evidence-lab/live-refresh-qualification-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/live-refresh-qualification.json"
