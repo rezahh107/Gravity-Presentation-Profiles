@@ -213,12 +213,10 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
  * marker; :has() only harmonizes the already-rendered native User Input form.
  * No native field is moved, cloned, hidden or made editable by this layer.
  */
-.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) {
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #post-body-content {
     box-sizing: border-box;
     inline-size: 100%;
     padding-inline: clamp(16px, 2vw, 32px);
-    direction: rtl;
-    text-align: start;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-journey--correction {
@@ -418,7 +416,7 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
         width: 100%;
     }
 
-    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) {
+    .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #post-body-content {
         padding-inline: 0;
     }
 
