@@ -29,7 +29,7 @@ jobs:
   evidence-lab:
     name: WU21 exact-Head reproducible simulation
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     services:
       database:
         image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
@@ -306,6 +306,7 @@ jobs:
           set -euo pipefail
           node tests/repro-evidence-lab/p06-fixture-lifecycle-falsification.mjs
           GPP_DEFER_P06_QUALIFICATION=1 node tests/repro-evidence-lab/browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/live-refresh-qualification.json"
 
       - name: Complete deferred P06 mutation qualification before integrated visual host
         shell: bash
@@ -514,6 +515,7 @@ jobs:
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
+            /tmp/wu21-artifacts/live-refresh-qualification.json
             /tmp/wu21-artifacts/wu17-*.json
             /tmp/wu21-artifacts/pr4-*.json
             /tmp/wu21-artifacts/pr4-*.png
