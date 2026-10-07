@@ -141,7 +141,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       $f=$m['forms'][0];
       $e=GFAPI::get_entry(${valueEntryId});
       if(is_wp_error($e)) throw new RuntimeException($e->get_error_message());
-      $e[(string)$f['last_name_field_id'] = 'LRQVISIBLEFRESH';
+      $e[(string)$f['last_name_field_id']] = 'LRQVISIBLEFRESH';
       $r=GFAPI::update_entry($e);
       if(is_wp_error($r)) throw new RuntimeException($r->get_error_message());
     `);
