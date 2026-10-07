@@ -41,8 +41,10 @@ add_filter(
         if ( ! in_array( '5', $editable_fields, true ) ) {
             $editable_fields[] = '5';
         }
-        if ( ! in_array( '6', $editable_fields, true ) ) {
-            $editable_fields[] = '6';
+        foreach ( array( '6', '7', '8' ) as $field_id ) {
+            if ( ! in_array( $field_id, $editable_fields, true ) ) {
+                $editable_fields[] = $field_id;
+            }
         }
 
         return $editable_fields;
@@ -71,4 +73,26 @@ add_filter(
     },
     20,
     4
+);
+
+
+/*
+ * Test-only native CTA baseline switch. This removes only GPP's production text
+ * filter for one HTTP request so the runtime can compare semantic form/button
+ * identity before and after relabelling without replacing native markup.
+ */
+add_action(
+    'wp_loaded',
+    static function () {
+        if ( '1' !== (string) get_option( 'gpp_srwf_mr4_native_cta_baseline', '0' ) ) {
+            return;
+        }
+
+        remove_filter(
+            'gravityflow_update_button_text_user_input',
+            array( \GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailJourneyPresentationAdapter::class, 'filterCorrectionUpdateButtonText' ),
+            20
+        );
+    },
+    PHP_INT_MAX
 );
