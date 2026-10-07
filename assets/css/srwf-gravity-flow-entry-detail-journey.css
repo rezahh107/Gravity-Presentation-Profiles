@@ -217,6 +217,8 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
     box-sizing: border-box;
     inline-size: 100%;
     padding-inline: clamp(16px, 2vw, 32px);
+    direction: rtl;
+    text-align: start;
 }
 
 .gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) .gpp-entry-journey--correction {
