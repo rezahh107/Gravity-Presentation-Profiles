@@ -1,6 +1,8 @@
 await import('./browser-tests-core.mjs');
 await import('./manual-inbox-refresh-browser-test.mjs');
-await import('./live-refresh-qualification-browser.mjs');
+if (process.env.GPP_DEFER_LRQ_QUALIFICATION !== '1') {
+  await import('./live-refresh-qualification-browser.mjs');
+}
 
 // Candidate C production verification runs inside the same pinned WU21 runtime
 // as the native Inbox suite. The original module preserves the shipped one-shot
