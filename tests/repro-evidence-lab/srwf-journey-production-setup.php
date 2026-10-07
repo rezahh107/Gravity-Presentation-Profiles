@@ -54,6 +54,8 @@ $identity_fields = array(
 );
 $conditional_field_id = 5;
 $semantic_ltr_field_id = 6;
+$textarea_field_id = 7;
+$select_field_id = 8;
 $existing_ids = array();
 foreach ( $form['fields'] as $field ) {
     if ( is_object( $field ) && isset( $field->id ) ) {
@@ -105,6 +107,30 @@ if ( ! in_array( $semantic_ltr_field_id, $existing_ids, true ) ) {
             'id' => $semantic_ltr_field_id,
             'label' => 'MR4 Email',
             'isRequired' => false,
+        )
+    );
+}
+if ( ! in_array( $textarea_field_id, $existing_ids, true ) ) {
+    $form['fields'][] = GF_Fields::create(
+        array(
+            'type' => 'textarea',
+            'id' => $textarea_field_id,
+            'label' => 'MR4 Persian Notes',
+            'isRequired' => false,
+        )
+    );
+}
+if ( ! in_array( $select_field_id, $existing_ids, true ) ) {
+    $form['fields'][] = GF_Fields::create(
+        array(
+            'type' => 'select',
+            'id' => $select_field_id,
+            'label' => 'MR4 Persian Select',
+            'isRequired' => false,
+            'choices' => array(
+                array( 'text' => 'گزینه یک', 'value' => 'one' ),
+                array( 'text' => 'گزینه دو', 'value' => 'two' ),
+            ),
         )
     );
 }
@@ -178,6 +204,8 @@ $manifest['production_presentation'] = array(
     'identity_fields' => $identity_fields,
     'conditional_field_id' => $conditional_field_id,
     'semantic_ltr_field_id' => $semantic_ltr_field_id,
+    'textarea_field_id' => $textarea_field_id,
+    'select_field_id' => $select_field_id,
     'gtb_registration_opt_in' => in_array( 'srwf-registration-theme', $classes, true ),
     'host_args_control' => basename( $control_target ),
     'mr4_host_control' => basename( $mr4_control_target ),
