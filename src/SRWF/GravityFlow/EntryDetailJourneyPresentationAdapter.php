@@ -37,6 +37,7 @@ final class EntryDetailJourneyPresentationAdapter {
         add_filter( 'gravityflow_entry_detail_args', array( __CLASS__, 'captureEffectiveEntryDetailArgs' ), PHP_INT_MAX, 1 );
         add_action( 'gravityflow_entry_detail_content_before', array( __CLASS__, 'renderJourneyPresentation' ), 15, 2 );
         add_filter( 'gravityflow_back_link_url_entry_detail', array( __CLASS__, 'filterNativeBackLinkUrl' ), 20, 2 );
+        add_filter( 'gravityflow_update_button_text_user_input', array( __CLASS__, 'filterCorrectionUpdateButtonText' ), 20, 3 );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueStyles' ), 20 );
     }
@@ -200,6 +201,49 @@ final class EntryDetailJourneyPresentationAdapter {
 
         $context = self::canonicalInboxContext();
         return null === $context ? $url : $context['url'];
+    }
+
+    public static function filterCorrectionUpdateButtonText( $text, $form, $step ) {
+        if ( ! EntryDetailRequestReachability::isReachable()
+            || ! is_array( $form ) || empty( $form['id'] )
+            || ! is_object( $step ) || ! method_exists( $step, 'get_id' ) || ! method_exists( $step, 'get_type' )
+            || 'user_input' !== (string) $step->get_type() ) {
+            return $text;
+        }
+
+        $entry_id = isset( $_GET['lid'] ) ? absint( wp_unslash( $_GET['lid'] ) ) : 0;
+        if ( $entry_id < 1 || ! class_exists( 'GFAPI' ) || ! method_exists( 'GFAPI', 'get_entry' ) ) {
+            return $text;
+        }
+
+        $entry = \GFAPI::get_entry( $entry_id );
+        if ( ! self::hostPayloadMatches( $form, $entry ) ) {
+            return $text;
+        }
+
+        $model = EntryDetailPresentationAdapter::admittedPresentationModel( $entry );
+        if ( null === $model || ! self::isJourneyProfileId( $model->profileId() ) ) {
+            return $text;
+        }
+
+        $truth = self::freshHostTruth( $entry );
+        $state = self::classifyHostTruth(
+            isset( $truth['current_step_type'] ) ? $truth['current_step_type'] : null,
+            isset( $truth['current_step_can_update'] ) ? $truth['current_step_can_update'] : null,
+            ! empty( $truth['current_step_is_correction_target'] ),
+            isset( $truth['final_status'] ) ? $truth['final_status'] : null,
+            isset( $truth['api_status'] ) ? $truth['api_status'] : null,
+            ! empty( $truth['established'] )
+        );
+
+        $current_step = isset( $truth['current_step'] ) ? $truth['current_step'] : null;
+        if ( self::STATE_CORRECTION !== $state
+            || ! is_object( $current_step ) || ! method_exists( $current_step, 'get_id' )
+            || (string) $current_step->get_id() !== (string) $step->get_id() ) {
+            return $text;
+        }
+
+        return __( 'اصلاح اطلاعات', 'gravity-presentation-profiles' );
     }
 
     /**
