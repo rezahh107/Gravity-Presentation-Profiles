@@ -53,6 +53,7 @@ $identity_fields = array(
     'national_id' => 4,
 );
 $conditional_field_id = 5;
+$semantic_ltr_field_id = 6;
 $existing_ids = array();
 foreach ( $form['fields'] as $field ) {
     if ( is_object( $field ) && isset( $field->id ) ) {
@@ -94,6 +95,16 @@ if ( ! in_array( $conditional_field_id, $existing_ids, true ) ) {
                     ),
                 ),
             ),
+        )
+    );
+}
+if ( ! in_array( $semantic_ltr_field_id, $existing_ids, true ) ) {
+    $form['fields'][] = GF_Fields::create(
+        array(
+            'type' => 'email',
+            'id' => $semantic_ltr_field_id,
+            'label' => 'MR4 Email',
+            'isRequired' => false,
         )
     );
 }
@@ -166,6 +177,7 @@ $manifest['production_presentation'] = array(
     'profile_id' => $setup['entry_detail_profile']['profile_id'],
     'identity_fields' => $identity_fields,
     'conditional_field_id' => $conditional_field_id,
+    'semantic_ltr_field_id' => $semantic_ltr_field_id,
     'gtb_registration_opt_in' => in_array( 'srwf-registration-theme', $classes, true ),
     'host_args_control' => basename( $control_target ),
     'mr4_host_control' => basename( $mr4_control_target ),
