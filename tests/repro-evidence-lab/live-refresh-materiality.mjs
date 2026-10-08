@@ -555,7 +555,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
         const guestResponse = await guestPage.goto(targetUrl, { waitUntil: 'domcontentloaded' });
         navigation.guest_http_status = guestResponse?.status() ?? null;
         navigation.guest_final_path = new URL(guestPage.url()).pathname;
-        navigation.anonymous_login_guard = /\\/wp-login\\.php$/.test(navigation.guest_final_path)
+        navigation.anonymous_login_guard = /\/wp-login\.php$/.test(navigation.guest_final_path)
           ? 'OBSERVED_LOGIN_REQUIRED' : 'NOT_PROVEN';
       } finally {
         await guestContext.close();
@@ -582,10 +582,14 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     sameMountRecovery.removed_by_first_native_poll_on_same_grid =
       membershipRecoveredNextPoll && sameMountRecovery.identity_continuity;
     sameMountRecovery.status = sameMountRecovery.removed_by_first_native_poll_on_same_grid ? 'OBSERVED' : 'NOT_PROVEN';
+    if (sameMountRecovery.status === 'NOT_PROVEN') {
+      sameMountRecovery.not_proven_reason =
+        'No first subsequent native remove with intact original Grid/document through separate navigation was established.';
+    }
     navigation.original_inbox_preserved = sameMountRecovery.identity_continuity;
 
     evidence.assignment_membership_race = {
-      status: delayedStaleAddVisible && membershipRecoveredNextPoll
+      status: delayedStaleAddVisible
         && hostBeforeMove === true && newerMembershipExcludesEntry && absentBeforeRelease
         ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: assignmentId,
@@ -614,7 +618,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
           ? 'Authoritative operator membership did not transition true-to-false.'
           : (!newerMembershipExcludesEntry || !absentBeforeRelease
             ? 'The newer native response/UI did not establish host-authoritative absence before the older add was released.'
-            : null)),
+            : (!delayedStaleAddVisible ? 'The delayed stale add was not rendered.' : null))),
     };
   } finally {
     tearingDown = true;
