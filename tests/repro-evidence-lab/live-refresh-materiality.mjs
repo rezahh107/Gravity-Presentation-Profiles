@@ -69,6 +69,10 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
   let valueEntryId = null;
   let targetPage = null;
   let assignmentFixture = null;
+  let assignmentNavigationListener = null;
+  let assignmentMount = null;
+  const assignmentNavigations = [];
+
   let mode = 'pass';
   let holdRemaining = 0;
   let held = null;
@@ -361,6 +365,38 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     // wp-admin race; it is not evidence of a five-column SRWF field binding.
     await page.goto(inboxUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
+    // Capture the original wp-admin document and native mounted Grid before
+    // the assignment is added. A reload must never count as poll recovery.
+    assignmentMount = await page.evaluateHandle(() => ({
+      document,
+      grid: document.querySelector('[data-js="gflow-inbox"] .ag-root-wrapper'),
+    }));
+    assignmentNavigationListener = (frame) => {
+      if (frame === page.mainFrame()) assignmentNavigations.push(frame.url());
+    };
+    page.on('framenavigated', assignmentNavigationListener);
+    const assignmentInboxUrl = page.url();
+    const mountedGridState = async () => {
+      try {
+        return await page.evaluate(({ original, url, id }) => {
+          const currentGrid = document.querySelector('[data-js="gflow-inbox"] .ag-root-wrapper');
+          return {
+            document_identity_preserved: original.document === document,
+            grid_identity_preserved: original.grid !== null && original.grid === currentGrid,
+            original_grid_connected: Boolean(original.grid?.isConnected),
+            native_grid_count: document.querySelectorAll('[data-js="gflow-inbox"] .ag-root-wrapper').length,
+            url_unchanged: location.href === url,
+            row_present: Boolean(document.querySelector(
+              '[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="' + id + '"]'
+            )),
+          };
+        }, { original: assignmentMount, url: assignmentInboxUrl, id: Number(assignmentFixture.entry_id) });
+      } catch (error) {
+        return { document_identity_preserved: false, grid_identity_preserved: false,
+          original_grid_connected: false, url_unchanged: false,
+          observation_error: String(error) };
+      }
+    };
     held = null;
     releaseHeld = null;
     mode = 'hold';
@@ -445,9 +481,62 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     const staleMembershipPresent = await rowPresent(page, assignmentId);
     const delayedStaleAddVisible = heldContainsAdd && !rowVisibleBeforeHeldAdd
       && hostAfterMove === false && staleMembershipPresent;
+    const mountAtStaleAdd = await mountedGridState();
     const staleRowLink = delayedStaleAddVisible
       ? await page.locator(`${rowsSelector}[row-id="${assignmentId}"] .gflow-inbox__entry-cell-link`).first().getAttribute('href').catch(() => null)
       : null;
+
+    // Start looking only after the stale add has been rendered. The first
+    // following native response must explicitly classify this ID as removed;
+    // absence alone (or a clean page reload) is not proof of poll recovery.
+    const recoveryStart = responses.length;
+    const recoveryResponse = delayedStaleAddVisible
+      ? await waitFor(
+        () => responses.slice(recoveryStart).find((item) => item.status === 200 && item.shape) || null,
+        pollTimeout, 'assignment-first-same-mount-poll'
+      ).catch(() => null)
+      : null;
+    const recoveryClassification = {
+      status: recoveryResponse?.status ?? null,
+      shape: recoveryResponse?.shape ?? null,
+      add_contains_entry: recoveryResponse?.shape?.add.includes(String(assignmentId)) ?? null,
+      remove_contains_entry: recoveryResponse?.shape?.remove.includes(String(assignmentId)) ?? null,
+      update_contains_entry: recoveryResponse?.shape?.update.includes(String(assignmentId)) ?? null,
+    };
+    if (recoveryClassification.remove_contains_entry === true) {
+      await waitFor(
+        async () => !(await rowPresent(page, assignmentId)),
+        15000, 'assignment-same-mount-native-remove'
+      ).catch(() => null);
+    }
+    const mountAfterRecoveryPoll = await mountedGridState();
+    const recoveryIdentityContinuity = [mountAtStaleAdd, mountAfterRecoveryPoll].every(
+      (snapshot) => snapshot.document_identity_preserved === true
+        && snapshot.grid_identity_preserved === true
+        && snapshot.original_grid_connected === true
+        && snapshot.native_grid_count === 1
+        && snapshot.url_unchanged === true
+    ) && assignmentNavigations.length === 0;
+    const membershipRecoveredNextPoll = delayedStaleAddVisible
+      && mountAtStaleAdd.row_present === true
+      && recoveryClassification.remove_contains_entry === true
+      && mountAfterRecoveryPoll.row_present === false
+      && recoveryIdentityContinuity;
+    const sameMountRecovery = {
+      status: membershipRecoveredNextPoll ? 'OBSERVED' : 'NOT_PROVEN',
+      route: assignmentInboxUrl,
+      response: recoveryClassification,
+      grid_at_stale_add: mountAtStaleAdd,
+      grid_after_recovery_poll: mountAfterRecoveryPoll,
+      main_frame_navigation_events: [...assignmentNavigations],
+      identity_continuity: recoveryIdentityContinuity,
+      removed_by_first_native_poll_on_same_grid: membershipRecoveredNextPoll,
+      not_proven_reason: membershipRecoveredNextPoll ? null
+        : 'No first subsequent native remove response with a vanished row and continuous original document/Grid was established.',
+    };
+
+    // Exercise the stale native href in a separate page. Neither authenticated
+    // navigation nor the guest login check can destroy the observed Grid.
     const navigation = {
       stale_native_link: staleRowLink,
       operator_identity: 'bootstrap_admin',
@@ -455,42 +544,45 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       assignment_specific_authorization: 'NOT_PROVEN_ADMINISTRATOR_CAPABILITY_CONFOUNDS',
       anonymous_login_guard: 'NOT_PROVEN',
       administrator_entry_open: 'NOT_PROVEN',
+      original_inbox_preserved: true,
     };
     if (staleRowLink) {
-      // This unauthenticated new request exercises WordPress's login boundary,
-      // not assignment-specific permission for a non-admin SRWF operator.
+      const targetUrl = new URL(staleRowLink, baseUrl).toString();
       const browser = page.context().browser();
       const guestContext = await browser.newContext();
       try {
         const guestPage = await guestContext.newPage();
-        const guestResponse = await guestPage.goto(new URL(staleRowLink, baseUrl).toString(), { waitUntil: 'domcontentloaded' });
+        const guestResponse = await guestPage.goto(targetUrl, { waitUntil: 'domcontentloaded' });
         navigation.guest_http_status = guestResponse?.status() ?? null;
         navigation.guest_final_path = new URL(guestPage.url()).pathname;
-        navigation.anonymous_login_guard = /\/wp-login\.php$/.test(navigation.guest_final_path)
+        navigation.anonymous_login_guard = /\\/wp-login\\.php$/.test(navigation.guest_final_path)
           ? 'OBSERVED_LOGIN_REQUIRED' : 'NOT_PROVEN';
       } finally {
         await guestContext.close();
       }
-      const nativeLink = page.locator(`${rowsSelector}[row-id="${assignmentId}"] .gflow-inbox__entry-cell-link`).first();
-      if (await nativeLink.count()) {
-        await nativeLink.click();
-        await page.waitForLoadState('domcontentloaded');
-        navigation.administrator_final_url = page.url();
-        navigation.administrator_entry_open = /[?&]view=entry(?:&|$)/.test(page.url())
+      const detailPage = await page.context().newPage();
+      try {
+        const detailResponse = await detailPage.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+        navigation.administrator_http_status = detailResponse?.status() ?? null;
+        navigation.administrator_final_url = detailPage.url();
+        navigation.administrator_entry_open = /[?&]view=entry(?:&|$)/.test(detailPage.url())
           ? 'OBSERVED_NAVIGATION_TO_ENTRY_DETAIL' : 'NOT_PROVEN';
+      } finally {
+        await detailPage.close();
       }
     }
-
-    // Recover through an actual native poll on the original Inbox, not merely
-    // by treating departure from the page as proof of disappearance.
-    await page.goto(inboxUrl, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
-    const recoveryStart = responses.length;
-    await waitFor(
-      () => responses.slice(recoveryStart).find(item => item.shape) || null,
-      pollTimeout, 'assignment-native-recovery-poll'
-    );
-    const membershipRecoveredNextPoll = !(await rowPresent(page, assignmentId));
+    const mountAfterSeparateNavigation = await mountedGridState();
+    sameMountRecovery.grid_after_separate_navigation = mountAfterSeparateNavigation;
+    sameMountRecovery.identity_continuity = sameMountRecovery.identity_continuity
+      && mountAfterSeparateNavigation.document_identity_preserved === true
+      && mountAfterSeparateNavigation.grid_identity_preserved === true
+      && mountAfterSeparateNavigation.original_grid_connected === true
+      && mountAfterSeparateNavigation.url_unchanged === true
+      && assignmentNavigations.length === 0;
+    sameMountRecovery.removed_by_first_native_poll_on_same_grid =
+      membershipRecoveredNextPoll && sameMountRecovery.identity_continuity;
+    sameMountRecovery.status = sameMountRecovery.removed_by_first_native_poll_on_same_grid ? 'OBSERVED' : 'NOT_PROVEN';
+    navigation.original_inbox_preserved = sameMountRecovery.identity_continuity;
 
     evidence.assignment_membership_race = {
       status: delayedStaleAddVisible && membershipRecoveredNextPoll
@@ -504,6 +596,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       delayed_stale_add_visible: delayedStaleAddVisible,
       reintroduction_of_previously_visible_then_removed_row: false,
       navigation_authorization: navigation,
+      same_mount_recovery: sameMountRecovery,
       host_membership_before_move: hostBeforeMove,
       host_membership_after_move: hostAfterMove,
       newer_response_shape: newerMembershipResponse.shape,
@@ -513,7 +606,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       transient_membership_reversion: false,
       transient_stale_membership_visibility: delayedStaleAddVisible,
       semantic_precision: 'DELAYED_STALE_ADD_NOT_REINTRODUCTION_OF_PREVIOUSLY_VISIBLE_ROW',
-      recovered_next_poll: membershipRecoveredNextPoll,
+      recovered_next_poll: sameMountRecovery.removed_by_first_native_poll_on_same_grid,
       final_row_absent: !(await rowPresent(page, assignmentId)),
       not_proven_reason: !heldContainsAdd
         ? 'The held native response did not contain the assignment row in add, so the membership-changing race was not formed.'
@@ -544,6 +637,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
         `);
       }
     } catch {}
+    if (assignmentNavigationListener) page.off('framenavigated', assignmentNavigationListener);
+    if (assignmentMount) await assignmentMount.dispose().catch(() => {});
     page.off('response', responseListener);
     await page.unroute(`**${changesPath}**`, routeHandler);
   }
