@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { classifyAssignmentPollRequests } from './live-refresh-contract-repair.mjs';
 
 const changesPath = '/wp-json/gravityflow/internal/inbox/changes';
 const rowsSelector = '[data-js="gflow-inbox"] .ag-center-cols-container .ag-row';
@@ -81,7 +82,19 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
   let resolveHeldSettled = null;
   let tearingDown = false;
   const responses = [];
-  const requestStarts = new WeakMap();
+  const nativeRequests = [];
+  const nativeRequestByObject = new WeakMap();
+  let requestSequence = 0;
+  let completionSequence = 0;
+  function finishNativeRequest(record, outcome, details = {}) {
+    if (!record || record.outcome !== 'PENDING') return;
+    record.outcome = outcome;
+    record.http_status = details.http_status ?? null;
+    record.shape = details.shape ?? null;
+    record.error = details.error ?? null;
+    record.completed_at = Date.now();
+    record.completion_sequence = ++completionSequence;
+  }
 
   async function releaseHeldResponse(label) {
     if (typeof releaseHeld !== 'function') {
@@ -108,17 +121,54 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
   `));
 
   const requestListener = (request) => {
-    if (request.url().includes(changesPath)) requestStarts.set(request, Date.now());
+    if (!request.url().includes(changesPath)) return;
+    const sequence = ++requestSequence;
+    const record = {
+      request_id: `lrq-native-${sequence}`, sequence, started_at: Date.now(),
+      outcome: 'PENDING', http_status: null, shape: null, error: null,
+      completed_at: null, completion_sequence: null,
+    };
+    nativeRequests.push(record);
+    nativeRequestByObject.set(request, record);
   };
   const responseListener = async (response) => {
     if (!response.url().includes(changesPath)) return;
-    let body = '';
-    try { body = await response.text(); } catch {}
+    const record = nativeRequestByObject.get(response.request());
+    let body;
+    try {
+      body = await response.text();
+    } catch (error) {
+      finishNativeRequest(record, 'NETWORK_FAILURE', {
+        error: String(error), http_status: response.status(),
+      });
+      return;
+    }
+    let parsed = null;
+    if (response.status() === 200) {
+      try {
+        const json = JSON.parse(body);
+        if (json && typeof json === 'object'
+            && ['add', 'remove', 'update'].every(key => Array.isArray(json[key]))) {
+          parsed = shape(body);
+        }
+      } catch {}
+    }
+    const outcome = response.status() !== 200 ? 'HTTP_FAILURE'
+      : parsed === null ? 'MALFORMED_RESPONSE' : 'NATIVE_CHANGE';
+    finishNativeRequest(record, outcome, {
+      http_status: response.status(), shape: parsed,
+    });
     responses.push({
-      at: Date.now(),
-      request_started_at: requestStarts.get(response.request()) ?? null,
-      status: response.status(),
-      shape: shape(body),
+      at: Date.now(), request_id: record?.request_id ?? null,
+      request_sequence: record?.sequence ?? null,
+      request_started_at: record?.started_at ?? null,
+      status: response.status(), shape: parsed,
+    });
+  };
+  const failedListener = (request) => {
+    if (!request.url().includes(changesPath)) return;
+    finishNativeRequest(nativeRequestByObject.get(request), 'NETWORK_FAILURE', {
+      error: request.failure()?.errorText || 'native request failed',
     });
   };
 
@@ -151,6 +201,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
   page.on('request', requestListener);
   page.on('response', responseListener);
+  page.on('requestfailed', failedListener);
   await page.route(`**${changesPath}**`, routeHandler);
 
   try {
@@ -662,6 +713,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     } catch {}
     if (assignmentNavigationListener) page.off('framenavigated', assignmentNavigationListener);
     if (assignmentMount) await assignmentMount.dispose().catch(() => {});
+    page.off('requestfailed', failedListener);
     page.off('request', requestListener);
     page.off('response', responseListener);
     await page.unroute(`**${changesPath}**`, routeHandler);
