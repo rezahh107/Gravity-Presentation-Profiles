@@ -52,13 +52,22 @@ async function findVisibleCellByText(page, id, expectedText) {
 
 export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUrl, artifactDir }) {
   const evidence = {
-    schema_version: '1.0.0',
+    schema_version: '1.1.0',
+    historical_native_admin_created_by: {
+      observation: 'OBSERVED_IN_PRIOR_PINNED_WU21_RUN_NOT_REEXECUTED_HERE',
+      run_id: 37741349213,
+      artifact_file: 'live-refresh-materiality.json',
+      artifact_sha256: 'd4ad23ca3d4b705bd09a755a5d66f08219ee4e4357ee3d129814e59d869ae1d0',
+      surface: 'wp-admin gravityflow-inbox; WU21 synthetic form; created_by column',
+      direct_srwf_target_column_proof: false,
+    },
     evidence_ceiling: 'REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION',
     production_visible_value_race: { status: 'NOT_PROVEN' },
     assignment_membership_race: { status: 'NOT_PROVEN' },
   };
 
   let valueEntryId = null;
+  let targetPage = null;
   let assignmentFixture = null;
   let mode = 'pass';
   let holdRemaining = 0;
@@ -132,7 +141,33 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
   try {
     const inboxUrl = `${baseUrl}/wp-admin/admin.php?page=gravityflow-inbox`;
-    await page.goto(inboxUrl, { waitUntil: 'domcontentloaded' });
+    // The target is the already-admitted frontend SRWF projection, not the
+    // wp-admin default Inbox. Bind a single form using Gravity Flow's native
+    // shortcode, exactly as the header/pagination WU21 browser test does.
+    targetPage = JSON.parse(wpEval(`
+      $m=get_option('gpp_wu21_fixture_manifest');
+      $f=$m['forms'][0];
+      $form=(int)$f['form_id'];
+      $page=wp_insert_post([
+        'post_type'=>'page',
+        'post_status'=>'publish',
+        'post_title'=>'WU21 LRQ Scoped SRWF Value Race',
+        'post_content'=>'[gravityflow page="inbox" form="'.$form.'"]'
+      ],true);
+      if(is_wp_error($page)) throw new RuntimeException($page->get_error_message());
+      echo wp_json_encode([
+        'page_id'=>(int)$page,
+        'url'=>get_permalink($page),
+        'form_id'=>$form,
+        'national_id_field_id'=>(int)$f['national_id_field_id'],
+        'first_name_field_id'=>(int)$f['first_name_field_id'],
+        'school_field_id'=>(int)$f['school_field_id'],
+      ]);
+    `));
+    if (!targetPage.page_id || !targetPage.url || !targetPage.national_id_field_id) {
+      throw new Error('SRWF scoped value-race route could not be established.');
+    }
+    await page.goto(targetPage.url, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
 
     const intervalSeconds = await page.evaluate(() => {
@@ -151,7 +186,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
         (string)$f['first_name_field_id']=>'WU21 Alpha',
         (string)$f['last_name_field_id']=>'Race Student',
         (string)$f['photo_field_id']=>$seed[(string)$f['photo_field_id']]??'',
-        (string)$f['national_id_field_id']=>'LRQ-VISIBLE-RACE',
+        (string)$f['national_id_field_id']=>'LRQ-TARGET-NATIONAL-OLD',
         (string)$f['grade_group_field_id']=>'پایه آزمایشی',
         (string)$f['school_field_id']=>'مدرسه آزمایشی'
       ];
@@ -163,74 +198,144 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     `));
 
     await waitFor(() => rowPresent(page, valueEntryId), pollTimeout, 'production-visible-entry-add');
+
+    // A recorded target claim requires real Grid column identity, the
+    // admitted five-column projection, and the exact mapped GF field.
+    const targetSurface = await page.evaluate(({ formId, fieldId, firstId, schoolId, entryId }) => {
+      const grids = [...document.querySelectorAll('[data-js="gflow-inbox"]')];
+      const root = grids[0];
+      const gridId = root?.dataset?.gridId || 'inbox_default';
+      const options = window.gflow_config?.grids?.[gridId]?.grid_options;
+      const headers = [...(root?.querySelectorAll('.ag-header-cell[col-id]') || [])]
+        .filter(el => el.getBoundingClientRect().width > 0)
+        .map(el => ({
+          col_id: el.getAttribute('col-id'),
+          label: (el.querySelector('.ag-header-cell-text')?.textContent || '').trim(),
+        }));
+      const defs = Array.isArray(options?.columnDefs)
+        ? options.columnDefs.map(col => ({ field: String(col.field), display_key: col.displayKey || null }))
+        : [];
+      const matching = defs.find(col => col.field === String(fieldId));
+      const row = Array.isArray(options?.rowData)
+        ? options.rowData.find(item => Number(item.id) === entryId)
+        : null;
+      const expected = ['id', String(firstId), String(fieldId), String(schoolId), 'date_created'];
+      return {
+        kind: 'AUTHENTIC_FRONTEND_SCOPED_SRWF_INBOX',
+        form_id: formId,
+        native_grid_count: grids.length,
+        gpp_surface_count: document.querySelectorAll('[data-gpp-inbox-surface="gravity_flow.inbox"]').length,
+        headers,
+        column_defs: defs,
+        expected_column_ids: expected,
+        national_id_column_def: matching || null,
+        bootstrap_row_value: row ? row[String(fieldId)] ?? null : null,
+        is_five_column_projection: grids.length === 1
+          && headers.length === 5
+          && expected.every(key => headers.some(header => header.col_id === key))
+          && headers.some(header => header.col_id === String(fieldId) && header.label === 'کد ملی'),
+      };
+    }, {
+      formId: targetPage.form_id,
+      fieldId: targetPage.national_id_field_id,
+      firstId: targetPage.first_name_field_id,
+      schoolId: targetPage.school_field_id,
+      entryId: valueEntryId,
+    });
+    const fieldId = String(targetPage.national_id_field_id);
+    const oldValue = 'LRQ-TARGET-NATIONAL-OLD';
+    const newValue = 'LRQ-TARGET-NATIONAL-NEW';
+    const visibleColumnId = fieldId;
     const oldText = await rowText(page, valueEntryId);
-    const oldCreatedBy = 'bootstrap_admin';
-    const oldCell = await findVisibleCellByText(page, valueEntryId, oldCreatedBy);
-    const productionValueRendered = Boolean(oldCell?.col_id && oldCell.text.includes(oldCreatedBy));
-    const visibleColumnId = oldCell?.col_id || null;
-    const oldCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
+    const oldCellText = await cellText(page, valueEntryId, visibleColumnId);
+    const beforeSource = JSON.parse(wpEval(`
+      $entry=GFAPI::get_entry(${valueEntryId});
+      if(is_wp_error($entry)) throw new RuntimeException($entry->get_error_message());
+      echo wp_json_encode(['form_id'=>(int)$entry['form_id'], 'value'=>$entry['${fieldId}']??null]);
+    `));
+    const bindingProven = targetSurface.is_five_column_projection
+      && targetSurface.gpp_surface_count === 1
+      && targetSurface.national_id_column_def?.field === fieldId
+      && targetSurface.bootstrap_row_value === oldValue
+      && beforeSource.form_id === targetPage.form_id
+      && beforeSource.value === oldValue
+      && oldCellText.trim() === oldValue;
 
     held = null;
     releaseHeld = null;
     mode = 'hold';
     holdRemaining = 1;
-    await waitFor(() => held, pollTimeout, 'production-visible-held-response');
+    await waitFor(() => held, pollTimeout, 'target-national-held-response');
     const heldContainsValueUpdate = Boolean(held.shape?.update.includes(String(valueEntryId)));
 
     wpEval(`
       $m=get_option('gpp_wu21_fixture_manifest');
-      $viewer=(int)$m['viewer']['id'];
-      $r=GFAPI::update_entry_property(${valueEntryId}, 'created_by', $viewer);
+      $key=(string)$m['forms'][0]['national_id_field_id'];
+      $entry=GFAPI::get_entry(${valueEntryId});
+      if(is_wp_error($entry)) throw new RuntimeException($entry->get_error_message());
+      $entry[$key]='LRQ-TARGET-NATIONAL-NEW';
+      $r=GFAPI::update_entry($entry);
       if(is_wp_error($r)) throw new RuntimeException($r->get_error_message());
     `);
+    const afterSource = JSON.parse(wpEval(`
+      $entry=GFAPI::get_entry(${valueEntryId});
+      if(is_wp_error($entry)) throw new RuntimeException($entry->get_error_message());
+      echo wp_json_encode(['form_id'=>(int)$entry['form_id'], 'value'=>$entry['${fieldId}']??null]);
+    `));
 
     mode = 'pass';
     const newerStart = responses.length;
     await waitFor(
-      () => responses.slice(newerStart).find((item) => item.shape?.update.includes(String(valueEntryId))) || null,
-      pollTimeout,
-      'production-visible-newer-response'
+      () => responses.slice(newerStart).find(item => item.shape?.update.includes(String(valueEntryId))) || null,
+      pollTimeout, 'target-national-newer-response'
     );
     await waitFor(
-      async () => visibleColumnId && (await cellText(page, valueEntryId, visibleColumnId)).includes('wu21_viewer'),
-      pollTimeout,
-      'production-visible-newer-render'
+      async () => (await cellText(page, valueEntryId, visibleColumnId)).trim() === newValue,
+      pollTimeout, 'target-national-newer-render'
     );
     const freshText = await rowText(page, valueEntryId);
-    const freshCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
+    const freshCellText = await cellText(page, valueEntryId, visibleColumnId);
 
-    await releaseHeldResponse('production-visible');
-
+    await releaseHeldResponse('target-national');
     await waitFor(
-      async () => {
-        const text = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
-        return text.includes(oldCreatedBy) ? text : null;
-      },
-      15000,
-      'production-visible-stale-render'
+      async () => (await cellText(page, valueEntryId, visibleColumnId)).trim() === oldValue,
+      15000, 'target-national-stale-render'
     ).catch(() => null);
-
     const staleText = await rowText(page, valueEntryId);
-    const staleCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
-    const transientReversion = staleCellText.includes(oldCreatedBy) && !staleCellText.includes('wu21_viewer');
+    const staleCellText = await cellText(page, valueEntryId, visibleColumnId);
+    const transientReversion = staleCellText.trim() === oldValue;
     let recoveredNextPoll = !transientReversion;
 
     if (transientReversion) {
       await waitFor(
-        async () => visibleColumnId && (await cellText(page, valueEntryId, visibleColumnId)).includes('wu21_viewer'),
-        pollTimeout,
-        'production-visible-recovery'
+        async () => (await cellText(page, valueEntryId, visibleColumnId)).trim() === newValue,
+        pollTimeout, 'target-national-recovery'
       );
       recoveredNextPoll = true;
     }
 
+    const targetProven = bindingProven && heldContainsValueUpdate
+      && afterSource.form_id === targetPage.form_id && afterSource.value === newValue
+      && freshCellText.trim() === newValue && transientReversion && recoveredNextPoll;
     evidence.production_visible_value_race = {
-      status: productionValueRendered && heldContainsValueUpdate ? 'OBSERVED' : 'NOT_PROVEN',
+      status: targetProven ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: valueEntryId,
-      semantic_surface: 'created_by',
-      surface_role: 'native Gravity Flow Inbox production-visible task-row value',
+      semantic_surface: 'student.national_id',
+      surface_role: 'AUTHENTIC_FRONTEND_SCOPED_SRWF_INBOX',
+      route: targetPage.url,
+      route_page_id: targetPage.page_id,
+      target_surface: targetSurface,
+      value_binding: {
+        semantic_slot: 'student.national_id',
+        form_id: targetPage.form_id,
+        field_id: fieldId,
+        native_grid_field: targetSurface.national_id_column_def?.field || null,
+        source_before: beforeSource.value,
+        source_after: afterSource.value,
+        verified: bindingProven && afterSource.value === newValue,
+      },
       production_column_id: visibleColumnId,
-      old_value_rendered: productionValueRendered,
+      old_value_rendered: oldCellText.trim() === oldValue,
       held_response_update_contains_entry: heldContainsValueUpdate,
       old_row_text: oldText,
       old_cell_text: oldCellText,
@@ -241,11 +346,9 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       transient_reversion: transientReversion,
       recovered_next_poll: recoveredNextPoll,
       final_row_text: await rowText(page, valueEntryId),
-      final_cell_text: visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '',
+      final_cell_text: await cellText(page, valueEntryId, visibleColumnId),
       host_membership_final: hostContains(valueEntryId),
-      not_proven_reason: !productionValueRendered
-        ? 'No current production-visible Inbox cell containing the authoritative created_by value was found on the SRWF task row.'
-        : (!heldContainsValueUpdate ? 'The held native response did not contain the SRWF row in update, so the value-ordering race was not formed.' : null),
+      not_proven_reason: targetProven ? null : 'Exact target route, five-column native binding, authoritative GF field transition, or stale response/recovery was not all proven.',
     };
 
     wpEval(`GFAPI::delete_entry(${valueEntryId});`);
@@ -253,6 +356,10 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     valueEntryId = null;
     await waitFor(async () => !(await rowPresent(page, deletedValueEntryId)), pollTimeout, 'production-visible-cleanup');
 
+    // The assignment fixture below is deliberately a different, synthetic
+    // wp-admin race; it is not evidence of a five-column SRWF field binding.
+    await page.goto(inboxUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
     held = null;
     releaseHeld = null;
     mode = 'hold';
@@ -302,6 +409,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
     await waitFor(() => held, pollTimeout, 'assignment-held-response');
     const assignmentId = Number(assignmentFixture.entry_id);
+    const rowVisibleBeforeHeldAdd = await rowPresent(page, assignmentId);
     const heldContainsAdd = Boolean(held.shape?.add.includes(String(assignmentId)));
     const hostBeforeMove = hostContains(assignmentId);
 
@@ -334,25 +442,73 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
 
     const staleMembershipPresent = await rowPresent(page, assignmentId);
-    const transientMembershipReversion = heldContainsAdd && hostAfterMove === false && staleMembershipPresent;
-    let membershipRecoveredNextPoll = !transientMembershipReversion;
-
-    if (transientMembershipReversion) {
-      await waitFor(async () => !(await rowPresent(page, assignmentId)), pollTimeout, 'assignment-recovery-remove');
-      membershipRecoveredNextPoll = true;
+    const delayedStaleAddVisible = heldContainsAdd && !rowVisibleBeforeHeldAdd
+      && hostAfterMove === false && staleMembershipPresent;
+    const staleRowLink = delayedStaleAddVisible
+      ? await page.locator(`${rowsSelector}[row-id="${assignmentId}"] .gflow-inbox__entry-cell-link`).first().getAttribute('href').catch(() => null)
+      : null;
+    const navigation = {
+      stale_native_link: staleRowLink,
+      operator_identity: 'bootstrap_admin',
+      operator_role: 'administrator',
+      assignment_specific_authorization: 'NOT_PROVEN_ADMINISTRATOR_CAPABILITY_CONFOUNDS',
+      anonymous_login_guard: 'NOT_PROVEN',
+      administrator_entry_open: 'NOT_PROVEN',
+    };
+    if (staleRowLink) {
+      // This unauthenticated new request exercises WordPress's login boundary,
+      // not assignment-specific permission for a non-admin SRWF operator.
+      const browser = page.context().browser();
+      const guestContext = await browser.newContext();
+      try {
+        const guestPage = await guestContext.newPage();
+        const guestResponse = await guestPage.goto(new URL(staleRowLink, baseUrl).toString(), { waitUntil: 'domcontentloaded' });
+        navigation.guest_http_status = guestResponse?.status() ?? null;
+        navigation.guest_final_path = new URL(guestPage.url()).pathname;
+        navigation.anonymous_login_guard = /\/wp-login\.php$/.test(navigation.guest_final_path)
+          ? 'OBSERVED_LOGIN_REQUIRED' : 'NOT_PROVEN';
+      } finally {
+        await guestContext.close();
+      }
+      const nativeLink = page.locator(`${rowsSelector}[row-id="${assignmentId}"] .gflow-inbox__entry-cell-link`).first();
+      if (await nativeLink.count()) {
+        await nativeLink.click();
+        await page.waitForLoadState('domcontentloaded');
+        navigation.administrator_final_url = page.url();
+        navigation.administrator_entry_open = /[?&]view=entry(?:&|$)/.test(page.url())
+          ? 'OBSERVED_NAVIGATION_TO_ENTRY_DETAIL' : 'NOT_PROVEN';
+      }
     }
+
+    // Recover through an actual native poll on the original Inbox, not merely
+    // by treating departure from the page as proof of disappearance.
+    await page.goto(inboxUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-js="gflow-inbox"] .ag-root-wrapper', { timeout: 30000 });
+    const recoveryStart = responses.length;
+    await waitFor(
+      () => responses.slice(recoveryStart).find(item => item.shape) || null,
+      pollTimeout, 'assignment-native-recovery-poll'
+    );
+    const membershipRecoveredNextPoll = !(await rowPresent(page, assignmentId));
 
     evidence.assignment_membership_race = {
       status: heldContainsAdd && hostBeforeMove === true && hostAfterMove === false && newerMembershipExcludesEntry && absentBeforeRelease ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: assignmentId,
+      fixture_surface: 'NATIVE_WP_ADMIN_SYNTHETIC_ASSIGNMENT_FORM',
+      form_id: assignmentFixture.form_id,
       held_response_add_contains_entry: heldContainsAdd,
+      row_visible_before_held_add: rowVisibleBeforeHeldAdd,
+      delayed_stale_add_visible: delayedStaleAddVisible,
+      reintroduction_of_previously_visible_then_removed_row: false,
+      navigation_authorization: navigation,
       host_membership_before_move: hostBeforeMove,
       host_membership_after_move: hostAfterMove,
       newer_response_shape: newerMembershipResponse.shape,
       newer_response_excludes_entry: newerMembershipExcludesEntry,
       row_absent_before_release: absentBeforeRelease,
       stale_row_present_after_older_response: staleMembershipPresent,
-      transient_membership_reversion: transientMembershipReversion,
+      transient_membership_reversion: delayedStaleAddVisible,
+      semantic_precision: 'DELAYED_STALE_ADD_NOT_REINTRODUCTION_OF_PREVIOUSLY_VISIBLE_ROW',
       recovered_next_poll: membershipRecoveredNextPoll,
       final_row_absent: !(await rowPresent(page, assignmentId)),
       not_proven_reason: !heldContainsAdd
@@ -374,6 +530,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
     try {
       if (valueEntryId) wpEval(`GFAPI::delete_entry(${Number(valueEntryId)});`);
+      if (targetPage?.page_id) wpEval(`wp_delete_post(${Number(targetPage.page_id)}, true);`);
     } catch {}
     try {
       if (assignmentFixture) {
