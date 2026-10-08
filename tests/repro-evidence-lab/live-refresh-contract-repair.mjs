@@ -96,6 +96,65 @@ function runScopeFalsification() {
   return { ok: results.every(item => item.pass), results };
 }
 
+
+export function classifyAssignmentPollRequests({ requests, after_sequence, entry_id }) {
+  const post = (Array.isArray(requests) ? requests : [])
+    .filter(item => Number.isSafeInteger(item.sequence) && item.sequence > after_sequence)
+    .sort((a, b) => a.sequence - b.sequence);
+  const unique = post.every((item, i) => item.request_id === `lrq-native-${item.sequence}`
+    && (i === 0 || item.sequence > post[i - 1].sequence)
+    && Number.isFinite(item.started_at));
+  const first = post[0] || null;
+  const nativeRemove = item => item?.outcome === 'NATIVE_CHANGE'
+    && item.http_status === 200
+    && Array.isArray(item.shape?.remove)
+    && item.shape.remove.includes(String(entry_id));
+  const later = post.slice(1);
+  const earlierCompletedLater = first && Number.isSafeInteger(first.completion_sequence)
+    ? later.some(item => Number.isSafeInteger(item.completion_sequence)
+      && item.completion_sequence < first.completion_sequence)
+    : false;
+  const firstRemoved = unique && nativeRemove(first) && !earlierCompletedLater;
+  const laterRemove = unique ? later.find(nativeRemove) || null : null;
+  return {
+    identity_and_start_order_valid: unique,
+    first_request: first,
+    first_request_outcome: first?.outcome || 'NOT_OBSERVED',
+    first_request_removed: Boolean(firstRemoved),
+    later_request_removed: Boolean(laterRemove),
+    eventual_request: laterRemove,
+    later_response_completed_before_first: Boolean(earlierCompletedLater),
+    request_count: post.length,
+  };
+}
+
+export function runAssignmentPollProvenanceFalsification() {
+  const make = (sequence, outcome, completion_sequence, shape = null) => ({
+    request_id: `lrq-native-${sequence}`, sequence, started_at: sequence * 100,
+    completed_at: completion_sequence * 100, completion_sequence, outcome,
+    http_status: outcome === 'HTTP_FAILURE' ? 500 : outcome === 'NETWORK_FAILURE' ? null : 200,
+    shape,
+  });
+  const remove = { add: [], remove: ['61'], update: [] };
+  const none = { add: [], remove: [], update: [] };
+  const cases = [
+    ['FIRST_NATIVE_REMOVE', [make(2, 'NATIVE_CHANGE', 1, remove)], true, false],
+    ['FIRST_HTTP_FAILURE_SECOND_REMOVES', [make(2, 'HTTP_FAILURE', 1), make(3, 'NATIVE_CHANGE', 2, remove)], false, true],
+    ['FIRST_MALFORMED_SECOND_REMOVES', [make(2, 'MALFORMED_RESPONSE', 1), make(3, 'NATIVE_CHANGE', 2, remove)], false, true],
+    ['FIRST_NETWORK_FAILURE_SECOND_REMOVES', [make(2, 'NETWORK_FAILURE', 1), make(3, 'NATIVE_CHANGE', 2, remove)], false, true],
+    ['SECOND_COMPLETES_FIRST', [make(2, 'NATIVE_CHANGE', 2, remove), make(3, 'NATIVE_CHANGE', 1, remove)], false, true],
+    ['LATER_SUCCESS_CANNOT_MASK_FIRST_NO_REMOVE', [make(2, 'NATIVE_CHANGE', 1, none), make(3, 'NATIVE_CHANGE', 2, remove)], false, true],
+    ['UNRESOLVED_FIRST_CANNOT_PASS', [make(2, 'PENDING', null), make(3, 'NATIVE_CHANGE', 1, remove)], false, true],
+  ];
+  const results = cases.map(([id, requests, first, eventual]) => {
+    const result = classifyAssignmentPollRequests({ requests, after_sequence: 1, entry_id: 61 });
+    return { id, expected_next: first, actual_next: result.first_request_removed,
+      expected_eventual: eventual, actual_eventual: result.later_request_removed,
+      pass: result.first_request_removed === first && result.later_request_removed === eventual };
+  });
+  return { ok: results.every(item => item.pass), results };
+}
+
 function sameMountRecoveryProven(membership) {
   const recovery = membership?.same_mount_recovery;
   const mounted = (snapshot) => snapshot?.document_identity_preserved === true
@@ -103,7 +162,15 @@ function sameMountRecoveryProven(membership) {
     && snapshot.original_grid_connected === true
     && snapshot.native_grid_count === 1
     && snapshot.url_unchanged === true;
+  const firstPoll = classifyAssignmentPollRequests({
+    requests: recovery?.requests, after_sequence: recovery?.after_sequence,
+    entry_id: membership?.entry_id,
+  });
   return membership?.delayed_stale_add_visible === true
+    && firstPoll.identity_and_start_order_valid === true
+    && firstPoll.first_request_removed === true
+    && recovery?.classification?.first_request_removed === true
+    && recovery?.classification?.first_request?.request_id === firstPoll.first_request?.request_id
     && recovery?.status === 'OBSERVED'
     && recovery?.removed_by_first_native_poll_on_same_grid === true
     && recovery.identity_continuity === true
@@ -199,6 +266,8 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
       && !sameMountProven) {
     throw new Error('Assignment recovery claims native same-mount success without explicit remove and Grid identity continuity.');
   }
+  const pollProvenanceFalsification = runAssignmentPollProvenanceFalsification();
+  if (!pollProvenanceFalsification.ok) throw new Error('First request provenance falsification failed.');
   const sameMountFalsification = falsifySameMountRecovery();
   if (!sameMountFalsification.ok) throw new Error('Same-mount recovery falsification failed.');
   const targetProven = isTargetBoundObservation(productionVisible);
@@ -278,6 +347,7 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
   };
   contract.scope_falsification = scopeFalsification;
   contract.same_mount_recovery_falsification = sameMountFalsification;
+  contract.first_poll_request_provenance_falsification = pollProvenanceFalsification;
   contract.request_lifecycle_model = {
     ...(contract.request_lifecycle_model || {}),
     out_of_order_observation: {
@@ -354,6 +424,7 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
     reducer_falsification: falsification,
     scope_falsification: scopeFalsification,
     same_mount_recovery_falsification: sameMountFalsification,
+    first_poll_request_provenance_falsification: pollProvenanceFalsification,
     assignment_same_mount_recovery_proven: sameMountProven,
     target_column_qualified: targetProven,
   };
