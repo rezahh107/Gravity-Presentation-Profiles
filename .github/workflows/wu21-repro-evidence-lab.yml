@@ -333,6 +333,7 @@ jobs:
               contract.reducer_falsification?.ok !== true ||
               contract.scope_falsification?.ok !== true ||
               contract.same_mount_recovery_falsification?.ok !== true ||
+              contract.first_poll_request_provenance_falsification?.ok !== true ||
               contract.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION" ||
               materiality.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION"
             ) {
