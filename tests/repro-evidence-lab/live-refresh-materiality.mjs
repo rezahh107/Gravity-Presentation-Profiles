@@ -40,6 +40,16 @@ async function cellText(page, id, columnId) {
   return page.locator(`${rowsSelector}[row-id="${id}"] .ag-cell[col-id="${columnId}"]`).innerText().catch(() => '');
 }
 
+async function findVisibleCellByText(page, id, expectedText) {
+  return page.locator(`${rowsSelector}[row-id="${id}"] .ag-cell`).evaluateAll((cells, needle) => {
+    const cell = cells.find((candidate) => (candidate.textContent || '').includes(needle));
+    return cell ? {
+      col_id: cell.getAttribute('col-id'),
+      text: (cell.textContent || '').trim(),
+    } : null;
+  }, expectedText);
+}
+
 export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUrl, artifactDir }) {
   const evidence = {
     schema_version: '1.0.0',
@@ -54,7 +64,21 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
   let holdRemaining = 0;
   let held = null;
   let releaseHeld = null;
+  let heldSettled = Promise.resolve();
+  let resolveHeldSettled = null;
+  let tearingDown = false;
   const responses = [];
+
+  async function releaseHeldResponse(label) {
+    if (typeof releaseHeld !== 'function') {
+      throw new Error(`${label}: held response cannot be released`);
+    }
+    const release = releaseHeld;
+    const settled = heldSettled;
+    releaseHeld = null;
+    release();
+    await settled;
+  }
 
   const hostContains = (id) => JSON.parse(wpEval(`
     $m=get_option('gpp_wu21_fixture_manifest');
@@ -91,8 +115,16 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       body,
       shape: shape(body.toString('utf8')),
     };
-    await new Promise((resolve) => { releaseHeld = resolve; });
-    await route.fulfill({ status: held.status, headers: held.headers, body: held.body });
+    heldSettled = new Promise((resolve) => { resolveHeldSettled = resolve; });
+    try {
+      await new Promise((resolve) => { releaseHeld = resolve; });
+      await route.fulfill({ status: held.status, headers: held.headers, body: held.body });
+    } catch (error) {
+      if (!(tearingDown && /already handled/i.test(String(error)))) throw error;
+    } finally {
+      if (resolveHeldSettled) resolveHeldSettled();
+      resolveHeldSettled = null;
+    }
   };
 
   page.on('response', responseListener);
@@ -108,8 +140,6 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       return Number(grids[0]?.fetch_interval || 30);
     });
     const pollTimeout = Math.max(70000, intervalSeconds * 2200);
-    const visibleFieldId = String(manifest?.forms?.[0]?.first_name_field_id || '');
-    if (!visibleFieldId) throw new Error('SRWF production-visible first-name field is unavailable.');
 
     valueEntryId = Number(wpEval(`
       $m=get_option('gpp_wu21_fixture_manifest');
@@ -118,7 +148,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       $entry=[
         'form_id'=>(int)$f['form_id'],
         'created_by'=>(int)$m['operator']['id'],
-        (string)$f['first_name_field_id']=>'LRQVISIBLEOLD',
+        (string)$f['first_name_field_id']=>'WU21 Alpha',
         (string)$f['last_name_field_id']=>'Race Student',
         (string)$f['photo_field_id']=>$seed[(string)$f['photo_field_id']]??'',
         (string)$f['national_id_field_id']=>'LRQ-VISIBLE-RACE',
@@ -134,8 +164,11 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
     await waitFor(() => rowPresent(page, valueEntryId), pollTimeout, 'production-visible-entry-add');
     const oldText = await rowText(page, valueEntryId);
-    const oldCellText = await cellText(page, valueEntryId, visibleFieldId);
-    const productionValueRendered = oldCellText.includes('LRQVISIBLEOLD');
+    const oldCreatedBy = 'bootstrap_admin';
+    const oldCell = await findVisibleCellByText(page, valueEntryId, oldCreatedBy);
+    const productionValueRendered = Boolean(oldCell?.col_id && oldCell.text.includes(oldCreatedBy));
+    const visibleColumnId = oldCell?.col_id || null;
+    const oldCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
 
     held = null;
     releaseHeld = null;
@@ -146,11 +179,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
 
     wpEval(`
       $m=get_option('gpp_wu21_fixture_manifest');
-      $f=$m['forms'][0];
-      $e=GFAPI::get_entry(${valueEntryId});
-      if(is_wp_error($e)) throw new RuntimeException($e->get_error_message());
-      $e[(string)$f['first_name_field_id']] = 'LRQVISIBLEFRESH';
-      $r=GFAPI::update_entry($e);
+      $viewer=(int)$m['viewer']['id'];
+      $r=GFAPI::update_entry_property(${valueEntryId}, 'created_by', $viewer);
       if(is_wp_error($r)) throw new RuntimeException($r->get_error_message());
     `);
 
@@ -162,34 +192,32 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       'production-visible-newer-response'
     );
     await waitFor(
-      async () => (await cellText(page, valueEntryId, visibleFieldId)).includes('LRQVISIBLEFRESH'),
+      async () => visibleColumnId && (await cellText(page, valueEntryId, visibleColumnId)).includes('wu21_viewer'),
       pollTimeout,
       'production-visible-newer-render'
     );
     const freshText = await rowText(page, valueEntryId);
-    const freshCellText = await cellText(page, valueEntryId, visibleFieldId);
+    const freshCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
 
-    if (typeof releaseHeld !== 'function') throw new Error('production-visible held response cannot be released');
-    releaseHeld();
-    releaseHeld = null;
+    await releaseHeldResponse('production-visible');
 
     await waitFor(
       async () => {
-        const text = await cellText(page, valueEntryId, visibleFieldId);
-        return text.includes('LRQVISIBLEOLD') ? text : null;
+        const text = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
+        return text.includes(oldCreatedBy) ? text : null;
       },
       15000,
       'production-visible-stale-render'
     ).catch(() => null);
 
     const staleText = await rowText(page, valueEntryId);
-    const staleCellText = await cellText(page, valueEntryId, visibleFieldId);
-    const transientReversion = staleCellText.includes('LRQVISIBLEOLD') && !staleCellText.includes('LRQVISIBLEFRESH');
+    const staleCellText = visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '';
+    const transientReversion = staleCellText.includes(oldCreatedBy) && !staleCellText.includes('wu21_viewer');
     let recoveredNextPoll = !transientReversion;
 
     if (transientReversion) {
       await waitFor(
-        async () => (await cellText(page, valueEntryId, visibleFieldId)).includes('LRQVISIBLEFRESH'),
+        async () => visibleColumnId && (await cellText(page, valueEntryId, visibleColumnId)).includes('wu21_viewer'),
         pollTimeout,
         'production-visible-recovery'
       );
@@ -199,8 +227,9 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     evidence.production_visible_value_race = {
       status: productionValueRendered && heldContainsValueUpdate ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: valueEntryId,
-      semantic_surface: 'student.first_name',
-      production_column_id: visibleFieldId,
+      semantic_surface: 'created_by',
+      surface_role: 'native Gravity Flow Inbox production-visible task-row value',
+      production_column_id: visibleColumnId,
       old_value_rendered: productionValueRendered,
       held_response_update_contains_entry: heldContainsValueUpdate,
       old_row_text: oldText,
@@ -212,10 +241,10 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       transient_reversion: transientReversion,
       recovered_next_poll: recoveredNextPoll,
       final_row_text: await rowText(page, valueEntryId),
-      final_cell_text: await cellText(page, valueEntryId, visibleFieldId),
+      final_cell_text: visibleColumnId ? await cellText(page, valueEntryId, visibleColumnId) : '',
       host_membership_final: hostContains(valueEntryId),
       not_proven_reason: !productionValueRendered
-        ? 'The authoritative SRWF student.first_name field was not visible in its current production Inbox column.'
+        ? 'No current production-visible Inbox cell containing the authoritative created_by value was found on the SRWF task row.'
         : (!heldContainsValueUpdate ? 'The held native response did not contain the SRWF row in update, so the value-ordering race was not formed.' : null),
     };
 
@@ -298,9 +327,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       && !newerMembershipResponse.shape.update.includes(String(assignmentId));
     const absentBeforeRelease = !(await rowPresent(page, assignmentId));
 
-    if (typeof releaseHeld !== 'function') throw new Error('assignment held response cannot be released');
-    releaseHeld();
-    releaseHeld = null;
+    await releaseHeldResponse('assignment');
 
     if (heldContainsAdd) {
       await waitFor(() => rowPresent(page, assignmentId), 15000, 'assignment-stale-add').catch(() => null);
@@ -337,8 +364,14 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
             : null)),
     };
   } finally {
+    tearingDown = true;
     mode = 'pass';
-    if (typeof releaseHeld === 'function') releaseHeld();
+    if (typeof releaseHeld === 'function') {
+      const release = releaseHeld;
+      releaseHeld = null;
+      release();
+      try { await heldSettled; } catch {}
+    }
     try {
       if (valueEntryId) wpEval(`GFAPI::delete_entry(${Number(valueEntryId)});`);
     } catch {}
