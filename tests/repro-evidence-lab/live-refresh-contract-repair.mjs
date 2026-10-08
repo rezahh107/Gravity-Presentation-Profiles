@@ -108,6 +108,10 @@ function sameMountRecoveryProven(membership) {
     && recovery?.removed_by_first_native_poll_on_same_grid === true
     && recovery.identity_continuity === true
     && recovery.response?.status === 200
+    && recovery.response.native_request_started_after_stale === true
+    && Number.isFinite(recovery.response.request_started_at)
+    && Number.isFinite(recovery.response.stale_row_observed_at)
+    && recovery.response.request_started_at >= recovery.response.stale_row_observed_at
     && recovery.response.remove_contains_entry === true
     && recovery.response.shape?.remove.includes(String(membership.entry_id)) === true
     && mounted(recovery.grid_at_stale_add)
@@ -128,8 +132,11 @@ function falsifySameMountRecovery() {
     same_mount_recovery: {
       status: 'OBSERVED', identity_continuity: true,
       removed_by_first_native_poll_on_same_grid: true,
-      response: { status: 200, remove_contains_entry: true,
-        shape: { add: [], update: [], remove: ['61'] } },
+      response: {
+        status: 200, request_started_at: 101, stale_row_observed_at: 100,
+        native_request_started_after_stale: true, remove_contains_entry: true,
+        shape: { add: [], update: [], remove: ['61'] },
+      },
       grid_at_stale_add: { ...mount, row_present: true },
       grid_after_recovery_poll: { ...mount, row_present: false },
       grid_after_separate_navigation: { ...mount, row_present: false },
@@ -148,6 +155,10 @@ function falsifySameMountRecovery() {
       { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
         response: { status: 200, remove_contains_entry: false,
           shape: { add: [], remove: [], update: [] } } } }, false],
+    ['PRE_STALE_NATIVE_RESPONSE_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        response: { ...membership.same_mount_recovery.response,
+          request_started_at: 99, native_request_started_after_stale: false } } }, false],
     ['NAVIGATION_IN_ORIGINAL_INBOX_CANNOT_PROVE_RECOVERY',
       { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
         main_frame_navigation_events: ['http://127.0.0.1/wp-admin/'] } }, false],
