@@ -170,7 +170,9 @@ function sameMountRecoveryProven(membership) {
     && firstPoll.identity_and_start_order_valid === true
     && firstPoll.first_request_removed === true
     && recovery?.classification?.first_request_removed === true
-    && recovery?.classification?.first_request?.request_id === firstPoll.first_request?.request_id
+    && recovery?.first_request?.request_id === firstPoll.first_request?.request_id
+    && recovery?.response?.request_id === firstPoll.first_request?.request_id
+    && recovery?.classification?.first_request_outcome === firstPoll.first_request_outcome
     && recovery?.status === 'OBSERVED'
     && recovery?.removed_by_first_native_poll_on_same_grid === true
     && recovery.identity_continuity === true
@@ -194,12 +196,21 @@ function sameMountRecoveryProven(membership) {
 function falsifySameMountRecovery() {
   const mount = { document_identity_preserved: true, grid_identity_preserved: true,
     original_grid_connected: true, native_grid_count: 1, url_unchanged: true };
+  const firstRequest = {
+    request_id: 'lrq-native-2', sequence: 2, started_at: 101,
+    completed_at: 102, completion_sequence: 1, outcome: 'NATIVE_CHANGE',
+    http_status: 200, shape: { add: [], update: [], remove: ['61'] },
+  };
   const membership = {
     entry_id: 61, delayed_stale_add_visible: true, recovered_next_poll: true,
     same_mount_recovery: {
       status: 'OBSERVED', identity_continuity: true,
+      after_sequence: 1, requests: [firstRequest], first_request: firstRequest,
+      classification: { first_request_removed: true,
+        first_request_outcome: 'NATIVE_CHANGE', later_request_removed: false },
       removed_by_first_native_poll_on_same_grid: true,
       response: {
+        request_id: 'lrq-native-2', sequence: 2,
         status: 200, request_started_at: 101, stale_row_observed_at: 100,
         native_request_started_after_stale: true, remove_contains_entry: true,
         shape: { add: [], update: [], remove: ['61'] },
