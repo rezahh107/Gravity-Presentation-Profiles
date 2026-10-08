@@ -81,6 +81,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
   let resolveHeldSettled = null;
   let tearingDown = false;
   const responses = [];
+  const requestStarts = new WeakMap();
 
   async function releaseHeldResponse(label) {
     if (typeof releaseHeld !== 'function') {
@@ -106,11 +107,19 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     echo wp_json_encode(in_array(${Number(id)},$ids,true));
   `));
 
+  const requestListener = (request) => {
+    if (request.url().includes(changesPath)) requestStarts.set(request, Date.now());
+  };
   const responseListener = async (response) => {
     if (!response.url().includes(changesPath)) return;
     let body = '';
     try { body = await response.text(); } catch {}
-    responses.push({ at: Date.now(), status: response.status(), shape: shape(body) });
+    responses.push({
+      at: Date.now(),
+      request_started_at: requestStarts.get(response.request()) ?? null,
+      status: response.status(),
+      shape: shape(body),
+    });
   };
 
   const routeHandler = async (route) => {
@@ -140,6 +149,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
   };
 
+  page.on('request', requestListener);
   page.on('response', responseListener);
   await page.route(`**${changesPath}**`, routeHandler);
 
@@ -490,14 +500,23 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     // following native response must explicitly classify this ID as removed;
     // absence alone (or a clean page reload) is not proof of poll recovery.
     const recoveryStart = responses.length;
+    const staleRowObservedAt = Date.now();
     const recoveryResponse = delayedStaleAddVisible
       ? await waitFor(
-        () => responses.slice(recoveryStart).find((item) => item.status === 200 && item.shape) || null,
+        () => responses.slice(recoveryStart).find(
+          (item) => item.status === 200 && item.shape
+            && item.request_started_at !== null
+            && item.request_started_at >= staleRowObservedAt
+        ) || null,
         pollTimeout, 'assignment-first-same-mount-poll'
       ).catch(() => null)
       : null;
     const recoveryClassification = {
       status: recoveryResponse?.status ?? null,
+      request_started_at: recoveryResponse?.request_started_at ?? null,
+      stale_row_observed_at: staleRowObservedAt,
+      native_request_started_after_stale: recoveryResponse
+        ? recoveryResponse.request_started_at >= staleRowObservedAt : false,
       shape: recoveryResponse?.shape ?? null,
       add_contains_entry: recoveryResponse?.shape?.add.includes(String(assignmentId)) ?? null,
       remove_contains_entry: recoveryResponse?.shape?.remove.includes(String(assignmentId)) ?? null,
@@ -643,6 +662,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     } catch {}
     if (assignmentNavigationListener) page.off('framenavigated', assignmentNavigationListener);
     if (assignmentMount) await assignmentMount.dispose().catch(() => {});
+    page.off('request', requestListener);
     page.off('response', responseListener);
     await page.unroute(`**${changesPath}**`, routeHandler);
   }
