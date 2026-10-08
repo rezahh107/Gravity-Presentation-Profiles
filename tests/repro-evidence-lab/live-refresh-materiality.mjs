@@ -540,6 +540,10 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     }
 
     const staleMembershipPresent = await rowPresent(page, assignmentId);
+    // Start-order watermark belongs to the moment the stale row is actually
+    // observed, not to whichever HTTP response happens to finish later.
+    const staleRowObservedAt = Date.now();
+    const afterSequence = requestSequence;
     const delayedStaleAddVisible = heldContainsAdd && !rowVisibleBeforeHeldAdd
       && hostAfterMove === false && staleMembershipPresent;
     const mountAtStaleAdd = await mountedGridState();
@@ -547,62 +551,111 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       ? await page.locator(`${rowsSelector}[row-id="${assignmentId}"] .gflow-inbox__entry-cell-link`).first().getAttribute('href').catch(() => null)
       : null;
 
-    // Start looking only after the stale add has been rendered. The first
-    // following native response must explicitly classify this ID as removed;
-    // absence alone (or a clean page reload) is not proof of poll recovery.
-    const recoveryStart = responses.length;
-    const staleRowObservedAt = Date.now();
-    const recoveryResponse = delayedStaleAddVisible
+    // Select the FIRST request started after stale rendering by native request
+    // sequence, then await *that same request's* outcome. Never skip its HTTP,
+    // malformed or network failure to admit a successful later response.
+    const firstRequest = delayedStaleAddVisible
       ? await waitFor(
-        () => responses.slice(recoveryStart).find(
-          (item) => item.status === 200 && item.shape
-            && item.request_started_at !== null
-            && item.request_started_at >= staleRowObservedAt
-        ) || null,
-        pollTimeout, 'assignment-first-same-mount-poll'
+        () => nativeRequests.find(item => item.sequence > afterSequence) || null,
+        pollTimeout, 'assignment-first-native-request-start'
       ).catch(() => null)
       : null;
+    if (firstRequest) {
+      await waitFor(() => firstRequest.outcome !== 'PENDING', pollTimeout,
+        'assignment-first-native-request-outcome').catch(() => null);
+    }
+    let firstClassification = classifyAssignmentPollRequests({
+      requests: nativeRequests, after_sequence: afterSequence, entry_id: assignmentId,
+    });
+    if (firstClassification.first_request_removed) {
+      await waitFor(async () => !(await rowPresent(page, assignmentId)),
+        15000, 'assignment-first-request-native-remove').catch(() => null);
+    }
+    const mountAfterFirstPoll = await mountedGridState();
+    const navigationFree = snapshot => snapshot.document_identity_preserved === true
+      && snapshot.grid_identity_preserved === true
+      && snapshot.original_grid_connected === true
+      && snapshot.native_grid_count === 1
+      && snapshot.url_unchanged === true;
+    const firstIdentityContinuous = [mountAtStaleAdd, mountAfterFirstPoll].every(navigationFree)
+      && assignmentNavigations.length === 0;
+    const firstRemovedOnGrid = delayedStaleAddVisible
+      && mountAtStaleAdd.row_present === true
+      && firstClassification.first_request_removed === true
+      && mountAfterFirstPoll.row_present === false
+      && firstIdentityContinuous;
+
+    // Later native polling may legitimately restore membership. Record it as
+    // EVENTUAL, never as the first poll's outcome. Bound observation to one
+    // additional native poll window if the first did not establish recovery.
+    if (delayedStaleAddVisible && !firstRemovedOnGrid) {
+      await waitFor(() => nativeRequests.some(item =>
+        item.sequence > (firstRequest?.sequence ?? afterSequence)
+        && item.outcome === 'NATIVE_CHANGE'
+        && item.shape?.remove.includes(String(assignmentId))
+      ), pollTimeout, 'assignment-later-native-remove').catch(() => null);
+      if (nativeRequests.some(item => item.sequence > (firstRequest?.sequence ?? afterSequence)
+          && item.outcome === 'NATIVE_CHANGE'
+          && item.shape?.remove.includes(String(assignmentId)))) {
+        await waitFor(async () => !(await rowPresent(page, assignmentId)),
+          15000, 'assignment-eventual-native-remove').catch(() => null);
+      }
+    }
+    const mountAfterRecoveryObservation = await mountedGridState();
+    firstClassification = classifyAssignmentPollRequests({
+      requests: nativeRequests, after_sequence: afterSequence, entry_id: assignmentId,
+    });
+    const relevantRequests = nativeRequests.filter(item => item.sequence > afterSequence)
+      .map(item => ({ ...item }));
+    const finalIdentityContinuous = [
+      mountAtStaleAdd, mountAfterFirstPoll, mountAfterRecoveryObservation,
+    ].every(navigationFree) && assignmentNavigations.length === 0;
+    const laterNativeRemoveOnGrid = !firstRemovedOnGrid
+      && firstClassification.later_request_removed === true
+      && mountAfterRecoveryObservation.row_present === false
+      && finalIdentityContinuous;
+    const recoveryResponse = firstClassification.first_request;
     const recoveryClassification = {
-      status: recoveryResponse?.status ?? null,
-      request_started_at: recoveryResponse?.request_started_at ?? null,
+      request_id: recoveryResponse?.request_id ?? null,
+      sequence: recoveryResponse?.sequence ?? null,
+      outcome: recoveryResponse?.outcome ?? 'NOT_OBSERVED',
+      status: recoveryResponse?.http_status ?? null,
+      request_started_at: recoveryResponse?.started_at ?? null,
       stale_row_observed_at: staleRowObservedAt,
-      native_request_started_after_stale: recoveryResponse
-        ? recoveryResponse.request_started_at >= staleRowObservedAt : false,
+      native_request_started_after_stale: recoveryResponse?.sequence > afterSequence,
       shape: recoveryResponse?.shape ?? null,
       add_contains_entry: recoveryResponse?.shape?.add.includes(String(assignmentId)) ?? null,
       remove_contains_entry: recoveryResponse?.shape?.remove.includes(String(assignmentId)) ?? null,
       update_contains_entry: recoveryResponse?.shape?.update.includes(String(assignmentId)) ?? null,
     };
-    if (recoveryClassification.remove_contains_entry === true) {
-      await waitFor(
-        async () => !(await rowPresent(page, assignmentId)),
-        15000, 'assignment-same-mount-native-remove'
-      ).catch(() => null);
-    }
-    const mountAfterRecoveryPoll = await mountedGridState();
-    const recoveryIdentityContinuity = [mountAtStaleAdd, mountAfterRecoveryPoll].every(
-      (snapshot) => snapshot.document_identity_preserved === true
-        && snapshot.grid_identity_preserved === true
-        && snapshot.original_grid_connected === true
-        && snapshot.native_grid_count === 1
-        && snapshot.url_unchanged === true
-    ) && assignmentNavigations.length === 0;
-    const membershipRecoveredNextPoll = delayedStaleAddVisible
-      && mountAtStaleAdd.row_present === true
-      && recoveryClassification.remove_contains_entry === true
-      && mountAfterRecoveryPoll.row_present === false
-      && recoveryIdentityContinuity;
     const sameMountRecovery = {
-      status: membershipRecoveredNextPoll ? 'OBSERVED' : 'NOT_PROVEN',
+      status: firstRemovedOnGrid ? 'OBSERVED' : 'NOT_PROVEN',
       route: assignmentInboxUrl,
+      after_sequence: afterSequence,
+      first_request: firstClassification.first_request,
+      requests: relevantRequests,
+      classification: {
+        first_request_removed: firstClassification.first_request_removed,
+        later_request_removed: firstClassification.later_request_removed,
+        later_response_completed_before_first: firstClassification.later_response_completed_before_first,
+        first_request_outcome: firstClassification.first_request_outcome,
+      },
       response: recoveryClassification,
       grid_at_stale_add: mountAtStaleAdd,
-      grid_after_recovery_poll: mountAfterRecoveryPoll,
+      grid_after_recovery_poll: mountAfterFirstPoll,
+      grid_after_later_observation: mountAfterRecoveryObservation,
       main_frame_navigation_events: [...assignmentNavigations],
-      identity_continuity: recoveryIdentityContinuity,
-      removed_by_first_native_poll_on_same_grid: membershipRecoveredNextPoll,
-      not_proven_reason: membershipRecoveredNextPoll ? null
-        : 'No first subsequent native remove response with a vanished row and continuous original document/Grid was established.',
+      identity_continuity: finalIdentityContinuous,
+      removed_by_first_native_poll_on_same_grid: firstRemovedOnGrid,
+      eventual_recovery: {
+        status: laterNativeRemoveOnGrid ? 'OBSERVED' : 'NOT_PROVEN',
+        native_request: firstClassification.eventual_request,
+        native_remove_classified: firstClassification.later_request_removed,
+        same_grid_row_absent: mountAfterRecoveryObservation.row_present === false,
+        same_mount_identity_continuity: finalIdentityContinuous,
+      },
+      not_proven_reason: firstRemovedOnGrid ? null :
+        'First native request was absent/failed/malformed/non-removing, overtaken by a later response, or same Grid disappearance was not proven.',
     };
 
     // Exercise the stale native href in a separate page. Neither authenticated
@@ -650,7 +703,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       && mountAfterSeparateNavigation.url_unchanged === true
       && assignmentNavigations.length === 0;
     sameMountRecovery.removed_by_first_native_poll_on_same_grid =
-      membershipRecoveredNextPoll && sameMountRecovery.identity_continuity;
+      firstRemovedOnGrid && sameMountRecovery.identity_continuity;
     sameMountRecovery.status = sameMountRecovery.removed_by_first_native_poll_on_same_grid ? 'OBSERVED' : 'NOT_PROVEN';
     if (sameMountRecovery.status === 'NOT_PROVEN') {
       sameMountRecovery.not_proven_reason =
@@ -681,6 +734,7 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       transient_stale_membership_visibility: delayedStaleAddVisible,
       semantic_precision: 'DELAYED_STALE_ADD_NOT_REINTRODUCTION_OF_PREVIOUSLY_VISIBLE_ROW',
       recovered_next_poll: sameMountRecovery.removed_by_first_native_poll_on_same_grid,
+      recovered_eventually: sameMountRecovery.eventual_recovery.status === 'OBSERVED',
       final_row_absent: !(await rowPresent(page, assignmentId)),
       not_proven_reason: !heldContainsAdd
         ? 'The held native response did not contain the assignment row in add, so the membership-changing race was not formed.'
