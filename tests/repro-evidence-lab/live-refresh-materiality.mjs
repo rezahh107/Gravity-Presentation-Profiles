@@ -256,7 +256,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     const bindingProven = targetSurface.is_five_column_projection
       && targetSurface.gpp_surface_count === 1
       && targetSurface.national_id_column_def?.field === fieldId
-      && targetSurface.bootstrap_row_value === oldValue
+      // Initial Grid options are a bootstrap snapshot; this row was added
+      // by native Live Refresh after mount, so rowData cannot prove its value.
       && beforeSource.form_id === targetPage.form_id
       && beforeSource.value === oldValue
       && oldCellText.trim() === oldValue;
