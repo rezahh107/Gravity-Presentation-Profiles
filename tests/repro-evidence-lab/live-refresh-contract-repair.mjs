@@ -198,9 +198,10 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
       ...(contract.request_lifecycle_model?.out_of_order_observation || {}),
       transient_reversion: overlap.transient_reversion ?? null,
       recovered_next_poll: overlap.recovered_next_poll ?? null,
-      production_visible_value_transient_reversion: productionVisible.transient_reversion ?? null,
-      production_visible_value_recovered_next_poll: productionVisible.recovered_next_poll ?? null,
+      production_visible_value_transient_reversion: targetProven ? true : null,
+      production_visible_value_recovered_next_poll: targetProven ? productionVisible.recovered_next_poll : null,
       assignment_membership_transient_reversion: membership.transient_membership_reversion ?? null,
+      assignment_membership_delayed_stale_add: membership.delayed_stale_add_visible ?? null,
       assignment_membership_recovered_next_poll: membership.recovered_next_poll ?? null,
     },
   };
@@ -217,16 +218,18 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
       judgment: overlap.transient_reversion === true ? 'OWNER_DECISION_REQUIRED' : 'NO_STALE_REVERSION_OBSERVED',
     },
     production_visible_srwf_value: {
-      status: productionVisible.status,
-      observed_stale_reversion: productionVisible.transient_reversion ?? null,
-      recovered_next_poll: productionVisible.recovered_next_poll ?? null,
-      owner_tolerance_authority: productionVisible.transient_reversion === true ? 'NOT_ESTABLISHED' : 'NOT_REQUIRED_FOR_OBSERVED_RESULT',
+      status: targetProven ? 'OBSERVED' : 'NOT_PROVEN',
+      observed_stale_reversion: targetProven ? true : null,
+      recovered_next_poll: targetProven ? productionVisible.recovered_next_poll : null,
+      owner_tolerance_authority: targetProven ? 'NOT_ESTABLISHED' : 'NOT_REQUIRED_FOR_OBSERVED_RESULT',
     },
     assignment_membership: {
       status: membership.status,
       observed_stale_reversion: membership.transient_membership_reversion ?? null,
+      observed_delayed_stale_add: membership.delayed_stale_add_visible ?? null,
+      was_previously_visible_and_removed: membership.row_visible_before_held_add === false ? false : null,
       recovered_next_poll: membership.recovered_next_poll ?? null,
-      owner_tolerance_authority: membership.transient_membership_reversion === true ? 'NOT_ESTABLISHED' : 'NOT_REQUIRED_FOR_OBSERVED_RESULT',
+      owner_tolerance_authority: membership.delayed_stale_add_visible === true ? 'NOT_ESTABLISHED' : 'NOT_REQUIRED_FOR_OBSERVED_RESULT',
     },
   };
   contract.confirmed_findings = {
