@@ -327,10 +327,12 @@ jobs:
             const contract = qualification.contract || {};
             if (
               contract.name !== "LIVE REFRESH RUNTIME CONTRACT" ||
-              contract.schema_version !== "1.1.0" ||
+              contract.schema_version !== "1.2.0" ||
               !allowed.has(contract.final_disposition) ||
               contract.next_action_disposition !== contract.final_disposition ||
               contract.reducer_falsification?.ok !== true ||
+              contract.scope_falsification?.ok !== true ||
+              contract.same_mount_recovery_falsification?.ok !== true ||
               contract.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION" ||
               materiality.evidence_ceiling !== "REPRODUCIBLE_PINNED_RUNTIME_NOT_TARGET_PRODUCTION"
             ) {
