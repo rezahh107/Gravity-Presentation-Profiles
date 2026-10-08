@@ -493,7 +493,9 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
     const membershipRecoveredNextPoll = !(await rowPresent(page, assignmentId));
 
     evidence.assignment_membership_race = {
-      status: heldContainsAdd && hostBeforeMove === true && hostAfterMove === false && newerMembershipExcludesEntry && absentBeforeRelease ? 'OBSERVED' : 'NOT_PROVEN',
+      status: delayedStaleAddVisible && membershipRecoveredNextPoll
+        && hostBeforeMove === true && newerMembershipExcludesEntry && absentBeforeRelease
+        ? 'OBSERVED' : 'NOT_PROVEN',
       entry_id: assignmentId,
       fixture_surface: 'NATIVE_WP_ADMIN_SYNTHETIC_ASSIGNMENT_FORM',
       form_id: assignmentFixture.form_id,
@@ -508,7 +510,8 @@ export async function runLiveRefreshMateriality({ page, wpEval, manifest, baseUr
       newer_response_excludes_entry: newerMembershipExcludesEntry,
       row_absent_before_release: absentBeforeRelease,
       stale_row_present_after_older_response: staleMembershipPresent,
-      transient_membership_reversion: delayedStaleAddVisible,
+      transient_membership_reversion: false,
+      transient_stale_membership_visibility: delayedStaleAddVisible,
       semantic_precision: 'DELAYED_STALE_ADD_NOT_REINTRODUCTION_OF_PREVIOUSLY_VISIBLE_ROW',
       recovered_next_poll: membershipRecoveredNextPoll,
       final_row_absent: !(await rowPresent(page, assignmentId)),
