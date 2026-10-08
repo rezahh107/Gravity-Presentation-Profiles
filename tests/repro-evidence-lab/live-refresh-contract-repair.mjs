@@ -96,6 +96,72 @@ function runScopeFalsification() {
   return { ok: results.every(item => item.pass), results };
 }
 
+function sameMountRecoveryProven(membership) {
+  const recovery = membership?.same_mount_recovery;
+  const mounted = (snapshot) => snapshot?.document_identity_preserved === true
+    && snapshot.grid_identity_preserved === true
+    && snapshot.original_grid_connected === true
+    && snapshot.native_grid_count === 1
+    && snapshot.url_unchanged === true;
+  return membership?.delayed_stale_add_visible === true
+    && recovery?.status === 'OBSERVED'
+    && recovery?.removed_by_first_native_poll_on_same_grid === true
+    && recovery.identity_continuity === true
+    && recovery.response?.status === 200
+    && recovery.response.remove_contains_entry === true
+    && recovery.response.shape?.remove.includes(String(membership.entry_id)) === true
+    && mounted(recovery.grid_at_stale_add)
+    && recovery.grid_at_stale_add.row_present === true
+    && mounted(recovery.grid_after_recovery_poll)
+    && recovery.grid_after_recovery_poll.row_present === false
+    && mounted(recovery.grid_after_separate_navigation)
+    && Array.isArray(recovery.main_frame_navigation_events)
+    && recovery.main_frame_navigation_events.length === 0
+    && membership.recovered_next_poll === true;
+}
+
+function falsifySameMountRecovery() {
+  const mount = { document_identity_preserved: true, grid_identity_preserved: true,
+    original_grid_connected: true, native_grid_count: 1, url_unchanged: true };
+  const membership = {
+    entry_id: 61, delayed_stale_add_visible: true, recovered_next_poll: true,
+    same_mount_recovery: {
+      status: 'OBSERVED', identity_continuity: true,
+      removed_by_first_native_poll_on_same_grid: true,
+      response: { status: 200, remove_contains_entry: true,
+        shape: { add: [], update: [], remove: ['61'] } },
+      grid_at_stale_add: { ...mount, row_present: true },
+      grid_after_recovery_poll: { ...mount, row_present: false },
+      grid_after_separate_navigation: { ...mount, row_present: false },
+      main_frame_navigation_events: [],
+    },
+  };
+  const cases = [
+    ['SAME_MOUNT_NATIVE_REMOVE', membership, true],
+    ['RELOAD_WITH_ABSENT_ROW_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        grid_after_recovery_poll: { ...mount, row_present: false, document_identity_preserved: false } } }, false],
+    ['REMOUNTED_GRID_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        grid_after_recovery_poll: { ...mount, row_present: false, grid_identity_preserved: false } } }, false],
+    ['NO_EXPLICIT_NATIVE_REMOVE_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        response: { status: 200, remove_contains_entry: false,
+          shape: { add: [], remove: [], update: [] } } } }, false],
+    ['NAVIGATION_IN_ORIGINAL_INBOX_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        main_frame_navigation_events: ['http://127.0.0.1/wp-admin/'] } }, false],
+    ['ROW_NEVER_OBSERVED_STALE_CANNOT_PROVE_RECOVERY',
+      { ...membership, same_mount_recovery: { ...membership.same_mount_recovery,
+        grid_at_stale_add: { ...mount, row_present: false } } }, false],
+  ];
+  const results = cases.map(([id, input, expected]) => {
+    const actual = sameMountRecoveryProven(input);
+    return { id, expected, actual, pass: actual === expected };
+  });
+  return { ok: results.every(result => result.pass), results };
+}
+
 function scenarioMap(scenarios) {
   return Object.fromEntries((scenarios || []).map((scenario) => [scenario.id, scenario]));
 }
@@ -117,6 +183,13 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
   const background = byId['LRQ-BACKGROUND'] || null;
   const productionVisible = materiality.production_visible_value_race || { status: 'NOT_PROVEN' };
   const membership = materiality.assignment_membership_race || { status: 'NOT_PROVEN' };
+  const sameMountProven = sameMountRecoveryProven(membership);
+  if ((membership.recovered_next_poll === true || membership.same_mount_recovery?.status === 'OBSERVED')
+      && !sameMountProven) {
+    throw new Error('Assignment recovery claims native same-mount success without explicit remove and Grid identity continuity.');
+  }
+  const sameMountFalsification = falsifySameMountRecovery();
+  if (!sameMountFalsification.ok) throw new Error('Same-mount recovery falsification failed.');
   const targetProven = isTargetBoundObservation(productionVisible);
   if (productionVisible.status === 'OBSERVED' && !targetProven) {
     throw new Error('Broad target-SRWF claim contradicted by route, Grid and field evidence.');
@@ -130,6 +203,7 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
   if (!background || background.status === 'NOT_PROVEN') unresolved.add('LRQ-BACKGROUND');
   if (!targetProven) unresolved.add('LRQ-PRODUCTION-VISIBLE-VALUE-RACE');
   if (membership.status !== 'OBSERVED') unresolved.add('LRQ-OVERLAP-ASSIGNMENT');
+  if (!sameMountProven) unresolved.add('LRQ-ASSIGNMENT-SAME-MOUNT-RECOVERY');
   if (membership.navigation_authorization?.assignment_specific_authorization !== 'OBSERVED_FRESH_HOST_AUTHORIZATION') {
     unresolved.add('LRQ-ASSIGNMENT-SPECIFIC-FRESH-AUTHORIZATION');
   }
@@ -192,6 +266,7 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
     prior_admin_created_by_is_not_target_evidence: true,
   };
   contract.scope_falsification = scopeFalsification;
+  contract.same_mount_recovery_falsification = sameMountFalsification;
   contract.request_lifecycle_model = {
     ...(contract.request_lifecycle_model || {}),
     out_of_order_observation: {
@@ -202,7 +277,7 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
       production_visible_value_recovered_next_poll: targetProven ? productionVisible.recovered_next_poll : null,
       assignment_membership_transient_reversion: membership.transient_membership_reversion ?? null,
       assignment_membership_delayed_stale_add: membership.delayed_stale_add_visible ?? null,
-      assignment_membership_recovered_next_poll: membership.recovered_next_poll ?? null,
+      assignment_membership_recovered_next_poll: sameMountProven ? true : null,
     },
   };
   contract.change_application_integrity = {
@@ -228,7 +303,8 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
       observed_stale_reversion: membership.transient_membership_reversion ?? null,
       observed_delayed_stale_add: membership.delayed_stale_add_visible ?? null,
       was_previously_visible_and_removed: membership.row_visible_before_held_add === false ? false : null,
-      recovered_next_poll: membership.recovered_next_poll ?? null,
+      recovered_next_poll: sameMountProven ? true : null,
+      same_mount_recovery: sameMountProven ? 'OBSERVED' : 'NOT_PROVEN',
       owner_tolerance_authority: membership.delayed_stale_add_visible === true ? 'NOT_ESTABLISHED' : 'NOT_REQUIRED_FOR_OBSERVED_RESULT',
     },
   };
@@ -266,6 +342,8 @@ export function repairLiveRefreshContract({ artifactDir, materiality }) {
     unresolved: reduction.unresolved,
     reducer_falsification: falsification,
     scope_falsification: scopeFalsification,
+    same_mount_recovery_falsification: sameMountFalsification,
+    assignment_same_mount_recovery_proven: sameMountProven,
     target_column_qualified: targetProven,
   };
 }
