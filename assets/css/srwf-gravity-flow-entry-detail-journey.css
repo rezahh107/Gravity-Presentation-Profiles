@@ -375,6 +375,36 @@ body.wp-admin .gravityflow_workflow_detail form:has(.gpp-entry-journey-result[da
 }
 
 /*
+ * A saved draft is not the same outcome as completing Correction. Keep the
+ * native User Input submit as the primary action; paint the optional native
+ * Save Progress as a secondary utility, without changing either control's
+ * identity, form transport or Gravity Flow lifecycle.
+ */
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button {
+    border-color: #c9d6f0;
+    background: #f8fafe;
+    color: #1d4ed8;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) :is(#gravityflow_update_button, #gravityflow_submit_button):hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: #1e40af;
+    background: #1e40af;
+    color: #fff;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) #gravityflow_save_progress_button:hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: #9bb4e7;
+    background: #f0f6ff;
+    color: #1e40af;
+}
+
+.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"]) :is(#gravityflow_update_button, #gravityflow_submit_button, #gravityflow_save_progress_button):is(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+    opacity: .65;
+    cursor: default;
+    box-shadow: none;
+}
+
+/*
  * Print remains a separate native-authorized utility in Review, but neither
  * native Gravity Flow Print nor the GPP dossier replacement is an operator
  * action in qualified correction mode. Suppression is tied only to the same
