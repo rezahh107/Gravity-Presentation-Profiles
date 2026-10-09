@@ -232,9 +232,27 @@ jobs:
           # disposable Playwright document only; no production assets change.
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/srwf-mr3-source-contract.php
           test -s "$WU21_ARTIFACT_DIR/srwf-mr3-source-contract.json"
+          # Bounded source extract printed to the job log for independent
+          # event-order review; full package bytes remain in the pinned fixture.
+          node - <<'MR3SOURCE'
+          const fs = require('fs');
+          const p = process.env.WU21_ARTIFACT_DIR + '/srwf-mr3-source-contract.json';
+          const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+          console.log('MR3_SOURCE_IDENTITY', JSON.stringify({host_version:j.host_version,host_main_sha256:j.host_main_sha256,fixture_note_mode:j.fixture_note_mode,fixture_confirmation_prompt:j.fixture_confirmation_prompt}));
+          for (const [file, terms] of Object.entries({
+            confirmation_js:['handleApprovalStepButtonClick','confirm(','gravityflow_note'],
+            approval_php:['gravityflow_note','note_mode','gravityflow_approval_new_status_step_'],
+            entry_detail_php:['gravityflow_note']
+          })) {
+            for (const term of terms) {
+              const hits = j.files?.[file]?.matches?.[term] || [];
+              for (const hit of hits.slice(0,2)) console.log('MR3_SOURCE_WINDOW',JSON.stringify({file:j.files[file].path,sha256:j.files[file].sha256,term,line:hit.line,context:hit.context}));
+            }
+          }
+          MR3SOURCE
           node tests/repro-evidence-lab/srwf-mr3-browser-qualification.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-mr3-browser-qualification.json"
-          node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.WU21_ARTIFACT_DIR+"/srwf-mr3-browser-qualification.json","utf8"));if(j.kind!=="NON_PRODUCTION_BROWSER_PROTOTYPE"||!Array.isArray(j.results)||j.results.length!==13){console.error("Incomplete MR3 capture",j);process.exit(1)}'
+          node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.WU21_ARTIFACT_DIR+"/srwf-mr3-browser-qualification.json","utf8"));if(j.kind!=="NON_PRODUCTION_BROWSER_PROTOTYPE"||!Array.isArray(j.results)||j.results.length!==16){console.error("Incomplete MR3 capture",j);process.exit(1)}'
 
           # Preserve the existing 13 production journey assertions unchanged.
           node tests/repro-evidence-lab/srwf-journey-production-browser.mjs
