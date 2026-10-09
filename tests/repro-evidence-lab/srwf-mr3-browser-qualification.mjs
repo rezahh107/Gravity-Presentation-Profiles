@@ -139,13 +139,13 @@ async function installPrototype(page) {
       controls.hidden = false;
       note.focus({ preventScroll: true });
     };
-    const close = () => {
+    const close = (restoreFocus = true) => {
       note.value = '';
       open = false;
       labelBox.style.display = 'none';
       valueBox.style.display = 'none';
       controls.hidden = true;
-      reject.focus({ preventScroll: true });
+      if (restoreFocus) reject.focus({ preventScroll: true });
     };
     cancel.addEventListener('click', close);
     note.addEventListener('keydown', e => {
@@ -154,12 +154,27 @@ async function installPrototype(page) {
     // Deliberately interception-dependent candidate. Native inline handler is
     // untouched; NO click replay/requestSubmit/alternate persistence.
     form.addEventListener('click', e => {
-      if (e.target.closest('button') !== reject || open) return;
+      const button = e.target.closest('button');
+      // The native Note is Reject-only: never let a previously typed rejection
+      // reason ride along a later native Approve or Revert payload.
+      if (open && (button === approved || button === revert)) {
+        close(false);
+      }
+      if (button !== reject || open) return;
       intercepted++;
       e.preventDefault();
       e.stopImmediatePropagation();
       show();
     }, true);
+    form.addEventListener('click', e => {
+      if (!open || e.target.closest('button') !== reject) return;
+      // This bubble listener runs AFTER the unchanged native inline onclick.
+      // In exact host 3.1.0, rejected is written to its hidden carrier only
+      // after the native browser confirm was accepted. An empty carrier means
+      // native Cancel, so erase unsaved Reject-only text without interfering
+      // with any host event or transition.
+      if (carrier.value === '') close();
+    });
     labelBox.style.display = 'none';
     valueBox.style.display = 'none';
     controls.hidden = true;
@@ -270,8 +285,9 @@ try {
     const before = truth(id); await firstReject(page); await page.locator(noteSelector).fill('SYNTHETIC-NOT-SAVED');
     const dialogs = await nativeConfirm(page, 'rejected', false);
     const after = truth(id);
-    assert(dialogs.length === 1 && JSON.stringify(before) === JSON.stringify(after), JSON.stringify({ dialogs, before, after }));
-    return { dialogs, unchanged: true, panel: await state(page) };
+    const snapshot = await state(page);
+    assert(dialogs.length === 1 && JSON.stringify(before) === JSON.stringify(after) && !snapshot.noteVisible && snapshot.noteValue === '', JSON.stringify({ dialogs, before, after, snapshot }));
+    return { dialogs, unchanged: true, panel: snapshot };
   });
   await probe('MR3-007-APPROVE-UNTOUCHED', async () => {
     const id = create('APPROVE'); await goto(page, id);
@@ -387,8 +403,8 @@ try {
       await page.waitForTimeout(100);
     } finally { page.off('dialog', listener); }
     const after = truth(id), snapshot = await state(page);
-    assert(JSON.stringify(before) === JSON.stringify(after) && snapshot.intercepted === 1 && dialogs.length === 1, JSON.stringify({ dialogs, snapshot, before, after }));
-    return { dialogs, snapshot, noMutation: true, note: 'Second physical activation still opens native confirmation; native Cancel owns termination' };
+    assert(JSON.stringify(before) === JSON.stringify(after) && snapshot.intercepted === 1 && dialogs.length <= 1, JSON.stringify({ dialogs, snapshot, before, after }));
+    return { dialogs, snapshot, noMutation: true, note: 'Rapid double-click may only disclose Note (zero dialog); more than one confirmation or any mutation is forbidden' };
   });
   await probe('MR3-016-INTERRUPTED-POST', async () => {
     const id = create('ABORT'); await goto(page, id);
@@ -433,7 +449,20 @@ try {
     const afterApprove = truth(id);
     const noteLeaked = JSON.stringify(afterApprove.timeline).includes(marker);
     assert(approved.length === 1 && afterApprove.final === 'approved', JSON.stringify({ approved, afterApprove }));
-    return { rejectConfirmDismissed: true, approveNative: true, noteLeakedIntoApprove: noteLeaked, candidateSafe: !noteLeaked, disposition: noteLeaked ? 'CANDIDATE_FALSIFIED' : 'NO_CROSS_ACTION_LEAK_OBSERVED' };
+    assert(!noteLeaked, 'CANDIDATE_FALSIFIED: Reject-only text leaked into Approve timeline');
+    return { rejectConfirmDismissed: true, approveNative: true, noteLeakedIntoApprove: false, candidateSafe: true };
+  });
+  await probe('MR3-018-SWITCH-TO-APPROVE-ON-OPEN', async () => {
+    const id = create('SWITCHAPPROVE'); await goto(page, id);
+    const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
+    await firstReject(page);
+    const marker = 'SYNTHETIC-MR3-APPROVE-SWITCH-MUST-NOT-PERSIST-' + id;
+    await page.locator(noteSelector).fill(marker);
+    const dialogs = await nativeConfirm(page, 'approved', true);
+    const after = truth(id);
+    const leaked = JSON.stringify(after.timeline).includes(marker);
+    assert(dialogs.length === 1 && after.final === 'approved' && !leaked, JSON.stringify({ dialogs, after, leaked }));
+    return { dialogs, final: after.final, leaked, noteIsolation: true };
   });
 } finally {
   await browser.close();
