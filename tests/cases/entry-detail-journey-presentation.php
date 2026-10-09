@@ -267,6 +267,18 @@ gpp_journey_assert(
     && false !== strpos( $css, 'input:is([type="email"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"]'),
     'Correction RTL presentation and semantic LTR/bidi-safe exceptions are incomplete.'
 );
+// Native User Input controls share a base treatment, but only completing the
+// correction is primary. These paint-only states must stay inside the existing
+// server-admitted Correction selector; no native control or transport is added.
+$correction_action_boundary = '.gravityflow_workflow_detail form:has(.gpp-entry-journey--correction[data-gpp-entry-journey="correction"])';
+gpp_journey_assert(
+    false !== strpos( $css, $correction_action_boundary . ' #gravityflow_save_progress_button {' . "\n" . '    border-color: #c9d6f0;' . "\n" . '    background: #f8fafe;' . "\n" . '    color: #1d4ed8;' )
+    && false !== strpos( $css, $correction_action_boundary . ' :is(#gravityflow_update_button, #gravityflow_submit_button):hover:not(:disabled):not([aria-disabled="true"])' )
+    && false !== strpos( $css, $correction_action_boundary . ' #gravityflow_save_progress_button:hover:not(:disabled):not([aria-disabled="true"])' )
+    && false !== strpos( $css, $correction_action_boundary . ' :is(#gravityflow_update_button, #gravityflow_submit_button, #gravityflow_save_progress_button):is(:disabled, [aria-disabled="true"], [aria-busy="true"])' ),
+    'Correction primary/secondary hierarchy and hover/unavailable paint must remain native-control-scoped.'
+);
+
 gpp_journey_assert( false !== strpos( $css, '@media (max-width: 600px)' ) && false !== strpos( $css, 'width: 100%' ), 'Journey presentation must retain the mobile stacking contract.' );
 gpp_journey_assert( false !== strpos( $css, 'direction: rtl' ) && false !== strpos( $css, 'unicode-bidi: isolate' ), 'Journey presentation must preserve RTL/BiDi isolation.' );
 
