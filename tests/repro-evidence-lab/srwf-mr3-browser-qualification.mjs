@@ -324,6 +324,62 @@ try {
       return { status: response.status(), sheets, reasonLeaked: false };
     } finally { await printPage.close(); }
   });
+  await probe('MR3-014-INVALID-NONCE-NOTE', async () => {
+    const id = create('BADNONCE'); await goto(page, id);
+    const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
+    const before = truth(id);
+    await firstReject(page);
+    const marker = 'SYNTHETIC-MR3-NONCE-MUST-NOT-PERSIST-' + id;
+    await page.locator(noteSelector).fill(marker);
+    await page.locator('input[name="_wpnonce"]').first().evaluate(el => { el.value = 'MR3-intentionally-invalid'; });
+    const dialogs = await nativeConfirm(page, 'rejected', true);
+    const after = truth(id);
+    const leaked = JSON.stringify(after.timeline).includes(marker);
+    assert(dialogs.length === 1 && after.final === 'pending' && after.step === before.step && !leaked, JSON.stringify({ dialogs, before, after, leaked }));
+    return { dialogs, final: after.final, persistedNote: leaked, authoritativeResultUnchanged: true };
+  });
+  await probe('MR3-015-DOUBLE-ACTIVATION-CANCEL', async () => {
+    const id = create('DOUBLE'); await goto(page, id);
+    const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
+    const before = truth(id), dialogs = [];
+    const listener = async d => { dialogs.push(d.type()); await d.dismiss(); };
+    page.on('dialog', listener);
+    try {
+      await page.locator(rejectSelector).dblclick();
+      await page.waitForTimeout(100);
+    } finally { page.off('dialog', listener); }
+    const after = truth(id), snapshot = await state(page);
+    assert(JSON.stringify(before) === JSON.stringify(after) && snapshot.intercepted === 1 && dialogs.length === 1, JSON.stringify({ dialogs, snapshot, before, after }));
+    return { dialogs, snapshot, noMutation: true, note: 'Second physical activation still opens native confirmation; native Cancel owns termination' };
+  });
+  await probe('MR3-016-INTERRUPTED-POST', async () => {
+    const id = create('ABORT'); await goto(page, id);
+    const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
+    const before = truth(id);
+    await firstReject(page);
+    const marker = 'SYNTHETIC-MR3-ABORT-MUST-NOT-PERSIST-' + id;
+    await page.locator(noteSelector).fill(marker);
+    let aborted = 0, confirmCount = 0;
+    const handler = async route => {
+      if (route.request().isNavigationRequest() && route.request().method() === 'POST') {
+        aborted++;
+        await route.abort('failed');
+      } else await route.continue();
+    };
+    const listener = async d => { confirmCount++; await d.accept(); };
+    await page.route('**/*', handler);
+    page.on('dialog', listener);
+    let transportError = null;
+    try {
+      await page.locator(rejectSelector).click({ timeout: 12000 });
+      await page.waitForTimeout(150);
+    } catch (error) { transportError = String(error).slice(0, 500); }
+    finally { page.off('dialog', listener); await page.unroute('**/*', handler); }
+    const after = truth(id);
+    const fabricated = await page.locator('[data-gpp-entry-journey-result="rejected"]').count();
+    assert(aborted >= 1 && confirmCount === 1 && JSON.stringify(before) === JSON.stringify(after) && fabricated === 0, JSON.stringify({ aborted, confirmCount, before, after, fabricated, transportError }));
+    return { aborted, confirmCount, afterStatus: after.final, fabricated, transportError };
+  });
 } finally {
   await browser.close();
   fs.writeFileSync(artifact + '/srwf-mr3-browser-qualification.json', JSON.stringify({
