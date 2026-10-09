@@ -380,6 +380,23 @@ try {
     assert(aborted >= 1 && confirmCount === 1 && JSON.stringify(before) === JSON.stringify(after) && fabricated === 0, JSON.stringify({ aborted, confirmCount, before, after, fabricated, transportError }));
     return { aborted, confirmCount, afterStatus: after.final, fabricated, transportError };
   });
+  await probe('MR3-017-NATIVE-CANCEL-THEN-APPROVE-CROSS-ACTION', async () => {
+    const id = create('CANCELAPPROVE'); await goto(page, id);
+    const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
+    await firstReject(page);
+    const marker = 'SYNTHETIC-MR3-REJECT-ONLY-NOT-FOR-APPROVE-' + id;
+    await page.locator(noteSelector).fill(marker);
+    const canceled = await nativeConfirm(page, 'rejected', false);
+    const afterCancel = truth(id);
+    assert(canceled.length === 1 && afterCancel.final === 'pending', JSON.stringify({ canceled, afterCancel }));
+    // Do not alter the native note or Approve path. Observe whether the
+    // candidate's retained field value bleeds into the later native action.
+    const approved = await nativeConfirm(page, 'approved', true);
+    const afterApprove = truth(id);
+    const noteLeaked = JSON.stringify(afterApprove.timeline).includes(marker);
+    assert(approved.length === 1 && afterApprove.final === 'approved', JSON.stringify({ approved, afterApprove }));
+    return { rejectConfirmDismissed: true, approveNative: true, noteLeakedIntoApprove: noteLeaked, candidateSafe: !noteLeaked, disposition: noteLeaked ? 'CANDIDATE_FALSIFIED' : 'NO_CROSS_ACTION_LEAK_OBSERVED' };
+  });
 } finally {
   await browser.close();
   fs.writeFileSync(artifact + '/srwf-mr3-browser-qualification.json', JSON.stringify({
