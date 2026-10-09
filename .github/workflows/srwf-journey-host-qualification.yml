@@ -252,7 +252,7 @@ jobs:
           MR3SOURCE
           node tests/repro-evidence-lab/srwf-mr3-browser-qualification.mjs
           test -s "$WU21_ARTIFACT_DIR/srwf-mr3-browser-qualification.json"
-          node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.WU21_ARTIFACT_DIR+"/srwf-mr3-browser-qualification.json","utf8"));if(j.kind!=="NON_PRODUCTION_BROWSER_PROTOTYPE"||!Array.isArray(j.results)||j.results.length!==16){console.error("Incomplete MR3 capture",j);process.exit(1)}'
+          node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.WU21_ARTIFACT_DIR+"/srwf-mr3-browser-qualification.json","utf8"));if(j.kind!=="NON_PRODUCTION_BROWSER_PROTOTYPE"||!Array.isArray(j.results)||j.results.length!==17){console.error("Incomplete MR3 capture",j);process.exit(1)}'
 
           # Preserve the existing 13 production journey assertions unchanged.
           node tests/repro-evidence-lab/srwf-journey-production-browser.mjs
