@@ -81,7 +81,7 @@ function setSetting(value) {
     '$id=' + correctionId + ';$fid=' + formId + ';' +
     '$feed=GFAPI::get_feed($id);' +
     'if(is_wp_error($feed)||!is_array($feed)||!is_array($feed["meta"]))throw new RuntimeException("Native feed absent");' +
-    '$meta=$feed["meta"];$meta["default_status"]=' + JSON.stringify(value) + ';' +
+    'update_option("gpp_pr149_native_save_original_feed_meta",$feed["meta"],false);$meta=$feed["meta"];$meta["default_status"]=' + JSON.stringify(value) + ';' +
     '$ok=GFAPI::update_feed($id,$meta,$fid);' +
     'if(is_wp_error($ok)||!$ok)throw new RuntimeException("Native feed update failed");' +
     '$after=GFAPI::get_feed($id);echo wp_json_encode(array("setting"=>rgar($after["meta"],"default_status"),' +
@@ -259,7 +259,11 @@ try {
   if (originalMeta) {
     try {
       const restored = wpEval(
-        '$ok=GFAPI::update_feed(' + correctionId + ',' + JSON.stringify(originalMeta).replaceAll('\\', '\\\\').replaceAll("'", "\\'") + ',' + formId + ');echo $ok?"1":"0";'
+        '$meta=get_option("gpp_pr149_native_save_original_feed_meta");' +
+        'if(!is_array($meta))throw new RuntimeException("Original feed meta unavailable");' +
+        '$ok=GFAPI::update_feed(' + correctionId + ',$meta,' + formId + ');' +
+        'delete_option("gpp_pr149_native_save_original_feed_meta");' +
+        'echo $ok?"1":"0";'
       );
       report.restoration = { attempted: true, result: restored };
     } catch (error) {
