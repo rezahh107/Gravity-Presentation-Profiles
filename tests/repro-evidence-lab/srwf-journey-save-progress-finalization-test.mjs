@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { finalizeSaveProgressQualification } from './srwf-journey-save-progress-finalization.mjs';
 
@@ -120,6 +120,10 @@ if (assertionSites !== 17 || !script.includes('for (const width of [1440, 390, 3
 if (errors.length) {
   console.error('SAVE_PROGRESS_FINALIZATION_FALSIFICATION_FAIL', JSON.stringify({ errors, results }, null, 2));
   process.exit(1);
+}
+if (process.env.WU21_ARTIFACT_DIR) {
+  writeFileSync(process.env.WU21_ARTIFACT_DIR + '/srwf-pr149-save-progress-finalization-falsification.json',
+    JSON.stringify({ status: 'PASS', caseCount: results.length, scenarios: results }, null, 2));
 }
 console.log('SAVE_PROGRESS_FINALIZATION_FALSIFICATION_PASS', JSON.stringify({
   count: results.length,
