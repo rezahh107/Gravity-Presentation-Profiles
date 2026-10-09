@@ -198,6 +198,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(node --version)" = "v22.19.0"
+          node tests/repro-evidence-lab/srwf-journey-save-progress-finalization-test.mjs
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
           node -e "const p=require('playwright/package.json'); if(p.version!=='1.55.0') process.exit(1);"
