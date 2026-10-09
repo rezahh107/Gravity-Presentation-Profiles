@@ -91,41 +91,68 @@ async function installPrototype(page) {
         note.disabled || note.required) {
       return { eligible: false, reason: 'Native Review/Note or optional contract missing' };
     }
-    let wrapper = note;
-    while (wrapper && !wrapper.contains(label)) wrapper = wrapper.parentElement;
+    // Gravity Flow 3.1.0 renders the label and textarea in distinct
+    // .gravityflow-status-box-field-label / -value native siblings.
+    // Do not hide their lowest common ancestor: it also contains actions.
+    const labelBox = label.closest('.gravityflow-status-box-field-label');
+    const valueBox = note.closest('.gravityflow-status-box-field-value');
     const actionRegion = reject.closest('.gravityflow-action-buttons');
-    if (!wrapper || wrapper.contains(actionRegion) || wrapper === form ||
-        wrapper.classList.contains('gravityflow-status-box') ||
-        wrapper.querySelectorAll('textarea[name="gravityflow_note"]').length !== 1) {
-      return { eligible: false, reason: 'No bounded shared Note + label wrapper, cannot safely hide' };
+    const statusBox = actionRegion?.closest('.gravityflow-status-box');
+    if (!labelBox || !valueBox || !actionRegion || !statusBox ||
+        labelBox === valueBox || labelBox.contains(actionRegion) || valueBox.contains(actionRegion) ||
+        labelBox.querySelectorAll('label[for="gravityflow-note"]').length !== 1 ||
+        valueBox.querySelectorAll('textarea[name="gravityflow_note"]').length !== 1 ||
+        !statusBox.contains(labelBox) || !statusBox.contains(valueBox)) {
+      return {
+        eligible: false, reason: 'Native Note sibling boundaries changed',
+        labelAncestors: [...(function*(){for(let p=label,i=0;p&&i<5;p=p.parentElement,i++)yield p.className;})()],
+        valueAncestors: [...(function*(){for(let p=note,i=0;p&&i<5;p=p.parentElement,i++)yield p.className;})()]
+      };
     }
-    const original = { onclick: reject.getAttribute('onclick'), noteName: note.name, carrierName: carrier.name };
+    const original = {
+      onclick: reject.getAttribute('onclick'), noteName: note.name,
+      carrierName: carrier.name,
+      labelDisplay: labelBox.style.display,
+      valueDisplay: valueBox.style.display
+    };
+    const controls = document.createElement('div');
+    controls.setAttribute('data-mr3-prototype-controls', '1');
+    controls.lang = 'fa'; controls.dir = 'rtl';
     const guidance = document.createElement('p');
     guidance.textContent = 'دلیل رد پرونده (اختیاری)؛ می‌توانید این قسمت را خالی بگذارید.';
-    guidance.lang = 'fa'; guidance.dir = 'rtl';
+    guidance.id = 'mr3-optional-note-guidance';
     const cancel = document.createElement('button');
     cancel.type = 'button'; cancel.textContent = 'انصراف';
     cancel.setAttribute('data-mr3-prototype-cancel', '1');
-    wrapper.insertBefore(guidance, note);
-    wrapper.appendChild(cancel);
+    controls.append(guidance, cancel);
+    // Insert beside, never inside or around, the host's original action nodes.
+    actionRegion.parentElement.insertBefore(controls, actionRegion);
+    const initialDescription = note.getAttribute('aria-describedby');
+    note.setAttribute('aria-describedby',
+      [initialDescription, guidance.id].filter(Boolean).join(' '));
     let open = false;
     let intercepted = 0;
     const show = () => {
       open = true;
-      wrapper.style.display = '';
+      labelBox.style.display = original.labelDisplay;
+      valueBox.style.display = original.valueDisplay;
+      controls.hidden = false;
       note.focus({ preventScroll: true });
     };
     const close = () => {
       note.value = '';
       open = false;
-      wrapper.style.display = 'none';
+      labelBox.style.display = 'none';
+      valueBox.style.display = 'none';
+      controls.hidden = true;
       reject.focus({ preventScroll: true });
     };
     cancel.addEventListener('click', close);
-    wrapper.addEventListener('keydown', e => {
+    note.addEventListener('keydown', e => {
       if (e.key === 'Escape' && open) { e.preventDefault(); close(); }
     });
-    // Capture on form deliberately precedes the native button's inline onclick.
+    // Deliberately interception-dependent candidate. Native inline handler is
+    // untouched; NO click replay/requestSubmit/alternate persistence.
     form.addEventListener('click', e => {
       if (e.target.closest('button') !== reject || open) return;
       intercepted++;
@@ -133,16 +160,27 @@ async function installPrototype(page) {
       e.stopImmediatePropagation();
       show();
     }, true);
-    wrapper.style.display = 'none';
+    labelBox.style.display = 'none';
+    valueBox.style.display = 'none';
+    controls.hidden = true;
     window.__mr3TestSnapshot = () => ({
-      open, intercepted, wrapperVisible: getComputedStyle(wrapper).display !== 'none',
+      open, intercepted, wrapperVisible: getComputedStyle(labelBox).display !== 'none' && getComputedStyle(valueBox).display !== 'none',
       noteVisible: note.getBoundingClientRect().height > 0,
-      noteValue: note.value, focus: document.activeElement === note ? 'note' : document.activeElement === reject ? 'reject' : 'other',
+      noteValue: note.value,
+      focus: document.activeElement === note ? 'note' : document.activeElement === reject ? 'reject' : 'other',
       noteIdentityUnchanged: note.name === original.noteName && form.querySelectorAll('textarea[name="gravityflow_note"]').length === 1,
       rejectHandlerUnchanged: reject.getAttribute('onclick') === original.onclick,
       carrierUnchanged: carrier.name === original.carrierName
     });
-    return { eligible: true, original, wrapperTag: wrapper.tagName, wrapperClass: wrapper.className, panelInitial: window.__mr3TestSnapshot() };
+    return {
+      eligible: true,
+      original,
+      labelTag: labelBox.tagName,
+      labelClass: labelBox.className,
+      valueTag: valueBox.tagName,
+      valueClass: valueBox.className,
+      panelInitial: window.__mr3TestSnapshot()
+    };
   });
 }
 async function state(page) { return page.evaluate(() => window.__mr3TestSnapshot?.() || null); }
