@@ -138,7 +138,7 @@ final class EntryDetailMappingAdminController {
         }
         echo '</tbody></table></div>';
         echo '<p class="description">' . esc_html__( 'Suggestions are evidence only and are never connected automatically. Saving re-validates the active binding and the current Gravity Forms field/input inventory.', 'gravity-presentation-profiles' ) . '</p>';
-        echo '<p><button type="submit" class="button button-primary" data-gpp-entry-detail-mapping-submit formaction="' . esc_url( $post_url ) . '" formmethod="post" formnovalidate>' . esc_html__( 'Save Entry Detail mappings once', 'gravity-presentation-profiles' ) . '</button></p>';
+        echo '<p><button type="submit" class="button button-primary" data-gpp-entry-detail-mapping-submit formaction="' . esc_url( $post_url ) . '" formmethod="post" formnovalidate>' . esc_html__( 'ذخیره یک‌باره نگاشت‌های جزئیات پرونده', 'gravity-presentation-profiles' ) . '</button></p>';
         echo '</section>';
     }
 
