@@ -133,6 +133,12 @@ async function installPrototype(page) {
     // Persian free-text presentation only; native name/id and submission remain intact.
     note.setAttribute('dir', 'rtl');
     labelBox.setAttribute('dir', 'rtl');
+    // The pinned English host can impose an author-level LTR direction over
+    // the HTML dir attribute. Explicit local style is needed for the Persian
+    // Note; this is scoped to the single native control, not the whole form.
+    note.style.setProperty('direction', 'rtl', 'important');
+    note.style.setProperty('text-align', 'right');
+    labelBox.style.setProperty('direction', 'rtl');
     let open = false;
     let intercepted = 0;
     const show = () => {
