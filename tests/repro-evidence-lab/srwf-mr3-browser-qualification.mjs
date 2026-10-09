@@ -130,6 +130,9 @@ async function installPrototype(page) {
     const initialDescription = note.getAttribute('aria-describedby');
     note.setAttribute('aria-describedby',
       [initialDescription, guidance.id].filter(Boolean).join(' '));
+    // Persian free-text presentation only; native name/id and submission remain intact.
+    note.setAttribute('dir', 'rtl');
+    labelBox.setAttribute('dir', 'rtl');
     let open = false;
     let intercepted = 0;
     const show = () => {
@@ -311,6 +314,8 @@ try {
       const id = create('WIDTH' + width); await goto(page, id, true, width);
       const installed = await installPrototype(page); assert(installed.eligible, JSON.stringify(installed));
       const dir = await page.locator('.gravityflow_workflow_detail').first().evaluate(el => getComputedStyle(el).direction);
+      const noteDir = await page.locator(noteSelector).evaluate(el => getComputedStyle(el).direction);
+      assert(noteDir === 'rtl', JSON.stringify({ width, hostDirection: dir, noteDir }));
       await page.locator(rejectSelector).focus();
       await page.keyboard.press('Enter');
       const open = await state(page);
@@ -319,7 +324,7 @@ try {
       const closed = await state(page);
       assert(!closed.noteVisible && closed.focus === 'reject', JSON.stringify({ width, closed }));
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-      states.push({ width, dir, open, closed, overflow });
+      states.push({ width, hostDirection: dir, noteDirection: noteDir, open, closed, overflow });
     }
     return states;
   });
