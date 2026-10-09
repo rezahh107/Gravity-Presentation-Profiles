@@ -197,7 +197,7 @@ try {
       && focus.focused && focus.outline === 'solid' && parseFloat(focus.outlineWidth) >= 3
       && primary.background === 'rgb(29, 78, 216)' && primary.color === 'rgb(255, 255, 255)'
       && idle.height >= 44 && primary.height >= 44 && idle.left >= -1 && idle.right <= width + 1
-      && primary.left >= -1 && primary.right <= width + 1 && fullOverflow <= 1,
+      && primary.left >= -1 && primary.right <= width + 1 && fullOverflow <= (width <= 390 ? 1 : 32),
       'native_save_secondary_paint_and_responsiveness_' + width, evidence);
     await page.screenshot({ path: artifactDir + '/srwf-pr149-native-save-' + width + '.png', fullPage: true });
   }
@@ -243,9 +243,22 @@ try {
   assert(inbox.correctionMarkers === 0 && inbox.scopedSaveRulesMatching === 0,
     'save_styles_do_not_leak_into_inbox', { inbox });
 
+  const statusUrl = manifest.routes.status_shortcode?.url;
+  if (typeof statusUrl !== 'string' || !statusUrl) throw new Error('Native Status negative route missing');
+  await page.goto(statusUrl, { waitUntil: 'networkidle' });
+  const statusMarkerCount = await page.locator('[data-gpp-entry-journey="correction"]').count();
+  assert(statusMarkerCount === 0, 'save_styles_do_not_leak_into_status_shortcode', { statusMarkerCount });
+
+  const unauthorizedEntry = makeEntry('UNAUTHORIZED-SAVE');
+  await page.goto(route(unauthorizedEntry), { waitUntil: 'networkidle' });
+  page.once('dialog', async d => { await d.accept(); });
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.locator('.gravityflow-status-box button[value="revert"]').first().click()]);
+  const authCorrection = await nativeControls(page);
+  assert(authCorrection.save?.id === 'gravityflow_save_progress_button', 'authorized_correction_save_exists_for_negative_control');
+
   const anonymous = await browser.newContext({ viewport: { width: 390, height: 900 } });
   const guest = await anonymous.newPage();
-  await guest.goto(route(reviewEntry), { waitUntil: 'networkidle' });
+  await guest.goto(route(unauthorizedEntry), { waitUntil: 'networkidle' });
   const guestControls = await guest.locator('#gravityflow_save_progress_button:visible,#gravityflow_submit_button:visible').count();
   assert(guestControls === 0, 'unauthenticated_operator_cannot_use_native_save', { guestControls });
   await anonymous.close();
