@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { finalizeSaveProgressQualification } from './srwf-journey-save-progress-finalization.mjs';
 
 const env = process.env;
 const artifactDir = env.WU21_ARTIFACT_DIR;
@@ -81,7 +82,10 @@ function setSetting(value) {
     '$id=' + correctionId + ';$fid=' + formId + ';' +
     '$feed=GFAPI::get_feed($id);' +
     'if(is_wp_error($feed)||!is_array($feed)||!is_array($feed["meta"]))throw new RuntimeException("Native feed absent");' +
-    'update_option("gpp_pr149_native_save_original_feed_meta",$feed["meta"],false);$meta=$feed["meta"];$meta["default_status"]=' + JSON.stringify(value) + ';' +
+    'update_option("gpp_pr149_native_save_original_feed_meta",$feed["meta"],false);' +
+    '$backup=get_option("gpp_pr149_native_save_original_feed_meta",null);' +
+    'if(!is_array($backup)||serialize($backup)!==serialize($feed["meta"]))throw new RuntimeException("Original native feed recovery checkpoint unverified");' +
+    '$meta=$feed["meta"];$meta["default_status"]=' + JSON.stringify(value) + ';' +
     '$ok=GFAPI::update_feed($id,$meta,$fid);' +
     'if(is_wp_error($ok)||!$ok)throw new RuntimeException("Native feed update failed");' +
     '$after=GFAPI::get_feed($id);echo wp_json_encode(array("setting"=>rgar($after["meta"],"default_status"),' +
@@ -135,6 +139,8 @@ async function keyboardFocus(page, id) {
   throw new Error('Native button not reachable by Tab: ' + id);
 }
 let browser, context, page, originalMeta;
+let mutationMayHaveOccurred = false;
+let assertionsPassed = false;
 try {
   originalMeta = JSON.parse(wpEval('$f=GFAPI::get_feed(' + correctionId + ');echo wp_json_encode($f["meta"]);'));
   assert(originalMeta.default_status === 'hidden', 'default_fixture_setting_is_disabled', { value: originalMeta.default_status });
@@ -149,6 +155,13 @@ try {
   const baseline = await nativeControls(page);
   assert(!baseline.save && !baseline.complete && !baseline.correctionMarker, 'review_baseline_has_no_save_controls', { baseline });
 
+  // Never overwrite a retained recovery source from an earlier failed run.
+  // The mutation flag is set BEFORE the cross-process operation: WP-CLI may
+  // mutate the feed before failing or returning malformed output.
+  if (wpEval('echo get_option("gpp_pr149_native_save_original_feed_meta",null)===null?"ABSENT":"PRESENT";') !== 'ABSENT') {
+    throw new Error('Unresolved native feed recovery metadata already exists; refusing another mutation.');
+  }
+  mutationMayHaveOccurred = true;
   const setting = setSetting('submit_buttons');
   assert(setting.setting === 'submit_buttons', 'persisted_host_setting_readback', { setting });
   assert(JSON.stringify(setting.assignees) === JSON.stringify(originalMeta.assignees), 'host_assignees_unchanged');
@@ -264,28 +277,54 @@ try {
   await anonymous.close();
 
   report.observed_native_labels = { save: controls.save.value, complete: controls.complete.value };
-  report.status = 'VERIFIED';
+  assertionsPassed = true;
 } catch (error) {
-  report.status = 'NOT_PROVEN';
   report.error = String(error?.stack || error).slice(0, 20000);
 } finally {
-  if (originalMeta) {
-    try {
-      const restored = wpEval(
-        '$meta=get_option("gpp_pr149_native_save_original_feed_meta");' +
-        'if(!is_array($meta))throw new RuntimeException("Original feed meta unavailable");' +
-        '$ok=GFAPI::update_feed(' + correctionId + ',$meta,' + formId + ');' +
-        'delete_option("gpp_pr149_native_save_original_feed_meta");' +
-        'echo $ok?"1":"0";'
+  const finalized = await finalizeSaveProgressQualification({
+    assertionsPassed,
+    mutationMayHaveOccurred,
+    originalMeta,
+    restore: () => {
+      const response = wpEval(
+        '$meta=get_option("gpp_pr149_native_save_original_feed_meta",null);' +
+        'if(!is_array($meta))throw new RuntimeException("Original feed recovery source unavailable");' +
+        '$result=GFAPI::update_feed(' + correctionId + ',$meta,' + formId + ');' +
+        'if(is_wp_error($result))throw new RuntimeException("Native restore WP_Error: ".$result->get_error_message());' +
+        'echo $result?"true":"false";'
       );
-      report.restoration = { attempted: true, result: restored };
+      return response === 'true';
+    },
+    readback: () => JSON.parse(wpEval(
+      '$feed=GFAPI::get_feed(' + correctionId + ');' +
+      'if(is_wp_error($feed)||!is_array($feed)||!is_array($feed["meta"]))throw new RuntimeException("Native feed readback unavailable");' +
+      'echo wp_json_encode($feed["meta"],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);'
+    )),
+    clearRecovery: () => {
+      const response = wpEval(
+        'echo delete_option("gpp_pr149_native_save_original_feed_meta")?"true":"false";'
+      );
+      return response === 'true';
+    },
+  });
+  report.status = finalized.status;
+  report.restoration = finalized.restoration;
+  report.provisional_assertions_passed = assertionsPassed;
+
+  for (const [label, resource] of [['context', context], ['browser', browser]]) {
+    if (!resource) continue;
+    try {
+      await resource.close();
     } catch (error) {
-      report.restoration = { attempted: true, error: String(error) };
+      report.cleanup_diagnostics ??= [];
+      report.cleanup_diagnostics.push({ resource: label, error: String(error) });
+      report.status = 'NOT_PROVEN';
     }
   }
-  if (context) await context.close();
-  if (browser) await browser.close();
   fs.writeFileSync(artifactPath, JSON.stringify(report, null, 2));
-  console.log('PR149_NATIVE_SAVE_PROGRESS_QUALIFICATION ' + report.status + ' ' + JSON.stringify({ error: report.error, assertions: report.assertions.length, labels: report.observed_native_labels }));
+  console.log('PR149_NATIVE_SAVE_PROGRESS_QUALIFICATION ' + report.status + ' ' + JSON.stringify({
+    error: report.error, assertions: report.assertions.length,
+    restoration: report.restoration, labels: report.observed_native_labels,
+  }));
 }
 if (report.status !== 'VERIFIED') process.exit(1);
