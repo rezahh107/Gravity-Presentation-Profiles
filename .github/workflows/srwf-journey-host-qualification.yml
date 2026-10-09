@@ -252,11 +252,21 @@ jobs:
           mr4_status=$?
           set -e
 
+          # Evidence-only optional native Save Progress qualification on the same
+          # authentic pinned forward host. This restores only its disposable
+          # User Input feed setting; no GPP product or host code is modified.
+          set +e
+          node tests/repro-evidence-lab/srwf-journey-save-progress-browser.mjs
+          native_save_status=$?
+          set -e
+
           # Restore the historical host before the pre-existing downstream
           # Journey probes, even when MR-4 itself fails.
           php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
           test "$mr4_status" -eq 0
+          test "$native_save_status" -eq 0
+          test -s "$WU21_ARTIFACT_DIR/srwf-pr149-save-progress-browser.json"
           test -s "$WU21_ARTIFACT_DIR/srwf-journey-production-mr4-browser.json"
           node -e 'const fs=require("fs"); const p=process.env.WU21_ARTIFACT_DIR+"/srwf-journey-production-mr4-browser.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); if(!Array.isArray(j.results)||j.results.length!==8||j.results.some(x=>x.status!=="PASS")) process.exit(1);'
 
