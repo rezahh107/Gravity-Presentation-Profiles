@@ -90,7 +90,7 @@ for (const [name, config] of Object.entries(cases)) {
   if (executed.status !== (success ? 0 : 1)
       || result.status !== (success ? 'VERIFIED' : 'NOT_PROVEN')
       || result.restoration?.verified !== (success || name === 'qualification_fails_after_mutation' || name === 'cleanup_fails')
-      || result.recoveryRetained !== !success
+      || result.recoveryRetained !== !(success || name === 'qualification_fails_after_mutation')
       || result.attempts !== (name === 'mutation_not_attempted' || name === 'missing_original_metadata' ? 0 : 1)
       || result.reads !== ((success || name === 'qualification_fails_after_mutation'
         || name === 'cleanup_fails' || name === 'readback_mismatch') ? 1 : 0)
