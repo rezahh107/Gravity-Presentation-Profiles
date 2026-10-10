@@ -6,6 +6,16 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+### Added
+
+- Shipped a complete 17-topic bilingual in-plugin product guide in native Gravity Forms Add-On Settings and a native WordPress Persian gettext catalog for GPP-owned administration and form settings.
+- Added exact-head bilingual help/locale browser checks and release-package completeness guards for Help and translation assets.
+
+### Changed
+
+- Removed a forced RTL admin-mapping wrapper so English can follow WordPress LTR, without changing SRWF frontend presentation, mapping lifecycle or Gravity Flow workflow ownership.
+
+
 ## [0.4.1] - 2026-10-07
 
 ### Changed

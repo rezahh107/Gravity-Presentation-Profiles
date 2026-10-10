@@ -172,6 +172,8 @@ mutate_zip() {
     case "$mutation" in
         forbidden) mkdir -p "$dir/gravity-presentation-profiles/tests"; echo '<?php' > "$dir/gravity-presentation-profiles/tests/forbidden.php" ;;
         missing) rm -f "$dir/gravity-presentation-profiles/src/Bootstrap.php" ;;
+        missing-help) rm -f "$dir/gravity-presentation-profiles/help/fa_IR.html" ;;
+        missing-language) rm -f "$dir/gravity-presentation-profiles/languages/gravity-presentation-profiles-fa_IR.mo" ;;
         wrong-version) sed -i 's/Version: 9.8.7/Version: 9.8.6/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         missing-author) sed -i '/^[[:space:]]*\*[[:space:]]*Author:/d' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
         wrong-author) sed -i 's/Author: Reza Hashemi Hosseini/Author: Gravity Presentation Profiles/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
@@ -186,6 +188,10 @@ mutate_zip "$ZIP_RELATIVE" "$WORK/forbidden.zip" forbidden
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/forbidden.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing.zip" missing
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/missing-help.zip" missing-help
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-help.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/missing-language.zip" missing-language
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-language.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/wrong-version.zip" wrong-version
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/wrong-version.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing-author.zip" missing-author

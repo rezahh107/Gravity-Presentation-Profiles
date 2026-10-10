@@ -157,6 +157,8 @@ release_runtime_files() {
         find src -type f -name '*.php' -print
         find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print
         find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print
+        find help -type f -name '*.html' -print
+        find languages -type f \( -name '*.mo' -o -name '*.po' \) -print
     ) | LC_ALL=C sort -u
 }
 
@@ -167,6 +169,10 @@ gravity-presentation-profiles.php
 src/Autoloader.php
 src/Bootstrap.php
 src/GravityForms/AddOn.php
+src/GravityForms/InPluginHelp.php
+help/en_US.html
+help/fa_IR.html
+languages/gravity-presentation-profiles-fa_IR.mo
 src/GravityForms/EntryDetailSetupDiagnosticStore.php
 assets/css/base.css
 assets/css/gravity-forms-declarative.css

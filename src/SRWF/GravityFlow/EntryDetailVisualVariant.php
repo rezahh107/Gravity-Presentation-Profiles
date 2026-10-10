@@ -24,8 +24,8 @@ final class EntryDetailVisualVariant {
 
     public static function labels() {
         return array(
-            self::CURRENT_SAFE => 'Current / Safe — طرح فعلی و پایدار',
-            self::FULL_WIDTH => 'Full Width — طرح جدید تمام‌عرض',
+            self::CURRENT_SAFE => ( function_exists( '__' ) ? __( 'Current / Safe — stable design', 'gravity-presentation-profiles' ) : 'Current / Safe — طرح فعلی و پایدار' ),
+            self::FULL_WIDTH => ( function_exists( '__' ) ? __( 'Full Width — expanded design', 'gravity-presentation-profiles' ) : 'Full Width — طرح جدید تمام‌عرض' ),
         );
     }
 

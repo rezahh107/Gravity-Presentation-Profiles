@@ -29,6 +29,23 @@ final class AddOn extends \GFAddOn {
     protected $_title       = 'Gravity Presentation Profiles';
     protected $_short_title = 'Presentation Profiles';
 
+    /**
+     * The GFAddOn base constructor uses _full_path to normalize _path.
+     * Give it the real plugin entrypoint before its constructor executes;
+     * using __FILE__ here points Gravity Forms translation discovery at
+     * src/GravityForms/languages instead of the packaged languages directory.
+     */
+    public function __construct() {
+        $this->_full_path = defined( 'GPP_PLUGIN_FILE' )
+            ? GPP_PLUGIN_FILE
+            : dirname( __DIR__, 2 ) . '/gravity-presentation-profiles.php';
+
+        // Lightweight standalone unit stubs do not always define a base ctor.
+        if ( method_exists( \GFAddOn::class, '__construct' ) ) {
+            parent::__construct();
+        }
+    }
+
     public static function get_instance() {
         if ( null === self::$_instance ) {
             self::$_instance = new self();
@@ -151,6 +168,17 @@ final class AddOn extends \GFAddOn {
                 ),
             ),
             array(
+                'title' => esc_html__( 'Product Guide', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Practical offline help for GPP features, prerequisites, failure states and native host ownership.', 'gravity-presentation-profiles' ),
+                'fields' => array(
+                    array(
+                        'name' => 'product_help',
+                        'label' => esc_html__( 'In-plugin help', 'gravity-presentation-profiles' ),
+                        'type' => 'gpp_product_help',
+                    ),
+                ),
+            ),
+            array(
                 'title'       => esc_html__( 'Diagnostics & Support', 'gravity-presentation-profiles' ),
                 'description' => esc_html__( 'GPP keeps a small local record of recent presentation failures and degraded fail-closed decisions. Nothing is uploaded automatically. Download the sanitized JSON bundle only when you choose to share it with support or an external LLM.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
@@ -168,6 +196,11 @@ final class AddOn extends \GFAddOn {
         parent::init_admin();
         add_action( 'admin_post_gpp_download_general_llm_authoring_prompt', array( $this, 'download_general_llm_authoring_prompt' ) );
         add_action( 'admin_post_gpp_download_support_bundle', array( $this, 'download_support_bundle' ) );
+    }
+
+    public function settings_gpp_product_help( $field ) {
+        unset( $field );
+        InPluginHelp::render();
     }
 
     public function settings_gpp_general_llm_authoring_prompt( $field ) {
@@ -243,7 +276,7 @@ final class AddOn extends \GFAddOn {
     public function validate_visual_package_import( $field, $value ) {
         $json = $this->visualPackageJsonString( $value );
         if ( null === $json ) {
-            $this->setSettingsFieldError( $field, 'Profile Package JSON must be text or a decoded JSON object.' );
+            $this->setSettingsFieldError( $field, __( 'Profile Package JSON must be text or a decoded JSON object.', 'gravity-presentation-profiles' ) );
             return;
         }
         if ( '' === trim( $json ) ) {
@@ -285,7 +318,7 @@ final class AddOn extends \GFAddOn {
                 : '';
             $row_action = $this->decodeBindingManagementAction( $encoded );
             if ( 1 !== preg_match( '/^[a-f0-9]{24}$/', $row_token ) || null === $row_action || $this->bindingRowToken( $row_action ) !== $row_token ) {
-                $this->setSettingsFieldError( $field, 'The selected mapping row no longer matches its submitted action. Refresh the page and try again.' );
+                $this->setSettingsFieldError( $field, __( 'The selected mapping row no longer matches its submitted action. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
                 return;
             }
             $value = $encoded;
@@ -297,7 +330,7 @@ final class AddOn extends \GFAddOn {
 
         $action = $this->decodeBindingManagementAction( $value );
         if ( null === $action || ( ! $row_submission && 'rollback' !== $action['action'] ) ) {
-            $this->setSettingsFieldError( $field, 'The selected binding management action is invalid. Refresh the page and try again.' );
+            $this->setSettingsFieldError( $field, __( 'The selected binding management action is invalid. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -373,11 +406,11 @@ final class AddOn extends \GFAddOn {
                 return;
             }
 
-            $this->setSettingsFieldError( $field, 'The selected binding management action is not supported.' );
+            $this->setSettingsFieldError( $field, __( 'The selected binding management action is not supported.', 'gravity-presentation-profiles' ) );
         } catch ( LifecycleException $exception ) {
             $this->setSettingsFieldError( $field, $exception->getMessage() );
         } catch ( \Throwable $exception ) {
-            $this->setSettingsFieldError( $field, 'Binding management failed before the active mapping could be changed.' );
+            $this->setSettingsFieldError( $field, __( 'Binding management failed before the active mapping could be changed.', 'gravity-presentation-profiles' ) );
         }
     }
 
@@ -473,7 +506,7 @@ final class AddOn extends \GFAddOn {
         }
 
         if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
-            $this->setSettingsFieldError( $field, 'The selected operations setup action is invalid. Refresh the page and try again.' );
+            $this->setSettingsFieldError( $field, __( 'The selected operations setup action is invalid. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -483,7 +516,7 @@ final class AddOn extends \GFAddOn {
             $this->setSettingsFieldError( $field, $exception->getMessage() );
             return;
         } catch ( \Throwable $exception ) {
-            $this->setSettingsFieldError( $field, 'Operations setup failed before any presentation state was changed.' );
+            $this->setSettingsFieldError( $field, __( 'Operations setup failed before any presentation state was changed.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -525,7 +558,7 @@ final class AddOn extends \GFAddOn {
         }
 
         if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
-            $this->setSettingsFieldError( $field, 'The selected Inbox setup action is invalid. Refresh the page and try again.' );
+            $this->setSettingsFieldError( $field, __( 'The selected Inbox setup action is invalid. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -537,7 +570,7 @@ final class AddOn extends \GFAddOn {
             $this->setSettingsFieldError( $field, $exception->getMessage() );
             return;
         } catch ( \Throwable $exception ) {
-            $this->setSettingsFieldError( $field, 'Inbox setup failed before presentation state could be safely completed.' );
+            $this->setSettingsFieldError( $field, __( 'Inbox setup failed before presentation state could be safely completed.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -611,7 +644,7 @@ final class AddOn extends \GFAddOn {
         }
 
         if ( 1 !== preg_match( '/^form:([1-9][0-9]*)$/', trim( $value ), $matches ) ) {
-            $this->setSettingsFieldError( $field, 'The selected Entry Detail setup action is invalid. Refresh the page and try again.' );
+            $this->setSettingsFieldError( $field, __( 'The selected Entry Detail setup action is invalid. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -633,7 +666,7 @@ final class AddOn extends \GFAddOn {
             } catch ( \Throwable $diagnostic_exception ) {
                 // Diagnostics are observational and never change setup outcome.
             }
-            $this->setSettingsFieldError( $field, 'Entry Detail setup failed before presentation state could be safely completed.' );
+            $this->setSettingsFieldError( $field, __( 'Entry Detail setup failed before presentation state could be safely completed.', 'gravity-presentation-profiles' ) );
             return;
         }
 

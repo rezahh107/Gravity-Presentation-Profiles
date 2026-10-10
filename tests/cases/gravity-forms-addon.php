@@ -125,6 +125,14 @@ gpp_assert_same( array( 'GravityPresentationProfiles\\GravityForms\\AddOn' ), GF
 
 $addon_class = GFAddOn::$registered[0];
 $addon       = $addon_class::get_instance();
+$path_property = new ReflectionProperty( $addon_class, '_full_path' );
+$path_property->setAccessible( true );
+gpp_assert_same(
+    GPP_PLUGIN_FILE,
+    $path_property->getValue( $addon ),
+    'GFAddOn must use the real plugin entrypoint for relative bundled translation discovery.'
+);
+
 
 $visual_store  = new GppAddonMemoryStateStore();
 $binding_store = new GppAddonMemoryStateStore();

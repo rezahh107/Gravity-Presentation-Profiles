@@ -270,7 +270,7 @@ gpp_assert_same( null, gpp_edm_row( $amb_facts, 'student.home_phone' )['suggesti
 
 $controller_source = file_get_contents( $root . '/src/GravityForms/EntryDetailMappingAdminController.php' );
 gpp_assert_true( false === strpos( $controller_source, "'student.home_phone'" ), 'Owner-facing workflow must not special-case the current blocker.' );
-gpp_assert_true( false !== strpos( $controller_source, 'ذخیره یک‌باره نگاشت‌های جزئیات پرونده' ), 'Owner-facing workflow must expose one bounded save action.' );
+gpp_assert_true( false !== strpos( $controller_source, "esc_html__( 'Save Entry Detail mappings', 'gravity-presentation-profiles' )" ), 'Owner-facing workflow must expose one localized bounded save action.' );
 gpp_assert_true( false !== strpos( $controller_source, 'Field mapping is shared' ), 'UI must explicitly explain shared mapping impact.' );
 
 echo "ENTRY_DETAIL_MAPPING_WORKFLOW_TESTS_PASS\n";
