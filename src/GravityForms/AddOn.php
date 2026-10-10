@@ -25,7 +25,9 @@ final class AddOn extends \GFAddOn {
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
     protected $_path        = 'gravity-presentation-profiles/gravity-presentation-profiles.php';
-    protected $_full_path   = __FILE__;
+    // GFAddOn resolves bundled translations relative to this path, so it must
+    // refer to the plugin entrypoint rather than this nested implementation file.
+    protected $_full_path   = GPP_PLUGIN_FILE;
     protected $_title       = 'Gravity Presentation Profiles';
     protected $_short_title = 'Presentation Profiles';
 
