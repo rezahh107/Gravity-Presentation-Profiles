@@ -17,7 +17,7 @@ const settingsUrl = base + '/wp-admin/admin.php?page=gf_settings&subview=gravity
 const artifact = { scenario: 'GENERIC_NO_CODE_FORM_E2E', status: 'FAIL', fixture_kind: 'PREPARED_NOT_LIVE_LLM', phases: {}, errors: [] };
 
 function wpEval(code) {
-  return execFileSync('php', [cli, '--path=' + wp, 'eval', code], { encoding: 'utf8', env: process.env }).trim();
+  return execFileSync('php', [cli, '--path=' + wp, 'eval', code], { encoding: 'utf8', env: process.env });
 }
 function wpJson(code) {
   const marker = 'GPP_E2E_JSON:';
@@ -113,7 +113,7 @@ try {
   expect(!formState(fixtures.target.id).active, 'Target form was pre-enabled.');
   expect(!formState(fixtures.control.id).active, 'Control form was pre-enabled.');
   const controlBefore = await capture(frontend, fixtures.control, 1440);
-  const targetBefore = await capture(frontend, fixtures.target, 1440);
+  const targetBefore = await capture(frontend, fixtures.target, 390);
   artifact.phases.host_fixture = 'PASS';
 
   await admin.goto(base + '/wp-login.php', { waitUntil: 'domcontentloaded' });
