@@ -11,6 +11,7 @@ $cases = array(
     'dependency-version-authority.php',
     'core-resolution.php',
     'gravity-forms-addon.php',
+    'gfaddon-entrypoint-identity.php',
     'gravity-forms-asset-cache-identity.php',
     'plugin-settings-atomicity-controller.php',
     'form-presentation-ownership-settings.php',
