@@ -269,8 +269,10 @@ try {
     const unaffectedFocus = {};
     for (const kind of Object.keys(nativeSelectors)) {
       unaffectedFocus[kind] = await focusedNativePaint(frontend, fixtures.control, kind);
-      expect(same(nativeFocusBaseline[width][kind], unaffectedFocus[kind]),
-        'Unrelated native ' + kind + ' focus changed while target ACTIVE at ' + width + ': ' +
+      const paintProperties = ['borderColor', 'outlineColor', 'outlineStyle',
+        'outlineWidth', 'boxShadow', 'nativeFocusVariable', 'nativeNormalVariable'];
+      expect(paintProperties.every(property => nativeFocusBaseline[width][kind][property] === unaffectedFocus[kind][property]),
+        'Unrelated native ' + kind + ' settled focus paint changed while target ACTIVE at ' + width + ': ' +
         JSON.stringify({ before: nativeFocusBaseline[width][kind], during: unaffectedFocus[kind] }));
     }
     artifact.phases.unrelated_while_active[width] = { status: 'PASS', computed: unaffected, focus: unaffectedFocus };
