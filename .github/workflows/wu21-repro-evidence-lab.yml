@@ -300,6 +300,13 @@ jobs:
           }
           ' "$probe_body"
 
+      - name: Execute connected generic no-code Gravity Forms acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/generic-no-code-form-e2e-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/generic-no-code-form-e2e-results.json"
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |
@@ -543,6 +550,8 @@ jobs:
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
+            /tmp/wu21-artifacts/generic-no-code-form-e2e-results.json
+            /tmp/wu21-artifacts/generic-no-code-form-fixtures.json
             /tmp/wu21-artifacts/live-refresh-qualification.json
             /tmp/wu21-artifacts/live-refresh-materiality.json
             /tmp/wu21-artifacts/wu17-*.json

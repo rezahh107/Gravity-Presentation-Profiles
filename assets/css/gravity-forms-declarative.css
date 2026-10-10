@@ -16,6 +16,18 @@
     --gf-ctrl-border-color: var(--gpp-control-border);
 }
 
+/*
+ * Orbital may define its control border variable at the native input scope.
+ * Reproject only an explicitly declared border preference on ordinary native
+ * form controls; keep host focus/error/disabled border semantics untouched.
+ */
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield input[type="text"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield input[type="email"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield textarea,
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield select {
+    --gf-ctrl-border-color: var(--gpp-control-border);
+}
+
 .gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-focus-border_wrapper {
     --gf-ctrl-border-color-focus: var(--gpp-control-focus-border);
 }
