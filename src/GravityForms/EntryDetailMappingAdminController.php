@@ -40,7 +40,7 @@ final class EntryDetailMappingAdminController {
 
         echo '<div class="gpp-entry-detail-mapping-workflow" data-gpp-entry-detail-mapping-workflow>';
         self::renderResultFeedback();
-        echo '<p>' . esc_html__( 'These mappings are shared: changing one meaning's source can affect every GPP surface that uses it, including Entry Detail, Inbox and Print.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p>' . esc_html__( 'These mappings are shared: changing one meaning\'s source can affect every GPP surface that uses it, including Entry Detail, Inbox and Print.', 'gravity-presentation-profiles' ) . '</p>';
         echo '<p><small>' . esc_html__( 'Active Entry Detail profile:', 'gravity-presentation-profiles' ) . ' <bdi dir="ltr"><code>' . esc_html( $facts['profile']['package_id'] . '@' . $facts['profile']['package_version'] . ' / ' . $facts['profile']['profile_id'] ) . '</code></bdi></small></p>';
 
         if ( empty( $facts['contexts'] ) ) {
