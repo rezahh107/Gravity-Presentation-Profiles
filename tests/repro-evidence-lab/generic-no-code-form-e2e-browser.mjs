@@ -195,7 +195,11 @@ try {
   const initialActivations = initialLifecycle?.activations || {};
   expect(!formState(fixtures.target.id).active, 'Target form was pre-enabled.');
   expect(!formState(fixtures.control.id).active, 'Control form was pre-enabled.');
-  const controlBefore = await capture(frontend, fixtures.control, 1440);
+  const controlNative = {};
+  for (const width of [1440, 390, 320]) {
+    controlNative[width] = await capture(frontend, fixtures.control, width);
+  }
+  const controlBefore = controlNative[1440];
   const targetBefore = await capture(frontend, fixtures.target, 390);
   artifact.phases.host_fixture = 'PASS';
 
@@ -234,6 +238,14 @@ try {
   expect(!formState(fixtures.control.id).active, 'Unrelated form was activated.');
   artifact.phases.form_settings_selection = 'PASS';
 
+  artifact.phases.unrelated_while_active = {};
+  for (const width of [1440, 390, 320]) {
+    const unaffected = await capture(frontend, fixtures.control, width);
+    expect(same(controlNative[width], unaffected),
+      'Unrelated native form changed while target profile was ACTIVE at ' + width);
+    artifact.phases.unrelated_while_active[width] = { status: 'PASS', computed: unaffected };
+  }
+
   artifact.phases.responsive = {};
   for (const width of [1440, 390, 320]) {
     const observed = await capture(frontend, fixtures.target, width);
@@ -260,12 +272,23 @@ try {
     expect(observed.bounds.left >= -1 && observed.bounds.right <= width + 1 &&
       observed.inputBounds.left >= -1 && observed.inputBounds.right <= width + 1,
       'Form or control overflows viewport at ' + width);
+    artifact.phases.responsive[width].focus = {};
+    for (const kind of Object.keys(nativeSelectors)) {
+      const paint = await focusedNativePaint(frontend, fixtures.target, kind);
+      artifact.phases.responsive[width].focus[kind] = paint;
+      expect(paint.isFocused && paint.focusToken === '#2563EB',
+        'Native ' + kind + ' focus state or declared focus token absent at ' + width + ': ' + JSON.stringify(paint));
+      expect(paint.borderColor === 'rgb(37, 99, 235)',
+        'Native ' + kind + ' computed focus border deviates from declared focus color at ' + width + ': ' + JSON.stringify(paint));
+    }
     const form = frontend.locator('#gform_' + fixtures.target.id);
     await form.locator('input[type=text]').first().focus();
-    await frontend.keyboard.press('Tab');
-    expect(await form.locator('input[type=email]').first().evaluate(el => el === document.activeElement),
-      'Keyboard Tab did not reach native email control at ' + width);
-    artifact.phases.responsive[width] = { status: 'PASS', computed: observed };
+    for (const kind of ['email', 'select', 'textarea']) {
+      await frontend.keyboard.press('Tab');
+      expect(await form.locator(nativeSelectors[kind]).first().evaluate(el => el === document.activeElement),
+        'Native keyboard tab order did not reach ' + kind + ' at ' + width);
+    }
+    artifact.phases.responsive[width].status = 'PASS';
   }
   artifact.phases.computed_visual_effect = 'PASS';
 
@@ -279,11 +302,22 @@ try {
   ]);
   await frontend.locator('#gform_wrapper_' + fixtures.target.id + ' .gfield_error').first()
     .waitFor({ state: 'visible', timeout: 20000 });
-  artifact.phases.native_required_validation = 'PASS';
+  const validationPaint = await nativeValidationPaint(frontend, fixtures.target);
+  artifact.phases.native_required_validation = { status: 'CHECKING', computed: validationPaint };
+  for (const kind of Object.keys(nativeSelectors)) {
+    const error = validationPaint[kind];
+    expect(error && error.fieldError && error.messageVisible,
+      'Native required-field error state or visible validation message missing for ' + kind + ': ' + JSON.stringify(error));
+    expect(error.borderColor && error.borderColor !== 'rgb(21, 94, 117)',
+      'Native ' + kind + ' error state retained normal GPP border instead of native error paint: ' + JSON.stringify(error));
+  }
+  artifact.phases.native_required_validation.status = 'PASS';
 
   const validForm = frontend.locator('#gform_' + fixtures.target.id);
   await validForm.locator('input[type=text]').fill('Synthetic E2E');
   await validForm.locator('input[type=email]').fill('test@example.invalid');
+  await validForm.locator('select').selectOption('blue');
+  await validForm.locator('textarea').fill('Synthetic non-PII notes');
   await Promise.all([
     frontend.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
     validForm.locator('input[type=submit], button[type=submit]').first().click()
@@ -300,6 +334,21 @@ try {
   expect(!targetAfter.classes.includes('gpp-declarative_wrapper') && !targetAfter.surfaceToken &&
     !targetAfter.actionToken && targetAfter.background === targetBefore.background,
     'Native fallback did not restore form presentation after opt-out.');
+  artifact.phases.native_fallback_computed_controls = {};
+  for (const kind of Object.keys(nativeSelectors)) {
+    const nativeBefore = targetBefore.controls[kind];
+    const nativeAfter = targetAfter.controls[kind];
+    expect(nativeBefore && nativeAfter && nativeBefore.borderColor === nativeAfter.borderColor &&
+      nativeBefore.nativeBorderVariable === nativeAfter.nativeBorderVariable &&
+      !nativeAfter.declaredBorderToken && !nativeAfter.declaredFocusToken,
+      'Native fallback ' + kind + ' border paint/variables failed to restore: ' +
+      JSON.stringify({ nativeBefore, nativeAfter }));
+    artifact.phases.native_fallback_computed_controls[kind] = {
+      before: nativeBefore.borderColor,
+      after: nativeAfter.borderColor,
+      status: 'PASS'
+    };
+  }
   expect(Boolean(lifecycle()?.installed?.[packageData.package_id]?.[packageData.package_version]),
     'Opt-out removed immutable installed package.');
   artifact.phases.native_fallback_and_persistence = 'PASS';
