@@ -25,11 +25,26 @@ final class AddOn extends \GFAddOn {
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
     protected $_path        = 'gravity-presentation-profiles/gravity-presentation-profiles.php';
-    // GFAddOn resolves bundled translations relative to this path, so it must
-    // refer to the plugin entrypoint rather than this nested implementation file.
-    protected $_full_path   = GPP_PLUGIN_FILE;
+    protected $_full_path   = __FILE__;
     protected $_title       = 'Gravity Presentation Profiles';
     protected $_short_title = 'Presentation Profiles';
+
+    /**
+     * The GFAddOn base constructor uses _full_path to normalize _path.
+     * Give it the real plugin entrypoint before its constructor executes;
+     * using __FILE__ here points Gravity Forms translation discovery at
+     * src/GravityForms/languages instead of the packaged languages directory.
+     */
+    public function __construct() {
+        $this->_full_path = defined( 'GPP_PLUGIN_FILE' )
+            ? GPP_PLUGIN_FILE
+            : dirname( __DIR__, 2 ) . '/gravity-presentation-profiles.php';
+
+        // Lightweight standalone unit stubs do not always define a base ctor.
+        if ( method_exists( \GFAddOn::class, '__construct' ) ) {
+            parent::__construct();
+        }
+    }
 
     public static function get_instance() {
         if ( null === self::$_instance ) {
