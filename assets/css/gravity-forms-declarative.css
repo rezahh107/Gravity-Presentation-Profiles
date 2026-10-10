@@ -21,7 +21,10 @@
  * Reproject only an explicitly declared border preference on ordinary native
  * form controls; keep host focus/error/disabled border semantics untouched.
  */
-.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield :is(input[type="text"], input[type="email"], textarea, select) {
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield input[type="text"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield input[type="email"],
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield textarea,
+.gpp-enabled_wrapper.gpp-declarative_wrapper.gpp-has-controls-border_wrapper.gform-theme--framework .gfield select {
     --gf-ctrl-border-color: var(--gpp-control-border);
 }
 
