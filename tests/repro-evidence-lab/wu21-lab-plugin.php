@@ -237,6 +237,11 @@ if ( isset( $_GET['page'] ) && 'gf_settings' === $_GET['page'] ) {
             'init_completed' => did_action( 'init' ),
             'current_hook' => current_filter(),
             'domain_loaded' => is_textdomain_loaded( 'gravity-presentation-profiles' ),
+            'registry_has' => $GLOBALS['wp_textdomain_registry']->has( 'gravity-presentation-profiles' ),
+            'registry_path' => $GLOBALS['wp_textdomain_registry']->get( 'gravity-presentation-profiles', determine_locale() ),
+            'unloaded_marker' => isset( $GLOBALS['l10n_unloaded']['gravity-presentation-profiles'] ),
+            'l10n_entry_class' => isset( $GLOBALS['l10n']['gravity-presentation-profiles'] ) ? get_class( $GLOBALS['l10n']['gravity-presentation-profiles'] ) : null,
+            'target_mo_readable' => is_readable( WP_PLUGIN_DIR . '/gravity-presentation-profiles/languages/gravity-presentation-profiles-fa_IR.mo' ),
         );
         file_put_contents( $dir . '/gpp-wu21-locale-trace.jsonl', wp_json_encode( $event, JSON_UNESCAPED_UNICODE ) . "\n", FILE_APPEND | LOCK_EX );
     };
