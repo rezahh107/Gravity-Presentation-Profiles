@@ -551,6 +551,67 @@ await test('SRWF-PROD-MR4-CTA-IDENTITY-001', 'native User Input CTA relabel pres
   };
 });
 
+await test('SRWF-PROD-MR4-ACTION-PAINT-001', 'native Correction completion is primary; hover and unavailable states remain accessible and scoped', async () => {
+  const originalViewport = page.viewportSize();
+  const signatureBefore = semanticControlIdentity(await correctionControlSignature(page));
+  const observations = [];
+  try {
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      const submit = page.locator('#gravityflow_update_button:visible').first();
+      if (await submit.count() !== 1 || await submit.inputValue() !== 'اصلاح اطلاعات') {
+        throw new Error('Original native Correction completion control or its Persian label changed.');
+      }
+      const style = () => submit.evaluate(node => {
+        const css = getComputedStyle(node);
+        const box = node.getBoundingClientRect();
+        return { background: css.backgroundColor, color: css.color, opacity: css.opacity,
+          cursor: css.cursor, outline: css.outlineStyle, outlineWidth: css.outlineWidth,
+          height: box.height, left: box.left, right: box.right };
+      });
+      await page.mouse.move(0, 0);
+      const idle = await style();
+      await submit.hover();
+      await page.waitForTimeout(240);
+      const hover = await style();
+      await page.mouse.move(0, 0);
+      await submit.evaluate(node => { node.disabled = true; });
+      const disabled = await style();
+      await submit.evaluate(node => { node.disabled = false; });
+      await submit.evaluate(node => { node.setAttribute('aria-disabled', 'true'); });
+      const ariaDisabled = await style();
+      await submit.evaluate(node => { node.removeAttribute('aria-disabled'); });
+      await submit.focus();
+      const focus = await style();
+      const optionalSave = page.locator('#gravityflow_save_progress_button:visible');
+      const save = await optionalSave.count() ? await optionalSave.first().evaluate(node => {
+        const css = getComputedStyle(node);
+        return { background: css.backgroundColor, color: css.color };
+      }) : null;
+      if (idle.background !== 'rgb(29, 78, 216)'
+        || hover.background !== 'rgb(30, 64, 175)'
+        || disabled.opacity !== '0.65' || ariaDisabled.opacity !== '0.65'
+        || disabled.cursor !== 'default' || focus.outline === 'none'
+        || idle.height < 44 || idle.left < -1 || idle.right > width + 1
+        || (save && (save.background !== 'rgb(248, 250, 254)' || save.color !== 'rgb(29, 78, 216)'))) {
+        throw new Error(`Native Correction action-paint contract failed at ${width}: ${JSON.stringify({ idle, hover, disabled, ariaDisabled, focus, save })}`);
+      }
+      observations.push({ width, idle, hover, disabled, ariaDisabled, focus, optional_save_visible: save !== null, save });
+    }
+  } finally {
+    await page.locator('#gravityflow_update_button').first().evaluate(node => {
+      node.disabled = false;
+      node.removeAttribute('aria-disabled');
+    });
+    if (originalViewport) await page.setViewportSize(originalViewport);
+  }
+  const signatureAfter = semanticControlIdentity(await correctionControlSignature(page));
+  if (JSON.stringify(signatureBefore) !== JSON.stringify(signatureAfter)) {
+    throw new Error('Action presentation changed the native form/button transport identity.');
+  }
+  return { observations, native_semantic_identity_unchanged: true };
+});
+
 await test('SRWF-PROD-MR4-CONDITIONAL-001', 'native Gravity Forms conditional logic remains live', async () => {
   const input1 = page.locator('input[name="input_1"]').first();
   await commitTextByKeyboard(page, input1, 'SHOW-MR4');
