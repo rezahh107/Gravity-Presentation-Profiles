@@ -56,7 +56,33 @@ try {
       throw new Error('Help direction mismatch for ' + locale);
     }
     if (await page.getByText(fa ? 'بسته‌های پروفایل اعلانی' : 'Declarative Profile Packages', { exact: true }).count() < 1) {
-      throw new Error('Native gettext did not translate the GPP settings heading for ' + locale);
+      const browserTexts = await page.locator('h1, h2, h3, h4, th, label, legend').allTextContents();
+      const phpProbe = wpEval(
+        '$u=get_user_by("login","bootstrap_admin");' +
+        '$domain="gravity-presentation-profiles";' +
+        '$file=dirname(GPP_PLUGIN_FILE)."/languages/".$domain."-fa_IR.mo";' +
+        '$switched=switch_to_user_locale($u->ID);' +
+        '$result=array(' +
+          '"user_locale"=>get_user_locale($u),' +
+          '"request_locale"=>determine_locale(),' +
+          '"active_locale"=>get_locale(),' +
+          '"switched"=>$switched,' +
+          '"domain_loaded_before"=>is_textdomain_loaded($domain),' +
+          '"plugin_basename"=>plugin_basename(GPP_PLUGIN_FILE),' +
+          '"mo_file_readable"=>is_readable($file),' +
+          '"registry_path"=>$GLOBALS["wp_textdomain_registry"]->get($domain,"fa_IR"),' +
+          '"translation"=>__("Declarative Profile Packages",$domain),' +
+          '"domain_loaded_after"=>is_textdomain_loaded($domain)' +
+        ');' +
+        'if($switched){restore_previous_locale();}' +
+        'echo wp_json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);'
+      );
+      report.diagnostics = {
+        browser_headings: browserTexts.filter(s => s.includes('Profile') || s.includes('پروفایل') || s.includes('Guide') || s.includes('راهنما')).slice(0, 35),
+        browser_has_english: (await page.locator('body').innerText()).includes('Declarative Profile Packages'),
+        wp_probe: phpProbe,
+      };
+      throw new Error('Native gettext did not translate the GPP settings heading for ' + locale + ': ' + JSON.stringify(report.diagnostics));
     }
     if (await page.getByText(fa ? 'راهنمای محصول' : 'Product Guide', { exact: true }).count() < 1) {
       throw new Error('Native gettext did not translate GPP Help heading for ' + locale);
