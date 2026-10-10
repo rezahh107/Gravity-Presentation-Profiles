@@ -1,0 +1,63 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "portable.generic_e2e.presentation",
+  "package_version": "1.0.0",
+  "provenance": {
+    "producer": "prepared independent synthetic acceptance fixture",
+    "evidence_refs": []
+  },
+  "selected_surfaces": [
+    "gravity_forms.form"
+  ],
+  "design_tokens": {
+    "colors": {
+      "surface": "#E7F3FF",
+      "action": "#D4571B",
+      "border": "#155E75",
+      "focus": "#2563EB"
+    },
+    "spacing_px": {
+      "inline": 20
+    },
+    "radii_px": {
+      "panel": 18
+    }
+  },
+  "semantic_slots": [],
+  "surface_profiles": [
+    {
+      "surface": "gravity_forms.form",
+      "profile_id": "portable.generic_e2e.v1",
+      "token_refs": [
+        "colors.surface",
+        "colors.action",
+        "colors.border",
+        "colors.focus",
+        "spacing_px.inline",
+        "radii_px.panel"
+      ],
+      "semantic_slots": [],
+      "presentation": {
+        "composition": {
+          "direction": "rtl",
+          "surface_background": "colors.surface",
+          "surface_radius": "radii_px.panel",
+          "inline_padding": "spacing_px.inline",
+          "field_layout": "single_column"
+        },
+        "controls": {
+          "border": "colors.border",
+          "focus_border": "colors.focus"
+        },
+        "primary_action": {
+          "background": "colors.action"
+        }
+      }
+    }
+  ],
+  "reserved_extension_seam": {
+    "version": "1.0.0",
+    "state": "INERT"
+  }
+}
