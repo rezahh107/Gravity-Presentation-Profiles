@@ -32,7 +32,14 @@ final class Bootstrap {
         self::$initialized = true;
 
         if ( function_exists( 'add_action' ) ) {
+            add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
+        }
+    }
+
+    public static function loadTranslations() {
+        if ( function_exists( 'load_plugin_textdomain' ) && function_exists( 'plugin_basename' ) && defined( 'GPP_PLUGIN_FILE' ) ) {
+            load_plugin_textdomain( 'gravity-presentation-profiles', false, dirname( plugin_basename( GPP_PLUGIN_FILE ) ) . '/languages' );
         }
     }
 

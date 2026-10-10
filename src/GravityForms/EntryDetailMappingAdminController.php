@@ -38,9 +38,9 @@ final class EntryDetailMappingAdminController {
             return;
         }
 
-        echo '<div class="gpp-entry-detail-mapping-workflow" data-gpp-entry-detail-mapping-workflow dir="rtl">';
+        echo '<div class="gpp-entry-detail-mapping-workflow" data-gpp-entry-detail-mapping-workflow>';
         self::renderResultFeedback();
-        echo '<p>' . esc_html__( 'این نگاشت مشترک است: تغییر منبع یک مفهوم می‌تواند روی همهٔ سطح‌های GPP که همان مفهوم را مصرف می‌کنند، از جمله Entry Detail، Inbox و Print، اثر بگذارد.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p>' . esc_html__( 'These mappings are shared: changing one meaning's source can affect every GPP surface that uses it, including Entry Detail, Inbox and Print.', 'gravity-presentation-profiles' ) . '</p>';
         echo '<p><small>' . esc_html__( 'Active Entry Detail profile:', 'gravity-presentation-profiles' ) . ' <bdi dir="ltr"><code>' . esc_html( $facts['profile']['package_id'] . '@' . $facts['profile']['package_version'] . ' / ' . $facts['profile']['profile_id'] ) . '</code></bdi></small></p>';
 
         if ( empty( $facts['contexts'] ) ) {
@@ -138,7 +138,7 @@ final class EntryDetailMappingAdminController {
         }
         echo '</tbody></table></div>';
         echo '<p class="description">' . esc_html__( 'Suggestions are evidence only and are never connected automatically. Saving re-validates the active binding and the current Gravity Forms field/input inventory.', 'gravity-presentation-profiles' ) . '</p>';
-        echo '<p><button type="submit" class="button button-primary" data-gpp-entry-detail-mapping-submit formaction="' . esc_url( $post_url ) . '" formmethod="post" formnovalidate>' . esc_html__( 'ذخیره یک‌باره نگاشت‌های جزئیات پرونده', 'gravity-presentation-profiles' ) . '</button></p>';
+        echo '<p><button type="submit" class="button button-primary" data-gpp-entry-detail-mapping-submit formaction="' . esc_url( $post_url ) . '" formmethod="post" formnovalidate>' . esc_html__( 'Save Entry Detail mappings', 'gravity-presentation-profiles' ) . '</button></p>';
         echo '</section>';
     }
 
