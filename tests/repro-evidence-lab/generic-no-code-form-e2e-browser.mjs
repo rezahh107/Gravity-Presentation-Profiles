@@ -136,6 +136,55 @@ async function capture(page, form, width) {
   });
 }
 
+
+const nativeSelectors = {
+  text: 'input[type="text"]',
+  email: 'input[type="email"]',
+  select: 'select',
+  textarea: 'textarea'
+};
+
+async function focusedNativePaint(page, form, kind) {
+  const selector = '#gform_' + form.id + ' ' + nativeSelectors[kind];
+  const control = page.locator(selector).first();
+  await control.focus();
+  return control.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      nativeTag: element.tagName.toLowerCase(),
+      isFocused: document.activeElement === element && element.matches(':focus'),
+      borderColor: style.borderColor,
+      focusToken: style.getPropertyValue('--gpp-control-focus-border').trim(),
+      nativeFocusVariable: style.getPropertyValue('--gf-ctrl-border-color-focus').trim()
+    };
+  });
+}
+
+async function nativeValidationPaint(page, form) {
+  const selector = '#gform_wrapper_' + form.id;
+  return page.locator(selector).evaluate(wrapper => {
+    const fields = {};
+    for (const [kind, controlSelector] of Object.entries({
+      text: 'input[type="text"]', email: 'input[type="email"]',
+      select: 'select', textarea: 'textarea'
+    })) {
+      const nativeControl = wrapper.querySelector(controlSelector);
+      const field = nativeControl?.closest('.gfield');
+      const message = field?.querySelector('.gfield_validation_message');
+      const computed = nativeControl ? getComputedStyle(nativeControl) : null;
+      fields[kind] = {
+        tag: nativeControl?.tagName.toLowerCase() ?? null,
+        fieldError: Boolean(field?.classList.contains('gfield_error')),
+        messageVisible: Boolean(message && message.getClientRects().length > 0 && getComputedStyle(message).visibility !== 'hidden'),
+        borderColor: computed?.borderColor ?? null,
+        nativeErrorVariable: computed?.getPropertyValue('--gf-ctrl-border-color-error').trim() ?? null,
+        ariaInvalid: nativeControl?.getAttribute('aria-invalid') ?? null
+      };
+    }
+    return fields;
+  });
+}
+
 execFileSync('php', [cli, '--path=' + wp, 'eval-file', 'tests/repro-evidence-lab/setup-generic-no-code-form-fixtures.php'], { stdio: 'inherit', env: process.env });
 const fixtures = JSON.parse(fs.readFileSync(path.join(dir, 'generic-no-code-form-fixtures.json'), 'utf8'));
 const browser = await chromium.launch({ headless: true });
