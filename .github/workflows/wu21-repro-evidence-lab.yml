@@ -307,6 +307,13 @@ jobs:
           node tests/repro-evidence-lab/generic-no-code-form-e2e-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/generic-no-code-form-e2e-results.json"
 
+      - name: Verify both GPP Admin and Help locales in real WordPress browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/bilingual-admin-help-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/bilingual-admin-help-browser-results.json"
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |

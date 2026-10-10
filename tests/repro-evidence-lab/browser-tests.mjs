@@ -21,7 +21,6 @@ await import('./inbox-width-legacy-v040-carry-forward-evidence-bridge.mjs');
 
 globalThis.CSS = globalThis.CSS || { escape: value => String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1') };
 await import('./authoring-prompt-admin-browser-tests.mjs');
-await import('./bilingual-admin-help-browser-tests.mjs');
 await import('./diagnostics-admin-row-browser-tests.mjs');
 await import('./diagnostics-bundle-validate.mjs');
 await import('./inbox-settings-admin-browser-tests.mjs');
