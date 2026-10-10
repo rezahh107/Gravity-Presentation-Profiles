@@ -33,6 +33,18 @@ gpp_assert_true( strpos( $en, '<code dir="ltr">' ) !== false && strpos( $fa, '<c
 gpp_assert_true( strpos( $fa, 'بستر نگاشت' ) !== false && strpos( $en, 'binding' ) !== false, 'Both language documents must explain operational bindings.' );
 gpp_assert_same( $en, gpp_help_render( 'de_DE' ), 'Unshipped locale must use truthful English fallback.' );
 
+
+$schema = \GravityPresentationProfiles\Core\Portable\VisualProfilePackageV11::schemaDefinition();
+foreach ( $schema['presentation'] as $group => $fields ) {
+    foreach ( array_keys( $fields ) as $preference ) {
+        $token = '<code dir="ltr">' . $group . '.' . $preference . '</code>';
+        gpp_assert_true( strpos( $en, $token ) !== false && strpos( $fa, $token ) !== false, 'Both guides must list the exact authorable preference: ' . $group . '.' . $preference );
+    }
+}
+foreach ( $schema['capabilities'] as $capability ) {
+    gpp_assert_true( strpos( $en, $capability ) !== false && strpos( $fa, $capability ) !== false, 'Both guides must name supported capability: ' . $capability );
+}
+
 $root = dirname( __DIR__, 2 );
 $catalog = $root . '/languages/gravity-presentation-profiles-fa_IR.mo';
 gpp_assert_true( is_readable( $catalog ), 'Compiled Persian MO must be present in repository sources.' );
