@@ -545,6 +545,8 @@ jobs:
             /tmp/wu21-artifacts/fixture-manifest.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
+            /tmp/wu21-artifacts/generic-no-code-form-e2e-results.json
+            /tmp/wu21-artifacts/generic-no-code-form-fixtures.json
             /tmp/wu21-artifacts/live-refresh-qualification.json
             /tmp/wu21-artifacts/live-refresh-materiality.json
             /tmp/wu21-artifacts/wu17-*.json
