@@ -88,6 +88,10 @@ jobs:
       - name: Run GPP core tests
         run: php tests/run.php
 
+      - name: Build and validate clean local release and required bilingual assets
+        shell: bash
+        run: bash tests/release/release-contract-tests.sh
+
       - name: Validate repository CI package sources
         shell: bash
         run: bash scripts/validate-ci-package-sources.sh .
