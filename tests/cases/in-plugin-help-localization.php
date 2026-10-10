@@ -63,6 +63,7 @@ for ( $i = 0; $i < $header['count']; $i++ ) {
 foreach ( array( 'Declarative Profile Packages', 'Profile Package JSON', 'Product Guide', 'In-plugin help', 'Save Entry Detail mappings', 'Current / Safe — stable design' ) as $key ) {
     gpp_assert_true( isset( $entries[ $key ] ) && preg_match( '/[\x{0600}-\x{06FF}]/u', $entries[ $key ] ), 'MO must contain real Persian translation for ' . $key );
 }
+gpp_assert_same( 'ذخیره یک‌باره نگاشت‌های جزئیات پرونده', $entries['Save Entry Detail mappings'], 'Owner-approved Persian save wording must survive migration to native gettext.' );
 gpp_assert_true( strpos( $entries[''], 'charset=UTF-8' ) !== false, 'MO must declare UTF-8.' );
 
 echo "IN_PLUGIN_HELP_LOCALIZATION_PASS\n";
