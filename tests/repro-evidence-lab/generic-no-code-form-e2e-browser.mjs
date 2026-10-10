@@ -95,7 +95,32 @@ async function capture(page, form, width) {
     const control = wrapper.querySelector('input[type=text]');
     const rect = wrapper.getBoundingClientRect();
     const inputRect = control?.getBoundingClientRect();
+    const controlSelectors = {
+      text: 'input[type="text"]',
+      email: 'input[type="email"]',
+      select: 'select',
+      textarea: 'textarea'
+    };
+    const controls = Object.fromEntries(Object.entries(controlSelectors).map(([kind, selector]) => {
+      const element = wrapper.querySelector(selector);
+      if (!element) return [kind, null];
+      const computed = getComputedStyle(element);
+      const bounds = element.getBoundingClientRect();
+      return [kind, {
+        tag: element.tagName.toLowerCase(),
+        inputType: element instanceof HTMLInputElement ? element.type : null,
+        borderColor: computed.borderColor,
+        borderWidth: computed.borderWidth,
+        borderStyle: computed.borderStyle,
+        nativeBorderVariable: computed.getPropertyValue('--gf-ctrl-border-color').trim(),
+        focusBorderVariable: computed.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
+        declaredBorderToken: computed.getPropertyValue('--gpp-control-border').trim(),
+        declaredFocusToken: computed.getPropertyValue('--gpp-control-focus-border').trim(),
+        bounds: { left: bounds.left, right: bounds.right }
+      }];
+    }));
     return {
+      controls,
       classes: wrapper.className.split(/\s+/),
       background: style.backgroundColor,
       direction: style.direction,
@@ -164,6 +189,17 @@ try {
   for (const width of [1440, 390, 320]) {
     const observed = await capture(frontend, fixtures.target, width);
     artifact.phases.responsive[width] = { status: 'CHECKING', computed: observed };
+    for (const [kind, expectedTag] of Object.entries({ text: 'input', email: 'input', select: 'select', textarea: 'textarea' })) {
+      const control = observed.controls[kind];
+      expect(control && control.tag === expectedTag, 'Native ' + kind + ' control missing or replaced at ' + width);
+      expect(control.borderColor === 'rgb(21, 94, 117)' &&
+        control.declaredBorderToken === '#155E75',
+        'Normal-state computed ' + kind + ' border does not match package at ' + width + ': ' + JSON.stringify(control));
+      expect(control.borderStyle !== 'none' && control.borderWidth !== '0px',
+        'Native ' + kind + ' has no painted border at ' + width);
+      expect(control.bounds.left >= -1 && control.bounds.right <= width + 1,
+        'Native ' + kind + ' overflows at ' + width + ': ' + JSON.stringify(control.bounds));
+    }
     expect(observed.classes.includes('gpp-declarative_wrapper'), 'Missing generic declaration class at ' + width);
     expect(observed.background === 'rgb(231, 243, 255)' && observed.surfaceToken === '#E7F3FF',
       'Distinct surface paint not computed at ' + width);
