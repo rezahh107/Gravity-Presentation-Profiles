@@ -453,7 +453,7 @@ msgid "Safe suggestion"
 msgstr "پیشنهاد ایمن"
 
 msgid "Save Entry Detail mappings"
-msgstr "ذخیرهٔ یک‌بارهٔ نگاشت‌های جزئیات پرونده"
+msgstr "ذخیره یک‌باره نگاشت‌های جزئیات پرونده"
 
 msgid "Select a profile"
 msgstr "یک پروفایل انتخاب کنید"
@@ -553,9 +553,3 @@ msgstr "اجازهٔ دریافت پرامپت ساخت GPP را ندارید."
 
 msgid "You are not allowed to initialize GPP Entry Detail presentation."
 msgstr "اجازهٔ آماده‌سازی نمایش جزئیات پرونده GPP را ندارید."
-
-msgid "این نگاشت مشترک است: تغییر منبع یک مفهوم می‌تواند روی همهٔ سطح‌های GPP که همان مفهوم را مصرف می‌کنند، از جمله Entry Detail، Inbox و Print، اثر بگذارد."
-msgstr "این نگاشت مشترک است: تغییر منبع یک مفهوم ممکن است بر جزئیات پرونده، کارهای من و چاپ اثر بگذارد."
-
-msgid "ذخیره یک‌باره نگاشت‌های جزئیات پرونده"
-msgstr "ذخیرهٔ یک‌بارهٔ نگاشت‌های جزئیات پرونده"
