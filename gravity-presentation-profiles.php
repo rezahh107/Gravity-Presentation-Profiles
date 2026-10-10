@@ -9,6 +9,7 @@
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: gravity-presentation-profiles
+ * Domain Path: /languages
  */
 
 // Release authority: the plugin-header Version is canonical; release tooling
