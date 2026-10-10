@@ -60,9 +60,18 @@ async function submitAdminForm(page, field) {
 async function formSettings(page, id, enabled) {
   await page.goto(base + '/wp-admin/admin.php?page=gf_edit_forms&view=settings&subview=gravity-presentation-profiles&id=' + id, { waitUntil: 'networkidle' });
   const select = page.getByLabel('Installed declarative profile', { exact: true });
-  const toggle = page.getByLabel('Apply GPP presentation to this form', { exact: true });
+  // The GF Add-On Framework's checkbox may not expose its choice caption as
+  // the HTML accessible name. Address the actual canonical enabled field,
+  // rather than relying on presentation-only label text.
+  const toggle = page.locator('input[type="checkbox"][name*="enabled"], input[type="checkbox"][id*="enabled"]');
   await select.waitFor({ state: 'visible', timeout: 30000 });
-  await toggle.waitFor({ state: 'visible' });
+  const count = await toggle.count();
+  if (count !== 1) {
+    const checkboxes = await page.locator('input[type="checkbox"]').evaluateAll(nodes =>
+      nodes.map(n => ({ id: n.id, name: n.name, visible: n.getClientRects().length > 0 })));
+    throw new Error('Expected one native GPP enabled checkbox; found ' + count + ' candidates=' + JSON.stringify(checkboxes));
+  }
+  await toggle.waitFor({ state: 'visible', timeout: 20000 });
   if (enabled) {
     await select.selectOption(reference);
     await toggle.check();
