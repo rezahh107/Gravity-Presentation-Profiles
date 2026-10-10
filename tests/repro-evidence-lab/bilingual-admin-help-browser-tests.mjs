@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 const base = process.env.WU21_BASE_URL;
@@ -29,6 +29,9 @@ function setUserLocale(locale) {
 
 const settingsUrl = base + '/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles';
 const report = { id: 'GPP-BILINGUAL-ADMIN-HELP-001', status: 'FAIL', locales: {}, browser: 'chromium' };
+const localeTrace = path.join(evidence, 'gpp-wu21-locale-trace.jsonl');
+writeFileSync(localeTrace, '');
+
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 try {
@@ -81,6 +84,7 @@ try {
         browser_headings: browserTexts.filter(s => s.includes('Profile') || s.includes('پروفایل') || s.includes('Guide') || s.includes('راهنما')).slice(0, 35),
         browser_has_english: (await page.locator('body').innerText()).includes('Declarative Profile Packages'),
         wp_probe: phpProbe,
+        request_trace: existsSync(localeTrace) ? readFileSync(localeTrace, 'utf8').trim().split('\n').slice(-25).map(s => JSON.parse(s)) : [],
       };
       throw new Error('Native gettext did not translate the GPP settings heading for ' + locale + ': ' + JSON.stringify(report.diagnostics));
     }

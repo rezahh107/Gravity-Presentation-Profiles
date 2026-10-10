@@ -464,7 +464,7 @@ await page.goto(settingsUrl, { waitUntil: 'networkidle' });
 const selector = page.locator('#entry_detail_visual_variant_action');
 if (await selector.count() !== 1) throw new Error('Entry Detail design selector was not rendered in the existing GPP settings page.');
 const optionsBefore = await selector.locator('option').evaluateAll(items => items.map(item => ({ label: item.textContent?.trim() || '', value: item.value })));
-const fullChoiceBefore = optionsBefore.find(item => item.label.includes('Full Width') && item.label.includes('طرح جدید تمام‌عرض') && item.value);
+const fullChoiceBefore = optionsBefore.find(item => item.label.includes('Full Width') && (item.label.includes('expanded design') || item.label.includes('طرح جدید تمام‌عرض')) && item.value);
 if (!fullChoiceBefore) throw new Error(`Owner-readable Full Width choice unavailable: ${JSON.stringify(optionsBefore)}`);
 const staleFullCommand = fullChoiceBefore.value;
 await selector.selectOption(staleFullCommand);

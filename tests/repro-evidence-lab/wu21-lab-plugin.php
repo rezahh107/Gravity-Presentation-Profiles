@@ -218,3 +218,46 @@ $gpp_wu21_native_baseline_module = WP_PLUGIN_DIR . '/gravity-presentation-profil
 if ( is_file( $gpp_wu21_native_baseline_module ) ) {
     require_once $gpp_wu21_native_baseline_module;
 }
+
+
+// Lab-only request-local provenance: record when the GF Add-On Framework
+// resolves translated headings relative to native user-locale activation.
+if ( isset( $_GET['page'] ) && 'gf_settings' === $_GET['page'] ) {
+    $gpp_wu21_locale_trace = static function ( $phase, $original, $translated ) {
+        $dir = getenv( 'WU21_ARTIFACT_DIR' );
+        if ( ! is_string( $dir ) || ! is_dir( $dir ) ) {
+            return;
+        }
+        $event = array(
+            'phase' => $phase,
+            'original' => $original,
+            'translated' => $translated,
+            'determine_locale' => determine_locale(),
+            'user_locale' => get_user_locale(),
+            'init_completed' => did_action( 'init' ),
+            'current_hook' => current_filter(),
+            'domain_loaded' => is_textdomain_loaded( 'gravity-presentation-profiles' ),
+        );
+        file_put_contents( $dir . '/gpp-wu21-locale-trace.jsonl', wp_json_encode( $event, JSON_UNESCAPED_UNICODE ) . "\n", FILE_APPEND | LOCK_EX );
+    };
+    add_filter(
+        'gettext',
+        static function ( $translated, $original, $domain ) use ( $gpp_wu21_locale_trace ) {
+            if ( 'gravity-presentation-profiles' === $domain
+                && in_array( $original, array( 'Declarative Profile Packages', 'Product Guide' ), true ) ) {
+                $gpp_wu21_locale_trace( 'gettext', $original, $translated );
+            }
+            return $translated;
+        },
+        100,
+        3
+    );
+    add_action(
+        'admin_head',
+        static function () use ( $gpp_wu21_locale_trace ) {
+            $original = 'Declarative Profile Packages';
+            $gpp_wu21_locale_trace( 'admin_head_probe', $original, __( $original, 'gravity-presentation-profiles' ) );
+        },
+        5
+    );
+}
