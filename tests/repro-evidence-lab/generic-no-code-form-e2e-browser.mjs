@@ -214,6 +214,15 @@ try {
     controlNative[width] = await capture(frontend, fixtures.control, width);
   }
   const controlBefore = controlNative[1440];
+  const nativeFocusBaseline = {};
+  for (const width of [1440, 390, 320]) {
+    await capture(frontend, fixtures.control, width);
+    nativeFocusBaseline[width] = {};
+    for (const kind of Object.keys(nativeSelectors)) {
+      nativeFocusBaseline[width][kind] = await focusedNativePaint(frontend, fixtures.control, kind);
+    }
+  }
+  artifact.phases.native_focus_baseline = nativeFocusBaseline;
   const targetBefore = await capture(frontend, fixtures.target, 390);
   artifact.phases.host_fixture = 'PASS';
 
@@ -257,7 +266,14 @@ try {
     const unaffected = await capture(frontend, fixtures.control, width);
     expect(same(controlNative[width], unaffected),
       'Unrelated native form changed while target profile was ACTIVE at ' + width);
-    artifact.phases.unrelated_while_active[width] = { status: 'PASS', computed: unaffected };
+    const unaffectedFocus = {};
+    for (const kind of Object.keys(nativeSelectors)) {
+      unaffectedFocus[kind] = await focusedNativePaint(frontend, fixtures.control, kind);
+      expect(same(nativeFocusBaseline[width][kind], unaffectedFocus[kind]),
+        'Unrelated native ' + kind + ' focus changed while target ACTIVE at ' + width + ': ' +
+        JSON.stringify({ before: nativeFocusBaseline[width][kind], during: unaffectedFocus[kind] }));
+    }
+    artifact.phases.unrelated_while_active[width] = { status: 'PASS', computed: unaffected, focus: unaffectedFocus };
   }
 
   const discoveredPaintGaps = [];
@@ -362,9 +378,15 @@ try {
       !nativeAfter.declaredBorderToken && !nativeAfter.declaredFocusToken,
       'Native fallback ' + kind + ' border paint/variables failed to restore: ' +
       JSON.stringify({ nativeBefore, nativeAfter }));
+    const focusNativeAfter = await focusedNativePaint(frontend, fixtures.target, kind);
+    expect(focusNativeAfter.borderColor === nativeFocusBaseline[390][kind].borderColor &&
+      focusNativeAfter.nativeFocusVariable === nativeFocusBaseline[390][kind].nativeFocusVariable,
+      'Disabling GPP did not restore native ' + kind + ' focused paint/variables: ' +
+      JSON.stringify({ after: focusNativeAfter, nativeBaseline: nativeFocusBaseline[390][kind] }));
     artifact.phases.native_fallback_computed_controls[kind] = {
       before: nativeBefore.borderColor,
       after: nativeAfter.borderColor,
+      focusAfter: focusNativeAfter,
       status: 'PASS'
     };
   }
