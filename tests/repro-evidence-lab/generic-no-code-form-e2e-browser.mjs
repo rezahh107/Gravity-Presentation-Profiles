@@ -154,8 +154,15 @@ async function focusedNativePaint(page, form, kind) {
       nativeTag: element.tagName.toLowerCase(),
       isFocused: document.activeElement === element && element.matches(':focus'),
       borderColor: style.borderColor,
+      borderWidth: style.borderWidth,
+      outlineColor: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      boxShadow: style.boxShadow,
       focusToken: style.getPropertyValue('--gpp-control-focus-border').trim(),
-      nativeFocusVariable: style.getPropertyValue('--gf-ctrl-border-color-focus').trim()
+      nativeFocusVariable: style.getPropertyValue('--gf-ctrl-border-color-focus').trim(),
+      nativeNormalVariable: style.getPropertyValue('--gf-ctrl-border-color').trim()
     };
   });
 }
@@ -246,6 +253,7 @@ try {
     artifact.phases.unrelated_while_active[width] = { status: 'PASS', computed: unaffected };
   }
 
+  const discoveredPaintGaps = [];
   artifact.phases.responsive = {};
   for (const width of [1440, 390, 320]) {
     const observed = await capture(frontend, fixtures.target, width);
@@ -276,10 +284,12 @@ try {
     for (const kind of Object.keys(nativeSelectors)) {
       const paint = await focusedNativePaint(frontend, fixtures.target, kind);
       artifact.phases.responsive[width].focus[kind] = paint;
-      expect(paint.isFocused && paint.focusToken === '#2563EB',
-        'Native ' + kind + ' focus state or declared focus token absent at ' + width + ': ' + JSON.stringify(paint));
-      expect(paint.borderColor === 'rgb(37, 99, 235)',
-        'Native ' + kind + ' computed focus border deviates from declared focus color at ' + width + ': ' + JSON.stringify(paint));
+      if (!paint.isFocused || paint.focusToken !== '#2563EB') {
+        discoveredPaintGaps.push('Focus state/token ' + kind + ' at ' + width + ': ' + JSON.stringify(paint));
+      }
+      if (paint.borderColor !== 'rgb(37, 99, 235)') {
+        discoveredPaintGaps.push('Focus border paint ' + kind + ' at ' + width + ': ' + JSON.stringify(paint));
+      }
     }
     const form = frontend.locator('#gform_' + fixtures.target.id);
     await form.locator('input[type=text]').first().focus();
@@ -306,10 +316,12 @@ try {
   artifact.phases.native_required_validation = { status: 'CHECKING', computed: validationPaint };
   for (const kind of Object.keys(nativeSelectors)) {
     const error = validationPaint[kind];
-    expect(error && error.fieldError && error.messageVisible,
-      'Native required-field error state or visible validation message missing for ' + kind + ': ' + JSON.stringify(error));
-    expect(error.borderColor && error.borderColor !== 'rgb(21, 94, 117)',
-      'Native ' + kind + ' error state retained normal GPP border instead of native error paint: ' + JSON.stringify(error));
+    if (!error || !error.fieldError || !error.messageVisible) {
+      discoveredPaintGaps.push('Native required-field error/message ' + kind + ': ' + JSON.stringify(error));
+    }
+    if (!error?.borderColor || error.borderColor === 'rgb(21, 94, 117)') {
+      discoveredPaintGaps.push('Native error border paint ' + kind + ': ' + JSON.stringify(error));
+    }
   }
   artifact.phases.native_required_validation.status = 'PASS';
 
@@ -359,6 +371,9 @@ try {
   expect(same(lifecycle().activations || {}, initialActivations),
     'Connected form journey changed Gravity Flow operational surface activations.');
   artifact.phases.other_form_and_operational_isolation = 'PASS';
+  artifact.phases.focus_and_error_paint_findings = discoveredPaintGaps;
+  expect(discoveredPaintGaps.length === 0,
+    'Pinned-host native focus/error paint did not satisfy declared behavior: ' + discoveredPaintGaps.join(' | '));
   artifact.status = 'PASS';
 } catch (error) {
   artifact.errors.push(String(error?.stack || error).slice(0, 7000));
