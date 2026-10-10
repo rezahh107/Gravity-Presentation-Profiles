@@ -148,9 +148,16 @@ async function focusedNativePaint(page, form, kind) {
   const selector = '#gform_' + form.id + ' ' + nativeSelectors[kind];
   const control = page.locator(selector).first();
   await control.focus();
-  return control.evaluate(element => {
+  return control.evaluate(async element => {
+    const initialBorderColor = getComputedStyle(element).borderColor;
+    // Gravity Forms Orbital animates focus paint. Sampling immediately after
+    // focus() captures a transition frame, not the settled visual result.
+    const transitions = element.getAnimations().filter(animation => animation instanceof CSSTransition);
+    await Promise.all(transitions.map(animation => animation.finished.catch(() => null)));
     const style = getComputedStyle(element);
     return {
+      initialBorderColor,
+      focusTransitionCount: transitions.length,
       nativeTag: element.tagName.toLowerCase(),
       isFocused: document.activeElement === element && element.matches(':focus'),
       borderColor: style.borderColor,
