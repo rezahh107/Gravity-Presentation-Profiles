@@ -30,7 +30,7 @@ function load_plugin_textdomain( $domain, $deprecated, $relative_path ) {
 }
 call_user_func( $GLOBALS['gpp_actions'][0][1] );
 gpp_assert_same(
-    array( 'gravity-presentation-profiles', 'gravity-presentation-profiles/languages' ),
+    array( 'gravity-presentation-profiles', dirname( plugin_basename( GPP_PLUGIN_FILE ) ) . '/languages' ),
     $GLOBALS['gpp_textdomain_registered'],
     'Native init hook must register the bundled gettext directory without Gravity Forms present.'
 );
