@@ -1,0 +1,561 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Language: fa_IR\\n"
+"MIME-Version: 1.0\\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\\n"
+
+msgid "%1$s — raw: %2$s"
+msgstr "%1$s — مقدار خام: %2$s"
+
+msgid "Active (a different profile; setup will not replace it)"
+msgstr "فعال (پروفایل دیگر؛ جایگزین نمی‌شود)"
+
+msgid "Active (operations Print profile)"
+msgstr "فعال (پروفایل چاپ عملیات)"
+
+msgid "Active Entry Detail design"
+msgstr "طرح فعال جزئیات پرونده"
+
+msgid "Active Entry Detail profile:"
+msgstr "پروفایل فعال جزئیات پرونده:"
+
+msgid "Active binding version:"
+msgstr "نسخهٔ فعال نگاشت:"
+
+msgid "Active shared binding:"
+msgstr "نگاشت مشترک فعال:"
+
+msgid "Active: %s"
+msgstr "فعال: %s"
+
+msgid "Adopt the shipped SRWF Entry Detail presentation for one existing operations binding context. GPP qualifies only admitted stable host sources, preserves Inbox and Print, and never records or grants Gravity Flow assignment, Approval permission, or request authorization."
+msgstr "نمایش جزئیات پروندهٔ SRWF را برای بستر نگاشت موجود فعال کنید. فقط منابع مجاز میزبان بررسی می‌شوند؛ کارهای من و چاپ حفظ می‌شوند و هیچ مجوز یا واگذاری Gravity Flow اعطا نمی‌شود."
+
+msgid "Adopt the shipped SRWF Inbox presentation for one existing operations binding context. This action reuses the active EnvironmentBindingSet, verifies the admitted host sources, preserves Print, and never changes Gravity Flow assignment or authorization."
+msgstr "نمایش کارهای من SRWF را برای بستر نگاشت عملیاتی موجود فعال کنید. این اقدام از بستر فعال استفاده و منابع میزبان را بررسی می‌کند، چاپ را حفظ می‌کند و مجوز و واگذاری Gravity Flow را تغییر نمی‌دهد."
+
+msgid "Affected surface"
+msgstr "سطح تحت تأثیر"
+
+msgid "Appearance only. Gravity Flow workflow, data, permissions, mappings, Inbox and Print are unchanged. Current / Safe is the stable rollback design."
+msgstr "فقط ظاهر تغییر می‌کند. گردش کار، داده، مجوزها، نگاشت‌ها، کارهای من و چاپ ثابت می‌مانند. Current / Safe طرح پایدار بازگشت است."
+
+msgid "Apply GPP presentation to this form"
+msgstr "اعمال نمایش GPP به این فرم"
+
+msgid "Apply Print meaning"
+msgstr "اعمال معنای چاپ"
+
+msgid "Apply mapping"
+msgstr "اعمال نگاشت"
+
+msgid "Authoritative meaning unavailable"
+msgstr "مفهوم معتبر در دسترس نیست"
+
+msgid "Binding health is unavailable because the authoritative lifecycle or host field inventory could not be read."
+msgstr "سلامت نگاشت در دسترس نیست؛ چرخهٔ عمر یا فهرست فیلدهای میزبان خوانده نشد."
+
+msgid "Binding history rollback"
+msgstr "بازگشت به تاریخچهٔ نگاشت"
+
+msgid "Binding management failed before the active mapping could be changed."
+msgstr "مدیریت نگاشت پیش از تغییر نگاشت فعال ناموفق بود."
+
+msgid "Bring only the resulting package JSON back to the Profile Package JSON field above. GPP treats that output as untrusted input and validates it through the existing package lifecycle before it can be installed."
+msgstr "فقط JSON تولیدشده را به قسمت ورود بسته بیاورید. GPP آن را ورودی نامطمئن می‌داند و پیش از نصب اعتبارسنجی می‌کند."
+
+msgid "Canonical meaning"
+msgstr "مفهوم استاندارد"
+
+msgid "Changing this selector changes presentation only. Gravity Flow remains authoritative for workflow, actions, permissions and data."
+msgstr "تغییر این انتخاب فقط ظاهر را عوض می‌کند. Gravity Flow مالک گردش کار، عملیات، مجوزها و داده است."
+
+msgid "Checked by Gravity Flow on every request; never cached here."
+msgstr "Gravity Flow در هر درخواست بررسی می‌کند؛ اینجا ذخیره نمی‌شود."
+
+msgid "Choose the exact existing operations form, then save settings. Re-running this action is idempotent when the same stable host sources and Entry Detail activation are already authoritative. Gravity Flow still decides request-time Approval/current-assignee eligibility."
+msgstr "فرم عملیاتی موجود را انتخاب و تنظیمات را ذخیره کنید. اجرای مجدد با منابع و فعال‌سازی یکسان بی‌اثر است. Gravity Flow در هر درخواست مجوز اقدام را تعیین می‌کند."
+
+msgid "Choose the exact existing operations form, then save settings. Required mappings are never guessed or auto-repaired. Re-running this action refreshes only legitimate source-bound readiness evidence and is idempotent when nothing changed."
+msgstr "فرم عملیاتی موجود را انتخاب و ذخیره کنید. نگاشت‌ها حدس زده یا خودکار اصلاح نمی‌شوند. اجرای مجدد در صورت نبود تغییر بی‌اثر است."
+
+msgid "Choose the exact form this installation uses, then save settings. This action initializes Print only; the Inbox action below remains separate. The default performs no change."
+msgstr "فرم دقیق را انتخاب و تنظیمات را ذخیره کنید. این اقدام فقط چاپ را آماده می‌کند؛ کارهای من اقدام جداگانه دارد. حالت پیش‌فرض تغییری نمی‌دهد."
+
+msgid "Completeness"
+msgstr "کامل‌بودن"
+
+msgid "Configuration readiness"
+msgstr "آمادگی پیکربندی"
+
+msgid "Confirm real raw host values explicitly; no labels are guessed."
+msgstr "مقادیر خام واقعی میزبان را صریح تأیید کنید؛ از برچسب‌ها حدس زده نمی‌شود."
+
+msgid "Current / Safe — stable design"
+msgstr "Current / Safe — طرح فعلی و پایدار"
+
+msgid "Current Field %s is missing — choose explicitly"
+msgstr "فیلد %s موجود نیست — دستی انتخاب کنید"
+
+msgid "Current host source"
+msgstr "منبع فعلی میزبان"
+
+msgid "Current mapping / state"
+msgstr "نگاشت / وضعیت فعلی"
+
+msgid "Current mapping health"
+msgstr "سلامت نگاشت فعلی"
+
+msgid "Declarative Profile Packages"
+msgstr "بسته‌های پروفایل اعلانی"
+
+msgid "Derived from"
+msgstr "مشتق‌شده از"
+
+msgid "Diagnostics & Support"
+msgstr "عیب‌یابی و پشتیبانی"
+
+msgid "Download fixed authoring prompt"
+msgstr "دریافت پرامپت ثابت ساخت"
+
+msgid "Download sanitized support bundle (JSON)"
+msgstr "دریافت بستهٔ پشتیبانی پالایش‌شده (JSON)"
+
+msgid "Enable"
+msgstr "فعال‌سازی"
+
+msgid "Enable Gravity Presentation Profiles for this form"
+msgstr "فعال‌کردن نمایش Gravity Presentation Profiles برای این فرم"
+
+msgid "Entry Detail batch mapping"
+msgstr "نگاشت گروهی جزئیات پرونده"
+
+msgid "Entry Detail design"
+msgstr "طرح جزئیات پرونده"
+
+msgid "Entry Detail design switched successfully to %s."
+msgstr "طرح جزئیات پرونده با موفقیت به %s تغییر کرد."
+
+msgid "Entry Detail design switching failed before a safe visual activation could complete."
+msgstr "تغییر طرح جزئیات پرونده پیش از فعال‌سازی امن کامل ناموفق بود."
+
+msgid "Entry Detail design unavailable — no visual change"
+msgstr "طرح جزئیات پرونده در دسترس نیست — بدون تغییر"
+
+msgid "Entry Detail mapping change rejected"
+msgstr "تغییر نگاشت جزئیات پرونده رد شد"
+
+msgid "Entry Detail mapping failed before authoritative binding state could be changed."
+msgstr "تغییر نگاشت جزئیات پرونده پیش از تغییر وضعیت اصلی ناموفق بود."
+
+msgid "Entry Detail mapping for %s"
+msgstr "نگاشت جزئیات پرونده برای %s"
+
+msgid "Entry Detail mapping is unavailable because the active profile or binding lifecycle could not be read."
+msgstr "نگاشت جزئیات پرونده در دسترس نیست؛ چرخهٔ عمر پروفایل یا نگاشت فعال خوانده نشد."
+
+msgid "Entry Detail presentation setup did not complete."
+msgstr "آماده‌سازی جزئیات پرونده کامل نشد."
+
+msgid "Entry Detail presentation setup failed before activation could complete."
+msgstr "آماده‌سازی جزئیات پرونده پیش از فعال‌سازی کامل ناموفق بود."
+
+msgid "Entry Detail semantic mapping table"
+msgstr "جدول نگاشت معنایی جزئیات پرونده"
+
+msgid "Entry Detail setup failed before presentation state could be safely completed."
+msgstr "آماده‌سازی جزئیات پرونده پیش از تکمیل امن نمایش ناموفق بود."
+
+msgid "Entry Detail setup rejected"
+msgstr "راه‌اندازی جزئیات پرونده رد شد"
+
+msgid "Entry Detail setup stopped at %1$s: %2$s"
+msgstr "آماده‌سازی جزئیات پرونده در %1$s متوقف شد: %2$s"
+
+msgid "Entry Detail shared mappings were updated and one next immutable binding version was activated."
+msgstr "نگاشت‌های مشترک جزئیات پرونده تغییر کردند و نسخهٔ جدید تغییرناپذیر فعال شد."
+
+msgid "Evidence not proven"
+msgstr "شواهد اثبات نشده"
+
+msgid "Field %1$s — %2$s (%3$s)"
+msgstr "فیلد %1$s — %2$s (%3$s)"
+
+msgid "Field ID"
+msgstr "شناسهٔ فیلد"
+
+msgid "Field mapping is disabled until this semantic meaning has one unambiguous authoritative definition."
+msgstr "تا تعریف معتبر و یکتای مفهوم روشن نشود، نگاشت غیرفعال است."
+
+msgid "Field/Input %1$s — %2$s (%3$s)"
+msgstr "فیلد / ورودی %1$s — %2$s (%3$s)"
+
+msgid "Form %d"
+msgstr "فرم %d"
+
+msgid "Form %s"
+msgstr "فرم %s"
+
+msgid "Form presentation"
+msgstr "نمایش فرم"
+
+msgid "Full Width — expanded design"
+msgstr "Full Width — طرح جدید تمام‌عرض"
+
+msgid "GPP could not build the local support bundle."
+msgstr "GPP نتوانست بستهٔ پشتیبانی محلی بسازد."
+
+msgid "GPP does not contact an AI service. Copy or download this fixed prompt and use it in an external general-purpose LLM of your choice."
+msgstr "GPP به هوش مصنوعی متصل نیست. پرامپت ثابت را کپی یا دریافت و در LLM دلخواه بیرون از سایت استفاده کنید."
+
+msgid "GPP keeps a small local record of recent presentation failures and degraded fail-closed decisions. Nothing is uploaded automatically. Download the sanitized JSON bundle only when you choose to share it with support or an external LLM."
+msgstr "GPP فقط سوابق محلی خطاهای نمایش و تصمیم‌های بازگشت امن را حفظ می‌کند. چیزی خودکار ارسال نمی‌شود. فایل JSON پالایش‌شده را فقط در صورت تمایل برای پشتیبانی دریافت کنید."
+
+msgid "General LLM Authoring Prompt"
+msgstr "پرامپت ساخت با LLM عمومی"
+
+msgid "Gravity Forms field / input"
+msgstr "فیلد / ورودی Gravity Forms"
+
+msgid "Gravity Presentation Profiles"
+msgstr "Gravity Presentation Profiles"
+
+msgid "Health"
+msgstr "سلامت"
+
+msgid "Healthy"
+msgstr "سالم"
+
+msgid "In-plugin help"
+msgstr "راهنمای داخل افزونه"
+
+msgid "Inbox presentation setup did not complete."
+msgstr "آماده‌سازی کارهای من کامل نشد."
+
+msgid "Inbox setup failed before presentation state could be safely completed."
+msgstr "آماده‌سازی کارهای من پیش از تکمیل امن نمایش ناموفق بود."
+
+msgid "Inbox setup result"
+msgstr "نتیجهٔ راه‌اندازی کارهای من"
+
+msgid "Inbox setup stopped at %1$s: %2$s"
+msgstr "آماده‌سازی کارهای من در %1$s متوقف شد: %2$s"
+
+msgid "Inbox setup/adoption completed for %s."
+msgstr "فعال‌سازی کارهای من برای %s کامل شد."
+
+msgid "Initialize / Adopt Entry Detail presentation"
+msgstr "آماده‌سازی / فعال‌سازی جزئیات پرونده"
+
+msgid "Initialize / Adopt Inbox presentation"
+msgstr "آماده‌سازی / فعال‌سازی کارهای من"
+
+msgid "Initialize Print presentation"
+msgstr "آماده‌سازی نمایش چاپ"
+
+msgid "Initialize for: %1$s (Form %2$d)"
+msgstr "آماده‌سازی برای: %1$s (فرم %2$d)"
+
+msgid "Installed Gravity Forms profiles"
+msgstr "پروفایل‌های نصب‌شدهٔ Gravity Forms"
+
+msgid "Installed declarative profile"
+msgstr "پروفایل اعلانی نصب‌شده"
+
+msgid "Installed profile catalog unavailable"
+msgstr "فهرست پروفایل‌های نصب‌شده در دسترس نیست"
+
+msgid "Leave unresolved / make no change"
+msgstr "حل‌نشده / بدون تغییر"
+
+msgid "Legacy profile"
+msgstr "پروفایل قدیمی"
+
+msgid "Local diagnostics storage is currently unavailable. GPP presentation and native host fallback continue normally."
+msgstr "ذخیرهٔ محلی عیب‌یابی در دسترس نیست. نمایش GPP و بازگشت به میزبان بومی ادامه می‌یابد."
+
+msgid "Managed by its host adapter or semantic contract; no arbitrary Gravity Forms field selector is admitted here."
+msgstr "توسط میزبان یا قرارداد معنایی مدیریت می‌شود و انتخابگر فیلد دلخواه Gravity Forms ندارد."
+
+msgid "Map each admitted Gravity Forms-backed canonical meaning on its own row, apply that row explicitly, then review the resulting health. Not mapped is always explicit. Derived and host-managed meanings are shown without a misleading field selector. Every accepted change creates and conflict-safely activates a new immutable binding version."
+msgstr "منبع هر مفهوم Gravity Forms را در ردیف خودش انتخاب، اعمال و سلامت آن را بررسی کنید. مفهوم‌های مشتق یا متعلق به میزبان انتخابگر ساختگی ندارند. هر تغییر پذیرفته‌شده نسخهٔ تغییرناپذیر جدیدی را امن فعال می‌کند."
+
+msgid "Mapped"
+msgstr "نگاشت‌شده"
+
+msgid "Mapping"
+msgstr "نگاشت"
+
+msgid "Mapping & Binding Health"
+msgstr "نگاشت و سلامت اتصال"
+
+msgid "Mapping change failed."
+msgstr "تغییر نگاشت ناموفق بود."
+
+msgid "Mapping change rejected"
+msgstr "تغییر نگاشت رد شد"
+
+msgid "Mapping for %s"
+msgstr "نگاشت برای %s"
+
+msgid "Meaning"
+msgstr "معنا"
+
+msgid "Missing Gravity Forms field"
+msgstr "فیلد Gravity Forms یافت نشد"
+
+msgid "Needs review"
+msgstr "نیازمند بررسی"
+
+msgid "No"
+msgstr "خیر"
+
+msgid "No Inbox setup action has completed in this settings request."
+msgstr "هیچ عملیات آماده‌سازی کارهای من در این درخواست کامل نشده است."
+
+msgid "No active Entry Detail environment binding context is available."
+msgstr "بستر نگاشت محیطی فعالی برای جزئیات پرونده در دسترس نیست."
+
+msgid "No active environment binding contexts are installed."
+msgstr "هیچ بستر نگاشت فعال محیطی نصب نشده است."
+
+msgid "No additional GPP fallback action recorded."
+msgstr "اقدام بازگشت دیگری ثبت نشده است."
+
+msgid "No installed declarative Gravity Forms profiles."
+msgstr "هیچ پروفایل اعلانی Gravity Forms نصب نشده است."
+
+msgid "No recent GPP failure or degraded presentation decision is stored."
+msgstr "هیچ خطای اخیر GPP یا تصمیم کاهش‌یافته ثبت نشده است."
+
+msgid "No rollback"
+msgstr "بدون بازگشت"
+
+msgid "No setup change"
+msgstr "بدون تغییر راه‌اندازی"
+
+msgid "No shared mapping facts changed. No new binding version was created."
+msgstr "هیچ نگاشتی عوض نشد و نسخهٔ تازه‌ای ساخته نشد."
+
+msgid "None — choose manually if needed."
+msgstr "هیچ‌کدام — در صورت نیاز دستی انتخاب کنید."
+
+msgid "Not activated yet"
+msgstr "هنوز فعال نشده"
+
+msgid "Not applicable"
+msgstr "نامرتبط"
+
+msgid "Not confirmed"
+msgstr "تأیید نشده"
+
+msgid "Not mapped"
+msgstr "بدون نگاشت"
+
+msgid "Observed"
+msgstr "مشاهده‌شده"
+
+msgid "Offline authoring prompt"
+msgstr "پرامپت ساخت آفلاین"
+
+msgid "Operational diagnostics"
+msgstr "عیب‌یابی عملیات"
+
+msgid "Operations Setup (Entry Detail)"
+msgstr "راه‌اندازی عملیات (جزئیات پرونده)"
+
+msgid "Operations Setup (Inbox)"
+msgstr "راه‌اندازی عملیات (کارهای من)"
+
+msgid "Operations Setup (Print)"
+msgstr "راه‌اندازی عملیات (چاپ)"
+
+msgid "Operations package present"
+msgstr "بستهٔ عملیات موجود است"
+
+msgid "Operations readiness is unavailable because the authoritative lifecycle state could not be read."
+msgstr "آمادگی عملیات در دسترس نیست؛ وضعیت معتبر چرخهٔ عمر خوانده نشد."
+
+msgid "Operations setup did not complete."
+msgstr "آماده‌سازی عملیات کامل نشد."
+
+msgid "Operations setup failed before any presentation state was changed."
+msgstr "راه‌اندازی عملیات پیش از تغییر نمایش ناموفق بود."
+
+msgid "Operations setup stopped at %1$s and changed nothing there: %2$s"
+msgstr "آماده‌سازی عملیات در %1$s متوقف شد و چیزی تغییر نداد: %2$s"
+
+msgid "Optional"
+msgstr "اختیاری"
+
+msgid "Optional screenshots or design references are selected and shared by you directly with that external tool. GPP does not collect or attach site, form, entry, upload, credential or token data to this prompt."
+msgstr "اشتراک تصاویر و مراجع طراحی با ابزار بیرونی به انتخاب شماست. GPP دادهٔ سایت، فرم، پرونده، فایل، اطلاعات ورود یا توکن را جمع‌آوری و ضمیمه نمی‌کند."
+
+msgid "Package"
+msgstr "بسته"
+
+msgid "Paste a validated GPP Profile Package JSON document and save settings to import it. Package JSON is validated and installed through the GPP lifecycle and is not retained as a second settings store."
+msgstr "JSON معتبر بستهٔ GPP را جای‌گذاری و تنظیمات را ذخیره کنید. بسته اعتبارسنجی و نصب می‌شود و JSON ورودی به‌عنوان تنظیمات دوم نگهداری نمی‌شود."
+
+msgid "Practical offline help for GPP features, prerequisites, failure states and native host ownership."
+msgstr "راهنمای آفلاین قابلیت‌ها، پیش‌نیازها، خطاها و مالکیت میزبان."
+
+msgid "Prepare Print presentation for one real Gravity Forms form. GPP installs the shipped operations package, adopts only the Print presentation profile, and creates the environment binding context with every canonical meaning left explicitly unmapped. GPP never guesses a field from its label, name or position: you map fields yourself below. Re-running this is safe; existing activations and repaired mappings are preserved, and a different existing activation is reported instead of replaced."
+msgstr "چاپ را برای یک فرم واقعی Gravity Forms آماده کنید. بستهٔ عملیاتی و پروفایل چاپ فعال می‌شوند؛ نگاشت‌ها ابتدا خالی‌اند و باید دستی تعیین شوند. GPP از روی نام و موقعیت فیلد حدس نمی‌زند. اجرای دوباره اطلاعات معتبر را حفظ می‌کند و فعال‌سازی ناسازگار را جایگزین نمی‌کند."
+
+msgid "Present and unmodified"
+msgstr "موجود و بدون تغییر"
+
+msgid "Print choice meaning"
+msgstr "معنای گزینهٔ چاپ"
+
+msgid "Print mapping for %1$s %2$s"
+msgstr "نگاشت چاپ برای %1$s %2$s"
+
+msgid "Print request authorization"
+msgstr "مجوز درخواست چاپ"
+
+msgid "Print surface activation"
+msgstr "فعال‌سازی نمایش چاپ"
+
+msgid "Product Guide"
+msgstr "راهنمای محصول"
+
+msgid "Profile"
+msgstr "پروفایل"
+
+msgid "Profile Package JSON"
+msgstr "JSON بستهٔ پروفایل"
+
+msgid "Profile Package JSON must be text or a decoded JSON object."
+msgstr "JSON بستهٔ پروفایل باید متن یا شیء JSON رمزگشایی‌شده باشد."
+
+msgid "Reason:"
+msgstr "دلیل:"
+
+msgid "Required"
+msgstr "ضروری"
+
+msgid "Required Print assets"
+msgstr "فایل‌های ضروری چاپ"
+
+msgid "Rollback is separate from normal row-by-row mapping. Choose one previously-authoritative immutable version only when you intentionally want to reactivate it. The default performs no binding change."
+msgstr "بازگشت با نگاشت ردیفی تفاوت دارد. تنها برای فعال‌سازی عمدی نسخهٔ معتبر قبلی، آن را انتخاب کنید. حالت پیش‌فرض تغییری ایجاد نمی‌کند."
+
+msgid "Rollback: %1$s → binding version %2$s"
+msgstr "بازگشت: %1$s ← نسخهٔ نگاشت %2$s"
+
+msgid "Safe fallback"
+msgstr "بازگشت امن"
+
+msgid "Safe suggestion"
+msgstr "پیشنهاد ایمن"
+
+msgid "Save Entry Detail mappings"
+msgstr "ذخیرهٔ یک‌بارهٔ نگاشت‌های جزئیات پرونده"
+
+msgid "Select a profile"
+msgstr "یک پروفایل انتخاب کنید"
+
+msgid "Select the existing Gravity Forms form before initializing Entry Detail presentation."
+msgstr "پیش از آماده‌سازی جزئیات پرونده، فرم موجود Gravity Forms را انتخاب کنید."
+
+msgid "Selects one exact installed package version and profile for this form. A declarative selection takes precedence over the legacy profile field and fails closed if it can no longer be resolved."
+msgstr "یک نسخهٔ دقیق از بسته و پروفایل نصب‌شده را انتخاب می‌کند. انتخاب اعلانی بر قدیمی مقدم است و اگر قابل بازیابی نباشد، نمایش فعال نمی‌شود."
+
+msgid "Show prompt for copying"
+msgstr "نمایش پرامپت برای کپی"
+
+msgid "Stale / source missing"
+msgstr "قدیمی / منبع گم‌شده"
+
+msgid "Suggestions are evidence only and are never connected automatically. Saving re-validates the active binding and the current Gravity Forms field/input inventory."
+msgstr "پیشنهادها فقط شواهدند و خودکار متصل نمی‌شوند. هنگام ذخیره، نگاشت فعال و فهرست فیلد / ورودی Gravity Forms دوباره بررسی می‌شوند."
+
+msgid "The active Entry Detail visual activation could not be read. No visual change was attempted."
+msgstr "فعال‌سازی طرح جزئیات پرونده خوانده نشد. هیچ تغییر ظاهری انجام نشد."
+
+msgid "The bundled GPP guide is unavailable. Reinstall a validated release package."
+msgstr "راهنمای همراه افزونه پیدا نشد. بستهٔ انتشار معتبر را دوباره نصب کنید."
+
+msgid "The current Entry Detail visual activation is not one of the two Owner-selectable designs. Refresh after resolving that lifecycle state; GPP will not overwrite it silently."
+msgstr "طرح فعلی جزئیات پرونده یکی از دو طرح انتخابی نیست. وضعیت را اصلاح و صفحه را تازه کنید؛ GPP آن را خودکار بازنویسی نمی‌کند."
+
+msgid "The existing compatible EnvironmentBindingSet was reused, source-bound Inbox readiness was qualified where supported, and the current Print activation was preserved."
+msgstr "بستر نگاشت سازگار دوباره استفاده شد، آمادگی منابع کارهای من تا حد مجاز بررسی و فعال‌سازی چاپ حفظ شد."
+
+msgid "The selected Entry Detail setup action is invalid. Refresh the page and try again."
+msgstr "عملیات راه‌اندازی جزئیات پرونده نامعتبر است. صفحه را تازه کنید."
+
+msgid "The selected Inbox setup action is invalid. Refresh the page and try again."
+msgstr "عملیات راه‌اندازی کارهای من نامعتبر است. صفحه را تازه کنید."
+
+msgid "The selected binding management action is invalid. Refresh the page and try again."
+msgstr "عملیات نگاشت نامعتبر است. صفحه را تازه کنید."
+
+msgid "The selected binding management action is not supported."
+msgstr "عملیات نگاشت پشتیبانی نمی‌شود."
+
+msgid "The selected mapping row no longer matches its submitted action. Refresh the page and try again."
+msgstr "ردیف نگاشت با عملیات ارسال‌شده مطابقت ندارد. صفحه را تازه کنید."
+
+msgid "The selected operations setup action is invalid. Refresh the page and try again."
+msgstr "عملیات راه‌اندازی نامعتبر است. صفحه را تازه کنید."
+
+msgid "These are configuration facts only. They never state that a person may print. Gravity Flow decides Print authorization for this user, this entry, this workflow step and this request, every request."
+msgstr "این‌ها فقط وضعیت پیکربندی‌اند و اجازهٔ چاپ به فرد نمی‌دهند. Gravity Flow برای هر کاربر، پرونده، مرحله و درخواست مجوز چاپ را جداگانه بررسی می‌کند."
+
+msgid "These mappings are shared: changing one meaning's source can affect every GPP surface that uses it, including Entry Detail, Inbox and Print."
+msgstr "این نگاشت مشترک است: تغییر منبع یک مفهوم می‌تواند بر جزئیات پرونده، کارهای من و چاپ اثر بگذارد."
+
+msgid "These records contain GPP decision facts only. Submitted form values, uploaded file names/content, cookies, tokens, credentials and request payloads are not collected."
+msgstr "این سوابق فقط واقعیت‌های تصمیم GPP هستند. مقادیر فرم، نام یا محتوای فایل‌ها، کوکی‌ها، توکن‌ها، اطلاعات ورود و متن درخواست جمع‌آوری نمی‌شوند."
+
+msgid "This selection is preserved while GPP presentation is off, but it is not applied to the form until GPP presentation is turned back on."
+msgstr "این انتخاب در زمان غیرفعال‌بودن GPP حفظ می‌شود اما تا فعال‌سازی دوباره روی فرم اعمال نمی‌شود."
+
+msgid "Type"
+msgstr "نوع"
+
+msgid "Unmapped"
+msgstr "بدون نگاشت"
+
+msgid "Unsupported current source"
+msgstr "منبع فعلی پشتیبانی‌نشده"
+
+msgid "Use legacy profile selection"
+msgstr "استفاده از پروفایل قدیمی"
+
+msgid "Use the fixed GPP prompt with a general-purpose LLM outside this site, then paste only the resulting package JSON into the existing Profile Package JSON importer above. GPP does not contact an AI service or automatically send site data."
+msgstr "پرامپت ثابت GPP را در یک LLM بیرون از سایت به‌کار ببرید و فقط JSON خروجی را وارد کنید. GPP هیچ داده‌ای را خودکار به سرویس هوش مصنوعی نمی‌فرستد."
+
+msgid "Version"
+msgstr "نسخه"
+
+msgid "What happened"
+msgstr "چه اتفاقی افتاد"
+
+msgid "When enabled, GPP may apply the selected Gravity Forms presentation profile to this form. Turn this off when another presentation system owns this form's appearance. Disabling this affects only GPP presentation of this Gravity Forms form; it does not disable GPP Inbox, Entry Detail, Print, mappings, diagnostics, or other forms."
+msgstr "اگر فعال باشد، GPP ظاهر این فرم را تغییر می‌دهد. وقتی سیستم دیگری مالک ظاهر فرم است، آن را خاموش کنید. خاموشی صرفاً روی این فرم اثر دارد، نه کارهای من، جزئیات پرونده، چاپ، نگاشت‌ها، عیب‌یابی یا سایر فرم‌ها."
+
+msgid "Yes"
+msgstr "بله"
+
+msgid "You are not allowed to change GPP semantic mappings."
+msgstr "اجازهٔ تغییر نگاشت‌های معنایی GPP را ندارید."
+
+msgid "You are not allowed to download GPP diagnostics."
+msgstr "اجازهٔ دریافت اطلاعات عیب‌یابی GPP را ندارید."
+
+msgid "You are not allowed to download the GPP authoring prompt."
+msgstr "اجازهٔ دریافت پرامپت ساخت GPP را ندارید."
+
+msgid "You are not allowed to initialize GPP Entry Detail presentation."
+msgstr "اجازهٔ آماده‌سازی نمایش جزئیات پرونده GPP را ندارید."
+
+msgid "این نگاشت مشترک است: تغییر منبع یک مفهوم می‌تواند روی همهٔ سطح‌های GPP که همان مفهوم را مصرف می‌کنند، از جمله Entry Detail، Inbox و Print، اثر بگذارد."
+msgstr "این نگاشت مشترک است: تغییر منبع یک مفهوم ممکن است بر جزئیات پرونده، کارهای من و چاپ اثر بگذارد."
+
+msgid "ذخیره یک‌باره نگاشت‌های جزئیات پرونده"
+msgstr "ذخیرهٔ یک‌بارهٔ نگاشت‌های جزئیات پرونده"
