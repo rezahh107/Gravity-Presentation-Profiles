@@ -18,6 +18,15 @@ function gpp_generic_e2e_host_form( $title ) {
         'fields' => array(
             array( 'id' => 1, 'label' => 'Synthetic Name', 'type' => 'text', 'isRequired' => true ),
             array( 'id' => 2, 'label' => 'Synthetic Email', 'type' => 'email', 'isRequired' => true ),
+            array(
+                'id' => 3, 'label' => 'Synthetic Choice', 'type' => 'select', 'isRequired' => true,
+                'placeholder' => 'Choose a synthetic option',
+                'choices' => array(
+                    array( 'text' => 'Synthetic Blue', 'value' => 'blue' ),
+                    array( 'text' => 'Synthetic Amber', 'value' => 'amber' ),
+                ),
+            ),
+            array( 'id' => 4, 'label' => 'Synthetic Notes', 'type' => 'textarea', 'isRequired' => true ),
         ),
         'button' => array( 'type' => 'text', 'text' => 'Send Synthetic Entry' ),
     );
