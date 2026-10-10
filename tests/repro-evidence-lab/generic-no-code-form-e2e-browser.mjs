@@ -163,13 +163,14 @@ try {
   artifact.phases.responsive = {};
   for (const width of [1440, 390, 320]) {
     const observed = await capture(frontend, fixtures.target, width);
+    artifact.phases.responsive[width] = { status: 'CHECKING', computed: observed };
     expect(observed.classes.includes('gpp-declarative_wrapper'), 'Missing generic declaration class at ' + width);
     expect(observed.background === 'rgb(231, 243, 255)' && observed.surfaceToken === '#E7F3FF',
       'Distinct surface paint not computed at ' + width);
     expect(observed.actionToken === '#D4571B' && observed.actionBackground === 'rgb(212, 87, 27)',
       'Distinct action paint not computed at ' + width);
     expect(observed.borderToken === '#155E75' && observed.controlBorder === 'rgb(21, 94, 117)',
-      'Control border paint not computed at ' + width);
+      'Control border paint not computed at ' + width + ': token=' + observed.borderToken + ' computed=' + observed.controlBorder);
     expect(observed.direction === 'rtl', 'Declared RTL direction not applied at ' + width);
     expect(observed.bounds.left >= -1 && observed.bounds.right <= width + 1 &&
       observed.inputBounds.left >= -1 && observed.inputBounds.right <= width + 1,
@@ -179,7 +180,7 @@ try {
     await frontend.keyboard.press('Tab');
     expect(await form.locator('input[type=email]').first().evaluate(el => el === document.activeElement),
       'Keyboard Tab did not reach native email control at ' + width);
-    artifact.phases.responsive[width] = 'PASS';
+    artifact.phases.responsive[width] = { status: 'PASS', computed: observed };
   }
   artifact.phases.computed_visual_effect = 'PASS';
 
