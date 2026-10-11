@@ -8,6 +8,7 @@ use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
+use GravityPresentationProfiles\GravityFlow\DeclarativeInboxPresentation;
 
 /**
  * SRWF presentation shell for the native Gravity Flow Inbox.
@@ -27,6 +28,7 @@ final class InboxPresentationAdapter {
     private static $model_loaded = false;
     private static $model = null;
     private static $surface_reached = false;
+    private static $declarative_inline_added = false;
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
@@ -48,6 +50,7 @@ final class InboxPresentationAdapter {
         self::$model_loaded = false;
         self::$model = null;
         self::$surface_reached = false;
+        self::$declarative_inline_added = false;
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -67,7 +70,8 @@ final class InboxPresentationAdapter {
 
         self::$surface_reached = true;
 
-        if ( null === self::model() ) {
+        $generic = self::genericPaintReady();
+        if ( ! $generic && null === self::model() ) {
             return $html;
         }
         if ( false !== strpos( $html, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) ) {
@@ -80,7 +84,8 @@ final class InboxPresentationAdapter {
         // Persian copy remains RTL. The only native Grid direction exception is
         // the Owner-authorized four-node physical LTR CSS seam; no Grid option,
         // state, DOM or interaction ownership is acquired here.
-        return self::prependLateStyles( '<section class="gpp-inbox-surface gpp-inbox-surface--full-width" data-gpp-inbox-surface="gravity_flow.inbox" aria-labelledby="gpp-inbox-title">'
+        $modifier = $generic ? 'gpp-inbox-declarative' : 'gpp-inbox-surface--full-width';
+        return self::prependLateStyles( '<section class="gpp-inbox-surface ' . $modifier . '" data-gpp-inbox-surface="gravity_flow.inbox" aria-labelledby="gpp-inbox-title">'
             . '<div class="gpp-inbox-surface__inner">'
             . '<header class="gpp-inbox-surface__header" dir="rtl">'
             . '<h1 class="gpp-inbox-surface__title" id="gpp-inbox-title">' . $title . '</h1>'
@@ -108,7 +113,7 @@ final class InboxPresentationAdapter {
         }
 
         self::$surface_reached = true;
-        return null === self::model() ? $block_content : self::prependLateStyles( $block_content );
+        return ! self::genericPaintReady() && null === self::model() ? $block_content : self::prependLateStyles( $block_content );
     }
 
     /** Print only the Inbox handles still pending after frontend head styles. */
@@ -119,7 +124,10 @@ final class InboxPresentationAdapter {
         }
 
         $pending = array();
-        foreach ( array( self::STYLE_HANDLE, self::NATIVE_STYLE_HANDLE ) as $handle ) {
+        $handles = self::genericPaintReady()
+            ? array( DeclarativeInboxPresentation::STYLE_HANDLE )
+            : array( self::STYLE_HANDLE, self::NATIVE_STYLE_HANDLE );
+        foreach ( $handles as $handle ) {
             if ( ! wp_style_is( $handle, 'done' ) ) {
                 $pending[] = $handle;
             }
@@ -136,7 +144,29 @@ final class InboxPresentationAdapter {
     }
 
     public static function enqueueStyles() {
-        if ( ! self::currentRequestReachesInbox() || null === self::model() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+        if ( ! self::currentRequestReachesInbox() || ! defined( 'GPP_PLUGIN_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
+            return;
+        }
+
+        if ( self::genericPaintReady() ) {
+            $path = DeclarativeInboxPresentation::ASSET_PATH;
+            wp_enqueue_style(
+                DeclarativeInboxPresentation::STYLE_HANDLE,
+                plugins_url( $path, GPP_PLUGIN_FILE ),
+                array(),
+                self::assetVersion( dirname( GPP_PLUGIN_FILE ) . '/' . $path )
+            );
+            if ( ! self::$declarative_inline_added ) {
+                $resolution = DeclarativeInboxPresentation::forWordPress();
+                $css = DeclarativeInboxPresentation::css( $resolution );
+                if ( '' !== $css && wp_add_inline_style( DeclarativeInboxPresentation::STYLE_HANDLE, $css ) ) {
+                    self::$declarative_inline_added = true;
+                }
+            }
+            return;
+        }
+
+        if ( null === self::model() ) {
             return;
         }
 
@@ -166,6 +196,19 @@ final class InboxPresentationAdapter {
             array( self::STYLE_HANDLE ),
             self::assetVersion( $plugin_root . '/' . $native_path )
         );
+    }
+
+    /**
+     * A presentation-only Schema 1.1 profile is independent of SRWF semantic
+     * readiness. Its CSS assets must exist before wrapping any host output.
+     * Admin Inbox deliberately remains native in this first frontend-only batch.
+     */
+    private static function genericPaintReady() {
+        return ( ! function_exists( 'is_admin' ) || ! is_admin() )
+            && function_exists( 'wp_enqueue_style' )
+            && function_exists( 'wp_add_inline_style' )
+            && DeclarativeInboxPresentation::assetAvailable()
+            && null !== DeclarativeInboxPresentation::forWordPress();
     }
 
     private static function currentRequestReachesInbox() {
