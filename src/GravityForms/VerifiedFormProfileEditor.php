@@ -21,6 +21,14 @@ final class VerifiedFormProfileEditor {
         );
     }
 
+    public static function columnLabel() {
+        return self::word( 'Edit', 'ویرایش' );
+    }
+
+    public static function unavailableLabel() {
+        return self::word( 'Not available for multi-surface packages', 'برای بسته‌های چندبخشی در دسترس نیست' );
+    }
+
     public static function editLabel() {
         return self::word( 'Edit verified colors', 'ویرایش رنگ‌های تأییدشده' );
     }
