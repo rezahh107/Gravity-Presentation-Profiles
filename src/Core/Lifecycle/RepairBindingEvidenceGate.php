@@ -11,7 +11,7 @@ final class RepairBindingEvidenceGate implements BindingEvidenceGate {
     private $previous_artifact;
     private $fallback;
 
-    public function __construct( AdminBindingEvidenceStore $evidence_store, $artifact, $previous_artifact = null, BindingEvidenceGate $fallback = null ) {
+    public function __construct( AdminBindingEvidenceStore $evidence_store, $artifact, $previous_artifact = null, ?BindingEvidenceGate $fallback = null ) {
         $this->evidence_store = $evidence_store;
         $this->artifact = $artifact;
         $this->previous_artifact = $previous_artifact;
