@@ -18,7 +18,7 @@ final class SupportBundleBuilder {
         BindingHealthService $binding_health,
         RuntimeIncidentStore $incidents,
         VisualPackageLifecycle $visual,
-        EntryDetailSetupDiagnosticStore $entry_detail_setup = null
+        ?EntryDetailSetupDiagnosticStore $entry_detail_setup = null
     ) {
         $this->binding_health = $binding_health;
         $this->incidents = $incidents;
