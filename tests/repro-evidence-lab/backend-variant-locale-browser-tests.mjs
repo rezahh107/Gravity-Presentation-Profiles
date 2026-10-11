@@ -96,7 +96,7 @@ try {
     assert(await page.getByLabel(fa ? 'پروفایل اعلانی نصب‌شده' : 'Installed declarative profile', { exact: true }).count() === 1,
       'Per-form native profile selector missing/incorrect: ' + locale);
     const formText = await page.locator('body').innerText();
-    assert(formText.includes(fa ? 'فعال‌سازی Gravity Presentation Profiles برای این فرم' : 'Enable Gravity Presentation Profiles for this form'),
+    assert(formText.includes(fa ? 'فعال‌کردن نمایش Gravity Presentation Profiles برای این فرم' : 'Enable Gravity Presentation Profiles for this form'),
       'Real per-form enable caption not localized: ' + locale);
     assert(formText.includes(fa ? 'پروفایل قدیمی' : 'Legacy profile'), 'Legacy profile control not localized: ' + locale);
     assert(lifecycleDigest() === beforeSave, 'Reading locale-specific form settings unexpectedly mutated visual state');
