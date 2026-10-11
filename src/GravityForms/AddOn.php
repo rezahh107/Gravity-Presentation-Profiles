@@ -440,7 +440,7 @@ final class AddOn extends \GFAddOn {
         echo '<th>' . esc_html__( 'Package', 'gravity-presentation-profiles' ) . '</th>';
         echo '<th>' . esc_html__( 'Version', 'gravity-presentation-profiles' ) . '</th>';
         echo '<th>' . esc_html__( 'Profile', 'gravity-presentation-profiles' ) . '</th>';
-        echo '<th>' . esc_html__( 'Edit', 'gravity-presentation-profiles' ) . '</th>';
+        echo '<th>' . esc_html( VerifiedFormProfileEditor::columnLabel() ) . '</th>';
         echo '</tr></thead><tbody>';
         foreach ( $installed as $item ) {
             echo '<tr><td><code>' . esc_html( $item['package_id'] ) . '</code></td>';
@@ -462,7 +462,7 @@ final class AddOn extends \GFAddOn {
                 echo '<td><a href="' . esc_url( VerifiedFormProfileEditor::sourceUrl( $reference ) ) . '">';
                 echo esc_html( VerifiedFormProfileEditor::editLabel() ) . '</a></td>';
             } else {
-                echo '<td>' . esc_html__( 'Unavailable for multi-surface packages', 'gravity-presentation-profiles' ) . '</td>';
+                echo '<td>' . esc_html( VerifiedFormProfileEditor::unavailableLabel() ) . '</td>';
             }
             echo '</tr>';
         }
