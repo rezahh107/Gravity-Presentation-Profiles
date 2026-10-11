@@ -15,6 +15,29 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailVisualVariant;
 
 Autoloader::register();
 
+// This unit exercises WordPress gettext calls using the exact shipped MO data;
+// real user-locale switching and HTML controls are covered in the WU21 browser.
+$GLOBALS['gpp_variant_test_locale'] = 'en_US';
+$GLOBALS['gpp_variant_test_catalog'] = array();
+$mo = file_get_contents( dirname( __DIR__, 2 ) . '/languages/gravity-presentation-profiles-fa_IR.mo' );
+$header = unpack( 'Vmagic/Vrevision/Vcount/Vorig/Vtrans/Vhash_size/Vhash_off', substr( $mo, 0, 28 ) );
+gpp_assert_same( 0x950412de, $header['magic'], 'Variant gettext fixture needs a valid compiled MO.' );
+for ( $i = 0; $i < $header['count']; $i++ ) {
+    $id = unpack( 'Vlength/Voffset', substr( $mo, $header['orig'] + 8 * $i, 8 ) );
+    $translation = unpack( 'Vlength/Voffset', substr( $mo, $header['trans'] + 8 * $i, 8 ) );
+    $GLOBALS['gpp_variant_test_catalog'][ substr( $mo, $id['offset'], $id['length'] ) ] = substr( $mo, $translation['offset'], $translation['length'] );
+}
+function __( $source, $domain ) {
+    if ( 'gravity-presentation-profiles' !== $domain || 'fa_IR' !== $GLOBALS['gpp_variant_test_locale'] ) {
+        return $source;
+    }
+    return isset( $GLOBALS['gpp_variant_test_catalog'][ $source ] )
+        ? $GLOBALS['gpp_variant_test_catalog'][ $source ]
+        : $source;
+}
+
+
+
 final class EntryVariantMemoryStore implements StateStore {
     private $state = null;
     public function load() { return $this->state; }
@@ -167,9 +190,43 @@ gpp_assert_same( $binding_before, $bindings->snapshot(), 'Rollback must leave En
 
 $choices = $service->settingsChoices();
 gpp_assert_same( 2, count( $choices ), 'Known activation must expose exactly two Owner choices.' );
-gpp_assert_true( false !== strpos( $choices[0]['label'], 'Current / Safe' ) && false !== strpos( $choices[0]['label'], 'طرح فعلی و پایدار' ), 'Current / Safe label must be Owner-readable.' );
-gpp_assert_true( false !== strpos( $choices[1]['label'], 'Full Width' ) && false !== strpos( $choices[1]['label'], 'طرح جدید تمام‌عرض' ), 'Full Width label must be Owner-readable.' );
+gpp_assert_same( 'Current / Safe — stable design — active', $choices[0]['label'], 'English admin active design must not contain a Persian suffix.' );
+gpp_assert_same( 'Full Width — expanded design', $choices[1]['label'], 'English admin inactive design must remain correctly labeled.' );
 gpp_assert_same( '', $choices[0]['value'], 'Active choice is a no-op and must not persist a second visual state.' );
 gpp_assert_true( '' !== $choices[1]['value'], 'Inactive Full Width choice must carry a bounded CAS command.' );
+
+// Labels are presentation data only. Locale changes must not affect encoded
+// activation commands, current identity, or the no-op sentinel.
+$en_choices = $choices;
+$before_locale_switch = $visual->snapshot();
+$GLOBALS['gpp_variant_test_locale'] = 'fa_IR';
+$fa_choices = $service->settingsChoices();
+gpp_assert_same( 'Current / Safe — طرح فعلی و پایدار — فعال', $fa_choices[0]['label'], 'Persian admin must show the localized active-state suffix.' );
+gpp_assert_same( 'Full Width — طرح جدید تمام‌عرض', $fa_choices[1]['label'], 'Persian admin must show the localized alternative design.' );
+gpp_assert_same( '', $fa_choices[0]['value'], 'Persian active selection must stay no-op.' );
+gpp_assert_same( $en_choices[1]['value'], $fa_choices[1]['value'], 'Locale switching must not change the bounded CAS command.' );
+gpp_assert_same( $before_locale_switch, $visual->snapshot(), 'Switching admin locale must not mutate visual lifecycle state.' );
+gpp_assert_same( EntryDetailVisualVariantService::STATUS_NO_CHANGE, $service->applySettingsValue( $fa_choices[0]['value'] )['status'], 'Persian active choice must remain a no-op.' );
+
+// An unactivated state is safely read-only and must be human-readable in both locales.
+$unknown_visual = new VisualPackageLifecycle( new EntryVariantMemoryStore() );
+$unknown_service = new EntryDetailVisualVariantService( $unknown_visual, $operations );
+gpp_assert_same( 'not_active', $unknown_service->activeFacts()['state'], 'Missing activation fixture must be genuinely unresolved.' );
+$fa_unknown = $unknown_service->settingsChoices();
+gpp_assert_same( 1, count( $fa_unknown ), 'Unrecognized selector must expose one non-mutating choice.' );
+gpp_assert_same( '', $fa_unknown[0]['value'], 'Unknown activation cannot submit an action.' );
+gpp_assert_same( 'طرح فعال جزئیات پرونده شناخته نشد — بدون تغییر نمایش', $fa_unknown[0]['label'], 'Unknown activation needs translated safe feedback.' );
+$GLOBALS['gpp_variant_test_locale'] = 'en_US';
+$en_unknown = $unknown_service->settingsChoices();
+gpp_assert_same( 'Active Entry Detail design is not recognized — no visual change', $en_unknown[0]['label'], 'English unresolved state must be readable.' );
+gpp_assert_same( $unknown_visual->snapshot(), $unknown_visual->snapshot(), 'Reading unknown activation must not write state.' );
+
+foreach ( array(
+    'The settings action could not be validated safely. Refresh the page and try again.',
+    'The active Entry Detail design changed after this settings action was prepared. The newer activation was left unchanged.',
+    'The selected Entry Detail design action is invalid. Refresh the page and try again.',
+) as $message ) {
+    gpp_assert_true( isset( $GLOBALS['gpp_variant_test_catalog'][ $message ] ) && preg_match( '/[\\x{0600}-\\x{06FF}]/u', $GLOBALS['gpp_variant_test_catalog'][ $message ] ), 'Shipped catalog must cover backend error: ' . $message );
+}
 
 echo "ENTRY_DETAIL_VISUAL_VARIANT_PASS\n";
