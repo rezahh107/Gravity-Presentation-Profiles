@@ -319,6 +319,13 @@ jobs:
           node tests/repro-evidence-lab/bilingual-admin-help-browser-tests.mjs
           test -s "$WU21_ARTIFACT_DIR/bilingual-admin-help-browser-results.json"
 
+      - name: Exercise native GPP backend variant and per-form locales
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/backend-variant-locale-browser-tests.mjs
+          test -s "$WU21_ARTIFACT_DIR/backend-variant-native-locale-results.json"
+
       - name: Execute real native Inbox browser tests
         shell: bash
         run: |
