@@ -480,7 +480,7 @@ final class AddOn extends \GFAddOn {
 
             $title = isset( $form['title'] ) && is_string( $form['title'] ) && '' !== trim( $form['title'] )
                 ? trim( $form['title'] )
-                : 'Form ' . $form['id'];
+                : sprintf( __( 'Form %d', 'gravity-presentation-profiles' ), (int) $form['id'] );
 
             $choices[] = array(
                 'label' => sprintf(
@@ -712,7 +712,7 @@ final class AddOn extends \GFAddOn {
             try {
                 $form = \GFAPI::get_form( $form_id );
                 if ( is_array( $form ) && isset( $form['title'] ) && is_string( $form['title'] ) && '' !== trim( $form['title'] ) ) {
-                    return sprintf( '%s (Form %d)', trim( $form['title'] ), $form_id );
+                    return trim( $form['title'] ) . ' (' . sprintf( __( 'Form %d', 'gravity-presentation-profiles' ), $form_id ) . ')';
                 }
             } catch ( \Throwable $exception ) {
                 // The explicit form ID remains enough for safe bounded feedback.
