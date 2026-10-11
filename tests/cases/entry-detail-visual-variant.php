@@ -212,6 +212,7 @@ gpp_assert_same( EntryDetailVisualVariantService::STATUS_NO_CHANGE, $service->ap
 $unknown_visual = new VisualPackageLifecycle( new EntryVariantMemoryStore() );
 $unknown_service = new EntryDetailVisualVariantService( $unknown_visual, $operations );
 gpp_assert_same( 'not_active', $unknown_service->activeFacts()['state'], 'Missing activation fixture must be genuinely unresolved.' );
+$unknown_state_before = $unknown_visual->snapshot();
 $fa_unknown = $unknown_service->settingsChoices();
 gpp_assert_same( 1, count( $fa_unknown ), 'Unrecognized selector must expose one non-mutating choice.' );
 gpp_assert_same( '', $fa_unknown[0]['value'], 'Unknown activation cannot submit an action.' );
@@ -219,7 +220,7 @@ gpp_assert_same( 'طرح فعال جزئیات پرونده شناخته نشد 
 $GLOBALS['gpp_variant_test_locale'] = 'en_US';
 $en_unknown = $unknown_service->settingsChoices();
 gpp_assert_same( 'Active Entry Detail design is not recognized — no visual change', $en_unknown[0]['label'], 'English unresolved state must be readable.' );
-gpp_assert_same( $unknown_visual->snapshot(), $unknown_visual->snapshot(), 'Reading unknown activation must not write state.' );
+gpp_assert_same( $unknown_state_before, $unknown_visual->snapshot(), 'Reading unknown activation must not write state.' );
 
 foreach ( array(
     'The settings action could not be validated safely. Refresh the page and try again.',
