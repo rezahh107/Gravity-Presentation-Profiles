@@ -17,10 +17,12 @@ function wp_enqueue_style() {
 
 require dirname( __DIR__, 2 ) . '/gravity-presentation-profiles.php';
 
-gpp_assert_same( 2, count( $GLOBALS['gpp_actions'] ), 'Bootstrap must register native translation-path setup and the deferred Gravity Forms callback.' );
+gpp_assert_same( 3, count( $GLOBALS['gpp_actions'] ), 'Bootstrap must register translations, deferred GF integration and inert conditional editor menu.' );
 gpp_assert_same( 'init', $GLOBALS['gpp_actions'][0][0], 'Translation path must be registered on WordPress init, not during plugin load.' );
 gpp_assert_same( 1, $GLOBALS['gpp_actions'][0][2], 'Translation path registration must precede GF add-on settings construction.' );
 gpp_assert_same( 'gform_loaded', $GLOBALS['gpp_actions'][1][0], 'Bootstrap must defer Gravity Forms integration until gform_loaded.' );
+gpp_assert_same( 'admin_menu', $GLOBALS['gpp_actions'][2][0], 'Editor menu is registered at WordPress admin_menu, not in late add-on init.' );
+call_user_func( $GLOBALS['gpp_actions'][2][1] ); // No GFForms: must remain inert even without add_submenu_page().
 $GLOBALS['gpp_textdomain_registered'] = null;
 function plugin_basename( $file ) { return basename( dirname( $file ) ) . '/' . basename( $file ); }
 function load_plugin_textdomain( $domain, $deprecated, $relative_path ) {
