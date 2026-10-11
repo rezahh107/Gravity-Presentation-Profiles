@@ -21,6 +21,7 @@ final class AddOn extends \GFAddOn {
     private $binding_health_service = null;
     private $binding_repair_service = null;
     private $inbox_setup_result = null;
+    private $inbox_appearance_feedback = null;
 
     protected $_version     = '0.0.0-dev';
     protected $_slug        = 'gravity-presentation-profiles';
@@ -189,7 +190,75 @@ final class AddOn extends \GFAddOn {
                     ),
                 ),
             ),
+            array(
+                'title'       => esc_html__( 'Shared Inbox appearance', 'gravity-presentation-profiles' ),
+                'description' => esc_html__( 'Frontend Shortcode/Block only. Schema 1.1 supports Inbox shell background, heading text color and helper text color. Native Grid, admin Inbox, workflow, assignment, and SRWF semantic bindings are unchanged. Import first; activate in a separate Save.', 'gravity-presentation-profiles' ),
+                'fields'      => array(
+                    array(
+                        'name'                => 'inbox_appearance_action',
+                        'label'               => esc_html__( 'Select shared Inbox appearance', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'choices'             => $this->inboxAppearanceChoices(),
+                        'validation_callback' => array( $this, 'validate_inbox_appearance_action' ),
+                        'save_callback'       => array( $this, 'discard_inbox_appearance_action' ),
+                    ),
+                    array(
+                        'name' => 'inbox_appearance_status',
+                        'label' => esc_html__( 'Current shared Inbox appearance', 'gravity-presentation-profiles' ),
+                        'type' => 'gpp_inbox_appearance_status',
+                    ),
+                ),
+            ),
         );
+    }
+
+    private function inboxAppearanceChoices() {
+        try {
+            return InboxDeclarativeActivationService::forWordPress()->choices();
+        } catch ( \Throwable $exception ) {
+            return array( array(
+                'label' => esc_html__( 'Inbox appearance unavailable — no change', 'gravity-presentation-profiles' ),
+                'value' => '',
+            ) );
+        }
+    }
+
+    public function validate_inbox_appearance_action( $field, $value ) {
+        if ( ! is_string( $value ) || '' === $value ) {
+            return;
+        }
+        if ( ! class_exists( 'GFCommon' ) || ! \GFCommon::current_user_can_any( 'gravityforms_edit_settings' ) ) {
+            $this->setSettingsFieldError( $field, __( 'Not authorized to change shared Inbox appearance.', 'gravity-presentation-profiles' ) );
+            return;
+        }
+        try {
+            $this->inbox_appearance_feedback = InboxDeclarativeActivationService::forWordPress()->apply( $value );
+        } catch ( \Throwable $exception ) {
+            $this->setSettingsFieldError( $field, __( 'Inbox appearance could not be changed safely. Refresh and verify the installed package and current selection.', 'gravity-presentation-profiles' ) );
+        }
+    }
+
+    public function discard_inbox_appearance_action( $field, $value ) {
+        unset( $field, $value );
+        return '';
+    }
+
+    public function settings_gpp_inbox_appearance_status( $field ) {
+        unset( $field );
+        try {
+            $current = InboxDeclarativeActivationService::forWordPress()->current();
+        } catch ( \Throwable $exception ) {
+            echo '<p>' . esc_html__( 'Shared Inbox appearance state unavailable.', 'gravity-presentation-profiles' ) . '</p>';
+            return;
+        }
+        if ( null === $current ) {
+            echo '<p>' . esc_html__( 'Native Inbox (no active visual profile)', 'gravity-presentation-profiles' ) . '</p>';
+        } else {
+            echo '<p><code>' . esc_html( $current['package_id'] . ' @ ' . $current['package_version'] . ' — ' . $current['profile_id'] ) . '</code></p>';
+        }
+        if ( is_array( $this->inbox_appearance_feedback ) ) {
+            echo '<p>' . esc_html__( 'Shared Inbox appearance selection saved.', 'gravity-presentation-profiles' ) . '</p>';
+        }
     }
 
     public function init_admin() {
