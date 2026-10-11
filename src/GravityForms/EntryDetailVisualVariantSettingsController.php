@@ -168,7 +168,6 @@ final class EntryDetailVisualVariantSettingsController {
                 return __( 'The current Entry Detail visual activation is not a recognized Owner-selectable design and was left unchanged.', 'gravity-presentation-profiles' );
             case 'visual_activation_conflict':
             case 'activation_conflict':
-            case 'visual_activation_conflict':
                 return __( 'The active Entry Detail design changed after this settings action was prepared. The newer activation was left unchanged.', 'gravity-presentation-profiles' );
             default:
                 return __( 'Entry Detail design switching failed before a safe visual activation could complete.', 'gravity-presentation-profiles' );
