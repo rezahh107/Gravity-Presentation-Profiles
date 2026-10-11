@@ -57,7 +57,7 @@ async function submitAdminForm(page, field) {
   await button.click();
   await page.waitForLoadState('networkidle');
 }
-async function formSettings(page, id, enabled) {
+async function formSettings(page, id, enabled, profileReference = reference) {
   await page.goto(base + '/wp-admin/admin.php?page=gf_edit_forms&view=settings&subview=gravity-presentation-profiles&id=' + id, { waitUntil: 'networkidle' });
   const select = page.getByLabel('Installed declarative profile', { exact: true });
   // The GF Add-On Framework's checkbox may not expose its choice caption as
@@ -73,15 +73,15 @@ async function formSettings(page, id, enabled) {
   }
   await toggle.waitFor({ state: 'visible', timeout: 20000 });
   if (enabled) {
-    await select.selectOption(reference);
+    await select.selectOption(profileReference);
     await toggle.check();
   } else {
-    expect(await select.inputValue() === reference, 'Form Settings did not retain the installed selection before OFF.');
+    expect(await select.inputValue() === profileReference, 'Form Settings did not retain the installed selection before OFF.');
     await toggle.uncheck();
   }
   await submitAdminForm(page, select);
   await page.reload({ waitUntil: 'networkidle' });
-  expect(await select.inputValue() === reference, 'Form Settings select value did not persist.');
+  expect(await select.inputValue() === profileReference, 'Form Settings select value did not persist.');
   expect(await toggle.isChecked() === enabled, 'Form Settings opt-in checkbox did not persist.');
 }
 async function capture(page, form, width) {
@@ -402,6 +402,82 @@ try {
   expect(same(lifecycle().activations || {}, initialActivations),
     'Connected form journey changed Gravity Flow operational surface activations.');
   artifact.phases.other_form_and_operational_isolation = 'PASS';
+
+  // Real administrator path: installed profile -> bounded editor -> downloaded
+  // successor -> ordinary immutable JSON import -> exact per-form selection.
+  await admin.goto(settingsUrl, { waitUntil: 'networkidle' });
+  const editLink = admin.getByRole('link', { name: 'Edit verified colors' }).first();
+  await editLink.waitFor({ state: 'visible', timeout: 20000 });
+  await editLink.click();
+  await admin.locator('input[name="change[surface_background]"]').check();
+  await admin.locator('input[name="change[control_border]"]').check();
+  await admin.locator('input[name="change[submit_background]"]').check();
+  await admin.locator('input[name="color[surface_background]"]').fill('#EFF6FF');
+  await admin.locator('input[name="color[control_border]"]').fill('#475569');
+  await admin.locator('input[name="color[submit_background]"]').fill('#15803D');
+  const lifecycleBeforeDownload = lifecycle();
+  const [download] = await Promise.all([
+    admin.waitForEvent('download', { timeout: 30000 }),
+    admin.getByRole('button', { name: 'Download inactive successor JSON' }).click()
+  ]);
+  const successorPath = path.join(dir, 'generic-verified-colors-successor.json');
+  await download.saveAs(successorPath);
+  const successorText = fs.readFileSync(successorPath, 'utf8');
+  const successor = JSON.parse(successorText);
+  expect(same(lifecycleBeforeDownload, lifecycle()),
+    'Editor download unexpectedly changed immutable installation/activation state.');
+  expect(successor.package_id === packageData.package_id && successor.package_version === '1.0.1',
+    'Editor did not generate a new exact portable package version.');
+  expect(successor.design_tokens.colors.gpp_editor_surface_background === '#EFF6FF' &&
+    successor.design_tokens.colors.gpp_editor_control_border === '#475569' &&
+    successor.design_tokens.colors.gpp_editor_submit_background === '#15803D',
+    'Downloaded successor colors do not match user edits.');
+  expect(Boolean(lifecycle().installed[packageData.package_id][packageData.package_version]),
+    'Editor mutated or removed source immutable package.');
+  artifact.phases.editor_download_without_activation = 'PASS';
+
+  await admin.goto(settingsUrl, { waitUntil: 'networkidle' });
+  const successorInput = admin.getByLabel('Profile Package JSON', { exact: true });
+  await successorInput.fill(successorText);
+  await submitAdminForm(admin, successorInput);
+  const importedSuccessor = lifecycle();
+  expect(Boolean(importedSuccessor.installed?.[successor.package_id]?.[successor.package_version]) &&
+    same(importedSuccessor.activations || {}, initialActivations),
+    'Successor import failed or changed shared operations activations.');
+  expect(!formState(fixtures.target.id).active, 'Inactive successor import unexpectedly re-enabled target form.');
+  const successorReference = [successor.package_id, successor.package_version, successor.surface_profiles[0].profile_id].join('|');
+  await formSettings(admin, fixtures.target.id, true, successorReference);
+  for (const width of [1440, 390, 320]) {
+    const observed = await capture(frontend, fixtures.target, width);
+    expect(observed.background === 'rgb(239, 246, 255)' &&
+      observed.actionBackground === 'rgb(21, 128, 61)' &&
+      observed.controls.text.borderColor === 'rgb(71, 85, 105)',
+      'Verified successor visual paint incorrect at ' + width + ': ' + JSON.stringify(observed));
+    expect(observed.bounds.left >= -1 && observed.bounds.right <= width + 1,
+      'Successor form overflows at ' + width);
+    const unaffected = await capture(frontend, fixtures.control, width);
+    expect(same(unaffected, controlNative[width]), 'Other form was affected by successor at ' + width);
+  }
+  artifact.phases.successor_activated_computed_paint = 'PASS';
+
+  // Roll back with native Form Settings, then opt out. Both stored versions survive.
+  await formSettings(admin, fixtures.target.id, true, reference);
+  const rollback = await capture(frontend, fixtures.target, 390);
+  expect(rollback.background === 'rgb(231, 243, 255)' &&
+    rollback.actionBackground === 'rgb(212, 87, 27)' &&
+    rollback.controlBorder === 'rgb(21, 94, 117)',
+    'Reselecting the immutable source did not restore previous visual paint.');
+  await formSettings(admin, fixtures.target.id, false, reference);
+  const finalNative = await capture(frontend, fixtures.target, 390);
+  expect(!finalNative.classes.includes('gpp-declarative_wrapper') &&
+    finalNative.background === targetBefore.background,
+    'Form OFF failed to restore native presentation after successor rollback.');
+  expect(Boolean(lifecycle().installed[packageData.package_id]['1.0.0']) &&
+    Boolean(lifecycle().installed[packageData.package_id]['1.0.1']) &&
+    same(lifecycle().activations || {}, initialActivations),
+    'Rollback damaged immutable history or operational activation.');
+  artifact.phases.successor_rollback_and_native_fallback = 'PASS';
+
   artifact.phases.focus_and_error_paint_findings = discoveredPaintGaps;
   expect(discoveredPaintGaps.length === 0,
     'Pinned-host native focus/error paint did not satisfy declared behavior: ' + discoveredPaintGaps.join(' | '));
