@@ -11,6 +11,9 @@ final class VerifiedFormProfileEditor {
     const ACTION = 'gpp_download_verified_form_successor';
 
     public static function registerMenu() {
+        if ( ! class_exists( 'GFForms' ) ) {
+            return;
+        }
         add_submenu_page(
             'gf_edit_forms',
             self::word( 'Edit verified form colors', 'ویرایش رنگ‌های تأییدشدهٔ فرم' ),
