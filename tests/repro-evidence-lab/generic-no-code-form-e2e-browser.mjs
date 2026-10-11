@@ -406,6 +406,8 @@ try {
   // Real administrator path: installed profile -> bounded editor -> downloaded
   // successor -> ordinary immutable JSON import -> exact per-form selection.
   await admin.goto(settingsUrl, { waitUntil: 'networkidle' });
+  const registeredEditorLinks = await admin.locator('#adminmenu a[href*="gpp_verified_form_editor"]')
+    .evaluateAll(nodes => nodes.map(node => ({ href: node.href, text: node.textContent.trim() })));
   const editLink = admin.locator('tr').filter({ hasText: packageData.package_id }).getByRole('link', { name: 'Edit verified colors' });
   await editLink.waitFor({ state: 'visible', timeout: 20000 });
   await editLink.click();
@@ -413,7 +415,7 @@ try {
   const editorRoute = admin.url();
   const editorCheckCount = await admin.locator('input[name="change[surface_background]"]').count();
   if (editorCheckCount !== 1) {
-    const diagnostic = { url: editorRoute, title: await admin.title(),
+    const diagnostic = { url: editorRoute, registeredEditorLinks, title: await admin.title(),
       body: (await admin.locator('body').innerText()).slice(0, 2500) };
     artifact.phases.editor_page_diagnostic = diagnostic;
     throw new Error('Editor route does not expose exact supported control: ' + JSON.stringify(diagnostic));
