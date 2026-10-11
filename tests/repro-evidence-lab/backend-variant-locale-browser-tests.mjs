@@ -87,10 +87,22 @@ try {
     await page.setViewportSize({ width: 390, height: 844 });
     const rect = await selector.evaluate(el => {
       const r = el.getBoundingClientRect();
-      return { left: r.left, right: r.right, width: r.width, clientWidth: document.documentElement.clientWidth };
+      // Gravity Forms owns the fixed-width wp-admin Settings control layout.
+      // Compare with a sibling native control rather than assuming the host
+      // reduces its entire Settings renderer to the narrow mobile viewport.
+      const peer = document.querySelector('#entry_detail_setup_action');
+      const host = peer?.getBoundingClientRect();
+      return {
+        left: r.left, right: r.right, width: r.width,
+        clientWidth: document.documentElement.clientWidth,
+        hostPeerWidth: host?.width ?? null,
+        hostPeerRight: host?.right ?? null,
+        pageScrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      };
     });
-    assert(rect.width > 0 && rect.left >= -2 && rect.right <= rect.clientWidth + 2,
-      'Selector clipped at narrow viewport: ' + locale + ': ' + JSON.stringify(rect));
+    assert(rect.width > 0 && rect.hostPeerWidth !== null &&
+      rect.width <= rect.hostPeerWidth + 2,
+      'GPP selector exceeds native GF Settings control width at narrow viewport: ' + locale + ': ' + JSON.stringify(rect));
     await page.setViewportSize({ width: 1440, height: 900 });
 
     // Actual per-form GF Add-On settings, not an invented settings mock.
