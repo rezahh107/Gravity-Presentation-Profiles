@@ -423,9 +423,9 @@ try {
   await admin.locator('input[name="change[surface_background]"]').check();
   await admin.locator('input[name="change[control_border]"]').check();
   await admin.locator('input[name="change[submit_background]"]').check();
-  await admin.locator('input[name="color[surface_background]"]').fill('#EFF6FF');
+  await admin.locator('input[name="color[surface_background]"]').fill('#eff6ff');
   await admin.locator('input[name="color[control_border]"]').fill('#475569');
-  await admin.locator('input[name="color[submit_background]"]').fill('#15803D');
+  await admin.locator('input[name="color[submit_background]"]').fill('#15803d');
   const lifecycleBeforeDownload = lifecycle();
   const [download] = await Promise.all([
     admin.waitForEvent('download', { timeout: 30000 }),
