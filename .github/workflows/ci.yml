@@ -96,6 +96,10 @@ jobs:
         shell: bash
         run: bash scripts/validate-ci-package-sources.sh .
 
+      - name: Falsify archive validation outside Git and with an invalid ZIP
+        shell: bash
+        run: bash tests/committed-archive-policy-guardrail.sh
+
       - name: Reject non-fixture committed archives
         shell: bash
         run: bash scripts/validate-committed-archives.sh
@@ -190,6 +194,10 @@ jobs:
       - name: Validate repository CI package sources
         shell: bash
         run: bash scripts/validate-ci-package-sources.sh .
+
+      - name: Falsify archive validation outside Git and with an invalid ZIP
+        shell: bash
+        run: bash tests/committed-archive-policy-guardrail.sh
 
       - name: Reject non-fixture committed archives
         shell: bash
