@@ -1,0 +1,25 @@
+/*
+ * Generic paint on GPP-owned frontend Inbox nodes only.
+ * Gravity Flow/AG Grid controls, geometry, state and scrolling remain native.
+ * Absent preferences deliberately inherit their existing host presentation.
+ */
+.gpp-inbox-surface.gpp-inbox-declarative {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    background-color: var(--gpp-declarative-inbox-background, transparent);
+}
+.gpp-inbox-declarative > .gpp-inbox-surface__inner {
+    min-inline-size: 0;
+}
+.gpp-inbox-declarative .gpp-inbox-surface__header {
+    direction: rtl;
+}
+.gpp-inbox-declarative .gpp-inbox-surface__title {
+    color: var(--gpp-declarative-inbox-heading-color, inherit);
+    font-family: inherit;
+}
+.gpp-inbox-declarative .gpp-inbox-surface__helper {
+    color: var(--gpp-declarative-inbox-helper-color, inherit);
+    font-family: inherit;
+}
