@@ -406,7 +406,7 @@ try {
   // Real administrator path: installed profile -> bounded editor -> downloaded
   // successor -> ordinary immutable JSON import -> exact per-form selection.
   await admin.goto(settingsUrl, { waitUntil: 'networkidle' });
-  const editLink = admin.getByRole('link', { name: 'Edit verified colors' }).first();
+  const editLink = admin.locator('tr').filter({ hasText: packageData.package_id }).getByRole('link', { name: 'Edit verified colors' });
   await editLink.waitFor({ state: 'visible', timeout: 20000 });
   await editLink.click();
   await admin.locator('input[name="change[surface_background]"]').check();
