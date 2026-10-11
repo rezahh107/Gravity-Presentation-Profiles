@@ -48,7 +48,9 @@ try {
   await page.fill('#user_pass', 'wu21-bootstrap-pass-2026');
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.click('#wp-submit')]);
 
-  const formId = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"));')).forms[0].form_id;
+  const manifest = JSON.parse(wpEval('echo wp_json_encode(get_option("gpp_wu21_fixture_manifest"));'));
+  const formId = manifest.forms[0].form_id;
+  assert(Boolean(manifest.frontend_inbox_url), 'Existing synthetic Frontend Inbox URL is unavailable');
   const english = {};
   const persian = {};
   for (const locale of ['en_US', 'fa_IR']) {
@@ -100,8 +102,18 @@ try {
       'Real per-form enable caption not localized: ' + locale);
     assert(formText.includes(fa ? 'پروفایل قدیمی' : 'Legacy profile'), 'Legacy profile control not localized: ' + locale);
     assert(lifecycleDigest() === beforeSave, 'Reading locale-specific form settings unexpectedly mutated visual state');
+    // This is an operational Frontend route despite the administrator's locale.
+    // Assert the GPP-owned Persian copy is retained; host-owned labels are excluded.
+    await page.goto(manifest.frontend_inbox_url, { waitUntil: 'networkidle' });
+    const ownedTitle = page.locator('.gpp-inbox-surface__title');
+    assert(await ownedTitle.count() === 1 && (await ownedTitle.innerText()).trim() === 'کارهای من',
+      'Switching admin locale changed Persian-only GPP operational Frontend copy: ' + locale);
+    assert(await page.locator('.gpp-inbox-surface__helper').innerText() ===
+      'پرونده‌هایی که اکنون نیاز به اقدام شما دارند در این صفحه نمایش داده می‌شوند. برای شروع، یکی از پرونده‌های زیر را باز کنید.',
+      'GPP-owned Frontend helper changed across administrator locales: ' + locale);
+    assert(lifecycleDigest() === beforeSave, 'Admin locale changed product state while rendering Frontend Inbox');
     report.locales[locale] = { variantOptions: choices.map(x => ({ label: x.label, noOp: x.value === '' })),
-      nativeFormSettings: true, noOpSave: true, focus: true, narrowViewport: rect, localized: true };
+      nativeFormSettings: true, noOpSave: true, focus: true, narrowViewport: rect, localized: true, persianFrontendPreserved: true };
     if (fa) persian.active = choices[0].label;
     else english.active = choices[0].label;
   }
@@ -131,7 +143,7 @@ try {
     assert(lifecycleDigest() === unresolvedDigest, 'Read-only unresolved selector changed activation: ' + locale);
     report.locales[locale].unrecognizedState = true;
   }
-  report.boundaries.push('Frontend Persian-only runtime is not asserted here; this test checks unchanged visual state and backend routes only.');
+  report.boundaries.push('Only GPP-owned Frontend shell copy is compared across admin locales; native Gravity Flow copy is host-owned.');
   report.status = 'PASS';
 } catch (error) {
   report.error = String(error?.stack || error);
