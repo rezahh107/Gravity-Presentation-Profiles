@@ -35,6 +35,8 @@ final class Bootstrap {
         if ( function_exists( 'add_action' ) ) {
             add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
+            // Admin menu must be registered before WordPress builds its page map.
+            add_action( 'admin_menu', array( VerifiedFormProfileEditor::class, 'registerMenu' ), 20 );
         }
     }
 
@@ -67,9 +69,6 @@ final class Bootstrap {
 
         \GFAddOn::register( $addon_class );
         FormPresentationOwnershipSettings::register();
-        // GFAddOn::init_admin may run after WordPress builds the admin menu.
-        // Register this page when Gravity Forms integration is bootstrapped.
-        add_action( 'admin_menu', array( VerifiedFormProfileEditor::class, 'registerMenu' ) );
         GtbCoexistenceGuard::register();
         JalaliValidationAssociation::register();
         BindingRowAdminController::register();
