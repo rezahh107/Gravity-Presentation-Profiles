@@ -181,6 +181,12 @@ jobs:
       - name: Run GPP core tests
         run: php tests/run.php
 
+      # Run the canonical installable-archive smoke against the actual PR Head,
+      # not only against GitHub's synthetic merge-result checkout.
+      - name: Build and smoke clean bilingual release ZIP on exact Head
+        shell: bash
+        run: bash tests/release/release-contract-tests.sh
+
       - name: Validate repository CI package sources
         shell: bash
         run: bash scripts/validate-ci-package-sources.sh .

@@ -232,7 +232,7 @@ final class EntryDetailVisualVariantService {
         if ( 'active' !== $facts['state'] ) {
             return array(
                 array(
-                    'label' => 'Active Entry Detail design is not recognized — no visual change',
+                    'label' => __( 'Active Entry Detail design is not recognized — no visual change', 'gravity-presentation-profiles' ),
                     'value' => '',
                 ),
             );
@@ -241,7 +241,7 @@ final class EntryDetailVisualVariantService {
         $choices = array();
         foreach ( array( EntryDetailVisualVariant::CURRENT_SAFE, EntryDetailVisualVariant::FULL_WIDTH ) as $variant ) {
             $choices[] = array(
-                'label' => EntryDetailVisualVariant::label( $variant ) . ( $variant === $facts['variant'] ? ' — فعال' : '' ),
+                'label' => EntryDetailVisualVariant::label( $variant ) . ( $variant === $facts['variant'] ? __( ' — active', 'gravity-presentation-profiles' ) : '' ),
                 'value' => $variant === $facts['variant'] ? '' : $this->encodeAction( $variant, $facts['activation'] ),
             );
         }

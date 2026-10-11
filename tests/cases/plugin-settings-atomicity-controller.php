@@ -161,4 +161,16 @@ gpp_assert_same(
 gpp_assert_same( 3, count( AtomicityCommitRecorder::$calls ), 'Duplicate save-callback invocation must not duplicate mutation.' );
 gpp_assert_same( false, AtomicityCommitRecorder::$calls[2]['preview'], 'Accepted commit must execute against real StateStore state.' );
 
+// The missing renderer callback is a fail-closed admin validation state.
+// It must remain a gettext message, without a lifecycle write.
+$unknown = new AtomicityField( 'unrecognized_settings_command' );
+$before_unknown = $GLOBALS['gpp_atomicity_options'];
+PluginSettingsAtomicityController::validateWithoutCommit( $unknown, 'form:42' );
+gpp_assert_same(
+    __( 'The settings action could not be validated safely. Refresh the page and try again.', 'gravity-presentation-profiles' ),
+    $unknown->get_error(),
+    'Unrecognized Settings commands must use the localized, actionable admin validation message.'
+);
+gpp_assert_same( $before_unknown, $GLOBALS['gpp_atomicity_options'], 'Rejected Settings action must not write lifecycle state.' );
+
 echo "PLUGIN_SETTINGS_ATOMICITY_CONTROLLER_PASS\n";

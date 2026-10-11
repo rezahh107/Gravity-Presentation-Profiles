@@ -5,6 +5,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid " — active"
+msgstr " — فعال"
+
 msgid "%1$s — raw: %2$s"
 msgstr "%1$s — مقدار خام: %2$s"
 
@@ -16,6 +19,9 @@ msgstr "فعال (پروفایل چاپ عملیات)"
 
 msgid "Active Entry Detail design"
 msgstr "طرح فعال جزئیات پرونده"
+
+msgid "Active Entry Detail design is not recognized — no visual change"
+msgstr "طرح فعال جزئیات پرونده شناخته نشد — بدون تغییر نمایش"
 
 msgid "Active Entry Detail profile:"
 msgstr "پروفایل فعال جزئیات پرونده:"
@@ -473,17 +479,29 @@ msgstr "قدیمی / منبع گم‌شده"
 msgid "Suggestions are evidence only and are never connected automatically. Saving re-validates the active binding and the current Gravity Forms field/input inventory."
 msgstr "پیشنهادها فقط شواهدند و خودکار متصل نمی‌شوند. هنگام ذخیره، نگاشت فعال و فهرست فیلد / ورودی Gravity Forms دوباره بررسی می‌شوند."
 
+msgid "The active Entry Detail design changed after this settings action was prepared. The newer activation was left unchanged."
+msgstr "طرح فعال جزئیات پرونده پس از آماده‌شدن این عملیات تغییر کرده است. فعال‌سازی جدیدتر بدون تغییر باقی ماند."
+
 msgid "The active Entry Detail visual activation could not be read. No visual change was attempted."
 msgstr "فعال‌سازی طرح جزئیات پرونده خوانده نشد. هیچ تغییر ظاهری انجام نشد."
 
 msgid "The bundled GPP guide is unavailable. Reinstall a validated release package."
 msgstr "راهنمای همراه افزونه پیدا نشد. بستهٔ انتشار معتبر را دوباره نصب کنید."
 
+msgid "The current Entry Detail visual activation is not a recognized Owner-selectable design and was left unchanged."
+msgstr "طرح فعال جزئیات پرونده شناخته‌شده و قابل انتخاب نیست و بدون تغییر باقی ماند."
+
 msgid "The current Entry Detail visual activation is not one of the two Owner-selectable designs. Refresh after resolving that lifecycle state; GPP will not overwrite it silently."
 msgstr "طرح فعلی جزئیات پرونده یکی از دو طرح انتخابی نیست. وضعیت را اصلاح و صفحه را تازه کنید؛ GPP آن را خودکار بازنویسی نمی‌کند."
 
 msgid "The existing compatible EnvironmentBindingSet was reused, source-bound Inbox readiness was qualified where supported, and the current Print activation was preserved."
 msgstr "بستر نگاشت سازگار دوباره استفاده شد، آمادگی منابع کارهای من تا حد مجاز بررسی و فعال‌سازی چاپ حفظ شد."
+
+msgid "The selected Entry Detail design action is invalid. Refresh the page and try again."
+msgstr "عملیات انتخاب طرح جزئیات پرونده نامعتبر است. صفحه را تازه کنید و دوباره تلاش کنید."
+
+msgid "The selected Entry Detail design is not supported."
+msgstr "طرح انتخاب‌شدهٔ جزئیات پرونده پشتیبانی نمی‌شود."
 
 msgid "The selected Entry Detail setup action is invalid. Refresh the page and try again."
 msgstr "عملیات راه‌اندازی جزئیات پرونده نامعتبر است. صفحه را تازه کنید."
@@ -502,6 +520,9 @@ msgstr "ردیف نگاشت با عملیات ارسال‌شده مطابقت �
 
 msgid "The selected operations setup action is invalid. Refresh the page and try again."
 msgstr "عملیات راه‌اندازی نامعتبر است. صفحه را تازه کنید."
+
+msgid "The settings action could not be validated safely. Refresh the page and try again."
+msgstr "عملیات تنظیمات را نمی‌توان به‌صورت ایمن اعتبارسنجی کرد. صفحه را تازه کنید و دوباره تلاش کنید."
 
 msgid "These are configuration facts only. They never state that a person may print. Gravity Flow decides Print authorization for this user, this entry, this workflow step and this request, every request."
 msgstr "این‌ها فقط وضعیت پیکربندی‌اند و اجازهٔ چاپ به فرد نمی‌دهند. Gravity Flow برای هر کاربر، پرونده، مرحله و درخواست مجوز چاپ را جداگانه بررسی می‌کند."

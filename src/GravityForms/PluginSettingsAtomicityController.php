@@ -106,7 +106,7 @@ final class PluginSettingsAtomicityController {
     public static function validateWithoutCommit( $field, $value ) {
         $name = self::fieldName( $field );
         if ( '' === $name || ! isset( self::$commit_callbacks[ $name ] ) ) {
-            self::setFieldError( $field, 'The settings action could not be validated safely. Refresh the page and try again.' );
+            self::setFieldError( $field, __( 'The settings action could not be validated safely. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             return;
         }
 
@@ -126,7 +126,7 @@ final class PluginSettingsAtomicityController {
             // by the original callback. An unexpected preview failure must also
             // fail closed without turning validation into a second transaction.
             if ( '' === self::fieldError( $field ) ) {
-                self::setFieldError( $field, 'The settings action could not be validated safely. Refresh the page and try again.' );
+                self::setFieldError( $field, __( 'The settings action could not be validated safely. Refresh the page and try again.', 'gravity-presentation-profiles' ) );
             }
         }
     }
