@@ -161,6 +161,27 @@ final class VisualPackageLifecycle {
         return null;
     }
 
+    /** Deactivate only the shared surface activation the administrator observed. */
+    public function deactivateIfCurrent( $request ) {
+        $this->requireExactKeys( $request, array( 'surface', 'expected_current_activation' ), 'visual conditional deactivation request' );
+        $surface = $request['surface'];
+        $this->requireSurface( $surface );
+        $state = $this->loadState();
+        $this->requireExpectedCurrentActivation( $state, $surface, $request['expected_current_activation'] );
+
+        unset( $state['activations'][ $surface ] );
+        $this->appendAudit(
+            $state,
+            array(
+                'event' => 'VISUAL_DEACTIVATE',
+                'outcome' => 'DEACTIVATED',
+                'surface' => $surface,
+            )
+        );
+        $this->commitState( $state );
+        return null;
+    }
+
     public function remove( $request ) {
         $this->requireExactKeys( $request, array( 'package_id', 'package_version' ), 'visual removal request' );
         $package_id      = $request['package_id'];
