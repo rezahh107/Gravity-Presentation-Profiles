@@ -409,6 +409,15 @@ try {
   const editLink = admin.locator('tr').filter({ hasText: packageData.package_id }).getByRole('link', { name: 'Edit verified colors' });
   await editLink.waitFor({ state: 'visible', timeout: 20000 });
   await editLink.click();
+  await admin.waitForLoadState('networkidle');
+  const editorRoute = admin.url();
+  const editorCheckCount = await admin.locator('input[name="change[surface_background]"]').count();
+  if (editorCheckCount !== 1) {
+    const diagnostic = { url: editorRoute, title: await admin.title(),
+      body: (await admin.locator('body').innerText()).slice(0, 2500) };
+    artifact.phases.editor_page_diagnostic = diagnostic;
+    throw new Error('Editor route does not expose exact supported control: ' + JSON.stringify(diagnostic));
+  }
   await admin.locator('input[name="change[surface_background]"]').check();
   await admin.locator('input[name="change[control_border]"]').check();
   await admin.locator('input[name="change[submit_background]"]').check();
