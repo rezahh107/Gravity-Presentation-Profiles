@@ -21,6 +21,10 @@ final class VerifiedFormProfileEditor {
         );
     }
 
+    public static function editLabel() {
+        return self::word( 'Edit verified colors', 'ویرایش رنگ‌های تأییدشده' );
+    }
+
     public static function sourceUrl( $reference ) {
         return admin_url( 'admin.php?page=' . self::PAGE . '&source=' . rawurlencode( $reference ) );
     }
