@@ -197,7 +197,7 @@ final class AddOn extends \GFAddOn {
         add_action( 'admin_post_gpp_download_general_llm_authoring_prompt', array( $this, 'download_general_llm_authoring_prompt' ) );
         add_action( 'admin_post_gpp_download_support_bundle', array( $this, 'download_support_bundle' ) );
         add_action( 'admin_post_' . VerifiedFormProfileEditor::ACTION, array( VerifiedFormProfileEditor::class, 'download' ) );
-        add_action( 'admin_menu', array( VerifiedFormProfileEditor::class, 'registerMenu' ) );
+
     }
 
     public function settings_gpp_product_help( $field ) {
