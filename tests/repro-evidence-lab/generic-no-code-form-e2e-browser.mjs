@@ -205,15 +205,6 @@ const browser = await chromium.launch({ headless: true });
 const admin = await browser.newPage();
 const frontend = await browser.newPage();
 try {
-  artifact.phases.admin_capability_probe = wpJson(
-    '$u=get_user_by("login","bootstrap_admin");wp_set_current_user($u->ID);' +
-    'echo "GPP_E2E_JSON:" . wp_json_encode(array(' +
-    '"id"=>$u->ID,"roles"=>$u->roles,' +
-    '"manage_options"=>current_user_can("manage_options"),' +
-    '"wp_gf_settings"=>current_user_can("gravityforms_edit_settings"),' +
-    '"gfcommon_settings"=>GFCommon::current_user_can_any("gravityforms_edit_settings")' +
-    '));'
-  );
   const initialLifecycle = lifecycle();
   const initialActivations = initialLifecycle?.activations || {};
   expect(!formState(fixtures.target.id).active, 'Target form was pre-enabled.');
