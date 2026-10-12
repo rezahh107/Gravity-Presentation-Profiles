@@ -93,19 +93,41 @@ try {
   requireTrue(original.status === 403, 'Original manage_options registration must reject GF-only user: ' + JSON.stringify(original));
   report.phases.original_registration_reproduction = { result: 'PASS', tuple: 'options-general.php/manage_options', httpStatus: original.status };
 
+  // Test the repaired route with only the granular GF settings capability.
+  // Gravity Forms' own gf_settings navigation can independently require a
+  // second GF permission; do not silently attribute that host decision to GPP.
+  const direct = await visit(positive, editor);
+  requireTrue(direct.status === 200 && await positive.locator('input[name="change[control_border]"]').count() === 1,
+    'Direct editor URL denied GF-only user: ' + JSON.stringify(direct));
+  report.phases.authorized_direct_route = 'PASS';
+
+  const nativeInventory = await visit(positive, settings);
+  if (nativeInventory.status === 403) {
+    report.phases.native_gf_inventory_prerequisite = {
+      status: 'HOST_LIMITATION', granular_settings_only_http_status: 403,
+      note: 'GPP does not grant the separate Gravity Forms menu/navigation permission.'
+    };
+    // Only this ephemeral synthetic test account is given the native GF form
+    // navigation capability, never manage_options or any production role grant.
+    const native = wpJson(
+      '$u=get_user_by("login","gpp-gf-settings-only");$u->add_cap("gravityforms_edit_forms");' +
+      'wp_set_current_user($u->ID);echo "GPP_AUTH_JSON:".wp_json_encode(array(' +
+      '"settings"=>GFCommon::current_user_can_any("gravityforms_edit_settings"),' +
+      '"forms"=>current_user_can("gravityforms_edit_forms"),' +
+      '"options"=>current_user_can("manage_options")));'
+    );
+    requireTrue(native.settings === true && native.forms === true && native.options === false,
+      'Native GF menu fixture must not receive manage_options: ' + JSON.stringify(native));
+  }
   const inventory = await visit(positive, settings);
-  requireTrue(inventory.status === 200, 'GF-only user cannot visit GPP profile inventory: ' + JSON.stringify(inventory));
+  requireTrue(inventory.status === 200,
+    'GF-settings user with native GF navigation cannot access GPP profile inventory: ' + JSON.stringify(inventory));
   const link = positive.locator('tr').filter({ hasText: packageId }).locator('a[href*="gpp_verified_form_editor"]').first();
   requireTrue(await link.count() === 1, 'Profile inventory editor link is missing for GF-only user.');
   await link.click();
   requireTrue(await positive.locator('input[name="change[control_border]"]').count() === 1,
     'GF-only user cannot open editor via inventory.');
   report.phases.authorized_inventory_navigation = 'PASS';
-
-  const direct = await visit(positive, editor);
-  requireTrue(direct.status === 200 && await positive.locator('input[name="change[control_border]"]').count() === 1,
-    'Direct editor URL denied GF-only user: ' + JSON.stringify(direct));
-  report.phases.authorized_direct_route = 'PASS';
 
   await positive.locator('input[name="change[control_border]"]').check();
   await positive.locator('input[name="color[control_border]"]').fill('#225588');
