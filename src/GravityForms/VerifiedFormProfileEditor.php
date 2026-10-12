@@ -11,14 +11,20 @@ final class VerifiedFormProfileEditor {
     const ACTION = 'gpp_download_verified_form_successor';
 
     public static function registerMenu() {
-        if ( ! class_exists( 'GFForms' ) ) {
+        // Gravity Forms supports its full-access capability as an alternative to
+        // the granular settings cap. WordPress current_user_can() on the
+        // granular string is therefore not equivalent to GFCommon's authority.
+        // Register this route only for users whom Gravity Forms authorizes.
+        if ( ! class_exists( 'GFForms' ) || ! self::authorized() ) {
             return;
         }
         add_submenu_page(
             'options-general.php',
             self::word( 'Edit verified form colors', 'ویرایش رنگ‌های تأییدشدهٔ فرم' ),
             self::word( 'GPP Form Colors', 'رنگ‌های فرم GPP' ),
-            'gravityforms_edit_settings',
+            // This only makes the already GF-authorized route reachable in
+            // WordPress; it is never an authorization substitute.
+            'read',
             self::PAGE,
             array( __CLASS__, 'render' )
         );
