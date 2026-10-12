@@ -44,7 +44,7 @@ final class PrintDossierValueResolver {
     private $model;
     private $reader;
 
-    public function __construct( PrintDossierPresentationModel $model, BoundHostValueReader $reader = null ) {
+    public function __construct( PrintDossierPresentationModel $model, ?BoundHostValueReader $reader = null ) {
         $this->model  = $model;
         $this->reader = null === $reader ? new BoundHostValueReader() : $reader;
     }

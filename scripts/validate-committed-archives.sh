@@ -25,7 +25,16 @@ gpp_validate_archive_paths() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  mapfile -t tracked < <(git ls-files '*.zip')
+  # Process substitution does not propagate a failed git ls-files command.
+  # The archive policy must fail closed when tracked files cannot be enumerated.
+  if ! tracked_list="$(git ls-files -- '*.zip')"; then
+    echo 'COMMITTED_ARCHIVE_POLICY_FAIL: cannot enumerate tracked ZIP archives from Git.' >&2
+    exit 1
+  fi
+  tracked=()
+  if [[ -n "$tracked_list" ]]; then
+    mapfile -t tracked <<< "$tracked_list"
+  fi
   gpp_validate_archive_paths "${tracked[@]}"
   echo "COMMITTED_ARCHIVE_POLICY_PASS tracked_zip_count=${#tracked[@]}"
 fi

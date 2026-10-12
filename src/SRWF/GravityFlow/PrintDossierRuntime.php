@@ -99,7 +99,7 @@ final class PrintDossierRuntime {
         }
     }
 
-    private static function unresolvedModel( $reason, \Throwable $exception = null ) {
+    private static function unresolvedModel( $reason, ?\Throwable $exception = null ) {
         if ( null !== $exception ) {
             RuntimeDiagnostics::recordException(
                 PrintDossierPresentationAdapter::SURFACE,
