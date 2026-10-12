@@ -15,10 +15,10 @@ final class VerifiedFormProfileEditor {
             return;
         }
         add_submenu_page(
-            'options-general.php',
+            'gf_edit_forms',
             self::word( 'Edit verified form colors', 'ویرایش رنگ‌های تأییدشدهٔ فرم' ),
             self::word( 'GPP Form Colors', 'رنگ‌های فرم GPP' ),
-            'manage_options',
+            'gravityforms_edit_settings',
             self::PAGE,
             array( __CLASS__, 'render' )
         );
