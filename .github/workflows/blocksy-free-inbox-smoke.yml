@@ -213,6 +213,67 @@ jobs:
             ' exit=' + process.env.NEGATIVE_EXIT);
           NODE
 
+      - name: Falsify failed Blocksy stylesheet delivery in authentic Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the normal and prior pageerror mutation evidence intact.
+          # Abort the real browser request for Blocksy CSS only on shortcode-1440.
+          set +e
+          GPP_BLOCKSY_INJECT_CSS_FAILURE=shortcode-1440 node tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs \
+            >"$WU21_ARTIFACT_DIR/blocksy-css-negative-control.log" 2>&1
+          negative_exit=$?
+          set -e
+          test "$negative_exit" -ne 0
+          NEGATIVE_EXIT="$negative_exit" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = process.env.WU21_ARTIFACT_DIR;
+          const normal = JSON.parse(fs.readFileSync(path.join(root, 'blocksy-browser-smoke.json'), 'utf8'));
+          const injected = JSON.parse(fs.readFileSync(path.join(root, 'blocksy-browser-smoke-css-negative.json'), 'utf8'));
+          const pageerrorControl = JSON.parse(fs.readFileSync(path.join(root, 'blocksy-browser-smoke-negative.json'), 'utf8'));
+          const log = fs.readFileSync(path.join(root, 'blocksy-css-negative-control.log'), 'utf8');
+          assert.equal(normal.status, 'PASS', 'Normal Blocksy smoke lost PASS.');
+          assert.equal(normal.scenarios.length, 7, 'Normal seven scenarios changed.');
+          assert.ok(normal.scenarios.every(record => record.status === 'PASS' &&
+            record.blocksy_css_delivery?.link_count > 0 &&
+            record.blocksy_css_delivery?.applied_witness_count > 0 &&
+            record.blocksy_css_delivery.sheets.every(sheet => sheet.cssom_attached &&
+              sheet.css_rule_count > 0 && sheet.media_matches && !sheet.disabled && !sheet.cssom_error)),
+          'Positive browser CSSOM/application evidence missing.');
+          assert.equal(pageerrorControl.status, 'FAIL', 'Existing pageerror mutation evidence overwritten.');
+          assert.ok(pageerrorControl.page_errors.some(message =>
+            message.includes('GPP_BLOCKSY_PAGEERROR_FALSIFICATION')), 'Existing pageerror control missing.');
+          assert.ok(Number(process.env.NEGATIVE_EXIT) > 0, 'CSS failure returned zero exit.');
+          assert.equal(injected.status, 'FAIL', 'Failed Blocksy CSS returned PASS.');
+          assert.equal(injected.scenarios.length, 7, 'CSS negative control dropped scenarios.');
+          const affected = injected.scenarios.find(record => record.name === 'shortcode-1440');
+          assert.equal(affected?.status, 'FAIL', 'CSS failure did not fail its scenario.');
+          assert.ok(affected?.blocksy_css_delivery?.injected_failed_requests > 0,
+            'Fault injection did not actually intercept a browser Blocksy CSS request.');
+          assert.ok(affected.blocksy_css_delivery.sheets.some(sheet =>
+            !sheet.cssom_attached || sheet.css_rule_count === 0 || !!sheet.cssom_error),
+          'CSSOM evidence did not expose failed browser stylesheet.');
+          assert.match(affected.error, /BLOCKSY_CSS_DELIVERY_GUARD/,
+            'Failure did not originate in selected Blocksy asset verification guard.');
+          assert.doesNotMatch(affected.error, /geometry|Grid|overflow|stylesheet HTTP delivery failed/,
+            'Negative control was reported as an unrelated DOM/geometry/GPP failure.');
+          assert.equal(affected.geometry, undefined,
+            'CSS negative control ran after rather than before geometry assertions.');
+          assert.ok(injected.errors.some(error => error.scenario === 'shortcode-1440' &&
+            error.error.includes('BLOCKSY_CSS_DELIVERY_GUARD')),
+          'Aggregate diagnostic evidence did not preserve CSS guard failure.');
+          assert.ok(injected.scenarios.filter(record => record.name !== 'shortcode-1440')
+            .every(record => record.status === 'PASS'), 'CSS failure leaked to other cases.');
+          assert.match(log, /BLOCKSY_AUTHENTIC_SMOKE_FAIL/, 'Negative process failed without normal verdict reporting.');
+          assert.ok(fs.existsSync(path.join(root, 'shortcode-1440-css-negative.png')),
+            'CSS failure screenshot not generated.');
+          console.log('BLOCKSY_CSS_DELIVERY_NEGATIVE_CONTROL_PASS blocked=' +
+            affected.blocksy_css_delivery.injected_failed_requests +
+            ' exit=' + process.env.NEGATIVE_EXIT);
+          NODE
+
       - name: Upload authentic smoke evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
