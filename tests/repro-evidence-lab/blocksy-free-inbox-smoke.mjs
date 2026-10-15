@@ -45,7 +45,18 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: 'fa-IR' });
 await context.addCookies(cookies.map(cookie => ({ ...cookie, url: baseUrl })));
 const page = await context.newPage();
-page.on('pageerror', err => evidence.page_errors.push(String(err).slice(0, 900)));
+// Attribute each actual uncaught page exception to the running scenario when possible.
+// Keep the original page_errors evidence, then reconcile every captured event
+ // into scenario/aggregate errors before deciding the process exit status.
+let activeScenario = null;
+const capturedPageErrors = [];
+page.on('pageerror', err => {
+  const message = String(err).slice(0, 900);
+  evidence.page_errors.push(message);
+  capturedPageErrors.push({ scenario: activeScenario?.name ?? null, message });
+});
+const injectionTarget = env.GPP_BLOCKSY_INJECT_PAGEERROR || null;
+const artifactSuffix = injectionTarget ? '-negative' : '';
 
 try {
   for (const scenario of scenarios) {
@@ -53,6 +64,7 @@ try {
       const key = scenario.name + '-' + viewport.width;
       const record = { name: key, url: scenario.url, viewport, status: 'PASS' };
       evidence.scenarios.push(record);
+      activeScenario = record;
       try {
         await page.setViewportSize(viewport);
         const response = await page.goto(scenario.url, { waitUntil: 'networkidle', timeout: 45000 });
@@ -122,19 +134,43 @@ try {
           assert.match(await cssResponse.text(), /gpp-inbox|gflow-inbox/,
             key + ': delivered GPP stylesheet appears empty/wrong.');
         }
+        // Deterministic falsification in the real browser, after ALL DOM,
+        // geometry, RTL and HTTP asset assertions have already succeeded.
+        if (injectionTarget === key) {
+          record.dom_assertions_passed = true;
+          const uncaught = page.waitForEvent('pageerror', {
+            predicate: error => String(error).includes('GPP_BLOCKSY_PAGEERROR_FALSIFICATION'),
+            timeout: 10000,
+          });
+          await page.evaluate(() => {
+            setTimeout(() => { throw new Error('GPP_BLOCKSY_PAGEERROR_FALSIFICATION'); }, 0);
+          });
+          await uncaught;
+        }
       } catch (error) {
         record.status = 'FAIL';
         record.error = String(error?.stack || error).slice(0, 3000);
         evidence.errors.push({ scenario: key, error: record.error });
       } finally {
-        await page.screenshot({ path: path.join(out, key + '.png'), fullPage: true }).catch(() => {});
+        await page.screenshot({ path: path.join(out, key + artifactSuffix + '.png'), fullPage: true }).catch(() => {});
+        activeScenario = null;
       }
     }
   }
 } finally {
-  evidence.status = evidence.errors.length ? 'FAIL' : 'PASS';
-  fs.writeFileSync(path.join(out, 'blocksy-browser-smoke.json'), JSON.stringify(evidence, null, 2) + '\n');
   await browser.close();
+  for (const { scenario, message } of capturedPageErrors) {
+    const record = evidence.scenarios.find(candidate => candidate.name === scenario);
+    if (record) {
+      record.status = 'FAIL';
+      (record.page_errors ??= []).push(message);
+    }
+    evidence.errors.push({ scenario: scenario ?? 'browser-global', error: 'Uncaught browser page exception: ' + message });
+  }
+  // Both existing assertion failures and every captured uncaught page error
+  // independently force a FAIL verdict; neither can be masked by a PASS DOM.
+  evidence.status = evidence.errors.length || evidence.page_errors.length ? 'FAIL' : 'PASS';
+  fs.writeFileSync(path.join(out, 'blocksy-browser-smoke' + artifactSuffix + '.json'), JSON.stringify(evidence, null, 2) + '\n');
 }
 if (evidence.status !== 'PASS') {
   console.error('BLOCKSY_AUTHENTIC_SMOKE_FAIL ' + JSON.stringify(evidence.errors));
