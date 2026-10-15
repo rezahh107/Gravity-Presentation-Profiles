@@ -56,7 +56,79 @@ page.on('pageerror', err => {
   capturedPageErrors.push({ scenario: activeScenario?.name ?? null, message });
 });
 const injectionTarget = env.GPP_BLOCKSY_INJECT_PAGEERROR || null;
-const artifactSuffix = injectionTarget ? '-negative' : '';
+const cssFailureTarget = env.GPP_BLOCKSY_INJECT_CSS_FAILURE || null;
+assert.ok(!injectionTarget || !cssFailureTarget, 'Falsification controls must run separately.');
+const artifactSuffix = injectionTarget ? '-negative' : cssFailureTarget ? '-css-negative' : '';
+const blocksyCssRequest = /\/themes\/blocksy\/.*\.css(?:\?|$)/;
+
+// Check the real browser CSSOM and a rendered computed-style effect, rather
+// than treating a <link> element or a standalone HTTP request as CSS delivery.
+async function inspectBlocksyCssDelivery(page) {
+  return page.evaluate(() => {
+    const links = [...document.querySelectorAll('link[rel~="stylesheet"]')]
+      .filter(link => /\/themes\/blocksy\/.*\.css(?:\?|$)/.test(link.href));
+    const sheets = links.map(link => {
+      let ruleCount = 0;
+      let cssomError = null;
+      try { ruleCount = link.sheet?.cssRules.length ?? 0; }
+      catch (error) { cssomError = String(error); }
+      return {
+        href: link.href, media: link.media || 'all', disabled: link.disabled,
+        media_matches: !link.media || matchMedia(link.media).matches,
+        cssom_attached: Boolean(link.sheet), css_rule_count: ruleCount,
+        cssom_error: cssomError,
+      };
+    });
+
+    // Probe existing rendered host nodes; Blocksy's own CSS must contribute at
+    // least one effective browser-computed declaration on the current page.
+    const probes = [...document.querySelectorAll('html, body, #main, #main-container, .ct-container, .entry-content, header, footer, h1')]
+      .slice(0, 20);
+    const properties = [
+      'font-family', 'font-size', 'font-weight', 'line-height', 'color',
+      'background-color', 'margin-top', 'margin-left', 'padding-top',
+      'padding-left', 'display', 'width', 'max-width', 'box-sizing',
+      'border-radius', '--theme-font-family', '--theme-text-color',
+      '--theme-palette-color-1', '--theme-content-width',
+    ];
+    const snapshot = () => probes.map(node => {
+      const computed = getComputedStyle(node);
+      return properties.map(property => computed.getPropertyValue(property).trim());
+    });
+    const withBlocksy = snapshot();
+    const wasDisabled = links.map(link => link.disabled);
+    let withoutBlocksy;
+    try {
+      for (const link of links) link.disabled = true;
+      withoutBlocksy = snapshot();
+    } finally {
+      links.forEach((link, i) => { link.disabled = wasDisabled[i]; });
+    }
+    const effectWitnesses = [];
+    for (let i = 0; i < probes.length; i++) {
+      for (let j = 0; j < properties.length; j++) {
+        if (withBlocksy[i][j] !== withoutBlocksy[i][j]) {
+          effectWitnesses.push({
+            node: probes[i].tagName.toLowerCase() + (probes[i].id ? '#' + probes[i].id : ''),
+            property: properties[j], applied: withBlocksy[i][j], without_theme_css: withoutBlocksy[i][j],
+          });
+        }
+      }
+    }
+    return { link_count: links.length, sheets, applied_witnesses: effectWitnesses.slice(0, 12),
+      applied_witness_count: effectWitnesses.length, probed_nodes: probes.length };
+  });
+}
+
+function assertBlocksyCssDelivery(facts, key) {
+  const guard = 'BLOCKSY_CSS_DELIVERY_GUARD ' + key;
+  assert.ok(facts.link_count > 0, guard + ': no Blocksy stylesheet link.');
+  assert.ok(facts.sheets.every(sheet => sheet.cssom_attached && sheet.css_rule_count > 0 &&
+    !sheet.disabled && sheet.media_matches && !sheet.cssom_error),
+  guard + ': a referenced Blocksy stylesheet was not loaded/parsed/active in browser CSSOM.');
+  assert.ok(facts.applied_witness_count > 0,
+    guard + ': no computed-style effect from Blocksy stylesheet set on rendered host nodes.');
+}
 
 try {
   for (const scenario of scenarios) {
@@ -65,10 +137,21 @@ try {
       const record = { name: key, url: scenario.url, viewport, status: 'PASS' };
       evidence.scenarios.push(record);
       activeScenario = record;
+      let blockedCssRequests = 0;
+      const abortBlocksyCss = route => {
+        blockedCssRequests++;
+        return route.abort('failed');
+      };
       try {
         await page.setViewportSize(viewport);
+        if (cssFailureTarget === key) {
+          await page.route(blocksyCssRequest, abortBlocksyCss);
+        }
         const response = await page.goto(scenario.url, { waitUntil: 'networkidle', timeout: 45000 });
         assert.equal(response?.status(), 200, key + ': page HTTP status is not 200.');
+        record.blocksy_css_delivery = await inspectBlocksyCssDelivery(page);
+        record.blocksy_css_delivery.injected_failed_requests = blockedCssRequests;
+        assertBlocksyCssDelivery(record.blocksy_css_delivery, key);
         if (!scenario.negative) {
           await page.locator('[data-js="gflow-inbox"] .ag-root-wrapper').waitFor({ timeout: 30000 });
         }
@@ -153,6 +236,7 @@ try {
         evidence.errors.push({ scenario: key, error: record.error });
       } finally {
         await page.screenshot({ path: path.join(out, key + artifactSuffix + '.png'), fullPage: true }).catch(() => {});
+        if (cssFailureTarget === key) await page.unroute(blocksyCssRequest, abortBlocksyCss);
         activeScenario = null;
       }
     }
