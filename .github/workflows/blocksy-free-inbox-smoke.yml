@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/blocksy-free-inbox-smoke.yml'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs'
+      - 'tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs'
+      - 'tests/repro-evidence-lab/blocksy-qualification-completeness.mjs'
+      - 'tests/repro-evidence-lab/blocksy-qualification-completeness-falsification.mjs'
   workflow_dispatch:
 
 permissions:
@@ -34,6 +37,7 @@ jobs:
       WU21_WP_CLI: /tmp/wp-cli.phar
       WU21_BASE_URL: http://127.0.0.1:8080
       BLOCKSY_VERSION: '2.1.59'
+      GPP_BLOCKSY_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Checkout exact PR head
@@ -162,6 +166,37 @@ jobs:
       - name: Exercise full-page Blocksy Inbox browser smoke
         run: node tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs
 
+      - name: Qualify native Blocksy page title and authentic Inbox interaction coverage
+        id: extended_qualification
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A previous or partially written artifact must never satisfy the gate.
+          rm -f "$WU21_ARTIFACT_DIR/blocksy-extended-qualification.json" \
+            "$WU21_ARTIFACT_DIR/blocksy-extended-runner.json"
+          set +e
+          node tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs \
+            2>&1 | tee "$WU21_ARTIFACT_DIR/blocksy-extended-qualification.log"
+          outcomes=("${PIPESTATUS[@]}")
+          set -e
+          node_exit="${outcomes[0]}"
+          tee_exit="${outcomes[1]}"
+          NODE_EXIT="$node_exit" TEE_EXIT="$tee_exit" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { executionIdentity } from './tests/repro-evidence-lab/blocksy-qualification-completeness.mjs';
+          fs.writeFileSync(path.join(process.env.WU21_ARTIFACT_DIR, 'blocksy-extended-runner.json'),
+            JSON.stringify({
+              execution_identity: executionIdentity(),
+              exit_code: Number(process.env.NODE_EXIT),
+              log_exit_code: Number(process.env.TEE_EXIT),
+            }, null, 2) + '\n');
+          NODE
+          # Preserve the real runner outcome even with continue-on-error.
+          if test "$node_exit" -ne 0; then exit "$node_exit"; fi
+          if test "$tee_exit" -ne 0; then exit "$tee_exit"; fi
+
       - name: Falsify captured pageerror verdict in authentic Chromium
         shell: bash
         run: |
@@ -273,6 +308,24 @@ jobs:
             affected.blocksy_css_delivery.injected_failed_requests +
             ' exit=' + process.env.NEGATIVE_EXIT);
           NODE
+
+      - name: Falsify extended execution-completeness gate
+        if: steps.extended_qualification.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/blocksy-qualification-completeness-falsification.mjs
+
+      - name: Enforce extended qualification verdict
+        if: always()
+        env:
+          GPP_BLOCKSY_STEP_OUTCOME: ${{ steps.extended_qualification.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/blocksy-qualification-completeness.mjs --gate \
+            "$WU21_ARTIFACT_DIR/blocksy-extended-qualification.json" \
+            "$WU21_ARTIFACT_DIR/blocksy-extended-runner.json"
 
       - name: Upload authentic smoke evidence
         if: always()
