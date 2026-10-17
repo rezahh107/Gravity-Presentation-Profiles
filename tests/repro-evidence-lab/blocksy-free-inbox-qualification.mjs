@@ -327,30 +327,71 @@ try {
     assert.ok(traffic.some(r => r.status === 200), 'No genuine Gravity Flow changes response observed');
     return { dynamic_id: dynamic, added: true, removed: true, host_poll_responses: traffic.length };
   });
+  // WU21 creates a different synthetic national ID for every real GFAPI entry.
+  // The Inbox AG Grid row ID ties the clicked native link to that exact fixture
+  // record; form titles are not authorization witnesses.
+  const fixtureEntries = fixture.entry_records;
+  assert.ok(Array.isArray(fixtureEntries) && fixtureEntries.length > 0, 'WU21 entry-specific fixtures unavailable');
+  function assertProtectedWitnessVisible(text, witness) {
+    assert.ok(typeof text === 'string' && text.includes(witness.national_id),
+      'Authorized native Entry Detail did not expose the selected synthetic national ID ' + witness.national_id);
+  }
+  function assertProtectedWitnessAbsent(text, witness) {
+    assert.ok(typeof text === 'string' && !text.includes(witness.national_id),
+      'Unassigned viewer received the selected protected synthetic national ID ' + witness.national_id);
+  }
+  function expectOracleToReject(name, assertion) {
+    assert.throws(assertion, { name: 'AssertionError' },
+      'Authorization oracle failed to reject the ' + name + ' falsification');
+    return { mutation: name, assertion_rejected: true };
+  }
   let detail = null;
   await check('authorized-entry-navigation', async () => {
     await openInbox(routes[0]);
     const a = page.locator('[data-js="gflow-inbox"] .gflow-inbox__entry-cell-link').first();
     await a.waitFor({ state: 'visible', timeout: 30000 });
+    const selectedId = Number(await a.evaluate(el => el.closest('.ag-row[row-id]')?.getAttribute('row-id')));
+    const witness = fixtureEntries.find(entry => Number(entry.entry_id) === selectedId);
+    assert.ok(witness && /^SYN-[AB]-\\d{6}$/.test(witness.national_id),
+      'Selected native Inbox row has no entry-specific WU21 synthetic witness: ' + selectedId);
     const href = await a.getAttribute('href');
     assert.ok(href && href.includes('view=entry') && href.includes('id=') && href.includes('lid='), 'Native detail link invalid');
+    const target = new URL(href, page.url());
+    assert.ok([target.searchParams.get('id'), target.searchParams.get('lid')].includes(String(selectedId)),
+      'Native Entry Detail URL does not identify the selected WU21 entry');
     await Promise.all([page.waitForURL(/view=entry/, { timeout: 30000 }), a.click()]);
     assert.ok(page.url().includes('view=entry'));
-    detail = page.url();
-    return { destination: detail, native_click: true };
+    const operatorText = await page.locator('body').innerText();
+    assertProtectedWitnessVisible(operatorText, witness);
+    const negativeA = [
+      expectOracleToReject('authorized-content-missing', () => assertProtectedWitnessVisible('', witness)),
+      expectOracleToReject('authorized-denial-page', () => assertProtectedWitnessVisible('Access denied', witness)),
+    ];
+    detail = { url: page.url(), witness: { entry_id: selectedId, form_id: witness.form_id,
+      national_id: witness.national_id }, protected_text_observed: true };
+    return { destination: detail.url, native_click: true, witness: detail.witness,
+      operator_protected_data_visible: true, falsification: negativeA };
   });
   await check('permission-isolation', async () => {
-    assert.ok(detail, 'No verified native authorized detail URL to test');
+    assert.ok(detail?.protected_text_observed, 'No authorized native Entry Detail content to test');
     const vctx = await browser.newContext({ locale: 'fa-IR' });
     try {
       await vctx.addCookies(auth('viewer'));
       const vp = await vctx.newPage();
-      const r = await vp.goto(detail, { waitUntil: 'networkidle' });
-      const text = await vp.locator('body').innerText();
+      const r = await vp.goto(detail.url, { waitUntil: 'networkidle' });
+      const viewerText = await vp.locator('body').innerText();
+      assertProtectedWitnessAbsent(viewerText, detail.witness);
+      // Actual oracle falsification: a leaked national ID is fatal even if
+      // neither form title appears. No successful host response is mocked.
+      const leakedWithoutTitles = 'Synthetic entry protected value: ' + detail.witness.national_id;
+      assert.ok(!leakedWithoutTitles.includes('WU21 Alpha Form') &&
+        !leakedWithoutTitles.includes('WU21 Beta Form'));
+      const negativeB = expectOracleToReject('viewer-data-leak-without-form-titles',
+        () => assertProtectedWitnessAbsent(leakedWithoutTitles, detail.witness));
       const markers = await vp.locator('.gflow-inbox__entry-cell-link, [data-gpp-entry-detail-surface]').count();
-      assert.ok(!text.includes('WU21 Alpha Form') && !text.includes('WU21 Beta Form'),
-        'Unassigned subscriber can read protected synthetic entry content');
-      return { status: r?.status(), final_url: vp.url(), protected_text_absent: true, detail_markers: markers };
+      return { requested_url: detail.url, response_status: r?.status(), final_url: vp.url(),
+        witness_entry_id: detail.witness.entry_id, protected_national_id_absent: true,
+        detail_markers: markers, falsification: negativeB };
     } finally { await vctx.close(); }
   }, !detail);
   await check('keyboard-action-accessibility', async () => {
