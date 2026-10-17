@@ -352,7 +352,7 @@ try {
     await a.waitFor({ state: 'visible', timeout: 30000 });
     const selectedId = Number(await a.evaluate(el => el.closest('.ag-row[row-id]')?.getAttribute('row-id')));
     const witness = fixtureEntries.find(entry => Number(entry.entry_id) === selectedId);
-    assert.ok(witness && /^SYN-[AB]-\\d{6}$/.test(witness.national_id),
+    assert.ok(witness && /^SYN-[AB]-\d{6}$/.test(witness.national_id),
       'Selected native Inbox row has no entry-specific WU21 synthetic witness: ' + selectedId);
     const href = await a.getAttribute('href');
     assert.ok(href && href.includes('view=entry') && href.includes('id=') && href.includes('lid='), 'Native detail link invalid');
