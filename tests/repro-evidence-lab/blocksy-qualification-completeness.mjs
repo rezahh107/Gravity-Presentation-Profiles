@@ -90,6 +90,9 @@ export function inspectQualificationGate(evidence, runner, options = {}) {
   if (!runner || !Number.isInteger(runner.exit_code) || runner.exit_code !== 0) {
     failures.push('Actual Node runner exit was missing or nonzero');
   }
+  if (!runner || !Number.isInteger(runner.log_exit_code) || runner.log_exit_code !== 0) {
+    failures.push('Node runner log capture exited abnormally or is missing');
+  }
   if (options.stepOutcome !== 'success') failures.push('GitHub Actions Node execution step was not successful');
   return { pass: failures.length === 0, failures, expected_count: EXPECTED_CASE_IDS.length,
     observed_count: Array.isArray(evidence?.cases) ? evidence.cases.length : null };
