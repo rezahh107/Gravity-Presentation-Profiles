@@ -16,7 +16,7 @@ assert.equal(fixture.data_class, 'SYNTHETIC_NON_PII');
 assert.equal(p06.status, 'PASS');
 const routes = [
   { key: 'shortcode', url: fixture.frontend_inbox_url, id: fixture.frontend_inbox_page_id },
-  { key: 'block', ...JSON.parse(wpEval("echo wp_json_encode(get_option('gpp_p06_fixture_manifest')['authentic_block_page']);")).authentic_block_page },
+  { key: 'block', ...JSON.parse(wpEval("echo wp_json_encode(get_option('gpp_p06_fixture_manifest')['authentic_block_page']);")) },
 ];
 routes[1].id = routes[1].page_id;
 assert.ok(routes.every(r => r.id && r.url && r.url.startsWith(base + '/')));
