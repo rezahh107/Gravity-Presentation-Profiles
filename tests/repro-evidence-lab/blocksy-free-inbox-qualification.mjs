@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { executionIdentity, inspectCaseCompletion } from './blocksy-qualification-completeness.mjs';
 
 // A test-only extension of the PR #156 pinned, real Blocksy/WU21/P06 fixture.
 // No GPP/Gravity Flow behavior or production site state is modified.
@@ -28,7 +29,9 @@ const surface = '[data-gpp-inbox-surface="gravity_flow.inbox"]';
 const refresh = '[data-gpp-inbox-manual-refresh]';
 const pollEndpoint = '/wp-json/gravityflow/internal/inbox/changes';
 const results = { schema_version: '1.0.0', source: 'BLOCKSY_FREE_2_1_59_WU21_AUTHENTIC', cases: [],
-  errors: [], page_errors: [], host_title: {}, interactions: [], runtime: JSON.parse(fs.readFileSync(path.join(out, 'blocksy-runtime.json'), 'utf8')) };
+  errors: [], page_errors: [], host_title: {}, interactions: [],
+  execution_identity: executionIdentity(), run_finished: false,
+  runtime: JSON.parse(fs.readFileSync(path.join(out, 'blocksy-runtime.json'), 'utf8')) };
 assert.equal(results.runtime.version, '2.1.59');
 assert.equal(results.runtime.theme, 'blocksy');
 assert.equal(results.runtime.child, false);
@@ -175,6 +178,9 @@ function sourceProbe() {
 // Run source/host title qualification without prematurely claiming the guessed
 // persisted-option shape is supported. Rendered before/after is the authority.
 try {
+  if (env.GPP_BLOCKSY_INJECT_SOURCE_PROBE_FAILURE === '1') {
+    throw new Error('BLOCKSY_SOURCE_PROBE_CONTROLLED_FAILURE');
+  }
   const source = sourceProbe();
   console.log('BLOCKSY_TITLE_SOURCE ' + JSON.stringify({
     post_meta: source.post_meta_witnesses.slice(0, 3), title: source.title_witnesses.slice(0, 8)
@@ -363,8 +369,15 @@ try {
     assert.ok(style.visible && style.outline !== 'none' && Number.parseFloat(style.width) > 0);
     return { tab_stops: tabs + 1, focus: style, accessible_name: await button.getAttribute('aria-label') };
   });
+  results.run_finished = true; // Only after the final intended scenario returns.
+} catch (error) {
+  results.errors.push({ id: 'execution', error: clip(error?.stack || error, 3000) });
 } finally {
-  await browser.close();
+  try {
+    await browser.close();
+  } catch (error) {
+    results.errors.push({ id: 'browser-close', error: clip(error?.stack || error, 2000) });
+  }
   for (const err of results.page_errors) {
     results.errors.push({ id: err.scenario || 'unattributed', error: 'Uncaught browser page exception: ' + err.message });
     const record = results.cases.find(r => r.id === err.scenario);
@@ -374,8 +387,16 @@ try {
   results.summary = { PASS: results.cases.filter(r => r.status === 'PASS').length,
     FAIL: results.cases.filter(r => r.status === 'FAIL').length,
     NOT_PROVEN: results.cases.filter(r => r.status === 'NOT_PROVEN').length };
-  results.status = results.errors.length ? 'FAIL' : results.summary.NOT_PROVEN ? 'QUALIFICATION_INCOMPLETE' : 'PASS';
-  fs.writeFileSync(path.join(out, 'blocksy-extended-qualification.json'), JSON.stringify(results, null, 2) + '\n');
-  console.log('BLOCKSY_QUALIFICATION_RESULT ' + JSON.stringify({ status: results.status, summary: results.summary }));
+  const completion = inspectCaseCompletion(results);
+  results.completeness = completion;
+  results.status = results.errors.length || results.page_errors.length ? 'FAIL' :
+    completion.complete ? 'PASS' : 'QUALIFICATION_INCOMPLETE';
+  const suffix = env.GPP_BLOCKSY_INJECT_SOURCE_PROBE_FAILURE === '1' ? '-source-negative' : '';
+  fs.writeFileSync(path.join(out, 'blocksy-extended-qualification' + suffix + '.json'),
+    JSON.stringify(results, null, 2) + '\n');
+  console.log('BLOCKSY_QUALIFICATION_RESULT ' + JSON.stringify({
+    status: results.status, summary: results.summary, complete: completion.complete,
+    errors: completion.problems,
+  }));
 }
-if (results.status === 'FAIL') process.exitCode = 1;
+if (results.status !== 'PASS') process.exitCode = 1;
