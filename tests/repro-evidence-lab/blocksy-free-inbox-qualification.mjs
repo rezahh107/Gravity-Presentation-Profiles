@@ -158,7 +158,7 @@ function sourceProbe() {
       const body = fs.readFileSync(p, 'utf8');
       const lines = body.split('\n');
       for (let i = 0; i < lines.length; i++) {
-        if (/(blocksy_post_meta_options|has_hero_section|page_title_enabled|page_title|hero-section)/.test(lines[i])) {
+        if (/(blocksy_post_meta_options|has_hero_section|page_title_enabled|page_title|hero-section)/.test(lines[i]) || (p.endsWith('/general/page-title.php') && lines[i].includes("'disabled'"))) {
           witnesses.push({ file: path.relative(root, p), line: i + 1, snippet: clip(lines[i].trim(), 220) });
         }
       }
@@ -167,7 +167,7 @@ function sourceProbe() {
   scan(root, 0);
   const facts = { root, total_witnesses: witnesses.length,
     post_meta_witnesses: witnesses.filter(w => w.snippet.includes('blocksy_post_meta_options')),
-    title_witnesses: witnesses.filter(w => w.snippet.includes('page_title') || w.snippet.includes('has_hero_section')).slice(0, 100),
+    title_witnesses: witnesses.filter(w => w.snippet.includes('page_title') || w.snippet.includes('has_hero_section') || (w.file.endsWith('general/page-title.php') && w.snippet.includes('disabled'))).slice(0, 100),
     hero_witnesses: witnesses.filter(w => w.snippet.includes('hero-section')).slice(0, 20) };
   fs.writeFileSync(path.join(out, 'blocksy-title-source.json'), JSON.stringify(facts, null, 2));
   return facts;
@@ -200,7 +200,7 @@ try {
   const mutation = await check('title-native-page-setting-source', async () => {
     assert.ok(source.post_meta_witnesses.length > 0, 'Installed Blocksy source does not expose the per-post options meta key.');
     assert.ok(source.title_witnesses.some(w => w.snippet.includes('has_hero_section')), 'Installed Blocksy source does not expose the native has_hero_section option.');
-    assert.ok(source.title_witnesses.some(w => w.snippet.includes('disabled')), 'Installed Blocksy source does not expose disabled hero setting.');
+    assert.ok(source.title_witnesses.some(w => w.file.endsWith('general/page-title.php') && w.snippet.includes("'disabled'")), 'Installed Blocksy source does not expose disabled hero choice.');
     const data = JSON.parse(wpEval(
       '$ids=[' + idList + '];$out=[];' +
       'foreach($ids as $id){$before=get_post_meta($id,"blocksy_post_meta_options",true);' +
