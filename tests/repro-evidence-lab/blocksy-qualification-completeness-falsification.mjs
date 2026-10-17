@@ -47,9 +47,11 @@ const abort = spawnSync(process.execPath, [qualificationFile], {
   timeout: 120000,
 });
 assert.notEqual(abort.status, 0, 'B: source-probe early abort returned zero exit');
-assert.match(abort.stdout + abort.stderr, /BLOCKSY_SOURCE_PROBE_CONTROLLED_FAILURE/);
+// Source failure reason is preserved in the JSON even when console output is summarized.
 const aborted = JSON.parse(fs.readFileSync(path.join(out, 'blocksy-extended-qualification-source-negative.json'), 'utf8'));
 assert.equal(aborted.cases.length, 0, 'B: test mutated later than the source probe');
+assert.ok(aborted.errors.some(e => e.error.includes('BLOCKSY_SOURCE_PROBE_CONTROLLED_FAILURE')),
+  'B: controlled source probe error missing from diagnostic evidence');
 assert.notEqual(aborted.status, 'PASS', 'B: zero-case abort reported PASS');
 check('B-source-abort', aborted,
   { execution_identity: executionIdentity(), exit_code: abort.status, log_exit_code: 0 }, 1, 'failure');
