@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/blocksy-free-inbox-smoke.yml'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs'
+      - 'tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs'
   workflow_dispatch:
 
 permissions:
@@ -162,6 +163,13 @@ jobs:
       - name: Exercise full-page Blocksy Inbox browser smoke
         run: node tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs
 
+      - name: Qualify native Blocksy page title and authentic Inbox interaction coverage
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs | tee "$WU21_ARTIFACT_DIR/blocksy-extended-qualification.log"
+
       - name: Falsify captured pageerror verdict in authentic Chromium
         shell: bash
         run: |
@@ -272,6 +280,20 @@ jobs:
           console.log('BLOCKSY_CSS_DELIVERY_NEGATIVE_CONTROL_PASS blocked=' +
             affected.blocksy_css_delivery.injected_failed_requests +
             ' exit=' + process.env.NEGATIVE_EXIT);
+          NODE
+
+      - name: Enforce extended qualification verdict
+        if: always()
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const file = path.join(process.env.WU21_ARTIFACT_DIR, 'blocksy-extended-qualification.json');
+          if (!fs.existsSync(file)) throw new Error('Extended authentic Blocksy qualification not executed.');
+          const result = JSON.parse(fs.readFileSync(file, 'utf8'));
+          console.log('BLOCKSY_EXTENDED_QUALIFICATION_GATE ' + JSON.stringify({ status: result.status, summary: result.summary }));
+          if (result.status !== 'PASS') process.exitCode = 1;
           NODE
 
       - name: Upload authentic smoke evidence
