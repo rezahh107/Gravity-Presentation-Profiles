@@ -149,6 +149,9 @@ async function waitId(id, present) {
   { rows, id, present }, { timeout: 45000 });
 }
 function sourceProbe() {
+  if (env.GPP_BLOCKSY_INJECT_SOURCE_PROBE_FAILURE === '1') {
+    throw new Error('BLOCKSY_SOURCE_PROBE_CONTROLLED_FAILURE');
+  }
   const root = path.join(wpPath, 'wp-content/themes/blocksy');
   const witnesses = [];
   function scan(dir, depth) {
@@ -178,9 +181,6 @@ function sourceProbe() {
 // Run source/host title qualification without prematurely claiming the guessed
 // persisted-option shape is supported. Rendered before/after is the authority.
 try {
-  if (env.GPP_BLOCKSY_INJECT_SOURCE_PROBE_FAILURE === '1') {
-    throw new Error('BLOCKSY_SOURCE_PROBE_CONTROLLED_FAILURE');
-  }
   const source = sourceProbe();
   console.log('BLOCKSY_TITLE_SOURCE ' + JSON.stringify({
     post_meta: source.post_meta_witnesses.slice(0, 3), title: source.title_witnesses.slice(0, 8)
