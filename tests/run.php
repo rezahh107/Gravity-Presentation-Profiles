@@ -23,6 +23,7 @@ $cases = array(
     'portable-profile-substrate.php',
     'portable-profile-package-v11.php',
     'general-llm-authoring-prompt.php',
+    'verified-color-successor.php',
     'in-plugin-help-localization.php',
     'general-llm-generated-packages.php',
     'semantic-binding-selected-identity.php',

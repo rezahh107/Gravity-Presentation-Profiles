@@ -196,6 +196,8 @@ final class AddOn extends \GFAddOn {
         parent::init_admin();
         add_action( 'admin_post_gpp_download_general_llm_authoring_prompt', array( $this, 'download_general_llm_authoring_prompt' ) );
         add_action( 'admin_post_gpp_download_support_bundle', array( $this, 'download_support_bundle' ) );
+        add_action( 'admin_post_' . VerifiedFormProfileEditor::ACTION, array( VerifiedFormProfileEditor::class, 'download' ) );
+
     }
 
     public function settings_gpp_product_help( $field ) {
@@ -438,11 +440,31 @@ final class AddOn extends \GFAddOn {
         echo '<th>' . esc_html__( 'Package', 'gravity-presentation-profiles' ) . '</th>';
         echo '<th>' . esc_html__( 'Version', 'gravity-presentation-profiles' ) . '</th>';
         echo '<th>' . esc_html__( 'Profile', 'gravity-presentation-profiles' ) . '</th>';
+        echo '<th>' . esc_html( VerifiedFormProfileEditor::columnLabel() ) . '</th>';
         echo '</tr></thead><tbody>';
         foreach ( $installed as $item ) {
             echo '<tr><td><code>' . esc_html( $item['package_id'] ) . '</code></td>';
             echo '<td><code>' . esc_html( $item['package_version'] ) . '</code></td>';
-            echo '<td><code>' . esc_html( $item['profile_id'] ) . '</code></td></tr>';
+            echo '<td><code>' . esc_html( $item['profile_id'] ) . '</code></td>';
+            $reference = DeclarativePresentationResolver::encodeReference(
+                $item['package_id'], $item['package_version'], $item['profile_id']
+            );
+            try {
+                $source = $this->visualWorkflow()->resolveInstalledVisualProfile(
+                    DeclarativePresentationResolver::SURFACE,
+                    $item['package_id'], $item['package_version'], $item['profile_id']
+                );
+                $standalone = array( 'gravity_forms.form' ) === $source['artifact']['selected_surfaces'];
+            } catch ( LifecycleException $exception ) {
+                $standalone = false;
+            }
+            if ( $standalone ) {
+                echo '<td><a href="' . esc_url( VerifiedFormProfileEditor::sourceUrl( $reference ) ) . '">';
+                echo esc_html( VerifiedFormProfileEditor::editLabel() ) . '</a></td>';
+            } else {
+                echo '<td>' . esc_html( VerifiedFormProfileEditor::unavailableLabel() ) . '</td>';
+            }
+            echo '</tr>';
         }
         echo '</tbody></table>';
     }

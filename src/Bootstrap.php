@@ -7,6 +7,7 @@ use GravityPresentationProfiles\GravityForms\EntryDetailMappingAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailVisualVariantSettingsController;
 use GravityPresentationProfiles\GravityForms\FormPresentationOwnershipSettings;
+use GravityPresentationProfiles\GravityForms\VerifiedFormProfileEditor;
 use GravityPresentationProfiles\GravityForms\PluginSettingsAtomicityController;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailFullWidthPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailJourneyPresentationAdapter;
@@ -34,6 +35,8 @@ final class Bootstrap {
         if ( function_exists( 'add_action' ) ) {
             add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
+            // Admin menu must be registered before WordPress builds its page map.
+            add_action( 'admin_menu', array( VerifiedFormProfileEditor::class, 'registerMenu' ), 20 );
         }
     }
 
