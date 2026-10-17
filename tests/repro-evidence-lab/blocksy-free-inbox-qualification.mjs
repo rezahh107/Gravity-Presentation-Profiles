@@ -149,7 +149,7 @@ function sourceProbe() {
   const root = path.join(wpPath, 'wp-content/themes/blocksy');
   const witnesses = [];
   function scan(dir, depth) {
-    if (depth > 8 || witnesses.length > 150) return;
+    if (depth > 8) return;
     for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
       if (['node_modules', 'static', 'vendor', 'languages'].includes(file.name)) continue;
       const p = path.join(dir, file.name);
@@ -158,7 +158,7 @@ function sourceProbe() {
       const body = fs.readFileSync(p, 'utf8');
       const lines = body.split('\n');
       for (let i = 0; i < lines.length; i++) {
-        if (/(blocksy_post_meta_options|page_title_enabled|page_title|hero-section)/.test(lines[i]) && witnesses.length < 150) {
+        if (/(blocksy_post_meta_options|has_hero_section|page_title_enabled|page_title|hero-section)/.test(lines[i])) {
           witnesses.push({ file: path.relative(root, p), line: i + 1, snippet: clip(lines[i].trim(), 220) });
         }
       }
@@ -167,7 +167,7 @@ function sourceProbe() {
   scan(root, 0);
   const facts = { root, total_witnesses: witnesses.length,
     post_meta_witnesses: witnesses.filter(w => w.snippet.includes('blocksy_post_meta_options')),
-    title_witnesses: witnesses.filter(w => w.snippet.includes('page_title')).slice(0, 60),
+    title_witnesses: witnesses.filter(w => w.snippet.includes('page_title') || w.snippet.includes('has_hero_section')).slice(0, 100),
     hero_witnesses: witnesses.filter(w => w.snippet.includes('hero-section')).slice(0, 20) };
   fs.writeFileSync(path.join(out, 'blocksy-title-source.json'), JSON.stringify(facts, null, 2));
   return facts;
@@ -198,18 +198,20 @@ try {
   // supported Blocksy per-page title option; an unsuccessful trial is NOT_PROVEN.
   const idList = routes.map(r => Number(r.id)).join(',');
   const mutation = await check('title-native-page-setting-source', async () => {
-    assert.ok(source.post_meta_witnesses.length > 0, 'Installed Blocksy source does not expose the expected post meta key.');
+    assert.ok(source.post_meta_witnesses.length > 0, 'Installed Blocksy source does not expose the per-post options meta key.');
+    assert.ok(source.title_witnesses.some(w => w.snippet.includes('has_hero_section')), 'Installed Blocksy source does not expose the native has_hero_section option.');
+    assert.ok(source.title_witnesses.some(w => w.snippet.includes('disabled')), 'Installed Blocksy source does not expose disabled hero setting.');
     const data = JSON.parse(wpEval(
       '$ids=[' + idList + '];$out=[];' +
       'foreach($ids as $id){$before=get_post_meta($id,"blocksy_post_meta_options",true);' +
-      '$options=is_array($before)?$before:[];$options["page_title"]="disabled";' +
+      '$options=is_array($before)?$before:[];$options["has_hero_section"]="disabled";' +
       'update_post_meta($id,"blocksy_post_meta_options",$options);' +
       '$after=get_post_meta($id,"blocksy_post_meta_options",true);' +
       '$resolved=function_exists("blocksy_get_post_options")?blocksy_get_post_options($id):null;' +
       '$out[]=["id"=>$id,"before"=>$before,"persisted"=>$after,"resolved"=>$resolved];}' +
       'echo wp_json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);'
     ));
-    assert.ok(data.every(x => x.persisted?.page_title === 'disabled'));
+    assert.ok(data.every(x => x.persisted?.has_hero_section === 'disabled'));
     return data;
   }, true);
   for (const route of routes) {
