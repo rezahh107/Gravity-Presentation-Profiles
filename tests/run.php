@@ -22,6 +22,7 @@ $cases = array(
     'srwf-registration-profile.php',
     'portable-profile-substrate.php',
     'portable-profile-package-v11.php',
+    'operational-visual-preferences.php',
     'general-llm-authoring-prompt.php',
     'in-plugin-help-localization.php',
     'general-llm-generated-packages.php',

@@ -18,6 +18,10 @@ on:
       - 'CHANGELOG.md'
       - 'README.md'
       - 'gravity-presentation-profiles.php'
+      # A new runtime PHP consumer changes the canonical production ZIP file set.
+      - 'src/Core/Presentation/OperationalVisualPreferences.php'
+      - 'src/SRWF/GravityFlow/InboxOperationalPaint.php'
+      - 'src/SRWF/GravityFlow/EntryDetailOperationalPaint.php'
   workflow_dispatch:
     inputs:
       mode:
