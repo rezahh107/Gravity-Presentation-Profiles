@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/wu19-a4-print-runtime.yml'
+      # Re-run the historical isolated Print contract on frontend handoff changes.
+      - '.github/workflows/srwf-journey-host-qualification.yml'
+      - 'tests/repro-evidence-lab/blocksy-frontend-native-print-*.mjs'
       - 'tests/fixtures/wu21-packages/**'
       - 'src/**'
       - 'assets/**'
