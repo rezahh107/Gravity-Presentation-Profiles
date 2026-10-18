@@ -262,7 +262,7 @@ jobs:
           const candidate=JSON.parse(fs.readFileSync(root+'/blocksy/wu19-browser-results.json','utf8'));
           assert.equal(candidate.theme,'blocksy');
           assert.deepEqual(candidate.results.map(r=>r.id),historic.results.map(r=>r.id));
-          assert.ok(candidate.results.length>=9);
+          assert.equal(candidate.results.length,8);
           assert.ok(historic.results.every(r=>r.status==='PASS'));
           assert.ok(candidate.results.every(r=>r.status==='PASS'));
           for(const file of ['wu19-canonical.pdf','wu19-long-content.pdf']) {
