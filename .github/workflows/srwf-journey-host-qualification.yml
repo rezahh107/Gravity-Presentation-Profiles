@@ -316,7 +316,7 @@ jobs:
               "theme"=>$theme->get_stylesheet(),"version"=>$theme->get("Version"),"child"=>is_child_theme(),
               "inbox_page_id"=>$page,"native_title_setting"=>$read["has_hero_section"],
               "wp"=>get_bloginfo("version"),"php"=>PHP_VERSION,
-              "gravity_forms"=>GFCommon::$version,"gravity_flow"=>gravity_flow()->get_version()
+              "gravity_forms"=>(string)$manifest["runtime"]["gravity_forms"],"gravity_flow"=>(string)$manifest["runtime"]["gravity_flow"]
             ),JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");
           '
           set +e
