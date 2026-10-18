@@ -11,6 +11,7 @@ on:
       - 'src/SRWF/GravityFlow/InboxOperationalPaint.php'
       - 'src/SRWF/GravityFlow/InboxPresentationAdapter.php'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs'
+      - 'tests/repro-evidence-lab/pr159-schema11-frontend-paint-qualification.mjs'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs'
       - 'tests/repro-evidence-lab/blocksy-qualification-completeness.mjs'
       - 'tests/repro-evidence-lab/blocksy-qualification-completeness-falsification.mjs'
@@ -207,6 +208,9 @@ jobs:
           # Preserve the real runner outcome even with continue-on-error.
           if test "$node_exit" -ne 0; then exit "$node_exit"; fi
           if test "$tee_exit" -ne 0; then exit "$tee_exit"; fi
+
+      - name: Qualify activated schema 1.1 paint on authentic frontend Shortcode and Block
+        run: node tests/repro-evidence-lab/pr159-schema11-frontend-paint-qualification.mjs
 
       - name: Falsify captured pageerror verdict in authentic Chromium
         shell: bash
