@@ -619,6 +619,16 @@ if (blocksyMode) {
     try {
       await auth(viewer, deniedId);
       const target = await viewer.newPage();
+      // A denied anonymous request is not evidence that an independently
+      // authenticated, unassigned operator is denied. Prove WordPress accepts
+      // this user's native session before requesting the protected case.
+      const profileResponse = await target.goto('http://127.0.0.1:8080/wp-admin/profile.php', { waitUntil: 'networkidle' });
+      const profileUrl = new URL(target.url());
+      const profileUsername = await target.locator('#user_login').inputValue();
+      if (profileResponse?.status() !== 200 || profileUrl.pathname !== '/wp-admin/profile.php'
+        || profileUsername !== manifest.users.negative_control.login) {
+        throw new Error('Negative-control WordPress session is not genuinely authenticated as the distinct synthetic user.');
+      }
       const response = await target.goto(url, { waitUntil: 'networkidle' });
       const rendered = await target.locator('body').innerText();
       const actions = await target.locator('.gravityflow-status-box .gravityflow-action-buttons button:visible').count();
@@ -627,7 +637,7 @@ if (blocksyMode) {
         throw new Error('Unassigned user reached protected synthetic data or actionable native controls.');
       }
       await target.screenshot({ path: `${artifactDir}/blocksy-unassigned-denied.png`, fullPage: true });
-      return { entry_id: entryId, status: response?.status(), protected_value_absent: true, native_actions: actions, dossier };
+      return { entry_id: entryId, profile_user: profileUsername, native_session_verified: true, status: response?.status(), protected_value_absent: true, native_actions: actions, dossier };
     } finally { await viewer.close(); }
   });
 
