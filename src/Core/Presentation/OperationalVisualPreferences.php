@@ -6,47 +6,38 @@ use GravityPresentationProfiles\Core\Portable\ContractViolation;
 use GravityPresentationProfiles\Core\Portable\VisualProfilePackage;
 
 /**
- * Closed, paint-only projection of existing schema 1.1 operational preferences.
+ * Consumer-neutral, paint-only interpretation of schema 1.1 color preferences.
  *
- * No selectors or CSS are accepted from package data. The host still owns
- * workflow, layout and native state; schema 1.0 remains visually unchanged.
+ * Only immutable selected profile data and validated hex color tokens may
+ * enter this projection. Consumers own selectors, properties and CSS emission.
  */
 final class OperationalVisualPreferences {
-    private const PAINT = array(
-        'gravity_flow.inbox' => array(
-            'composition.surface_background' => array( '.gpp-inbox-surface', '--gpp-inbox-canvas' ),
-            'sections.heading_text' => array( '.gpp-inbox-surface__title', 'color' ),
-            'labels.text' => array( '.gflow-inbox.gflow-grid.gflow-common .ag-header-cell', 'color' ),
-        ),
-        'gravity_flow.entry_detail' => array(
-            'composition.surface_background' => array( '.gpp-entry-dossier', 'background-color' ),
-            'sections.heading_text' => array(
-                '.gpp-entry-dossier__header h1, .gpp-entry-dossier__section-title, .gpp-entry-dossier .gpp-entry-dossier__task-heading, #poststuff .gpp-entry-dossier .gpp-entry-dossier__task-heading',
-                'color',
-            ),
-            'labels.text' => array( '.gpp-entry-dossier__fact dt', 'color' ),
-        ),
+    private const COLOR_PREFERENCES = array(
+        'composition.surface_background',
+        'sections.heading_text',
+        'labels.text',
     );
 
-    public static function css( $surface, $profile, $package ) {
-        if ( ! isset( self::PAINT[ $surface ] ) || ! is_array( $profile ) || ! is_array( $package )
+    /** Return an ordered preference => safe #RRGGBB map, or an empty map. */
+    public static function colors( $surface, $profile, $package ) {
+        if ( ! is_string( $surface ) || ! is_array( $profile ) || ! is_array( $package )
             || ! isset( $package['schema_version'] ) || '1.1.0' !== $package['schema_version'] ) {
-            return '';
+            return array();
         }
 
         try {
             VisualProfilePackage::validate( $package );
         } catch ( ContractViolation $exception ) {
-            return '';
+            return array();
         }
 
         if ( ! isset( $profile['surface'], $profile['profile_id'], $profile['presentation'], $profile['token_refs'] )
             || $surface !== $profile['surface'] ) {
-            return '';
+            return array();
         }
 
-        // A profile must be the exact immutable selected-surface record from the
-        // validated package, not an ad-hoc projection supplied by a caller.
+        // The profile must be exactly the immutable selected-surface record,
+        // never an arbitrary caller-supplied projection.
         $selected = null;
         foreach ( $package['surface_profiles'] as $candidate ) {
             if ( $surface === $candidate['surface'] ) {
@@ -55,11 +46,11 @@ final class OperationalVisualPreferences {
             }
         }
         if ( null === $selected || $selected !== $profile ) {
-            return '';
+            return array();
         }
 
-        $rules = array();
-        foreach ( self::PAINT[ $surface ] as $preference => $target ) {
+        $colors = array();
+        foreach ( self::COLOR_PREFERENCES as $preference ) {
             $parts = explode( '.', $preference );
             $reference = isset( $profile['presentation'][ $parts[0] ][ $parts[1] ] )
                 ? $profile['presentation'][ $parts[0] ][ $parts[1] ] : null;
@@ -67,20 +58,20 @@ final class OperationalVisualPreferences {
                 continue;
             }
             if ( ! is_string( $reference ) || ! in_array( $reference, $profile['token_refs'], true ) ) {
-                return '';
+                return array();
             }
             $ref_parts = explode( '.', $reference );
             if ( 2 !== count( $ref_parts ) || 'colors' !== $ref_parts[0]
                 || ! isset( $package['design_tokens']['colors'][ $ref_parts[1] ] ) ) {
-                return '';
+                return array();
             }
             $color = $package['design_tokens']['colors'][ $ref_parts[1] ];
             if ( ! is_string( $color ) || ! preg_match( '/^#[0-9a-fA-F]{6}$/D', $color ) ) {
-                return '';
+                return array();
             }
-            $rules[] = $target[0] . '{' . $target[1] . ':' . $color . ';}';
+            $colors[ $preference ] = $color;
         }
 
-        return implode( "\n", $rules );
+        return $colors;
     }
 }
