@@ -264,6 +264,13 @@ async function openFromInbox(page, entryId, width, exerciseRefresh = false) {
   if (await link.count() !== 1) throw new Error(`Native Entry Detail link missing for ${entryId}.`);
   await Promise.all([page.waitForURL(/view=entry/, { timeout: 30000 }), link.click()]);
   const current = new URL(page.url());
+  if (blocksyMode) {
+    const protectedNationalId = wpEval(`$entry=GFAPI::get_entry(${Number(entryId)});if(is_wp_error($entry))throw new RuntimeException('Missing selected native entry');echo (string)rgar($entry,'4');`);
+    const rendered = await page.locator('body').innerText();
+    if (!protectedNationalId.startsWith('MR6-') || !rendered.includes(protectedNationalId)) {
+      throw new Error('Selected Inbox entry protected synthetic national ID is not visible to the authorized operator.');
+    }
+  }
   if (current.searchParams.get('lid') !== String(entryId) || current.searchParams.get('id') !== String(formId)) {
     throw new Error(`Native Inbox navigation opened the wrong case: ${current}`);
   }
@@ -534,6 +541,8 @@ context.setDefaultTimeout(12000);
 context.setDefaultNavigationTimeout(20000);
 await auth(context);
 const page = await context.newPage();
+const pageErrors = [];
+if (blocksyMode) page.on('pageerror', error => pageErrors.push(String(error?.stack || error).slice(0, 1500)));
 
 for (const width of viewports) {
   await test(`SRWF-PROD-MR6-APPROVE-${width}`, `Inbox → Review → Correction → Review → Approved → Inbox at ${width}px`, async () => {
@@ -593,7 +602,7 @@ if (blocksyMode) {
     await page.setViewportSize({ width: 390, height: 844 });
     await openFromInbox(page, entryId, 390);
     const url = page.url();
-    const protectedValue = hostState(entryId).field_1;
+    const protectedValue = wpEval(`$entry=GFAPI::get_entry(${Number(entryId)});if(is_wp_error($entry))throw new RuntimeException('Missing entry');echo (string)rgar($entry,'4');`);
     if (!protectedValue || !protectedValue.startsWith('MR6-')) throw new Error('Synthetic protected witness missing.');
     const deniedId = Number(manifest.users.negative_control.id);
     if (!Number.isInteger(deniedId) || deniedId === operatorId) throw new Error('Invalid negative control identity.');
@@ -640,10 +649,11 @@ fs.writeFileSync(`${artifactDir}/${evidenceStem}.json`, JSON.stringify({
   expected_case_count: blocksyMode ? 13 : 6,
   viewports,
   results,
+  page_errors: pageErrors,
 }, null, 2) + '\n');
 const failed = results.filter(result => result.status !== 'PASS');
-if (failed.length) {
-  console.error(JSON.stringify({ failed }, null, 2));
+if (failed.length || pageErrors.length) {
+  console.error(JSON.stringify({ failed, page_errors: pageErrors }, null, 2));
   process.exit(1);
 }
 console.log(`${blocksyMode ? 'BLOCKSY_OPERATOR_JOURNEY' : 'SRWF_JOURNEY_PRODUCTION_MR6_INTEGRATED'}_PASS ${results.length}`);
