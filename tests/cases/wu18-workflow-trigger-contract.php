@@ -225,4 +225,70 @@ foreach ( $paint_workflows as $label => $spec ) {
     }
 }
 
+// FND-005: the authentic frontend schema 1.1 Chromium scenario must run
+// even when a PR changes only one input, its fixture producer, its current-post
+// Block composition, or the immutable lifecycle exercised by the driver.
+$blocksy_frontend_paths = gpp_wu18_extract_pull_request_paths(
+    $root . '/.github/workflows/blocksy-free-inbox-smoke.yml'
+);
+$frontend_paint_direct_dependencies = array(
+    // These are read directly by pr159-schema11-frontend-paint-qualification.mjs.
+    'tests/fixtures/generic-operational-paint-v11.json',
+    'tests/repro-evidence-lab/generic-operational-v11-control.php',
+    // These create the fixture-manifest and P06 authentic current-post Block.
+    'tests/repro-evidence-lab/setup-fixtures.php',
+    'tests/repro-evidence-lab/p06-inbox-asset-reachability-runtime.php',
+    // The real Block markup and native scoped wrapper depend on this bridge.
+    'src/SRWF/GravityFlow/InboxBlockCompositionBridge.php',
+    // The WP-CLI control directly uses these immutable-state classes.
+    'src/Core/Lifecycle/VisualPackageLifecycle.php',
+    'src/Core/Lifecycle/WordPressOptionStateStore.php',
+);
+foreach ( $frontend_paint_direct_dependencies as $dependency ) {
+    gpp_assert_true(
+        1 === count( array_keys( $blocksy_frontend_paths, $dependency, true ) )
+            && gpp_wu18_path_is_covered( $blocksy_frontend_paths, $dependency ),
+        'Blocksy must trigger on a change to only frontend paint dependency: ' . $dependency
+    );
+    $without_dependency = array_values( array_diff( $blocksy_frontend_paths, array( $dependency ) ) );
+    gpp_assert_true(
+        ! gpp_wu18_path_is_covered( $without_dependency, $dependency ),
+        'Removing Blocksy frontend dependency coverage must fail: ' . $dependency
+    );
+}
+foreach ( array(
+    'tests/repro-evidence-lab/pr159-schema11-frontend-paint-qualification.mjs',
+    'src/Core/Presentation/OperationalVisualPreferences.php',
+    'src/SRWF/GravityFlow/InboxOperationalPaint.php',
+    'src/SRWF/GravityFlow/InboxPresentationAdapter.php',
+) as $preserved_dependency ) {
+    gpp_assert_true(
+        in_array( $preserved_dependency, $blocksy_frontend_paths, true ),
+        'Existing frontend/projection trigger must stay intact: ' . $preserved_dependency
+    );
+}
+foreach ( array(
+    'src/**',
+    'tests/**',
+    'tests/repro-evidence-lab/**',
+    'tests/fixtures/**',
+) as $broad_pattern ) {
+    gpp_assert_true(
+        ! in_array( $broad_pattern, $blocksy_frontend_paths, true ),
+        'Blocksy frontend dependency qualification must not expand to broad paths: ' . $broad_pattern
+    );
+}
+foreach ( array(
+    'tests/fixtures/unrelated-operational-package.json',
+    'tests/repro-evidence-lab/unrelated-frontend-qualification.mjs',
+    'src/SRWF/GravityFlow/EntryDetailOperationalPaint.php',
+    'src/SRWF/GravityFlow/UnrelatedPaint.php',
+    'docs/unrelated-note.md',
+) as $unrelated ) {
+    gpp_assert_true(
+        ! gpp_wu18_path_is_covered( $blocksy_frontend_paths, $unrelated ),
+        'Unrelated paths must not select Blocksy frontend qualification: ' . $unrelated
+    );
+}
+
 echo "WU18_WORKFLOW_TRIGGER_CONTRACT_PASS\n";
