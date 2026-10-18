@@ -6,6 +6,13 @@ const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned MR-6 journey environment is incomplete.');
+// Historical Hello qualifications retain their exact inputs/outputs. Explicit
+// Blocksy mode runs independently with the same real GF/Flow/GPP fixture.
+const compatibilityTheme = process.env.GPP_MR6_COMPAT_THEME || '';
+if (compatibilityTheme && compatibilityTheme !== 'blocksy') throw new Error('Unadmitted MR-6 compatibility theme.');
+const blocksyMode = compatibilityTheme === 'blocksy';
+const evidenceStem = blocksyMode ? 'blocksy-operator-journey' : 'srwf-journey-production-mr6-integrated-browser';
+const viewports = blocksyMode ? [1440, 414, 390, 360, 320] : [1440, 390, 320];
 
 function wpEval(code) {
   const result = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
@@ -36,7 +43,9 @@ const hostFacts = JSON.parse(wpEval(`
     'twenty_twenty_five_active'=>'twentytwentyfive'===(string)get_stylesheet()
   ));
 `));
-if (hostFacts.theme !== 'hello-elementor' || hostFacts.gtb_active !== true || hostFacts.host_companion_active !== false || hostFacts.twenty_twenty_five_active !== false) {
+if ((!blocksyMode && hostFacts.theme !== 'hello-elementor')
+  || (blocksyMode && hostFacts.theme !== 'blocksy')
+  || hostFacts.gtb_active !== true || hostFacts.host_companion_active !== false || hostFacts.twenty_twenty_five_active !== false) {
   throw new Error(`Forward-host coexistence contract failed: ${JSON.stringify(hostFacts)}`);
 }
 
@@ -90,12 +99,12 @@ function createReviewEntry(label) {
   return id;
 }
 
-async function auth(context) {
+async function auth(context, userId = operatorId) {
   const cookies = JSON.parse(wpEval(`
     $expiry=time()+3600;
     echo wp_json_encode(array(
-      array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$expiry,'auth'),'expires'=>$expiry),
-      array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie(${operatorId},$expiry,'logged_in'),'expires'=>$expiry)
+      array('name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie(${userId},$expiry,'auth'),'expires'=>$expiry),
+      array('name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie(${userId},$expiry,'logged_in'),'expires'=>$expiry)
     ));
   `));
   await context.addCookies(cookies.map(cookie => ({
@@ -229,6 +238,13 @@ function assertInboxSnapshot(snapshot, width) {
 async function openFromInbox(page, entryId, width, exerciseRefresh = false) {
   await page.goto(inboxUrl, { waitUntil: 'networkidle' });
   await waitForInboxRow(page, entryId);
+  if (blocksyMode) {
+    const themeSheets = await page.evaluate(() => [...document.styleSheets].filter(sheet => {
+      if (!sheet.href || !sheet.href.includes('/themes/blocksy/')) return false;
+      try { return sheet.cssRules.length > 0 && !sheet.disabled; } catch { return false; }
+    }).length);
+    if (!themeSheets) throw new Error('Blocksy stylesheet not loaded into the real frontend page.');
+  }
   let snapshot = await inboxSnapshot(page, entryId, width);
   assertInboxSnapshot(snapshot, width);
 
@@ -249,6 +265,13 @@ async function openFromInbox(page, entryId, width, exerciseRefresh = false) {
   if (await link.count() !== 1) throw new Error(`Native Entry Detail link missing for ${entryId}.`);
   await Promise.all([page.waitForURL(/view=entry/, { timeout: 30000 }), link.click()]);
   const current = new URL(page.url());
+  if (blocksyMode) {
+    const protectedNationalId = wpEval(`$entry=GFAPI::get_entry(${Number(entryId)});if(is_wp_error($entry))throw new RuntimeException('Missing selected native entry');echo (string)rgar($entry,'4');`);
+    const rendered = await page.locator('body').innerText();
+    if (!protectedNationalId.startsWith('MR6-') || !rendered.includes(protectedNationalId)) {
+      throw new Error('Selected Inbox entry protected synthetic national ID is not visible to the authorized operator.');
+    }
+  }
   if (current.searchParams.get('lid') !== String(entryId) || current.searchParams.get('id') !== String(formId)) {
     throw new Error(`Native Inbox navigation opened the wrong case: ${current}`);
   }
@@ -349,6 +372,7 @@ async function correctionAndValidation(page, entryId, width) {
     throw new Error(`Correction admission failed at ${width}: ${JSON.stringify({ dialog, state, editable, unauthorized, print, gtb })}`);
   }
 
+  if (blocksyMode) await page.screenshot({ path: `${artifactDir}/blocksy-correction-${width}.png`, fullPage: true });
   const input1 = page.locator('input[name="input_1"]').first();
   await input1.focus();
   const focus = await input1.evaluate(node => {
@@ -518,18 +542,21 @@ context.setDefaultTimeout(12000);
 context.setDefaultNavigationTimeout(20000);
 await auth(context);
 const page = await context.newPage();
+const pageErrors = [];
+if (blocksyMode) page.on('pageerror', error => pageErrors.push(String(error?.stack || error).slice(0, 1500)));
 
-for (const width of [1440, 390, 320]) {
+async function exerciseWidth(width) {
   await test(`SRWF-PROD-MR6-APPROVE-${width}`, `Inbox → Review → Correction → Review → Approved → Inbox at ${width}px`, async () => {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     const entryId = createReviewEntry(`APPROVE-${width}`);
     const inbox = await openFromInbox(page, entryId, width, width === 1440);
     const reviewBefore = await reviewSnapshot(page, entryId, width);
+    if (blocksyMode) await page.screenshot({ path: `${artifactDir}/blocksy-review-${width}.png`, fullPage: true });
     const correction = await correctionAndValidation(page, entryId, width);
     const approveDialog = await accept(page, 'approved');
     if (!approveDialog) throw new Error('Native Approve confirmation was not observed.');
     const terminal = await assertTerminal(page, entryId, 'approved', width);
-    if (width !== 1440) await page.screenshot({ path: `${artifactDir}/srwf-journey-mr6-approved-${width}.png`, fullPage: true });
+    if (blocksyMode || width !== 1440) await page.screenshot({ path: `${artifactDir}/${blocksyMode ? 'blocksy' : 'srwf-journey-mr6'}-approved-${width}.png`, fullPage: true });
     const returned = await returnToInbox(page, width);
     return { entry_id: entryId, inbox, review_before: reviewBefore, correction, approve_dialog: approveDialog, terminal, returned };
   });
@@ -542,24 +569,110 @@ for (const width of [1440, 390, 320]) {
     const rejectDialog = await accept(page, 'rejected');
     if (!rejectDialog) throw new Error('Native Reject confirmation was not observed.');
     const terminal = await assertTerminal(page, entryId, 'rejected', width);
-    if (width !== 1440) await page.screenshot({ path: `${artifactDir}/srwf-journey-mr6-rejected-${width}.png`, fullPage: true });
+    if (blocksyMode || width !== 1440) await page.screenshot({ path: `${artifactDir}/${blocksyMode ? 'blocksy' : 'srwf-journey-mr6'}-rejected-${width}.png`, fullPage: true });
     const returned = await returnToInbox(page, width);
     return { entry_id: entryId, inbox, review, reject_dialog: rejectDialog, terminal, returned };
+  });
+}
+
+// Keep the three historical Hello scenarios visibly intact for the
+// repository's MR-6 contract. Blocksy's extra widths never change Hello.
+if (blocksyMode) {
+  for (const width of [1440, 414, 390, 360, 320]) await exerciseWidth(width);
+} else {
+  for (const width of [1440, 390, 320]) await exerciseWidth(width);
+}
+
+if (blocksyMode) {
+  await test('BLOCKSY-JOURNEY-NATIVE-CANCEL', 'Native Approval cancellation must not advance workflow', async () => {
+    const entryId = createReviewEntry('CANCEL');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openFromInbox(page, entryId, 390);
+    const before = hostState(entryId);
+    const button = page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]').first();
+    if (await button.count() !== 1) throw new Error('Native Approve action absent before cancel.');
+    let seen = null;
+    const dialog = new Promise(resolve => page.once('dialog', async d => {
+      seen = d.type();
+      await d.dismiss();
+      resolve();
+    }));
+    await Promise.all([button.click(), dialog]);
+    const after = hostState(entryId);
+    if (seen !== 'confirm' || JSON.stringify(before) !== JSON.stringify(after)
+      || await page.locator('[data-gpp-entry-journey-result]:visible').count() !== 0) {
+      throw new Error('Cancelled native confirmation mutated Review or showed a Result.');
+    }
+    return { entry_id: entryId, dialog: seen, before, after };
+  });
+
+  await test('BLOCKSY-JOURNEY-UNASSIGNED-DENIAL', 'Different real operator cannot see protected entry or native actions', async () => {
+    const entryId = createReviewEntry('DENY');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openFromInbox(page, entryId, 390);
+    const url = page.url();
+    const protectedValue = wpEval(`$entry=GFAPI::get_entry(${Number(entryId)});if(is_wp_error($entry))throw new RuntimeException('Missing entry');echo (string)rgar($entry,'4');`);
+    if (!protectedValue || !protectedValue.startsWith('MR6-')) throw new Error('Synthetic protected witness missing.');
+    const deniedId = Number(manifest.users.negative_control.id);
+    if (!Number.isInteger(deniedId) || deniedId === operatorId) throw new Error('Invalid negative control identity.');
+    const viewer = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      await auth(viewer, deniedId);
+      const target = await viewer.newPage();
+      // A denied anonymous request is not evidence that an independently
+      // authenticated, unassigned operator is denied. Prove WordPress accepts
+      // this user's native session before requesting the protected case.
+      const profileResponse = await target.goto(new URL('/wp-admin/profile.php', inboxUrl).toString(), { waitUntil: 'networkidle' });
+      const profileUrl = new URL(target.url());
+      const profileUsername = await target.locator('#user_login').inputValue();
+      if (profileResponse?.status() !== 200 || profileUrl.pathname !== '/wp-admin/profile.php'
+        || profileUsername !== manifest.users.negative_control.login) {
+        throw new Error('Negative-control WordPress session is not genuinely authenticated as the distinct synthetic user.');
+      }
+      const response = await target.goto(url, { waitUntil: 'networkidle' });
+      const rendered = await target.locator('body').innerText();
+      const actions = await target.locator('.gravityflow-status-box .gravityflow-action-buttons button:visible').count();
+      const dossier = await target.locator('.gpp-entry-dossier[data-gpp-entry-detail="ready"]:visible').count();
+      if (rendered.includes(protectedValue) || actions || dossier) {
+        throw new Error('Unassigned user reached protected synthetic data or actionable native controls.');
+      }
+      await target.screenshot({ path: `${artifactDir}/blocksy-unassigned-denied.png`, fullPage: true });
+      return { entry_id: entryId, profile_user: profileUsername, native_session_verified: true, status: response?.status(), protected_value_absent: true, native_actions: actions, dossier };
+    } finally { await viewer.close(); }
+  });
+
+  await test('BLOCKSY-JOURNEY-UNRELATED-ISOLATION', 'Unrelated Blocksy page has no operational GPP presentation assets', async () => {
+    const url = wpEval(`
+      $id=wp_insert_post(array('post_type'=>'page','post_status'=>'publish','post_title'=>'Synthetic unrelated Blocksy page','post_content'=>'Unrelated fixture'));
+      if(is_wp_error($id)||!$id) throw new RuntimeException('Unrelated page creation failed.');
+      echo get_permalink($id);
+    `);
+    await page.goto(url, { waitUntil: 'networkidle' });
+    const facts = await page.evaluate(() => ({
+      surface: document.querySelectorAll('[data-gpp-inbox-surface],[data-gpp-entry-detail-surface],.gpp-print-dossier').length,
+      styles: [...document.querySelectorAll('link[rel="stylesheet"]')].filter(link => /srwf-gravity-flow-(inbox|entry-detail|print)/.test(link.href || '')).map(link => link.href),
+      html_dir: document.documentElement.getAttribute('dir') || getComputedStyle(document.documentElement).direction,
+    }));
+    if (facts.surface || facts.styles.length || facts.html_dir !== 'rtl') throw new Error('GPP leaked onto unrelated theme page: ' + JSON.stringify(facts));
+    return facts;
   });
 }
 
 await browser.close();
 wpEval("delete_option('gpp_srwf_mr4_expand_editable_fields'); echo '1';");
 fs.mkdirSync(artifactDir, { recursive: true });
-fs.writeFileSync(`${artifactDir}/srwf-journey-production-mr6-integrated-browser.json`, JSON.stringify({
+fs.writeFileSync(`${artifactDir}/${evidenceStem}.json`, JSON.stringify({
   schema_version: '1.0.0',
-  runtime: 'REPRODUCIBLE_PINNED_FORWARD_HELLO',
+  runtime: blocksyMode ? 'REPRODUCIBLE_PINNED_BLOCKSY_FREE' : 'REPRODUCIBLE_PINNED_FORWARD_HELLO',
   host: hostFacts,
+  expected_case_count: blocksyMode ? 13 : 6,
+  viewports,
   results,
+  page_errors: pageErrors,
 }, null, 2) + '\n');
 const failed = results.filter(result => result.status !== 'PASS');
-if (failed.length) {
-  console.error(JSON.stringify({ failed }, null, 2));
+if (failed.length || pageErrors.length) {
+  console.error(JSON.stringify({ failed, page_errors: pageErrors }, null, 2));
   process.exit(1);
 }
-console.log(`SRWF_JOURNEY_PRODUCTION_MR6_INTEGRATED_PASS ${results.length}`);
+console.log(`${blocksyMode ? 'BLOCKSY_OPERATOR_JOURNEY' : 'SRWF_JOURNEY_PRODUCTION_MR6_INTEGRATED'}_PASS ${results.length}`);

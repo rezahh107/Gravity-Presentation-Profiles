@@ -13,6 +13,7 @@ on:
       - 'tests/run.php'
       - 'tests/repro-evidence-lab/srwf-journey-host-*'
       - 'tests/repro-evidence-lab/srwf-journey-production-*'
+      - 'tests/repro-evidence-lab/blocksy-frontend-native-print-*.mjs'
       - 'tests/fixtures/wu21-packages/**'
       - 'docs/evidence/SRWF_OPERATOR_JOURNEY_HOST_QUALIFICATION_V1.md'
   workflow_dispatch:
@@ -143,6 +144,18 @@ jobs:
           tar -xzf /tmp/hello-elementor.tar.gz -C /tmp/hello-elementor --strip-components=1
           mv /tmp/hello-elementor "$WU21_WP_PATH/wp-content/themes/hello-elementor"
           test "$(php "$WU21_WP_CLI" theme get hello-elementor --field=version --path="$WU21_WP_PATH")" = "$WU21_HELLO_VERSION"
+
+      - name: Install official Blocksy Free for independent operational journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='2.1.59'
+          curl --fail --location --retry 3 --output /tmp/gpp-blocksy-2.1.59.zip "https://downloads.wordpress.org/theme/blocksy.${version}.zip"
+          unzip -tq /tmp/gpp-blocksy-2.1.59.zip
+          sha256sum /tmp/gpp-blocksy-2.1.59.zip > "$WU21_ARTIFACT_DIR/blocksy-operator-theme-sha256.txt"
+          php "$WU21_WP_CLI" theme install /tmp/gpp-blocksy-2.1.59.zip --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" theme get blocksy --field=version --path="$WU21_WP_PATH")" = "$version"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" != 'blocksy'
 
       - name: Activate exact host packages
         shell: bash
@@ -284,6 +297,46 @@ jobs:
           # split-assignee negative control, including if MR-6 captured failure.
           php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
+
+          # Qualify the same real MR-6 journey in Blocksy after restoring the
+          # historical host. Keep existing Hello evidence and outputs unchanged.
+          php "$WU21_WP_CLI" theme activate blocksy --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = 'blocksy'
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $theme=wp_get_theme();
+            if ($theme->get_stylesheet() !== "blocksy" || $theme->get_template() !== "blocksy" || is_child_theme() || $theme->get("Version") !== "2.1.59") throw new RuntimeException("Wrong official Blocksy Free host.");
+            foreach (array("elementor/elementor.php","elementor-pro/elementor-pro.php","blocksy-companion/blocksy-companion.php") as $plugin) if(is_plugin_active($plugin)) throw new RuntimeException("Excluded companion active: ".$plugin);
+            $manifest=get_option("gpp_srwf_journey_host_manifest");
+            $page=(int)$manifest["routes"]["shortcode"]["page_id"];
+            $options=(array)get_post_meta($page,"blocksy_post_meta_options",true);
+            $options["has_hero_section"]="disabled";
+            update_post_meta($page,"blocksy_post_meta_options",$options);
+            $read=(array)get_post_meta($page,"blocksy_post_meta_options",true);
+            if(($read["has_hero_section"]??null)!=="disabled") throw new RuntimeException("Native Blocksy title configuration was not persisted.");
+            file_put_contents(getenv("WU21_ARTIFACT_DIR")."/blocksy-operator-host.json",wp_json_encode(array(
+              "theme"=>$theme->get_stylesheet(),"version"=>$theme->get("Version"),"child"=>is_child_theme(),
+              "inbox_page_id"=>$page,"native_title_setting"=>$read["has_hero_section"],
+              "wp"=>get_bloginfo("version"),"php"=>PHP_VERSION,
+              "gravity_forms"=>(string)$manifest["runtime"]["gravity_forms"],"gravity_flow"=>(string)$manifest["runtime"]["gravity_flow"]
+            ),JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");
+          '
+          set +e
+          GPP_MR6_COMPAT_THEME=blocksy node tests/repro-evidence-lab/srwf-journey-production-mr6-integrated-browser.mjs
+          blocksy_status=$?
+          # A separate real-button → native-request → native-authorization qualification.
+          # Preserve MR-6's existing 13 case IDs and its JSON artifact unchanged.
+          node tests/repro-evidence-lab/blocksy-frontend-native-print-qualification.mjs
+          frontend_print_status=$?
+          set -e
+          # Always restore host before existing destructive controls.
+          php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
+          test "$blocksy_status" -eq 0
+          test "$frontend_print_status" -eq 0
+          test -s "$WU21_ARTIFACT_DIR/blocksy-frontend-native-print.json"
+          node tests/repro-evidence-lab/blocksy-frontend-native-print-gate.mjs
+          test -s "$WU21_ARTIFACT_DIR/blocksy-operator-journey.json"
+          node -e 'const fs=require("fs");const p=process.env.WU21_ARTIFACT_DIR+"/blocksy-operator-journey.json";const x=JSON.parse(fs.readFileSync(p,"utf8"));if(x.runtime!=="REPRODUCIBLE_PINNED_BLOCKSY_FREE"||x.host.theme!=="blocksy"||x.results.length!==13||x.results.some(r=>r.status!=="PASS"))process.exit(1);'
 
           # Execute exact-head negative controls only after every canonical
           # positive journey. The split-assignee case mutates the shared form by

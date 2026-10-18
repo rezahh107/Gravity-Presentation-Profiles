@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/wu19-a4-print-runtime.yml'
+      - '.github/workflows/srwf-journey-host-qualification.yml'
+      - 'tests/repro-evidence-lab/blocksy-frontend-native-print-*.mjs'
       - 'tests/fixtures/wu21-packages/**'
       - 'src/**'
       - 'assets/**'
@@ -224,6 +226,73 @@ jobs:
           test "${{ steps.print_visual_qualification.outcome }}" = 'success'
           php tests/repro-evidence-lab/build-qualification-evidence.php
           test -s "$WU21_ARTIFACT_DIR/gpp-qualification.json"
+      - name: Qualify WU19 isolated native Print against official Blocksy Free
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$WU21_ARTIFACT_DIR/gpp-qualification.json"
+          test -s "$WU21_ARTIFACT_DIR/wu19-browser-results.json"
+          test -s "$WU21_ARTIFACT_DIR/wu19-canonical.pdf"
+          baseline_theme="$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")"
+          test "$baseline_theme" != 'blocksy'
+          curl --fail --location --retry 3 -o /tmp/gpp-wu19-blocksy.zip https://downloads.wordpress.org/theme/blocksy.2.1.59.zip
+          unzip -tq /tmp/gpp-wu19-blocksy.zip
+          mkdir -p "$WU21_ARTIFACT_DIR/blocksy"
+          sha256sum /tmp/gpp-wu19-blocksy.zip > "$WU21_ARTIFACT_DIR/blocksy/theme-sha256.txt"
+          php "$WU21_WP_CLI" theme install /tmp/gpp-wu19-blocksy.zip --activate --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $theme=wp_get_theme();
+            if($theme->get_stylesheet()!=="blocksy"||$theme->get_template()!=="blocksy"||$theme->get("Version")!=="2.1.59"||is_child_theme()) throw new RuntimeException("Not official Blocksy Free parent.");
+            foreach(array("elementor/elementor.php","elementor-pro/elementor-pro.php","blocksy-companion/blocksy-companion.php") as $p) if(is_plugin_active($p)) throw new RuntimeException("Excluded companion active.");
+            file_put_contents(getenv("WU21_ARTIFACT_DIR")."/blocksy/host.json",wp_json_encode(array(
+              "theme"=>$theme->get_stylesheet(),"version"=>$theme->get("Version"),"wordpress"=>get_bloginfo("version"),"php"=>PHP_VERSION
+            ),JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");
+          '
+          # Stateful Core Spine deliberately rotates bootstrap_admin's password
+          # to an unretained random value. Re-admit only the fixture's original
+          # synthetic login credential for this separate authenticated run.
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $user=get_user_by("login","bootstrap_admin");
+            $fixture_pass="wu21-bootstrap-pass-2026";
+            if(!$user||!$user->exists()) throw new RuntimeException("Missing canonical WU19 test operator");
+            wp_set_password($fixture_pass,(int)$user->ID);
+            $fresh=get_userdata((int)$user->ID);
+            if(!$fresh||!wp_check_password($fixture_pass,(string)$fresh->user_pass,(int)$fresh->ID)) throw new RuntimeException("Restored synthetic operator credential failed native verification");
+            echo "WU19_SYNTHETIC_OPERATOR_REAUTH_PROVEN\\n";
+          '
+          set +e
+          WU21_ARTIFACT_DIR="$WU21_ARTIFACT_DIR/blocksy" GPP_WU19_BLOCKSY_PRINT_ISOLATION=1 \
+            node tests/repro-evidence-lab/wu19-browser-tests.mjs
+          blocksy_print_exit=$?
+          WU21_ARTIFACT_DIR="$WU21_ARTIFACT_DIR/blocksy" \
+            node tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs
+          blocksy_utility_exit=$?
+          set -e
+          php "$WU21_WP_CLI" theme activate "$baseline_theme" --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$baseline_theme"
+          test "$blocksy_print_exit" -eq 0
+          test "$blocksy_utility_exit" -eq 0
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const root=process.env.WU21_ARTIFACT_DIR;
+          const historic=JSON.parse(fs.readFileSync(root+'/wu19-browser-results.json','utf8'));
+          const candidate=JSON.parse(fs.readFileSync(root+'/blocksy/wu19-browser-results.json','utf8'));
+          assert.equal(candidate.theme,'blocksy');
+          assert.deepEqual(candidate.results.map(r=>r.id),historic.results.map(r=>r.id));
+          assert.equal(candidate.results.length,8);
+          const utility=JSON.parse(fs.readFileSync(root+'/blocksy/print-utility-ux-browser-results.json','utf8'));
+          assert.equal(utility.results.length,6);
+          assert.ok(utility.results.every(r=>r.status==='PASS'));
+          assert.ok(historic.results.every(r=>r.status==='PASS'));
+          assert.ok(candidate.results.every(r=>r.status==='PASS'));
+          for(const file of ['wu19-canonical.pdf','wu19-long-content.pdf']) {
+            assert.ok(fs.statSync(root+'/'+file).size>0);
+            assert.ok(fs.statSync(root+'/blocksy/'+file).size>0);
+          }
+          console.log('BLOCKSY_WU19_ISOLATED_PRINT_PASS cases='+candidate.results.length);
+          NODE
+
       - name: Upload WU19 and qualification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

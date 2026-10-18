@@ -8,6 +8,10 @@ const artifactDir = process.env.WU21_ARTIFACT_DIR;
 const wpPath = process.env.WU21_WP_PATH;
 const wpCli = process.env.WU21_WP_CLI;
 const results = [];
+const blocksyIsolation = process.env.GPP_WU19_BLOCKSY_PRINT_ISOLATION === '1';
+if (blocksyIsolation && wpEval('echo get_stylesheet();') !== 'blocksy') {
+  throw new Error('The pinned Blocksy parent must be active for print isolation qualification.');
+}
 
 function wpEval(code) {
   const cp = spawnSync('php', [wpCli, `--path=${wpPath}`, 'eval', code], { encoding: 'utf8', env: process.env });
@@ -61,6 +65,10 @@ await test('WU19-BROWSER-001', 'authorized Entry Detail exposes separate dossier
 await test('WU19-BROWSER-002', 'canonical dossier is Front then Back and native Print grid is visually suppressed', async () => {
   await page.goto(dossierUrl(manifest.alpha), { waitUntil: 'networkidle' });
   await page.waitForSelector('.gpp-print-dossier[data-gpp-print-state="ready"]', { timeout: 30000 });
+  if (blocksyIsolation) {
+    const leaked = await page.locator('link[rel="stylesheet"][href*="/themes/blocksy/"],script[src*="/themes/blocksy/"]').count();
+    if (leaked) throw new Error('Blocksy theme assets leaked into isolated native Gravity Flow dossier Print.');
+  }
   await page.emulateMedia({ media: 'print' });
   const state = await layoutSafety(page);
   if (JSON.stringify(state.pages) !== JSON.stringify(['front', 'back'])) throw new Error(`Unexpected canonical page wrappers: ${JSON.stringify(state)}`);
@@ -200,6 +208,9 @@ await test('WU19-BROWSER-005', 'permission loss after Entry Detail open is re-ev
 await test('WU19-BROWSER-006', 'ordinary native Print remains unchanged without dossier intent', async () => {
   await page.goto(nativeUrl(manifest.alpha), { waitUntil: 'networkidle' });
   if (await page.locator('.gpp-print-dossier').count() !== 0) throw new Error('GPP dossier appeared without intent.');
+  if (blocksyIsolation && await page.locator('link[rel="stylesheet"][href*="/themes/blocksy/"],script[src*="/themes/blocksy/"]').count()) {
+    throw new Error('Blocksy theme assets leaked into ordinary native Gravity Flow Print.');
+  }
   if (await page.locator('#view-container > form').count() !== 1) throw new Error('Native single-entry Print form missing.');
   const visible = await page.locator('#view-container > form').evaluate(el => getComputedStyle(el).display !== 'none');
   if (!visible) throw new Error('Native Print was visually suppressed without dossier intent.');
@@ -213,7 +224,7 @@ await test('WU19-BROWSER-007', 'unsupported bulk dossier fails closed and never 
   return { explicit_failure: 'unsupported_request_cardinality', canonical_dossiers: 0 };
 });
 
-fs.writeFileSync(path.join(artifactDir, 'wu19-browser-results.json'), JSON.stringify({ suite: 'WU19 browser/runtime', results }, null, 2) + '\n');
+fs.writeFileSync(path.join(artifactDir, 'wu19-browser-results.json'), JSON.stringify({ suite: blocksyIsolation ? 'WU19 browser/runtime + Blocksy isolated print' : 'WU19 browser/runtime', theme: blocksyIsolation ? 'blocksy' : 'historical WU19 host', results }, null, 2) + '\n');
 for (const result of results) console.log(`${result.status} ${result.id} ${result.name}`);
 await browser.close();
 if (results.some(result => result.status !== 'PASS')) process.exit(1);
