@@ -436,6 +436,11 @@ jobs:
             /tmp/wu18-artifacts/wu09-entry-*.json
             /tmp/wu18-artifacts/wu18-runtime-results.json
             /tmp/wu18-artifacts/wu18-persiangravity-v48-capability.json
+            /tmp/wu18-artifacts/generic-operational-v11-browser.json
+            /tmp/wu18-artifacts/generic-operational-v11-negative-browser.json
+            /tmp/wu18-artifacts/generic-operational-before-inbox.png
+            /tmp/wu18-artifacts/generic-operational-after-inbox.png
+            /tmp/wu18-artifacts/generic-operational-detail-*.png
             /tmp/wu18-artifacts/wu18-browser-results.json
             /tmp/wu18-artifacts/wu09-entry-asset-qualification.json
             /tmp/wu18-artifacts/wu09-entry-asset-browser-results.json
