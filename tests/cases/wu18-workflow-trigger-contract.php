@@ -141,4 +141,50 @@ foreach ( array(
     );
 }
 
+// Operational schema 1.1 paint is now projected in SRWF-scoped owner files.
+// A projector-only PR must start the appropriate native smoke / ZIP gate even
+// when neither the Core interpreter nor the calling adapter is modified.
+$paint_workflows = array(
+    'Blocksy' => array(
+        'file' => $root . '/.github/workflows/blocksy-free-inbox-smoke.yml',
+        'positive' => array( 'src/SRWF/GravityFlow/InboxOperationalPaint.php' ),
+        'negative' => array(
+            'src/SRWF/GravityFlow/EntryDetailOperationalPaint.php',
+            'src/SRWF/GravityFlow/UnrelatedPaint.php',
+            'docs/unrelated-note.md',
+        ),
+    ),
+    'Release dry-run' => array(
+        'file' => $root . '/.github/workflows/release.yml',
+        'positive' => array(
+            'src/SRWF/GravityFlow/InboxOperationalPaint.php',
+            'src/SRWF/GravityFlow/EntryDetailOperationalPaint.php',
+        ),
+        'negative' => array(
+            'src/SRWF/GravityFlow/UnrelatedPaint.php',
+            'docs/unrelated-note.md',
+        ),
+    ),
+);
+foreach ( $paint_workflows as $label => $spec ) {
+    $paths = gpp_wu18_extract_pull_request_paths( $spec['file'] );
+    foreach ( $spec['positive'] as $owned ) {
+        gpp_assert_true(
+            in_array( $owned, $paths, true ) && gpp_wu18_path_is_covered( $paths, $owned ),
+            $label . ' must explicitly trigger for changed paint projector: ' . $owned
+        );
+        $removed = array_values( array_diff( $paths, array( $owned ) ) );
+        gpp_assert_true(
+            ! gpp_wu18_path_is_covered( $removed, $owned ),
+            $label . ' trigger mutation removing exact projector path must be rejected: ' . $owned
+        );
+    }
+    foreach ( $spec['negative'] as $unrelated ) {
+        gpp_assert_true(
+            ! gpp_wu18_path_is_covered( $paths, $unrelated ),
+            $label . ' must not expand into unrelated paths: ' . $unrelated
+        );
+    }
+}
+
 echo "WU18_WORKFLOW_TRIGGER_CONTRACT_PASS\n";
