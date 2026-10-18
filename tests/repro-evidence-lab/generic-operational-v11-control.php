@@ -16,6 +16,18 @@ if ( 'snapshot' === $action ) {
     $result = $visual->snapshot();
 } elseif ( 'import' === $action ) {
     $result = $visual->import( $fixture );
+} elseif ( 'unrelated_page' === $action ) {
+    $page_id = wp_insert_post( array(
+        'post_title' => 'Operational negative control',
+        'post_type' => 'page',
+        'post_status' => 'publish',
+        'post_content' => 'Unrelated synthetic page - no Gravity Flow shortcode.',
+    ), true );
+    if ( is_wp_error( $page_id ) || ! $page_id ) {
+        throw new RuntimeException( 'Unable to create negative control page.' );
+    }
+    $result = get_permalink( $page_id );
+
 } elseif ( in_array( $action, array( 'activate', 'rollback', 'deactivate' ), true )
     && in_array( $surface, array( 'gravity_flow.entry_detail', 'gravity_flow.inbox' ), true ) ) {
     if ( 'deactivate' === $action ) {
