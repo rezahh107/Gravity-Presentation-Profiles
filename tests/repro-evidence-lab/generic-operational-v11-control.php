@@ -9,7 +9,7 @@ use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
 
 $action = getenv( 'GPP_OPERATIONAL_ACTION' );
 $surface = getenv( 'GPP_OPERATIONAL_SURFACE' );
-$fixture = json_decode( file_get_contents( __DIR__ . '/fixtures/generic-operational-paint-v11.json' ), true );
+$fixture = json_decode( file_get_contents( __DIR__ . '/../fixtures/generic-operational-paint-v11.json' ), true );
 $visual = new VisualPackageLifecycle( new WordPressOptionStateStore( VisualPackageLifecycle::OPTION_NAME ) );
 $result = null;
 if ( 'snapshot' === $action ) {
