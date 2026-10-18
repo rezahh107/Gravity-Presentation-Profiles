@@ -8,7 +8,6 @@ use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\Core\Presentation\OperationalVisualPreferences;
 
 /**
  * Presentation-only adapter for Gravity Flow's native Entry Detail surface.
@@ -962,7 +961,7 @@ final class EntryDetailPresentationAdapter {
                 self::activeBindingSets( $bindings->snapshot() ),
                 $package['semantic_slots']
             );
-            self::$preference_css = OperationalVisualPreferences::css( self::SURFACE, $profile, $package );
+            self::$preference_css = EntryDetailOperationalPaint::css( $profile, $package );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_PROFILE_RESOLUTION',
