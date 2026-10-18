@@ -39,3 +39,37 @@ async function openInbox(page,width){
       axis:getComputedStyle(grid.querySelector('.ag-center-cols-viewport')).direction};
   });
 }
+
+fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage();
+let failure=null,imported=false;
+try{
+  await page.goto(base+'/wp-login.php',{waitUntil:'domcontentloaded'});
+  await page.locator('#user_login').fill('bootstrap_admin');
+  await page.locator('#user_pass').fill('wu21-bootstrap-pass-2026');
+  await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('#wp-submit').click()]);
+  const initial=control('snapshot');
+  evidence.original=Object.fromEntries(['gravity_flow.inbox','gravity_flow.entry_detail','print.dossier']
+    .map(k=>[k,initial.activations?.[k]||null]));
+  evidence.before={entry:await openDetail(page,1440),inbox:await openInbox(page,1440)};
+  await page.screenshot({path:out+'/generic-operational-before-inbox.png',fullPage:true});
+  const importedResult=control('import'); imported=true;
+  check(importedResult.status==='INSTALLED_INACTIVE','Real JSON import inactive');
+  const installed=control('snapshot');
+  check(JSON.stringify(installed.activations)===JSON.stringify(initial.activations),'No implicit activation');
+  check(Boolean(installed.installed?.[fixture.package_id]?.[fixture.package_version]?.content_hash),'Immutable stored version');
+
+  control('activate','gravity_flow.entry_detail');
+  const active=await openDetail(page,1440);
+  check(active.paint===rgb(fixture.design_tokens.colors.detail_surface),'Entry computed background changed');
+  check(active.heading===rgb(fixture.design_tokens.colors.detail_heading),'Entry heading token consumed');
+  check(active.label===rgb(fixture.design_tokens.colors.detail_label),'Entry label token consumed');
+  check(active.direction===evidence.before.entry.direction,'Entry RTL kept');
+  check(JSON.stringify(active.actions)===JSON.stringify(evidence.before.entry.actions),'Native actions unchanged');
+  check((await openInbox(page,1440)).paint===evidence.before.inbox.paint,'Entry activation isolated from Inbox');
+  control('activate','gravity_flow.inbox');
+  const activations=control('snapshot').activations;
+  check(activations['gravity_flow.inbox'].profile_id==='fixture.operations.inbox.v1','Inbox explicit activation');
+  check(activations['gravity_flow.entry_detail'].profile_id==='fixture.operations.entry.v1','Entry explicit activation');
+  check(JSON.stringify(activations['print.dossier']||null)===JSON.stringify(evidence.original['print.dossier']),'Print unchanged');
