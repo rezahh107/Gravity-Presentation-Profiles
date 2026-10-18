@@ -8,7 +8,6 @@ use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
-use GravityPresentationProfiles\Core\Presentation\OperationalVisualPreferences;
 
 /**
  * SRWF presentation shell for the native Gravity Flow Inbox.
@@ -347,7 +346,7 @@ final class InboxPresentationAdapter {
                 $active_binding_sets,
                 $package['semantic_slots']
             );
-            self::$preference_css = OperationalVisualPreferences::css( self::SURFACE, $profile, $package );
+            self::$preference_css = InboxOperationalPaint::css( $profile, $package );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'INBOX_PROFILE_RESOLUTION',
