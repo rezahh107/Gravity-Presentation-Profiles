@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { captureVerifiedOperationalScreenshot } from './wu18-operational-screenshot-guard.mjs';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const base=process.env.WU21_BASE_URL, wp=process.env.WU21_WP_PATH, cli=process.env.WU21_WP_CLI, out=process.env.WU21_ARTIFACT_DIR;
@@ -7,7 +8,7 @@ const host=JSON.parse(fs.readFileSync(out+'/wu18-fixture-manifest.json','utf8'))
 const detailUrl=base+'/wp-admin/admin.php?page=gravityflow-inbox&view=entry&id='+host.alpha.form_id+'&lid='+host.alpha.entry_id;
 const inboxUrl=base+'/wp-admin/admin.php?page=gravityflow-inbox';
 const rgb=h=>'rgb('+[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)).join(', ')+')';
-const evidence={checks:[],result:'NOT_RUN'};
+const evidence={checks:[],screenshots:[],rejected_screenshots:[],result:'NOT_RUN'};
 function check(v,m){if(!v)throw new Error(m);evidence.checks.push(m);}
 function control(action,surface='',previous=null){
   const p=spawnSync('php',[cli,'--path='+wp,'eval-file','tests/repro-evidence-lab/generic-operational-v11-control.php'],{
@@ -40,6 +41,32 @@ async function openInbox(page,width){
   });
 }
 
+async function captureSurface(page,surface,width,filename,fullPage=false){
+  const shot=await captureVerifiedOperationalScreenshot(page,{
+    surface, expectedUrl:surface==='entry_detail'?detailUrl:inboxUrl,
+    width, path:out+'/'+filename, fullPage
+  });
+  evidence.screenshots.push(shot);
+}
+async function expectSurfaceMismatch(page,surface,width){
+  const filename='generic-operational-rejected-'+surface+'.png';
+  const path=out+'/'+filename;
+  if(fs.existsSync(path))throw new Error('Negative-control screenshot already exists: '+filename);
+  let rejection=null;
+  try{
+    await captureVerifiedOperationalScreenshot(page,{
+      surface, expectedUrl:surface==='entry_detail'?detailUrl:inboxUrl,
+      width, path
+    });
+  }catch(error){
+    if(error.code!=='SURFACE_IDENTITY_MISMATCH')throw error;
+    rejection=error;
+  }
+  check(rejection!==null,'Cross-surface '+surface+' screenshot rejected');
+  check(!fs.existsSync(path),'Cross-surface '+surface+' leaves no screenshot');
+  evidence.rejected_screenshots.push({surface,actual_url:page.url(),code:rejection.code});
+}
+
 fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage();
@@ -54,7 +81,8 @@ try{
     .map(k=>[k,initial.activations?.[k]||null]));
   evidence.before={entry:await openDetail(page,1440),inbox:await openInbox(page,1440)};
   evidence.native_by_width={1440:evidence.before.inbox,390:await openInbox(page,390),320:await openInbox(page,320)};
-  await page.screenshot({path:out+'/generic-operational-before-inbox.png',fullPage:true});
+  await captureSurface(page,'inbox',320,'generic-operational-before-inbox.png',true);
+  await expectSurfaceMismatch(page,'entry_detail',320);
   const importedResult=control('import'); imported=true;
   check(importedResult.status==='INSTALLED_INACTIVE','Real JSON import inactive');
   const installed=control('snapshot');
@@ -77,16 +105,20 @@ try{
 
   evidence.after={};
   for(const width of [1440,390,320]){
-    const d=await openDetail(page,width),i=await openInbox(page,width);
+    const d=await openDetail(page,width);
+    if(width===1440)await expectSurfaceMismatch(page,'inbox',width);
+    await captureSurface(page,'entry_detail',width,'generic-operational-detail-'+width+'.png');
+    const i=await openInbox(page,width);
     evidence.after[width]={entry:d,inbox:i};
     check(d.paint===rgb(fixture.design_tokens.colors.detail_surface),'Entry computed paint '+width);
     check(i.paint===rgb(fixture.design_tokens.colors.inbox_label),'Inbox computed paint '+width);
     check(d.direction===evidence.before.entry.direction,'RTL direction '+width);
     check(i.axis===evidence.native_by_width[width].axis,'Grid physical axis '+width);
     check(i.columns===evidence.native_by_width[width].columns,'Grid column count at same viewport '+width);
-    await page.screenshot({path:out+'/generic-operational-detail-'+width+'.png'});
   }
-  await page.screenshot({path:out+'/generic-operational-after-inbox.png'});
+  await captureSurface(page,'inbox',320,'generic-operational-after-inbox.png',true);
+  check(evidence.screenshots.filter(s=>s.surface==='entry_detail').length===3,'Three verified Entry Detail screenshots');
+  check(evidence.screenshots.filter(s=>s.surface==='inbox').length===2,'Two verified Inbox screenshots');
   restore('gravity_flow.inbox',evidence.original['gravity_flow.inbox']);
   check((await openInbox(page,1440)).paint===evidence.before.inbox.paint,'Inbox computed rollback');
   check((await openDetail(page,1440)).paint===rgb(fixture.design_tokens.colors.detail_surface),'Independent Entry paint retained');
