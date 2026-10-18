@@ -39,9 +39,12 @@ function gpp_wu18_extract_pull_request_paths( $workflow_path ) {
             continue;
         }
 
-        if ( '' !== trim( $line ) ) {
-            break;
+        // YAML comments can appear between path entries without closing the
+        // pull_request.paths sequence (as in Blocksy's existing annotations).
+        if ( '' === trim( $line ) || preg_match( '/^\\s*#/', $line ) ) {
+            continue;
         }
+        break;
     }
 
     gpp_assert_true( ! empty( $paths ), 'pull_request.paths must be present and non-empty: ' . $workflow_path );
