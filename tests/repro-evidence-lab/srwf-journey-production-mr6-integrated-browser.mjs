@@ -11,7 +11,6 @@ if (!artifactDir || !wpPath || !wpCli) throw new Error('Pinned MR-6 journey envi
 const compatibilityTheme = process.env.GPP_MR6_COMPAT_THEME || '';
 if (compatibilityTheme && compatibilityTheme !== 'blocksy') throw new Error('Unadmitted MR-6 compatibility theme.');
 const blocksyMode = compatibilityTheme === 'blocksy';
-const expectedTheme = blocksyMode ? 'blocksy' : 'hello-elementor';
 const evidenceStem = blocksyMode ? 'blocksy-operator-journey' : 'srwf-journey-production-mr6-integrated-browser';
 const viewports = blocksyMode ? [1440, 414, 390, 360, 320] : [1440, 390, 320];
 
@@ -44,7 +43,9 @@ const hostFacts = JSON.parse(wpEval(`
     'twenty_twenty_five_active'=>'twentytwentyfive'===(string)get_stylesheet()
   ));
 `));
-if (hostFacts.theme !== expectedTheme || hostFacts.gtb_active !== true || hostFacts.host_companion_active !== false || hostFacts.twenty_twenty_five_active !== false) {
+if ((!blocksyMode && hostFacts.theme !== 'hello-elementor')
+  || (blocksyMode && hostFacts.theme !== 'blocksy')
+  || hostFacts.gtb_active !== true || hostFacts.host_companion_active !== false || hostFacts.twenty_twenty_five_active !== false) {
   throw new Error(`Forward-host coexistence contract failed: ${JSON.stringify(hostFacts)}`);
 }
 
@@ -544,7 +545,7 @@ const page = await context.newPage();
 const pageErrors = [];
 if (blocksyMode) page.on('pageerror', error => pageErrors.push(String(error?.stack || error).slice(0, 1500)));
 
-for (const width of viewports) {
+async function exerciseWidth(width) {
   await test(`SRWF-PROD-MR6-APPROVE-${width}`, `Inbox → Review → Correction → Review → Approved → Inbox at ${width}px`, async () => {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     const entryId = createReviewEntry(`APPROVE-${width}`);
@@ -572,6 +573,14 @@ for (const width of viewports) {
     const returned = await returnToInbox(page, width);
     return { entry_id: entryId, inbox, review, reject_dialog: rejectDialog, terminal, returned };
   });
+}
+
+// Keep the three historical Hello scenarios visibly intact for the
+// repository's MR-6 contract. Blocksy's extra widths never change Hello.
+if (blocksyMode) {
+  for (const width of [1440, 414, 390, 360, 320]) await exerciseWidth(width);
+} else {
+  for (const width of [1440, 390, 320]) await exerciseWidth(width);
 }
 
 if (blocksyMode) {
