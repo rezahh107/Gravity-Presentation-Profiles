@@ -53,6 +53,7 @@ try{
   evidence.original=Object.fromEntries(['gravity_flow.inbox','gravity_flow.entry_detail','print.dossier']
     .map(k=>[k,initial.activations?.[k]||null]));
   evidence.before={entry:await openDetail(page,1440),inbox:await openInbox(page,1440)};
+  evidence.native_by_width={1440:evidence.before.inbox,390:await openInbox(page,390),320:await openInbox(page,320)};
   await page.screenshot({path:out+'/generic-operational-before-inbox.png',fullPage:true});
   const importedResult=control('import'); imported=true;
   check(importedResult.status==='INSTALLED_INACTIVE','Real JSON import inactive');
@@ -81,8 +82,8 @@ try{
     check(d.paint===rgb(fixture.design_tokens.colors.detail_surface),'Entry computed paint '+width);
     check(i.paint===rgb(fixture.design_tokens.colors.inbox_label),'Inbox computed paint '+width);
     check(d.direction===evidence.before.entry.direction,'RTL direction '+width);
-    check(i.axis===evidence.before.inbox.axis,'Grid physical axis '+width);
-    check(i.columns===evidence.before.inbox.columns,'Grid column count '+width);
+    check(i.axis===evidence.native_by_width[width].axis,'Grid physical axis '+width);
+    check(i.columns===evidence.native_by_width[width].columns,'Grid column count at same viewport '+width);
     await page.screenshot({path:out+'/generic-operational-detail-'+width+'.png'});
   }
   await page.screenshot({path:out+'/generic-operational-after-inbox.png'});
