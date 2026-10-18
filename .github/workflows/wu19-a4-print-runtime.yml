@@ -249,11 +249,15 @@ jobs:
           set +e
           WU21_ARTIFACT_DIR="$WU21_ARTIFACT_DIR/blocksy" GPP_WU19_BLOCKSY_PRINT_ISOLATION=1 \
             node tests/repro-evidence-lab/wu19-browser-tests.mjs
-          blocksy_exit=$?
+          blocksy_print_exit=$?
+          WU21_ARTIFACT_DIR="$WU21_ARTIFACT_DIR/blocksy" \
+            node tests/repro-evidence-lab/print-utility-ux-browser-tests.mjs
+          blocksy_utility_exit=$?
           set -e
           php "$WU21_WP_CLI" theme activate "$baseline_theme" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$baseline_theme"
-          test "$blocksy_exit" -eq 0
+          test "$blocksy_print_exit" -eq 0
+          test "$blocksy_utility_exit" -eq 0
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
@@ -263,6 +267,9 @@ jobs:
           assert.equal(candidate.theme,'blocksy');
           assert.deepEqual(candidate.results.map(r=>r.id),historic.results.map(r=>r.id));
           assert.equal(candidate.results.length,8);
+          const utility=JSON.parse(fs.readFileSync(root+'/blocksy/print-utility-ux-browser-results.json','utf8'));
+          assert.equal(utility.results.length,6);
+          assert.ok(utility.results.every(r=>r.status==='PASS'));
           assert.ok(historic.results.every(r=>r.status==='PASS'));
           assert.ok(candidate.results.every(r=>r.status==='PASS'));
           for(const file of ['wu19-canonical.pdf','wu19-long-content.pdf']) {
