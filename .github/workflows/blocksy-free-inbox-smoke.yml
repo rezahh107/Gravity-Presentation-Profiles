@@ -8,6 +8,7 @@ on:
       # A change to either native Inbox consumer or generic operational paint
       # requires the original, unweakened pinned Blocksy browser gate.
       - 'src/Core/Presentation/OperationalVisualPreferences.php'
+      - 'src/SRWF/GravityFlow/InboxOperationalPaint.php'
       - 'src/SRWF/GravityFlow/InboxPresentationAdapter.php'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-smoke.mjs'
       - 'tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs'
