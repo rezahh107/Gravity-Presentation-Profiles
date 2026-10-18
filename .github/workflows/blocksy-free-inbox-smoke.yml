@@ -9,6 +9,12 @@ on:
       - 'tests/repro-evidence-lab/blocksy-free-inbox-qualification.mjs'
       - 'tests/repro-evidence-lab/blocksy-qualification-completeness.mjs'
       - 'tests/repro-evidence-lab/blocksy-qualification-completeness-falsification.mjs'
+      # Cross-surface qualification must re-exercise the original 26-case Inbox
+      # and its fail-closed controls on the same exact PR Head.
+      - '.github/workflows/srwf-journey-host-qualification.yml'
+      - '.github/workflows/wu19-a4-print-runtime.yml'
+      - 'tests/repro-evidence-lab/srwf-journey-production-mr6-integrated-browser.mjs'
+      - 'tests/repro-evidence-lab/wu19-browser-tests.mjs'
   workflow_dispatch:
 
 permissions:
