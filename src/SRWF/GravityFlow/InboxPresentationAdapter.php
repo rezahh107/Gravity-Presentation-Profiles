@@ -8,6 +8,7 @@ use GravityPresentationProfiles\Core\Lifecycle\BindingSetLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\EvidenceReferenceGate;
 use GravityPresentationProfiles\Core\Lifecycle\VisualPackageLifecycle;
 use GravityPresentationProfiles\Core\Lifecycle\WordPressOptionStateStore;
+use GravityPresentationProfiles\Core\Presentation\OperationalVisualPreferences;
 
 /**
  * SRWF presentation shell for the native Gravity Flow Inbox.
@@ -27,6 +28,7 @@ final class InboxPresentationAdapter {
     private static $model_loaded = false;
     private static $model = null;
     private static $surface_reached = false;
+    private static $preference_css = '';
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
@@ -48,6 +50,7 @@ final class InboxPresentationAdapter {
         self::$model_loaded = false;
         self::$model = null;
         self::$surface_reached = false;
+        self::$preference_css = '';
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -166,6 +169,11 @@ final class InboxPresentationAdapter {
             array( self::STYLE_HANDLE ),
             self::assetVersion( $plugin_root . '/' . $native_path )
         );
+
+        // After native paint defaults: no Grid geometry/options or saved state.
+        if ( '' !== self::$preference_css && function_exists( 'wp_add_inline_style' ) ) {
+            wp_add_inline_style( self::NATIVE_STYLE_HANDLE, self::$preference_css );
+        }
     }
 
     private static function currentRequestReachesInbox() {
@@ -339,6 +347,7 @@ final class InboxPresentationAdapter {
                 $active_binding_sets,
                 $package['semantic_slots']
             );
+            self::$preference_css = OperationalVisualPreferences::css( self::SURFACE, $profile, $package );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'INBOX_PROFILE_RESOLUTION',
