@@ -622,7 +622,7 @@ if (blocksyMode) {
       // A denied anonymous request is not evidence that an independently
       // authenticated, unassigned operator is denied. Prove WordPress accepts
       // this user's native session before requesting the protected case.
-      const profileResponse = await target.goto('http://127.0.0.1:8080/wp-admin/profile.php', { waitUntil: 'networkidle' });
+      const profileResponse = await target.goto(new URL('/wp-admin/profile.php', inboxUrl).toString(), { waitUntil: 'networkidle' });
       const profileUrl = new URL(target.url());
       const profileUsername = await target.locator('#user_login').inputValue();
       if (profileResponse?.status() !== 200 || profileUrl.pathname !== '/wp-admin/profile.php'
