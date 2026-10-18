@@ -133,6 +133,41 @@ foreach ( array(
     );
 }
 
+// FND-004: the real WU18 operational schema 1.1 browser entrypoint,
+// negative controls, WP-CLI lifecycle driver, package and PHP contracts must
+// each independently trigger WU18. A bare test runner trigger cannot stand in
+// for the exact dependency changed in a projector-only/future test PR.
+$operational_v11_dependencies = array(
+    'tests/repro-evidence-lab/generic-operational-v11-browser.mjs',
+    'tests/repro-evidence-lab/generic-operational-v11-negative-browser.mjs',
+    'tests/repro-evidence-lab/generic-operational-v11-control.php',
+    'tests/fixtures/generic-operational-paint-v11.json',
+    'tests/cases/operational-visual-preferences.php',
+);
+foreach ( $operational_v11_dependencies as $dependency ) {
+    gpp_assert_true(
+        in_array( $dependency, $wu18_paths, true ) && gpp_wu18_path_is_covered( $wu18_paths, $dependency ),
+        'WU18 must explicitly trigger for its real schema 1.1 dependency: ' . $dependency
+    );
+    $without_dependency = array_values( array_diff( $wu18_paths, array( $dependency ) ) );
+    gpp_assert_true(
+        ! gpp_wu18_path_is_covered( $without_dependency, $dependency ),
+        'Removing the schema 1.1 dependency path must falsify WU18 coverage: ' . $dependency
+    );
+}
+foreach ( array(
+    'tests/repro-evidence-lab/generic-operational-v10-browser.mjs',
+    'tests/repro-evidence-lab/unrelated-operational-test.mjs',
+    'tests/fixtures/unrelated-visual-package.json',
+    'tests/cases/unrelated-visual-contract.php',
+    'docs/unrelated-note.md',
+) as $unrelated ) {
+    gpp_assert_true(
+        ! gpp_wu18_path_is_covered( $wu18_paths, $unrelated ),
+        'WU18 must not broaden to unrelated files while covering operational schema 1.1: ' . $unrelated
+    );
+}
+
 $wu19_paths = gpp_wu18_extract_pull_request_paths( $workflows['WU19'] );
 foreach ( array(
     'tests/repro-evidence-lab/setup-wu18-fixtures.php',
