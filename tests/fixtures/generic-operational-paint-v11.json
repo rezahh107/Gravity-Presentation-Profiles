@@ -1,0 +1,94 @@
+{
+  "artifact_type": "gpp.visual_profile_package",
+  "schema_version": "1.1.0",
+  "package_id": "fixture.operations.paint",
+  "package_version": "1.0.0",
+  "provenance": {
+    "producer": "Synthetic generic operational presentation fixture",
+    "evidence_refs": [
+      "fixture:generic-operations-no-srwf"
+    ]
+  },
+  "selected_surfaces": [
+    "gravity_flow.entry_detail",
+    "gravity_flow.inbox"
+  ],
+  "design_tokens": {
+    "colors": {
+      "detail_surface": "#E5FAFF",
+      "detail_heading": "#234567",
+      "detail_label": "#987654",
+      "inbox_surface": "#F8EADD",
+      "inbox_heading": "#3050A0",
+      "inbox_label": "#6C4422"
+    }
+  },
+  "semantic_slots": [
+    {
+      "semantic_slot_key": "entry.created_at",
+      "meaning": "Host entry creation timestamp",
+      "surface_usage": [
+        {
+          "surface": "gravity_flow.entry_detail",
+          "required": true
+        },
+        {
+          "surface": "gravity_flow.inbox",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "surface_profiles": [
+    {
+      "surface": "gravity_flow.entry_detail",
+      "profile_id": "fixture.operations.entry.v1",
+      "token_refs": [
+        "colors.detail_surface",
+        "colors.detail_heading",
+        "colors.detail_label"
+      ],
+      "semantic_slots": [
+        "entry.created_at"
+      ],
+      "presentation": {
+        "composition": {
+          "surface_background": "colors.detail_surface"
+        },
+        "sections": {
+          "heading_text": "colors.detail_heading"
+        },
+        "labels": {
+          "text": "colors.detail_label"
+        }
+      }
+    },
+    {
+      "surface": "gravity_flow.inbox",
+      "profile_id": "fixture.operations.inbox.v1",
+      "token_refs": [
+        "colors.inbox_surface",
+        "colors.inbox_heading",
+        "colors.inbox_label"
+      ],
+      "semantic_slots": [
+        "entry.created_at"
+      ],
+      "presentation": {
+        "composition": {
+          "surface_background": "colors.inbox_surface"
+        },
+        "sections": {
+          "heading_text": "colors.inbox_heading"
+        },
+        "labels": {
+          "text": "colors.inbox_label"
+        }
+      }
+    }
+  ],
+  "reserved_extension_seam": {
+    "version": "1.0.0",
+    "state": "INERT"
+  }
+}
