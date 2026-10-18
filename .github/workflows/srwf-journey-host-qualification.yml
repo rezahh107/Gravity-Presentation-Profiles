@@ -13,6 +13,7 @@ on:
       - 'tests/run.php'
       - 'tests/repro-evidence-lab/srwf-journey-host-*'
       - 'tests/repro-evidence-lab/srwf-journey-production-*'
+      - 'tests/repro-evidence-lab/blocksy-frontend-native-print-*.mjs'
       - 'tests/fixtures/wu21-packages/**'
       - 'docs/evidence/SRWF_OPERATOR_JOURNEY_HOST_QUALIFICATION_V1.md'
   workflow_dispatch:
@@ -322,11 +323,18 @@ jobs:
           set +e
           GPP_MR6_COMPAT_THEME=blocksy node tests/repro-evidence-lab/srwf-journey-production-mr6-integrated-browser.mjs
           blocksy_status=$?
+          # A separate real-button → native-request → native-authorization qualification.
+          # Preserve MR-6's existing 13 case IDs and its JSON artifact unchanged.
+          node tests/repro-evidence-lab/blocksy-frontend-native-print-qualification.mjs
+          frontend_print_status=$?
           set -e
           # Always restore host before existing destructive controls.
           php "$WU21_WP_CLI" theme activate "$base_theme" --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")" = "$base_theme"
           test "$blocksy_status" -eq 0
+          test "$frontend_print_status" -eq 0
+          test -s "$WU21_ARTIFACT_DIR/blocksy-frontend-native-print.json"
+          node tests/repro-evidence-lab/blocksy-frontend-native-print-gate.mjs
           test -s "$WU21_ARTIFACT_DIR/blocksy-operator-journey.json"
           node -e 'const fs=require("fs");const p=process.env.WU21_ARTIFACT_DIR+"/blocksy-operator-journey.json";const x=JSON.parse(fs.readFileSync(p,"utf8"));if(x.runtime!=="REPRODUCIBLE_PINNED_BLOCKSY_FREE"||x.host.theme!=="blocksy"||x.results.length!==13||x.results.some(r=>r.status!=="PASS"))process.exit(1);'
 
