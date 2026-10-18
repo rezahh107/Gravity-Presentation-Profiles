@@ -73,3 +73,33 @@ try{
   check(activations['gravity_flow.inbox'].profile_id==='fixture.operations.inbox.v1','Inbox explicit activation');
   check(activations['gravity_flow.entry_detail'].profile_id==='fixture.operations.entry.v1','Entry explicit activation');
   check(JSON.stringify(activations['print.dossier']||null)===JSON.stringify(evidence.original['print.dossier']),'Print unchanged');
+
+  evidence.after={};
+  for(const width of [1440,390,320]){
+    const d=await openDetail(page,width),i=await openInbox(page,width);
+    evidence.after[width]={entry:d,inbox:i};
+    check(d.paint===rgb(fixture.design_tokens.colors.detail_surface),'Entry computed paint '+width);
+    check(i.paint===rgb(fixture.design_tokens.colors.inbox_label),'Inbox computed paint '+width);
+    check(d.direction===evidence.before.entry.direction,'RTL direction '+width);
+    check(i.axis===evidence.before.inbox.axis,'Grid physical axis '+width);
+    check(i.columns===evidence.before.inbox.columns,'Grid column count '+width);
+    await page.screenshot({path:out+'/generic-operational-detail-'+width+'.png'});
+  }
+  await page.screenshot({path:out+'/generic-operational-after-inbox.png'});
+  restore('gravity_flow.inbox',evidence.original['gravity_flow.inbox']);
+  check((await openInbox(page,1440)).paint===evidence.before.inbox.paint,'Inbox computed rollback');
+  check((await openDetail(page,1440)).paint===rgb(fixture.design_tokens.colors.detail_surface),'Independent Entry paint retained');
+  evidence.result='PASS';
+}catch(e){failure=e;evidence.result='FAIL';evidence.error=String(e);}
+finally{
+  if(imported&&evidence.original){
+    try{
+      for(const surface of ['gravity_flow.inbox','gravity_flow.entry_detail'])restore(surface,evidence.original[surface]);
+      evidence.restored=control('snapshot').activations;
+    }catch(e){failure ||= e;evidence.result='FAIL';evidence.restore_error=String(e);}
+  }
+  fs.writeFileSync(out+'/generic-operational-v11-browser.json',JSON.stringify(evidence,null,2)+'\n');
+  await browser.close();
+}
+if(failure)throw failure;
+console.log('GPP_GENERIC_OPERATIONAL_BROWSER_PASS');
