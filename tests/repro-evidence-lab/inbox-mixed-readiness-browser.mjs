@@ -206,8 +206,14 @@ function assertRawNativeEquivalence(observed, baseline, label) {
     assert.ok(a && b, label + ': native entry row missing ' + id);
     assert.deepEqual(a.stable_cells, b.stable_cells,
       label + ': native materialized field value mismatch on entry ' + id);
-    assert.equal(a.native_date, b.native_date,
-      label + ': host-native source date differs on entry ' + id);
+    // A null Grid row-data accessor on both sides does NOT prove equality.
+    // Independently validate the visible relative dates against GFAPI instead.
+    if (a.native_date != null || b.native_date != null) {
+      assert.ok(a.native_date != null && b.native_date != null,
+        label + ': host date data exposed on only one capture for Entry ' + id);
+      assert.equal(a.native_date, b.native_date,
+        label + ': host-native source date differs on entry ' + id);
+    }
     assert.ok(a.date_display && b.date_display,
       label + ': native date field not materialized on entry ' + id);
     validateNativeRelativeDate(a.date_display, a.observed_at, id);
