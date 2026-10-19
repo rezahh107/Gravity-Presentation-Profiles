@@ -175,7 +175,7 @@ function assertRawNativeEquivalence(observed, baseline, label) {
     : label === 'form-scoped-unconfigured' ? 'unconfigured_form' : null;
   assert.ok(witnessKind, label + ': native date comparison lacks independent form witness');
   const gfDate = mixed.source_witnesses[witnessKind]?.date_created;
-  assert.ok(typeof gfDate === 'string' && /^\\d{4}-\\d{2}-\\d{2}/.test(gfDate),
+  assert.ok(typeof gfDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(gfDate),
     label + ': missing independent GFAPI source date');
   function validateNativeRelativeDate(text, capturedAt, id) {
     const normalized = plain(text).replace(/[۰-۹٠-٩]/g, digit => {
@@ -188,7 +188,7 @@ function assertRawNativeEquivalence(observed, baseline, label) {
       hours: 3600, day: 86400, days: 86400, week: 604800,
       weeks: 604800, month: 2592000, months: 2592000,
       year: 31536000, years: 31536000 };
-    const match = /([0-9]+)\\s*(ثانیه|دقیقه|ساعت|روز|هفته|ماه|سال|seconds?|minutes?|hours?|days?|weeks?|months?|years?)/iu.exec(normalized);
+    const match = /([0-9]+)\s*(ثانیه|دقیقه|ساعت|روز|هفته|ماه|سال|seconds?|minutes?|hours?|days?|weeks?|months?|years?)/iu.exec(normalized);
     assert.ok(match, label + ': native date cannot be interpreted against GF source for Entry ' + id);
     const unit = units[match[2].toLowerCase()];
     const created = Date.parse(gfDate.replace(' ', 'T') + (gfDate.includes('Z') ? '' : 'Z'));
