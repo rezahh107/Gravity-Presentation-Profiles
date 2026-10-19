@@ -68,8 +68,8 @@ try {
       // This is the enforcement boundary: verify the exported PDF and its
       // actual raster pages, not the DOM that existed before page.pdf().
       const verifier = fileURLToPath(new URL('./verify-connected-print-output.mjs', import.meta.url));
-      const rasterOne = path.join(out, 'connected-print-page-1.png');
-      const rasterTwo = path.join(out, 'connected-print-page-2.png');
+      const rasterOne = path.join(out, basename+'-page-1.png');
+      const rasterTwo = path.join(out, basename+'-page-2.png');
       const verify = (pdfFile, firstRaster, secondRaster) => {
         const result = spawnSync(process.execPath, [
           verifier, pdfFile, firstRaster, secondRaster, expectedName,
