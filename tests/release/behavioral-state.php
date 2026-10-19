@@ -183,6 +183,32 @@ if ( 'runtime' === $command ) {
     );
 }
 
+
+if ( 'after-connected-final' === $command ) {
+    $entry = GFAPI::get_entry( (int) $fixture['entry_id'] );
+    $form = GFAPI::get_form( $form_id );
+    $choice_id = (string) $fixture['fields']['choice']['id'];
+    $alternate_id = (string) $fixture['fields']['alternate_choice']['id'];
+    $choice_field = GFAPI::get_field( $form, $choice_id );
+    $step = ( new Gravity_Flow_API( $form_id ) )->get_current_step( $entry );
+    if ( ! is_array( $entry ) || ! is_array( $form ) || ! is_object( $choice_field ) || ! $step ) {
+        throw new RuntimeException( 'Independent host source/Flow readback could not be completed.' );
+    }
+    $state['native_source_readback'] = array(
+        'first_name_field_id' => (string) $fixture['fields']['first_name']['id'],
+        'last_name_field_id' => (string) $fixture['fields']['last_name']['id'],
+        'choice_field_id' => $choice_id,
+        'alternate_choice_field_id' => $alternate_id,
+        'first_name_raw' => (string) $entry[ (string) $fixture['fields']['first_name']['id'] ],
+        'last_name_raw' => (string) $entry[ (string) $fixture['fields']['last_name']['id'] ],
+        'choice_raw' => (string) $entry[ $choice_id ],
+        'alternate_choice_raw' => (string) $entry[ $alternate_id ],
+        'choice_definitions' => $choice_field->choices,
+        'native_approval_step_id' => (int) $step->get_id(),
+        'native_approval_step_type' => $step->get_type(),
+    );
+}
+
 $output = wp_json_encode( $state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 if ( false === $output ) {
     throw new RuntimeException( 'Behavioral state could not be encoded.' );
