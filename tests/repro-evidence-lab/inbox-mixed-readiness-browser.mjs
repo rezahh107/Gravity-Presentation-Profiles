@@ -152,14 +152,22 @@ try {
       assert.equal(facts.rtl_header, 'rtl');
       assert.ok(facts.host_dom_preserved && facts.native_pager);
       assert.ok(facts.native_rows > 0);
+      // AG Grid column virtualization can render fewer visible header nodes
+      // than the five host-owned column definitions, particularly at 320px.
+      // The authoritative contract is the native Grid configuration, not the
+      // number of currently materialized header elements.
       if (route.name === 'form-scoped') {
-        assert.equal(facts.headers.length, 5,
-          'Form-scoped host-aligned five-column contract changed: ' + JSON.stringify({
-            route: route.url, headers: facts.headers,
-            native_config_columns: facts.native_config_columns, grid_id: facts.grid_id,
-          }));
+        const expected = mixed.header_projection.ready?.column_ids?.map(String);
+        assert.ok(Array.isArray(expected) && expected.length === 5,
+          'Product five-column source contract was not qualified by the real host fixture.');
+        assert.ok(Array.isArray(facts.native_config_columns),
+          'Host native Grid column definitions are unavailable: ' + JSON.stringify(facts));
+        assert.deepEqual([...facts.native_config_columns].map(String).sort(), [...expected].sort(),
+          'Form-scoped native Grid did not receive five exact source-bound columns.');
+        assert.ok(facts.headers.length > 0 && facts.headers.every(id => facts.native_config_columns.includes(id)),
+          'Visible virtualized headers do not belong to the actual native column set.');
       } else {
-        assert.ok(facts.headers.length >= 1, 'Native multi-form Inbox exposed no columns.');
+        assert.ok(facts.headers.length >= 1, 'Native multi-form Inbox exposed no headers.');
       }
       assert.equal(facts.physical.length, 4, 'Owner-authorized four-node physical axis is absent.');
       for (const node of facts.physical) assert.equal(node.direction, 'ltr', 'Owner physical LTR exception drifted.');
