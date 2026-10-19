@@ -83,7 +83,12 @@ try {
       requireOutput(new RegExp('✓\\s*' + femaleLabel.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&'), 'u').test(text), 'Selected canonical female indicator absent from printed PDF page one');
       const ticks = words.filter(word=>word.text==='✓');
       requireOutput(ticks.length === 1, 'Expected exactly one page-one selected checkmark in PDF');
-      requireOutput(inkWithin(ticks[0],pgm,pageSize) >= 2, 'Selected canonical indicator is invisible on page-one raster');
+      // Ignore the nearby printed circle/box border: only central checkmark
+      // ink counts. Otherwise white-on-white check text could falsely PASS.
+      const mark = ticks[0];
+      const mid = {x1:mark.x1+0.2*(mark.x2-mark.x1),x2:mark.x2-0.2*(mark.x2-mark.x1),
+        y1:mark.y1+0.3*(mark.y2-mark.y1),y2:mark.y2-0.3*(mark.y2-mark.y1)};
+      requireOutput(inkWithin(mid,pgm,pageSize) >= 2, 'Selected canonical indicator is invisible on page-one raster');
     } else {
       requireOutput(!words.some(word => word.text === '✓'), 'Unexpected selected canonical indicator on page two');
     }
