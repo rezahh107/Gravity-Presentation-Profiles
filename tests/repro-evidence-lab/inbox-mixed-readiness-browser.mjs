@@ -128,7 +128,7 @@ const schoolColumn = String(mixed.header_projection.ready?.column_ids?.[3] ?? ''
 assert.ok(nameColumn && schoolColumn && nameColumn !== schoolColumn);
 const readyWitnesses = Object.values(mixed.source_witnesses ?? {});
 assert.equal(readyWitnesses.length, 2, 'Missing independent Gravity Forms cell witnesses');
-function plain(source) { return String(source ?? '').replace(/\\s+/gu, ' ').trim(); }
+function plain(source) { return String(source ?? '').replace(/\s+/gu, ' ').trim(); }
 function expectedCells(witness) {
   assert.equal(Number(witness.form_id), Number(mixed.forms.ready), 'GF witness does not belong to Ready form');
   return {
