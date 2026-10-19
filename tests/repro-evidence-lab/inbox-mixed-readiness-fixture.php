@@ -282,12 +282,32 @@ mixed_assert( ! is_wp_error( $form_scoped_page_id ) && (int) $form_scoped_page_i
 $form_scoped_url = get_permalink( (int) $form_scoped_page_id );
 mixed_assert( is_string( $form_scoped_url ) && '' !== $form_scoped_url, 'Native form-scoped Inbox URL unavailable.' );
 
+$unready_scoped_pages = array();
+foreach ( array( 'unproven' => $partial_form, 'unconfigured' => $unconfigured_form ) as $state => $form_id ) {
+    $page_id = wp_insert_post( array(
+        'post_title' => 'WU21 Mixed ' . $state . ' Form-Scoped Inbox',
+        'post_status' => 'publish',
+        'post_type' => 'page',
+        'post_content' => '[gravityflow page="inbox" form="' . $form_id . '"]',
+    ), true );
+    mixed_assert( ! is_wp_error( $page_id ) && (int) $page_id > 0, 'Authentic ' . $state . ' native Inbox page could not be created.' );
+    $url = get_permalink( (int) $page_id );
+    mixed_assert( is_string( $url ) && '' !== $url, 'Authentic ' . $state . ' Inbox URL unavailable.' );
+    $unready_scoped_pages[ $state ] = array(
+        'page_id' => (int) $page_id,
+        'url' => $url,
+        'form_id' => (int) $form_id,
+        'entry_id' => 'unproven' === $state ? $unproven_id : $unconfigured_id,
+    );
+}
+
 $results = array(
     'schema_version' => '1.0.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'evidence_kind' => 'PINNED_WU21_AUTHENTIC_GF_FLOW_POST_BASELINE',
     'forms' => array( 'ready' => $ready_form, 'unproven' => $partial_form, 'unconfigured' => $unconfigured_form ),
-    'form_scoped' => array( 'page_id' => (int) $form_scoped_page_id, 'url' => $form_scoped_url, 'form_id' => $ready_form ),
+    'form_scoped' => array( 'page_id' => (int) $form_scoped_page_id, 'url' => $form_scoped_url, 'form_id' => $ready_form, 'entry_id' => $complete_id ),
+    'form_scoped_unready' => $unready_scoped_pages,
     'entries' => array( 'complete' => $complete_id, 'missing_required_values' => $missing_id, 'unproven_form' => $unproven_id, 'unconfigured_form' => $unconfigured_id ),
     'semantic_readiness' => array( 'complete' => $ready, 'missing_values' => $missing, 'unproven' => $unproven, 'unconfigured' => $unconfigured, 'post_remap' => $stale, 'post_requalification' => $requalified ),
     'header_projection' => array( 'ready' => $ready_header, 'unproven' => $unproven_header, 'unconfigured' => $unconfigured_header, 'unscoped' => $unscoped_header ),
