@@ -159,6 +159,21 @@ jobs:
         shell: bash
         run: bash scripts/release/validate-release.sh . "$GPP_RELEASE_ZIP" "$GPP_RELEASE_DRY_VERSION" "$GPP_RELEASE_ZIP_SHA"
 
+      - name: Set up exact Chromium native Print acceptance tools
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+      - name: Install pinned Playwright and PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = 'v22.19.0'
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1);"
+
       - name: Smoke-test the exact installable ZIP
         shell: bash
         run: bash scripts/release/smoke-zip.sh . "$GPP_RELEASE_ZIP" /tmp/gpp-release-wordpress
@@ -189,6 +204,15 @@ jobs:
             build/release/gravity-presentation-profiles-9999.0.0.zip.sha256
             build/release/release-manifest.json
             build/release/publication-prerequisites.json
+            build/release/behavioral-production-reachability.json
+            build/release/behavioral-production-reachability/connected-print-acceptance.json
+            build/release/behavioral-production-reachability/connected-print-*.json
+            build/release/behavioral-production-reachability/connected-print-dossier.html
+            build/release/behavioral-production-reachability/connected-print.pdf
+            build/release/behavioral-production-reachability/connected-print-page-*.png
+            build/release/behavioral-production-reachability/connected-print-*.pdf
+            build/release/behavioral-production-reachability/connected-print-*-page-*.png
+            build/release/behavioral-production-reachability/connected-print-*-negative/*
           if-no-files-found: error
           retention-days: 30
 
@@ -301,6 +325,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash scripts/release/wait-qualifications.sh "$GPP_RELEASE_CANDIDATE_BRANCH" "$GPP_RELEASE_CANDIDATE_SHA" build/release/qualification.json
+
+      - name: Set up exact Chromium native Print acceptance tools
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+      - name: Install pinned Playwright and PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = 'v22.19.0'
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1);"
 
       - name: Build, validate and smoke exact qualified candidate ZIP
         shell: bash

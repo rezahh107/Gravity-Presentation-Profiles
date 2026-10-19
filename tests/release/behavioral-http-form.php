@@ -6,8 +6,8 @@ if ( PHP_SAPI !== 'cli' ) {
 $mode      = isset( $argv[1] ) ? $argv[1] : '';
 $html_path = isset( $argv[2] ) ? $argv[2] : '';
 $fixture   = isset( $argv[3] ) ? json_decode( (string) file_get_contents( $argv[3] ), true ) : null;
-if ( ! in_array( $mode, array( 'setup', 'inbox', 'repair' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
-    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|inbox|repair> <settings.html> <fixture.json>\n" );
+if ( ! in_array( $mode, array( 'setup', 'inbox', 'repair', 'print-option' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
+    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|inbox|repair|print-option> <settings.html> <fixture.json> [slot] [host-field-key]\n" );
     exit( 1 );
 }
 
@@ -93,7 +93,16 @@ if ( in_array( $mode, array( 'setup', 'inbox' ), true ) ) {
         $fields[ $submit->getAttribute( 'name' ) ] = $submit->getAttribute( 'value' );
     }
 } else {
-    $slot = 'student.first_name';
+    $slot = isset( $argv[4] ) ? (string) $argv[4] : 'student.first_name';
+    $field_key = isset( $argv[5] ) ? (string) $argv[5] : 'first_name';
+    $allowed = array(
+        'student.first_name' => array( 'first_name' ),
+        'student.last_name' => array( 'last_name' ),
+        'student.gender' => array( 'choice', 'alternate_choice' ),
+    );
+    if ( ! isset( $allowed[ $slot ] ) || ( 'repair' === $mode && ! in_array( $field_key, $allowed[ $slot ], true ) ) || ( 'print-option' === $mode && 'student.gender' !== $slot ) ) {
+        throw new RuntimeException( 'The requested synthetic semantic mapping is outside the admitted connected Print cases.' );
+    }
     $row  = null;
     foreach ( $xpath->query( './/tr[@data-gpp-semantic-slot]' ) as $candidate ) {
         if ( $candidate->getAttribute( 'data-gpp-semantic-slot' ) === $slot ) {
@@ -104,22 +113,45 @@ if ( in_array( $mode, array( 'setup', 'inbox' ), true ) ) {
     if ( ! $row ) {
         throw new RuntimeException( 'student.first_name Mapping & Binding Health row was not found.' );
     }
-    $select = $xpath->query( './/select[starts-with(@name,"gpp_binding_row[")]', $row )->item( 0 );
-    $button = $xpath->query( './/button[@name="gpp_binding_row_action"]', $row )->item( 0 );
-    if ( ! $select || ! $button ) {
-        throw new RuntimeException( 'Exact row Mapping controls were not found.' );
-    }
-    $field_id = (string) $fixture['fields']['first_name']['id'];
-    $selected = null;
-    foreach ( $xpath->query( './option', $select ) as $option ) {
-        $text = preg_replace( '/\s+/u', ' ', trim( $option->textContent ) );
-        if ( false !== strpos( $text, 'Field ' . $field_id ) && false !== strpos( $text, 'Behavioral First Name' ) ) {
-            $selected = $option->getAttribute( 'value' );
-            break;
+    if ( 'print-option' === $mode ) {
+        $expected = $fixture['expected_choice'];
+        $option_row = null;
+        foreach ( $xpath->query( './/*[contains(concat(" ",normalize-space(@class)," ")," gpp-print-option-row ")]', $row ) as $candidate ) {
+            $code = $xpath->query( './code', $candidate )->item( 0 );
+            if ( $code && trim( $code->textContent ) === $expected['canonical_option'] ) {
+                $option_row = $candidate;
+                break;
+            }
+        }
+        if ( ! $option_row ) {
+            throw new RuntimeException( 'The canonical Print choice control was not offered by the shipped UI.' );
+        }
+        $select = $xpath->query( './/select[starts-with(@name,"gpp_binding_row[")]', $option_row )->item( 0 );
+        $button = $xpath->query( './/button[@name="gpp_binding_row_action"]', $option_row )->item( 0 );
+        $choice_text = $expected['host_display_value'] . ' — raw: ' . $expected['host_raw_value'];
+        $selected = null;
+        foreach ( $xpath->query( './option', $select ) as $option ) {
+            $label = preg_replace( '/\\s+/u', ' ', trim( $option->textContent ) );
+            if ( $label === $choice_text ) {
+                $selected = $option->getAttribute( 'value' );
+                break;
+            }
+        }
+    } else {
+        $select = $xpath->query( './/select[starts-with(@name,"gpp_binding_row[")]', $row )->item( 0 );
+        $button = $xpath->query( './/button[@name="gpp_binding_row_action"]', $row )->item( 0 );
+        $field_id = (string) $fixture['fields'][ $field_key ]['id'];
+        $selected = null;
+        foreach ( $xpath->query( './option', $select ) as $option ) {
+            $text = preg_replace( '/\\s+/u', ' ', trim( $option->textContent ) );
+            if ( false !== strpos( $text, 'Field ' . $field_id ) && false !== strpos( $text, $fixture['fields'][ $field_key ]['label'] ) ) {
+                $selected = $option->getAttribute( 'value' );
+                break;
+            }
         }
     }
-    if ( null === $selected || '' === $selected ) {
-        throw new RuntimeException( 'Exact real first-name field is not offered on its semantic row.' );
+    if ( ! $select || ! $button || null === $selected || '' === $selected ) {
+        throw new RuntimeException( 'The exact host-backed mapping/choice confirmation is not available on the shipped admin form.' );
     }
     $fields[ $select->getAttribute( 'name' ) ] = $selected;
     $fields['gpp_binding_row_action'] = $button->getAttribute( 'value' );
