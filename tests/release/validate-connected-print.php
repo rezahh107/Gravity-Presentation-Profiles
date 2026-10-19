@@ -94,6 +94,43 @@ foreach ( array( 'finance.tuition_amount', 'finance.discount_amount', 'finance.n
 $positive = $view['final'];
 $assert( ! empty( $positive['native_print_preserved'] ) && ! empty( $positive['bulk_failed_closed'] ) && ! empty( $positive['unauthorized_authenticated_viewer_denied'] ), 'Native non-dossier/bulk/permission negative was not exercised.' );
 $assert( ( $positive['pdf']['pages'] ?? null ) === 2 && ( $positive['layout']['clipped_values'] ?? -1 ) === 0 && ( $positive['layout']['clipped_sheets'] ?? -1 ) === 0, 'Chromium PDF/presentation geometry was not proven.' );
+
+$assert( ! empty( $positive['post_export_pdf_raster_verified'] ), 'Browser did not verify the actual exported PDF and raster pages.' );
+$falsified = $load( 'connected-print-falsification' );
+$expected_falsifications = array(
+    'first_page_name_print_only_hidden' => 'REJECTED_AS_REQUIRED',
+    'second_page_name_print_only_hidden' => 'REJECTED_AS_REQUIRED',
+    'selected_gender_indicator_print_only_hidden' => 'REJECTED_AS_REQUIRED',
+    'blank_raster_substitution' => 'REJECTED_AS_REQUIRED',
+    'original_pdf_and_rasters_preserved' => 'ACCEPTED_AS_REQUIRED',
+);
+$actual_falsifications = array();
+foreach ( (array) ( $falsified['results'] ?? array() ) as $result ) {
+    $key = $result['case'] ?? '';
+    $assert( isset( $expected_falsifications[ $key ] ) && ! isset( $actual_falsifications[ $key ] ), 'Unexpected or duplicate PDF falsification scenario.' );
+    $actual_falsifications[ $key ] = $result['result'] ?? '';
+}
+$assert( $actual_falsifications === $expected_falsifications, 'Post-export PDF/raster falsifications did not exercise every required control.' );
+
+// Independently re-run the post-export verifier against the files present
+// RIGHT NOW. A stale browser JSON PASS cannot rescue changed/blank artifacts.
+$verify_args = array(
+    __DIR__ . '/verify-connected-print-output.mjs',
+    $dir . '/connected-print.pdf',
+    $dir . '/connected-print-page-1.png',
+    $dir . '/connected-print-page-2.png',
+    $host['expected_first_name_value'] . ' ' . $host['expected_last_name_value'],
+    $expected['canonical_print_label'],
+    $expected['host_raw_value'],
+    $expected['host_display_value'],
+);
+$command = 'node ' . implode( ' ', array_map( 'escapeshellarg', $verify_args ) ) . ' 2>&1';
+$verification_log = array();
+$verification_exit = -1;
+exec( $command, $verification_log, $verification_exit );
+$assert( 0 === $verification_exit && in_array( 'GPP_CONNECTED_PRINT_OUTPUT_PASS pdf_pages=2 names=2 female_mark=1 raster_pages=2', $verification_log, true ),
+    'Post-export PDF/raster file verification failed: ' . implode( ' | ', array_slice( $verification_log, -4 ) ) );
+
 $evidence = array();
 foreach ( array( 'connected-print-dossier.html', 'connected-print.pdf', 'connected-print-page-1.png', 'connected-print-page-2.png' ) as $file ) {
     $path = $dir . '/' . $file;
@@ -128,6 +165,8 @@ $report = array(
         'authenticated_unauthorized_native_denial' => 'PASS',
         'ordinary_native_and_unsupported_bulk' => 'PASS',
         'two_page_a4_portrait_chromium_pdf' => 'PASS',
+        'page_scoped_pdf_semantics_and_raster_visibility' => 'PASS',
+        'post_export_falsifications' => 'PASS',
         'target_production' => 'NOT_PROVEN',
         'physical_printer' => 'NOT_PROVEN',
     ),
