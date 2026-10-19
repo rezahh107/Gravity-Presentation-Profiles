@@ -6,6 +6,8 @@ FILES=(
   "$ROOT/tests/release/behavioral-state.php"
   "$ROOT/tests/release/behavioral-http-form.php"
   "$ROOT/tests/release/validate-behavioral-production-reachability.php"
+  "$ROOT/tests/release/validate-connected-print.php"
+  "$ROOT/tests/release/connected-print-browser.mjs"
   "$ROOT/tests/release/run-behavioral-production-reachability.sh"
 )
 for file in "${FILES[@]}"; do [[ -f "$file" ]] || { echo "Missing behavioral helper: $file" >&2; exit 1; }; done
@@ -30,4 +32,8 @@ if grep -Fq 'GPP_RELEASE_DRY_VERSION:-9999.0.0' "$RUNNER"; then
   echo 'Behavioral release identity must not silently default production smoke to the synthetic dry-run version.' >&2
   exit 1
 fi
+# The higher-value gate must not silently degrade back to setup-only evidence.
+for marker in 'connected_browser unproven' 'connected_browser invalidated' 'connected_browser final' 'validate-connected-print.php'; do
+  grep -Fq "$marker" "$RUNNER" || { echo "Connected Print boundary absent: $marker" >&2; exit 1; }
+done
 echo 'GPP_BEHAVIORAL_ANTI_BYPASS_GUARDRAIL_PASS'
