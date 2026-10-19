@@ -33,6 +33,7 @@ final class EntryDetailPresentationAdapter {
 
     private static $model_loaded = false;
     private static $model = null;
+    private static $preference_css = '';
 
     public static function register() {
         if ( ! function_exists( 'add_action' ) || ! function_exists( 'add_filter' ) ) {
@@ -51,6 +52,7 @@ final class EntryDetailPresentationAdapter {
     public static function resetRuntimeCache() {
         self::$model_loaded = false;
         self::$model = null;
+        self::$preference_css = '';
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -281,6 +283,11 @@ final class EntryDetailPresentationAdapter {
             array(),
             self::assetVersion( $plugin_root . '/' . $style_path )
         );
+
+        // Only GPP-owned dossier paint; no native workflow action styling.
+        if ( '' !== self::$preference_css && function_exists( 'wp_add_inline_style' ) ) {
+            wp_add_inline_style( self::STYLE_HANDLE, self::$preference_css );
+        }
     }
 
     private static function enqueueProgressiveEnhancementScript() {
@@ -954,6 +961,7 @@ final class EntryDetailPresentationAdapter {
                 self::activeBindingSets( $bindings->snapshot() ),
                 $package['semantic_slots']
             );
+            self::$preference_css = EntryDetailOperationalPaint::css( $profile, $package );
             RuntimeDiagnostics::recordOnce(
                 self::SURFACE,
                 'ENTRY_DETAIL_PROFILE_RESOLUTION',
