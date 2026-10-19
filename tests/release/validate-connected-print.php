@@ -160,6 +160,7 @@ foreach ( array( 'unproven', 'invalidated' ) as $stage ) {
         ( $mutation['source'] ?? null ) === 'PRINT_ONLY_CSS_IN_NATIVE_CHROMIUM_PDF' &&
         ( $mutation['dom_female_unselected'] ?? null ) === true &&
         ( $mutation['mutation_materialized_in_pdf'] ?? null ) === true &&
+        ( $mutation['mutant_first_page_raster_changed'] ?? null ) === true &&
         ( $mutation['extracted_text_indicator'] ?? null ) === '✓' &&
         ( $mutation['mutated_pdf_result'] ?? null ) === 'REJECTED_AS_REQUIRED' &&
         ( $mutation['original_pdf_raster_result'] ?? null ) === 'ACCEPTED_AS_REQUIRED',
