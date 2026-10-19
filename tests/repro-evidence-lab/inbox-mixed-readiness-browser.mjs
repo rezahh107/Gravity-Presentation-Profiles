@@ -131,6 +131,11 @@ try {
         }));
         return {
           grid_id: grid?.getAttribute('data-grid-id'),
+          native_config_columns: (() => {
+            const key = grid?.getAttribute('data-grid-id') || 'inbox_default';
+            const definitions = window.gflow_config?.grids?.[key]?.grid_options?.columnDefs;
+            return Array.isArray(definitions) ? definitions.map(x => x.field ?? null) : null;
+          })(),
           headers: [...grid.querySelectorAll('.ag-header-cell[col-id]')].map(el => el.getAttribute('col-id')),
           native_rows: grid.querySelectorAll('.ag-row[row-id]').length,
           rtl_header: getComputedStyle(surface?.querySelector('.gpp-inbox-surface__header')).direction,
@@ -148,7 +153,11 @@ try {
       assert.ok(facts.host_dom_preserved && facts.native_pager);
       assert.ok(facts.native_rows > 0);
       if (route.name === 'form-scoped') {
-        assert.equal(facts.headers.length, 5, 'Form-scoped host-aligned five-column contract changed.');
+        assert.equal(facts.headers.length, 5,
+          'Form-scoped host-aligned five-column contract changed: ' + JSON.stringify({
+            route: route.url, headers: facts.headers,
+            native_config_columns: facts.native_config_columns, grid_id: facts.grid_id,
+          }));
       } else {
         assert.ok(facts.headers.length >= 1, 'Native multi-form Inbox exposed no columns.');
       }
