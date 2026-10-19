@@ -272,6 +272,41 @@ mixed_assert( is_array( $ready_header ) && count( $ready_header['column_ids'] ) 
 mixed_assert( null === $unproven_header && null === $unconfigured_header && null === $unscoped_header,
     'Native-filter header admitted unproven, unconfigured or ambiguous form authority.' );
 
+// Observe real Gravity Flow's native column-hook arguments and columns
+// when it renders the exact scoped shortcode. Never replace or fabricate host
+// hook inputs; the observer is removed immediately after this probe.
+$host_column_hook = array();
+$before_columns = static function ( $columns, $args ) use ( &$host_column_hook ) {
+    $host_column_hook[] = array(
+        'host_args' => $args,
+        'before_keys' => is_array( $columns ) ? array_keys( $columns ) : null,
+        'after_keys' => null,
+    );
+    return $columns;
+};
+$after_columns = static function ( $columns, $args ) use ( &$host_column_hook ) {
+    $index = count( $host_column_hook ) - 1;
+    if ( $index >= 0 ) {
+        $host_column_hook[ $index ]['after_keys'] = is_array( $columns ) ? array_keys( $columns ) : null;
+    }
+    return $columns;
+};
+add_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN, 2 );
+add_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX, 2 );
+try {
+    ob_start();
+    do_shortcode( '[gravityflow page="inbox" form="' . $ready_form . '"]' );
+    ob_end_clean();
+} finally {
+    if ( ob_get_level() > 0 ) {
+        // The probe owns only the buffer it explicitly opened.
+        // There should be no unclosed nested output after shortcode execution.
+    }
+    remove_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN );
+    remove_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX );
+}
+echo 'WU21_MIXED_HOST_COLUMNS_PROBE ' . wp_json_encode( $host_column_hook ) . PHP_EOL;
+
 $form_scoped_page_id = wp_insert_post( array(
     'post_title' => 'WU21 Mixed Ready Form-Scoped Inbox',
     'post_status' => 'publish',
@@ -290,6 +325,7 @@ $results = array(
     'form_scoped' => array( 'page_id' => (int) $form_scoped_page_id, 'url' => $form_scoped_url, 'form_id' => $ready_form ),
     'entries' => array( 'complete' => $complete_id, 'missing_required_values' => $missing_id, 'unproven_form' => $unproven_id, 'unconfigured_form' => $unconfigured_id ),
     'semantic_readiness' => array( 'complete' => $ready, 'missing_values' => $missing, 'unproven' => $unproven, 'unconfigured' => $unconfigured, 'post_remap' => $stale, 'post_requalification' => $requalified ),
+    'native_host_column_hook' => $host_column_hook,
     'header_projection' => array( 'ready' => $ready_header, 'unproven' => $unproven_header, 'unconfigured' => $unconfigured_header, 'unscoped' => $unscoped_header ),
     'source_versions' => array( 'pre_remap' => $before_remap['binding_set_version'], 'invalidated' => $after_remap['binding_set_version'], 'requalified' => mixed_artifact( $ready_form )['binding_set_version'] ),
     'native_operator' => $native_operator,
