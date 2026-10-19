@@ -53,6 +53,7 @@ const evidence = {
   authorization: {},
   unrelated: null,
   negative_control: null,
+  native_output_oracle: { method: 'NATIVE_OUTPUT_EQUIVALENCE_ORACLE', route_memberships: {}, semantic_cells: {} },
   errors: [],
 };
 const browser = await chromium.launch({ headless: true });
@@ -67,6 +68,39 @@ const expected = Object.values(mixed.entries).map(Number);
 const native = new Set(mixed.native_operator.ids.map(Number));
 const present = expected.filter(id => native.has(id));
 const absent = expected.filter(id => !native.has(id));
+
+// These are independent, complete Gravity Flow API enumerations captured by
+// the PHP fixture, not Grid-derived expected rows or GPP shadow query state.
+function authoritativeIds(record, label) {
+  assert.equal(record?.enumeration_complete, true, label + ': native enumeration not complete');
+  assert.ok(Number.isSafeInteger(record.total) && record.total >= 0, label + ': native total missing');
+  assert.ok(Array.isArray(record.ids), label + ': authoritative IDs missing');
+  assert.equal(record.ids.length, record.total, label + ': native enumeration truncated');
+  const ids = record.ids.map(Number);
+  assert.ok(ids.every(id => Number.isSafeInteger(id) && id > 0), label + ': invalid authoritative ID');
+  assert.equal(new Set(ids).size, ids.length, label + ': repeated authoritative ID');
+  return ids;
+}
+
+function assertNativeOutputMembership(observed, authorized, routeName) {
+  assert.ok(Array.isArray(observed), routeName + ': no authentic Grid row observation');
+  const ids = observed.map(Number);
+  assert.ok(ids.every(id => Number.isSafeInteger(id) && id > 0),
+    routeName + ': invalid observed Grid ID');
+  assert.equal(new Set(ids).size, ids.length,
+    routeName + ': duplicated observed Grid IDs');
+  assert.deepEqual([...ids].sort((a, b) => a - b), [...authorized].sort((a, b) => a - b),
+    routeName + ': observed native Grid membership differs from full host-authorized set');
+}
+
+const globalAuthorized = authoritativeIds(mixed.native_operator, 'global native assignment');
+authoritativeIds(mixed.native_viewer, 'unassigned native viewer');
+for (const [id, record] of Object.entries(mixed.native_per_form)) {
+  assert.equal(record.form_filter, Number(id), 'Native API form query was not form scoped');
+  authoritativeIds(record, 'native form ' + id);
+}
+assert.ok(mixed.native_per_form[String(mixed.forms.ready)].pages > 1,
+  'The fixture never exercised native expected-ID paging.');
 // A different native form/query filter can restrict the multi-form Inbox.
 // It is documented in host evidence; do not fake rows or change assignments.
 assert.ok(present.includes(mixed.entries.complete) && present.includes(mixed.entries.missing_required_values));
@@ -87,13 +121,78 @@ async function openInbox(route, width = 1440, height = 900) {
 async function visibleRowIds() {
   return page.locator(rows).evaluateAll(nodes => nodes.map(n => Number(n.getAttribute('row-id'))).filter(Number.isInteger));
 }
-async function traverseNativePaging() {
+// The only semantic expectations come from actual GFAPI::get_entry source
+// witnesses, never from GPP's rendered output or a parallel value service.
+const nameColumn = String(mixed.header_projection.ready?.column_ids?.[1] ?? '');
+const schoolColumn = String(mixed.header_projection.ready?.column_ids?.[3] ?? '');
+assert.ok(nameColumn && schoolColumn && nameColumn !== schoolColumn);
+const readyWitnesses = Object.values(mixed.source_witnesses ?? {});
+assert.equal(readyWitnesses.length, 2, 'Missing independent Gravity Forms cell witnesses');
+function plain(source) { return String(source ?? '').replace(/\\s+/gu, ' ').trim(); }
+function expectedCells(witness) {
+  assert.equal(Number(witness.form_id), Number(mixed.forms.ready), 'GF witness does not belong to Ready form');
+  return {
+    [nameColumn]: [witness.first, witness.last].map(plain).filter(Boolean).join(' '),
+    [schoolColumn]: [witness.school, witness.grade].map(plain).filter(Boolean).join(' — '),
+  };
+}
+function assertRenderedSemanticCells(actual, witness, label) {
+  assert.ok(actual && typeof actual === 'object', label + ': no rendered semantic-cell observation');
+  for (const [column, expectedText] of Object.entries(expectedCells(witness))) {
+    assert.ok(Object.hasOwn(actual, column), label + ': mandatory native cell inaccessible: ' + column);
+    assert.equal(plain(actual[column]), expectedText,
+      label + ': authentic AG Grid semantic cell mismatch for native column ' + column);
+  }
+}
+// Only inspect materialized native cells; horizontal scroll is a test-only
+// viewport operation needed under AG Grid column virtualization.
+async function observeNativeCells(targetIds, columns) {
+  const collected = {};
+  for (const factor of [0, 0.5, 1]) {
+    await page.locator(selector).evaluate((grid, factor) => {
+      const scroll = grid.querySelector('.ag-body-horizontal-scroll-viewport')
+        || grid.querySelector('.ag-center-cols-viewport');
+      if (scroll) scroll.scrollLeft = Math.round((scroll.scrollWidth - scroll.clientWidth) * factor);
+    }, factor);
+    await page.waitForTimeout(110);
+    for (const id of targetIds) {
+      for (const column of columns) {
+        const cell = page.locator(selector +
+          ' .ag-row[row-id="' + id + '"] .ag-cell[col-id="' + column + '"]').first();
+        if (await cell.count() === 1) {
+          collected[String(id)] ??= {};
+          collected[String(id)][column] = await cell.innerText();
+        }
+      }
+    }
+  }
+  return collected;
+}
+
+async function traverseNativePaging(qualified = false) {
   const seen = new Set();
   const pages = [];
+  const semanticCells = {};
+  const nativeCellTexts = [];
   for (let step = 0; step < 15; step++) {
     const ids = await visibleRowIds();
+    assert.ok(ids.length > 0, 'Native Grid page has no materialized row identity.');
+    assert.equal(new Set(ids).size, ids.length, 'Native Grid page duplicated a row ID.');
+    for (const id of ids) {
+      assert.ok(!seen.has(id), 'Native Grid paging repeated an already observed entry: ' + id);
+      seen.add(id);
+    }
     pages.push(ids);
-    ids.forEach(id => seen.add(id));
+    if (qualified) {
+      const readyIds = readyWitnesses.map(w => Number(w.entry_id)).filter(id => ids.includes(id));
+      const cells = await observeNativeCells(readyIds, [nameColumn, schoolColumn]);
+      Object.assign(semanticCells, cells);
+    } else {
+      // Fallback surfaces may expose a host-native subset of fields. Capture
+      // exactly those cells; do not synthesize a column that is not present.
+      const allCells = await page.locator(selector + ' .ag-row[row-id] .ag-cell[col-id]').allInnerTexts();
+      nativeCellTexts.push(...allCells);
+    }
     const next = page.locator(selector + ' [ref="btNext"]');
     if (await next.count() !== 1 || await next.isDisabled() ||
       (await next.getAttribute('class') || '').includes('ag-disabled')) break;
@@ -105,7 +204,8 @@ async function traverseNativePaging() {
     }, { rows, previousIds }, { timeout: 20000 });
     if (step === 14) throw Error('Native Inbox paging did not reach its last page.');
   }
-  return { visible_ids: [...seen], pages: pages.length, page_ids: pages };
+  return { visible_ids: [...seen], pages: pages.length, page_ids: pages,
+    semantic_cells: semanticCells, fallback_cell_texts: nativeCellTexts };
 }
 try {
   for (const route of routes) {
@@ -187,10 +287,15 @@ try {
       record.viewports.push({ width, ...facts });
     }
     await openInbox(route);
-    record.paginated = await traverseNativePaging();
-    const routeExpected = route.form_id
-      ? mixed.native_per_form[String(route.form_id)]?.ids?.map(Number)
-      : present;
+    record.paginated = await traverseNativePaging(route.name === 'form-scoped');
+    const routeAuthority = route.form_id
+      ? mixed.native_per_form[String(route.form_id)] : mixed.native_operator;
+    const routeExpected = authoritativeIds(routeAuthority, route.name);
+    assertNativeOutputMembership(record.paginated.visible_ids, routeExpected, route.name);
+    evidence.native_output_oracle.route_memberships[route.name] = {
+      authorized_count: routeExpected.length, observed_count: record.paginated.visible_ids.length,
+      native_api_total: routeAuthority.total, fully_enumerated: true, equivalent: true,
+    };
     assert.ok(Array.isArray(routeExpected) && routeExpected.length > 0,
       'Native form assignment query returned no authorized scoped rows: ' + route.name);
     if (route.entry_id) {
@@ -204,6 +309,28 @@ try {
     if (route.name === 'form-scoped') {
       assert.ok(!record.paginated.visible_ids.includes(Number(mixed.entries.unproven_form)),
         'Native form scope leaked an entry from a different form.');
+      for (const witness of readyWitnesses) {
+        assert.ok(routeExpected.includes(Number(witness.entry_id)),
+          'Required GF witness entry was excluded from native Ready form authority.');
+        const cells = record.paginated.semantic_cells[String(witness.entry_id)];
+        assertRenderedSemanticCells(cells, witness, 'Ready Entry ' + witness.entry_id);
+        evidence.native_output_oracle.semantic_cells[String(witness.entry_id)] = {
+          observed: cells, independent_gf_source: witness,
+          expected: expectedCells(witness), equivalent: true,
+        };
+      }
+    }
+    if (route.expects_native_fallback) {
+      const role = route.name === 'form-scoped-unproven' ? 'unproven_form' : 'unconfigured_form';
+      const expectedEntry = Number(mixed.entries[role]);
+      assert.ok(routeExpected.includes(expectedEntry), route.name + ': expected native Entry absent');
+      const allText = record.paginated.fallback_cell_texts.map(plain);
+      // A native fallback is not allowed to acquire values composed only by
+      // Ready-form GPP presentation. Check observed cells, not guessed headers.
+      assert.ok(!allText.includes('MIX-' + (role === 'unproven_form' ? 'Unproven' : 'Unconfigured') + ' Synthetic Last'),
+        route.name + ': unsupported First+Last composition leaked into fallback');
+      assert.ok(!allText.includes('Synthetic School — Synthetic Grade'),
+        route.name + ': unsupported School+Grade composition leaked into fallback');
     }
     const linkId = Number(route.entry_id || mixed.entries.complete);
     await openInbox(route);
@@ -328,9 +455,36 @@ try {
   assert.equal(evidence.unrelated.gpp_shell_count, 0);
   assert.equal(evidence.unrelated.gpp_style_count, 0);
 
-  // A deliberately false oracle must be rejected by the acceptance guard.
-  assert.throws(() => assert.ok(native.has(-9999999) && present.includes(-9999999)));
-  evidence.negative_control = { forged_authorized_row: -9999999, assertion_rejected: true };
+  // Test-only observations are mutated, NEVER host state. Both falsifications
+  // exercise the EXACT same production-output predicates as the positive path.
+  const forged = -9999999;
+  const rowFalsifications = [];
+  for (const route of [routes[0], routes[2]]) {
+    const observed = evidence.routes.find(item => item.route === route.name).paginated.visible_ids;
+    const authorized = route.form_id
+      ? authoritativeIds(mixed.native_per_form[String(route.form_id)], route.name)
+      : globalAuthorized;
+    assert.ok(!authorized.includes(forged), 'Forged ID accidentally authorized by native host.');
+    assert.throws(
+      () => assertNativeOutputMembership([...observed, forged], authorized, route.name),
+      /observed native Grid membership differs from full host-authorized set/,
+      'The acceptance predicate failed to reject an extra Grid observation on ' + route.name
+    );
+    rowFalsifications.push({ route: route.name, forged_observed_id: forged, rejected: true });
+  }
+  const witness = readyWitnesses[0];
+  const authenticCells = evidence.routes.find(item => item.route === 'form-scoped')
+    .paginated.semantic_cells[String(witness.entry_id)];
+  const wrongCells = { ...authenticCells, [nameColumn]: 'DELIBERATELY INCORRECT OBSERVED NAME' };
+  assert.throws(
+    () => assertRenderedSemanticCells(wrongCells, witness, 'controlled mutation'),
+    /authentic AG Grid semantic cell mismatch/,
+    'The real semantic-output predicate failed to reject controlled incorrect cell text'
+  );
+  evidence.negative_control = {
+    method: 'SAME_NATIVE_OUTPUT_PREDICATES', row_falsifications: rowFalsifications,
+    wrong_observed_composed_cell: { entry_id: witness.entry_id, column: nameColumn, rejected: true },
+  };
   evidence.native_host_filter_limitations = absent;
   assert.deepEqual(pageErrors, [], 'Uncaught page errors during authentic Inbox acceptance.');
   evidence.status = 'PASS';
