@@ -181,10 +181,12 @@ try {
     // assume search can discover a hidden source. Clear through native control.
     await input.fill('');
     await input.dispatchEvent('keyup');
-    await page.locator(rows).first().waitFor({ timeout: 20000 });
+    // A new host render is the supported reset after interacting with native
+    // search. Do not inspect potentially stale AG Grid filter/pager state.
+    await openInbox(route);
     let found = false;
     for (let turn = 0; turn < 15 && !found; turn++) {
-      const link = page.locator(rows + '[row-id="' + linkId + '"] .gflow-inbox__entry-cell-link').first();
+      const link = page.locator(rows + '[row-id="' + linkId + '"] a[href*="view=entry"]').first();
       if (await link.count() > 0) {
         const href = await link.getAttribute('href');
         assert.ok(href?.includes('view=entry') && href.includes('id=') && href.includes('lid='),
@@ -201,7 +203,14 @@ try {
       await next.click();
       await page.waitForTimeout(350);
     }
-    assert.ok(found, 'Authorized native entry link missing: ' + route.name);
+    if (!found) {
+      const nearby = await page.locator(rows).evaluateAll(nodes => nodes.map(n => ({
+        id: n.getAttribute('row-id'),
+        hrefs: [...n.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).slice(0, 5),
+      })).slice(0, 25));
+      throw Error('Authorized native entry link missing: ' + route.name +
+        ' id=' + linkId + ' visible_page=' + JSON.stringify(nearby));
+    }
   }
 
   const opDetail = evidence.routes[0].navigation.url;
