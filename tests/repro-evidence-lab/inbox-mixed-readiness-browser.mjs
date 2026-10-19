@@ -203,7 +203,10 @@ try {
     await openInbox(route);
     let found = false;
     for (let turn = 0; turn < 15 && !found; turn++) {
-      const link = page.locator(rows + '[row-id="' + linkId + '"] a[href*="view=entry"]').first();
+      // The native Operations/id cell may be pinned outside the center-cols
+      // container. Resolve the actual link by its exact AG Grid row identity
+      // across all host-owned row containers, without inventing a URL.
+      const link = page.locator(selector + ' .ag-row[row-id="' + linkId + '"] a[href*="view=entry"]').first();
       if (await link.count() > 0) {
         const href = await link.getAttribute('href');
         assert.ok(href?.includes('view=entry') && href.includes('id=') && href.includes('lid='),
@@ -221,7 +224,7 @@ try {
       await page.waitForTimeout(350);
     }
     if (!found) {
-      const nearby = await page.locator(rows).evaluateAll(nodes => nodes.map(n => ({
+      const nearby = await page.locator(selector + ' .ag-row[row-id]').evaluateAll(nodes => nodes.map(n => ({
         id: n.getAttribute('row-id'),
         hrefs: [...n.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).slice(0, 5),
       })).slice(0, 25));
