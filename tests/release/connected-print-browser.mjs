@@ -109,7 +109,9 @@ try {
           try {
             if (await page.locator(scenario.selector).count() !== 1 ||
               await page.locator(scenario.selector).evaluate(el => getComputedStyle(el).visibility) !== 'hidden' ||
-              !(await root.innerText()).includes(expectedName)) {
+              !(await root.innerText()).includes(expectedName) ||
+              await root.locator('i[data-gpp-checked="1"]').count() !== 1 ||
+              (await root.locator('i[data-gpp-checked="1"]').textContent()).trim() !== '✓') {
               throw Error('Print-only falsification did not preserve the DOM while hiding its printed target: '+scenario.key);
             }
             const mutatedPdf = path.join(mutants, scenario.key+'.pdf');
