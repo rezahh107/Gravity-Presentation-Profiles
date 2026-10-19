@@ -87,7 +87,7 @@ function mixed_add_form( $label, $extra_id = null ) {
     mixed_assert( ! is_wp_error( $result ) && (int) $result > 0, 'Cannot create synthetic ' . $label . ' form.' );
     return (int) $result;
 }
-function mixed_add_entry( $form_id, $operator_id, $label, $missing = false ) {
+function mixed_add_entry( $form_id, $operator_id, $label, $missing = false, $step_label = null ) {
     $api = new Gravity_Flow_API( $form_id );
     $entry = array(
         'form_id' => $form_id,
@@ -105,7 +105,7 @@ function mixed_add_entry( $form_id, $operator_id, $label, $missing = false ) {
     mixed_assert( ! is_wp_error( $id ) && (int) $id > 0, 'GF entry insertion failed: ' . $label );
     $api->process_workflow( (int) $id );
     $step = $api->get_current_step( GFAPI::get_entry( (int) $id ) );
-    mixed_assert( $step && $step->get_name() === 'Mixed ' . $label . ' Review', 'Authentic approval assignment absent: ' . $label );
+    mixed_assert( $step && $step->get_name() === 'Mixed ' . ( null === $step_label ? $label : $step_label ) . ' Review', 'Authentic approval assignment absent: ' . $label );
     return (int) $id;
 }
 function mixed_map( $repair, $operations, $form_id, $slot, $field_id ) {
@@ -173,7 +173,7 @@ foreach ( array(
     mixed_assert( $step && ! is_wp_error( $step ), 'Unable to create authentic approval assignment: ' . $label );
 }
 $complete_id = mixed_add_entry( $ready_form, $operator, 'Ready' );
-$missing_id = mixed_add_entry( $ready_form, $operator, 'Missing', true );
+$missing_id = mixed_add_entry( $ready_form, $operator, 'Missing', true, 'Ready' );
 $unproven_id = mixed_add_entry( $partial_form, $operator, 'Unproven' );
 $unconfigured_id = mixed_add_entry( $unconfigured_form, $operator, 'Unconfigured' );
 
