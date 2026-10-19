@@ -280,6 +280,7 @@ foreach ( array(
     $source_witnesses[ $kind ] = array(
         'entry_id' => $id,
         'form_id' => (int) $entry['form_id'],
+        'date_created' => (string) ( $entry['date_created'] ?? '' ),
         'first' => (string) ( $entry['1'] ?? '' ),
         'last' => (string) ( $entry['2'] ?? '' ),
         'school' => (string) ( $entry['6'] ?? '' ),
