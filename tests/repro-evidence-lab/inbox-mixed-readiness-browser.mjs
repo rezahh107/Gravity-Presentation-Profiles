@@ -202,6 +202,55 @@ try {
   evidence.authorization.viewer.native_row_count = viewerRows;
   await vp.close();
 
+  // Supported lifecycle mutation: establish an authentic native-only
+  // fallback without forging readiness/permissions. Restore in finally.
+  const getActiveVisual = () => JSON.parse(wpEval(
+    "$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(" +
+    "new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(" +
+    "\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));" +
+    "echo wp_json_encode(['activation'=>$v->resolve('gravity_flow.inbox')," +
+    "'installed'=>$v->snapshot()['installed']]);"
+  ));
+  const visualBefore = getActiveVisual();
+  assert.ok(visualBefore.activation?.package_id && visualBefore.activation?.profile_id);
+  try {
+    wpEval(
+      "$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(" +
+      "new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(" +
+      "\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));" +
+      "$v->deactivate(['surface'=>'gravity_flow.inbox']);"
+    );
+    const nativeResponse = await page.goto(routes[0].url, { waitUntil: 'networkidle' });
+    await page.locator(selector + ' .ag-root-wrapper').waitFor({ timeout: 30000 });
+    assert.equal(nativeResponse?.status(), 200);
+    assert.equal(await page.locator('[data-gpp-inbox-surface="gravity_flow.inbox"]').count(), 0,
+      'Inactive global profile still injected GPP wrapper.');
+    assert.equal(await page.locator(selector).count(), 1, 'Native Flow Grid vanished after GPP deactivation.');
+    evidence.native_global_fallback = { inactive_profile: true, native_grid_present: true,
+      gpp_shell_absent: true, native_rows_on_first_page: await page.locator(rows).count() };
+    assert.ok(evidence.native_global_fallback.native_rows_on_first_page > 0);
+  } finally {
+    const activation = visualBefore.activation;
+    const request = JSON.stringify({
+      surface: 'gravity_flow.inbox',
+      package_id: activation.package_id,
+      package_version: activation.package_version,
+      profile_id: activation.profile_id,
+      expected_current_activation: null,
+    });
+    wpEval(
+      "$v=new \\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle(" +
+      "new \\GravityPresentationProfiles\\Core\\Lifecycle\\WordPressOptionStateStore(" +
+      "\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));" +
+      "$v->activateIfCurrent(json_decode('" + request + "',true));"
+    );
+  }
+  const visualAfter = getActiveVisual();
+  assert.deepEqual(visualAfter.activation, visualBefore.activation, 'Rollback failed to restore visual activation.');
+  assert.deepEqual(visualAfter.installed, visualBefore.installed, 'Mutable visual package data changed during fallback.');
+  await openInbox(routes[0]);
+  evidence.native_global_fallback.restored_shell = true;
+
   await page.goto(host.unrelated_url, { waitUntil: 'networkidle' });
   evidence.unrelated = await page.evaluate(() => ({
     gpp_shell_count: document.querySelectorAll('[data-gpp-inbox-surface="gravity_flow.inbox"]').length,
