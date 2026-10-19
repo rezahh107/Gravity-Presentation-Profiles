@@ -295,6 +295,8 @@ $after_columns = static function ( $columns, $args ) use ( &$host_column_hook ) 
 add_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN, 2 );
 add_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX, 2 );
 $previous_buffer_level = ob_get_level();
+$previous_user_id = get_current_user_id();
+wp_set_current_user( $operator );
 try {
     ob_start();
     do_shortcode( '[gravityflow page="inbox" form="' . $ready_form . '"]' );
@@ -302,6 +304,7 @@ try {
     while ( ob_get_level() > $previous_buffer_level ) {
         ob_end_clean();
     }
+    wp_set_current_user( $previous_user_id );
     remove_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN );
     remove_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX );
 }
