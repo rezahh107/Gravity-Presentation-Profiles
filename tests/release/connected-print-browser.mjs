@@ -97,7 +97,10 @@ try {
         }
         const css = '@media print {.gpp-print-sheet[data-gpp-print-page="front"] .front-study .front-options .paper-choice:first-child i::after {content:"✓"!important;display:inline!important;font-family:Arial,sans-serif!important;font-weight:900!important;font-size:11px!important;color:#000!important}}';
         const mutation = await page.addStyleTag({content:css});
-        const dir = fs.mkdtempSync(path.join(out,'connected-print-'+stage+'-negative-'));
+        // Retain the CURRENT mutant PDF and its rendered pages so the final
+        // PHP acceptance can independently re-falsify actual bytes.
+        const dir = path.join(out, 'connected-print-' + stage + '-negative');
+        fs.mkdirSync(dir, {recursive:true});
         try {
           const pseudo = await marker.evaluate(el => getComputedStyle(el, '::after').content);
           if (!pseudo.includes('✓') || (await marker.textContent()).trim() !== '' ||
@@ -136,7 +139,6 @@ try {
             original_pdf_raster_result:'ACCEPTED_AS_REQUIRED'
           },null,2)+'\n');
         } finally {
-          fs.rmSync(dir,{recursive:true,force:true});
           await mutation.evaluate(el=>el.remove());
         }
       }
