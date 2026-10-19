@@ -558,6 +558,8 @@ try {
   tracker.setPhase('authorization:entry-detail');
   const opDetail = evidence.routes[0].navigation.url;
   const opPage = await op.newPage();
+  const opDetailTracker = await armDiagnostics(opPage, 'operator-entry-detail');
+  opDetailTracker.setPhase('authorized-entry-detail:navigate');
   const authResponse = await opPage.goto(opDetail, { waitUntil: 'networkidle' });
   const opText = await opPage.locator('body').innerText();
   assert.ok(opText.includes('SYN-MIX-Ready'), 'Authorized host Entry Detail lacks protected entry witness.');
@@ -565,11 +567,14 @@ try {
   await opPage.close();
 
   const vp = await viewer.newPage();
+  const viewerTracker = await armDiagnostics(vp, 'viewer-authorization');
+  viewerTracker.setPhase('unassigned-viewer-entry-detail:navigate');
   const response = await vp.goto(opDetail, { waitUntil: 'networkidle' });
   const viewerText = await vp.locator('body').innerText();
   assert.ok(!viewerText.includes('SYN-MIX-Ready'), 'Unassigned viewer gained authentic host Entry Detail data.');
   assert.ok(!viewerText.includes('MIX-Ready'), 'Unassigned viewer gained protected name data.');
   evidence.authorization.viewer = { http: response?.status(), protected_witness_absent: true, url: vp.url() };
+  viewerTracker.setPhase('unassigned-viewer-inbox:navigate');
   await vp.goto(routes[0].url, { waitUntil: 'networkidle' });
   const viewerRows = await vp.locator(rows).count();
   assert.equal(viewerRows, 0, 'Unassigned viewer gained native Inbox rows.');
@@ -594,6 +599,7 @@ try {
       "\\GravityPresentationProfiles\\Core\\Lifecycle\\VisualPackageLifecycle::OPTION_NAME));" +
       "$v->deactivate(['surface'=>'gravity_flow.inbox']);"
     );
+    tracker.setPhase('global-visual-profile-disabled:navigate');
     const nativeResponse = await page.goto(routes[0].url, { waitUntil: 'networkidle' });
     await page.locator(selector + ' .ag-root-wrapper').waitFor({ timeout: 30000 });
     assert.equal(nativeResponse?.status(), 200);
