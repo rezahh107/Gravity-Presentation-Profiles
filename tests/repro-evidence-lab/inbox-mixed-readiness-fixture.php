@@ -268,9 +268,14 @@ foreach ( array( $ready_form, $partial_form, $unconfigured_form ) as $form_id ) 
 // Independent Gravity Forms witnesses. Do not ask GPP's presentation adapter
 // what these cells should contain; it is the behavior under test.
 $source_witnesses = array();
-foreach ( array( 'complete' => $complete_id, 'missing_required_values' => $missing_id ) as $kind => $id ) {
+foreach ( array(
+    'complete' => $complete_id,
+    'missing_required_values' => $missing_id,
+    'unproven_form' => $unproven_id,
+    'unconfigured_form' => $unconfigured_id,
+) as $kind => $id ) {
     $entry = GFAPI::get_entry( $id );
-    mixed_assert( is_array( $entry ) && (int) $entry['form_id'] === $ready_form,
+    mixed_assert( is_array( $entry ) && (int) $entry['form_id'] > 0,
         'Cannot read authoritative Gravity Forms semantic witness.' );
     $source_witnesses[ $kind ] = array(
         'entry_id' => $id,
