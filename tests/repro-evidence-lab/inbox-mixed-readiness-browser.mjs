@@ -473,7 +473,7 @@ try {
 
   // Test-only observations are mutated, NEVER host state. Both falsifications
   // exercise the EXACT same production-output predicates as the positive path.
-  const forged = -9999999;
+  const forged = 987654321; // Valid positive ID, but absent from native authorization.
   const rowFalsifications = [];
   for (const route of [routes[0], routes[2]]) {
     const observed = evidence.routes.find(item => item.route === route.name).paginated.visible_ids;
