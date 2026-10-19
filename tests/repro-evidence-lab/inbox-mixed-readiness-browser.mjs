@@ -38,7 +38,9 @@ assert.ok(host.block_url && host.unrelated_url, 'Authentic registered Inbox Bloc
 const routes = [
   { name: 'shortcode', url: fixture.frontend_inbox_url },
   { name: 'block', url: host.block_url },
-  { name: 'form-scoped', url: mixed.form_scoped.url },
+  { name: 'form-scoped', ...mixed.form_scoped },
+  { name: 'form-scoped-unproven', ...mixed.form_scoped_unready.unproven, expects_native_fallback: true },
+  { name: 'form-scoped-unconfigured', ...mixed.form_scoped_unready.unconfigured, expects_native_fallback: true },
 ];
 const evidence = {
   schema_version: '1.0.0',
@@ -166,6 +168,16 @@ try {
           'Form-scoped native Grid did not receive five exact source-bound columns.');
         assert.ok(facts.headers.length > 0 && facts.headers.every(id => facts.native_config_columns.includes(id)),
           'Visible virtualized headers do not belong to the actual native column set.');
+      } else if (route.expects_native_fallback) {
+        // Independent real forms have no eligible source-proven table-wide
+        // projection. Capture the host's own definition set and reject GPP's
+        // Ready projection rather than guessing native fallback column counts.
+        const proven = mixed.header_projection.ready?.column_ids?.map(String);
+        assert.ok(Array.isArray(facts.native_config_columns) && facts.native_config_columns.length > 0,
+          'Unready form lost native Gravity Flow Grid definitions.');
+        assert.notDeepEqual(facts.native_config_columns.map(String).sort(), [...proven].sort(),
+          'Unready form reused the unrelated Ready-form five-column projection.');
+        assert.ok(facts.headers.length >= 1, 'Unready native Grid has no visible columns.');
       } else {
         assert.ok(facts.headers.length >= 1, 'Native multi-form Inbox exposed no headers.');
       }
@@ -176,9 +188,15 @@ try {
     }
     await openInbox(route);
     record.paginated = await traverseNativePaging();
-    const routeExpected = route.name === 'form-scoped'
-      ? [mixed.entries.complete, mixed.entries.missing_required_values].map(Number)
+    const routeExpected = route.form_id
+      ? mixed.native_per_form[String(route.form_id)]?.ids?.map(Number)
       : present;
+    assert.ok(Array.isArray(routeExpected) && routeExpected.length > 0,
+      'Native form assignment query returned no authorized scoped rows: ' + route.name);
+    if (route.entry_id) {
+      assert.ok(routeExpected.includes(Number(route.entry_id)),
+        'Native form filter excluded its own assigned synthetic Entry: ' + route.name);
+    }
     for (const id of routeExpected) {
       assert.ok(record.paginated.visible_ids.includes(id),
         'Native host-authorized entry disappeared from ' + route.name + ': ' + id);
@@ -187,7 +205,7 @@ try {
       assert.ok(!record.paginated.visible_ids.includes(Number(mixed.entries.unproven_form)),
         'Native form scope leaked an entry from a different form.');
     }
-    const linkId = Number(mixed.entries.complete);
+    const linkId = Number(route.entry_id || mixed.entries.complete);
     await openInbox(route);
     // Search is native AG Grid. No GPP row insertion or GPP form filtering.
     const input = page.locator('[data-js="gflow-inbox-search"]');
