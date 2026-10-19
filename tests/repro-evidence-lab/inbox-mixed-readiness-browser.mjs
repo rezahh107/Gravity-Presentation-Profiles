@@ -114,8 +114,8 @@ try {
         const grid = document.querySelector(sel);
         const root = grid?.querySelector('.ag-root-wrapper');
         const surface = document.querySelector('[data-gpp-inbox-surface="gravity_flow.inbox"]');
-        const rule = '.ag-header-viewport, .ag-center-cols-viewport, .ag-body-horizontal-scroll, .ag-body-horizontal-scroll-viewport';
-        const physical = [...grid.querySelectorAll(rule)].map(el => ({
+        const rule = '.ag-header-viewport, .ag-center-cols-viewport, .ag-body-horizontal-scroll-viewport';
+        const physical = [root, ...grid.querySelectorAll(rule)].map(el => ({
           selector: el.className, direction: getComputedStyle(el).direction,
         }));
         return {
@@ -137,7 +137,7 @@ try {
       assert.ok(facts.host_dom_preserved && facts.native_pager);
       assert.ok(facts.native_rows > 0);
       assert.equal(facts.headers.length, 5, 'Five-column native contract changed.');
-      assert.ok(facts.physical.length > 0, 'Four-node native scroll axis is absent.');
+      assert.equal(facts.physical.length, 4, 'Owner-authorized four-node physical axis is absent.');
       for (const node of facts.physical) assert.equal(node.direction, 'ltr', 'Owner physical LTR exception drifted.');
       assert.ok(facts.scroll_width <= facts.client_width + 3, 'Document-wide overflow at ' + width);
       record.viewports.push({ width, ...facts });
