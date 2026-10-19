@@ -124,16 +124,52 @@ function mixed_map( $repair, $operations, $form_id, $slot, $field_id ) {
     mixed_assert( in_array( $result['status'], array( 'REPAIRED_AND_ACTIVATED', 'UNCHANGED' ), true ), 'Product mapping failed: ' . $slot );
 }
 function mixed_inbox_rows( $user_id, $args = array() ) {
-    $total = 0;
-    $rows = Gravity_Flow_API::get_inbox_entries(
-        array_merge( array(
+    // Fully enumerate the host-authorized native result. One page_size=100
+    // request is not a completeness proof, even for a small synthetic fixture.
+    $page_size = 2; // Force more than one API request in the Ready form fixture.
+    $ids = array();
+    $total_expected = null;
+    $pages = 0;
+    for ( $offset = 0; $offset < 500; $offset += $page_size ) {
+        $total = 0;
+        $query = array_merge( array(
             'filter_key' => 'workflow_user_id_' . (int) $user_id,
             'user_id' => (int) $user_id,
-            'paging' => array( 'page_size' => 100 ),
-        ), $args ),
-        $total
+        ), $args );
+        $query['paging'] = array( 'offset' => $offset, 'page_size' => $page_size );
+        $rows = Gravity_Flow_API::get_inbox_entries( $query, $total );
+        mixed_assert( is_array( $rows ) && ! is_wp_error( $rows ), 'Native Inbox API enumeration failed at offset ' . $offset );
+        mixed_assert( is_numeric( $total ) && (int) $total >= 0, 'Native Inbox API did not expose a usable total.' );
+        if ( null === $total_expected ) {
+            $total_expected = (int) $total;
+        }
+        mixed_assert( (int) $total === $total_expected, 'Native Inbox total changed during authoritative enumeration.' );
+        mixed_assert( count( $rows ) <= $page_size, 'Native Inbox ignored the bounded paging contract.' );
+        mixed_assert( count( $rows ) > 0 || $offset >= $total_expected, 'Native Inbox returned an incomplete page.' );
+        ++$pages;
+        foreach ( $rows as $row ) {
+            $id = isset( $row['id'] ) ? (int) $row['id'] : 0;
+            mixed_assert( $id > 0 && ! in_array( $id, $ids, true ), 'Native Inbox returned an invalid/duplicate Entry ID.' );
+            if ( isset( $args['form_id'] ) ) {
+                $entry = GFAPI::get_entry( $id );
+                mixed_assert( is_array( $entry ) && (int) $entry['form_id'] === (int) $args['form_id'],
+                    'Native Inbox form filter returned an Entry from another form.' );
+            }
+            $ids[] = $id;
+        }
+        if ( count( $ids ) >= $total_expected ) {
+            break;
+        }
+    }
+    mixed_assert( count( $ids ) === $total_expected, 'Native Inbox pagination was truncated or exceeded the announced total.' );
+    return array(
+        'total' => $total_expected,
+        'ids' => $ids,
+        'pages' => $pages,
+        'page_size' => $page_size,
+        'enumeration_complete' => true,
+        'form_filter' => isset( $args['form_id'] ) ? (int) $args['form_id'] : null,
     );
-    return array( 'total' => $total, 'ids' => array_map( 'intval', array_column( $rows, 'id' ) ) );
 }
 function mixed_claim( $artifact, $slot ) {
     foreach ( $artifact['runtime_claims'] as $claim ) {
@@ -221,10 +257,40 @@ mixed_assert( in_array( $complete_id, $native_form['ids'], true ) && in_array( $
 mixed_assert( in_array( $complete_id, $native_operator['ids'], true ) && in_array( $missing_id, $native_operator['ids'], true ), 'GPP semantic readiness cannot remove native assigned entries.' );
 mixed_assert( ! array_intersect( $ids, $native_viewer['ids'] ), 'Native permission boundary leaked a synthetic assigned entry to unassigned user.' );
 $native_host_filter_limitations = array_values( array_diff( $ids, $native_operator['ids'] ) );
+mixed_assert( $native_operator['enumeration_complete'] && $native_viewer['enumeration_complete']
+    && $native_form['enumeration_complete'] && $native_form['pages'] > 1,
+    'Native multi-page expected-ID enumeration not established.' );
 $native_per_form = array();
 foreach ( array( $ready_form, $partial_form, $unconfigured_form ) as $form_id ) {
     $native_per_form[ $form_id ] = mixed_inbox_rows( $operator, array( 'form_id' => $form_id ) );
 }
+
+// Independent Gravity Forms witnesses. Do not ask GPP's presentation adapter
+// what these cells should contain; it is the behavior under test.
+$source_witnesses = array();
+foreach ( array( 'complete' => $complete_id, 'missing_required_values' => $missing_id ) as $kind => $id ) {
+    $entry = GFAPI::get_entry( $id );
+    mixed_assert( is_array( $entry ) && (int) $entry['form_id'] === $ready_form,
+        'Cannot read authoritative Gravity Forms semantic witness.' );
+    $source_witnesses[ $kind ] = array(
+        'entry_id' => $id,
+        'form_id' => (int) $entry['form_id'],
+        'first' => (string) ( $entry['1'] ?? '' ),
+        'last' => (string) ( $entry['2'] ?? '' ),
+        'school' => (string) ( $entry['6'] ?? '' ),
+        'grade' => (string) ( $entry['5'] ?? '' ),
+    );
+}
+mixed_assert( '' !== $source_witnesses['complete']['first']
+    && '' !== $source_witnesses['complete']['last']
+    && '' !== $source_witnesses['complete']['school']
+    && '' !== $source_witnesses['complete']['grade'],
+    'Complete Entry lacks source values needed to falsify composition.' );
+mixed_assert( '' !== $source_witnesses['missing_required_values']['first']
+    && '' === $source_witnesses['missing_required_values']['last']
+    && '' === $source_witnesses['missing_required_values']['school']
+    && '' !== $source_witnesses['missing_required_values']['grade'],
+    'Incomplete Entry did not preserve the intended true missing-value witness.' );
 
 $before_remap = mixed_artifact( $ready_form );
 mixed_map( $repair, $operations, $ready_form, 'student.national_id', 7 );
@@ -315,6 +381,7 @@ $results = array(
     'native_operator' => $native_operator,
     'native_viewer' => $native_viewer,
     'native_per_form' => $native_per_form,
+    'source_witnesses' => $source_witnesses,
     'native_host_filter_limitations' => $native_host_filter_limitations,
     'native_shell' => 'ACTIVE_WITH_UNTOUCHED_HOST_MARKUP',
     'request_authorization' => 'NATIVE_GRAVITY_FLOW_ONLY',
