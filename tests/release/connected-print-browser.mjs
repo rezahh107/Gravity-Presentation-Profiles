@@ -115,6 +115,9 @@ try {
           const prefix = path.join(dir,'selected-gender-in-unselected');
           const images = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',mutantPdf,prefix],{encoding:'utf8'});
           if (images.status !== 0) throw Error('Cannot rasterize print-only mutation: '+stage+' '+images.stderr);
+          if (fs.readFileSync(prefix+'-1.png').equals(fs.readFileSync(rasterOne))) {
+            throw Error('Print-only mutation did not change actual first-page raster pixels: '+stage);
+          }
           const rejected = verify(mutantPdf,prefix+'-1.png',prefix+'-2.png');
           const requiredReason = 'Unexpected selected canonical gender indicator in unselected printed PDF page 1';
           if (rejected.accepted || !rejected.message.includes(requiredReason)) {
@@ -127,6 +130,7 @@ try {
           fs.writeFileSync(path.join(out,'connected-print-'+stage+'-falsification.json'),JSON.stringify({
             stage, source:'PRINT_ONLY_CSS_IN_NATIVE_CHROMIUM_PDF',
             dom_female_unselected:true, mutation_materialized_in_pdf:true,
+            mutant_first_page_raster_changed:true,
             extracted_text_indicator:'✓',
             mutated_pdf_result:'REJECTED_AS_REQUIRED',
             original_pdf_raster_result:'ACCEPTED_AS_REQUIRED'
