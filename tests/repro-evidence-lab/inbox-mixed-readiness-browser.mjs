@@ -171,6 +171,36 @@ function assertRawNativeEquivalence(observed, baseline, label) {
   // Gravity Flow owns humanized relative dates. Their display texts can advance
   // between sequential navigations; compare stable host row date data as well
   // as the presence of the authentic materialized date cell instead.
+  const witnessKind = label === 'form-scoped-unproven' ? 'unproven_form'
+    : label === 'form-scoped-unconfigured' ? 'unconfigured_form' : null;
+  assert.ok(witnessKind, label + ': native date comparison lacks independent form witness');
+  const gfDate = mixed.source_witnesses[witnessKind]?.date_created;
+  assert.ok(typeof gfDate === 'string' && /^\\d{4}-\\d{2}-\\d{2}/.test(gfDate),
+    label + ': missing independent GFAPI source date');
+  function validateNativeRelativeDate(text, capturedAt, id) {
+    const normalized = plain(text).replace(/[۰-۹٠-٩]/g, digit => {
+      const code = digit.charCodeAt(0);
+      return String(code >= 0x6F0 ? code - 0x6F0 : code - 0x660);
+    });
+    const units = { 'ثانیه': 1, 'دقیقه': 60, 'ساعت': 3600, 'روز': 86400,
+      'هفته': 604800, 'ماه': 2592000, 'سال': 31536000,
+      second: 1, seconds: 1, minute: 60, minutes: 60, hour: 3600,
+      hours: 3600, day: 86400, days: 86400, week: 604800,
+      weeks: 604800, month: 2592000, months: 2592000,
+      year: 31536000, years: 31536000 };
+    const match = /([0-9]+)\\s*(ثانیه|دقیقه|ساعت|روز|هفته|ماه|سال|seconds?|minutes?|hours?|days?|weeks?|months?|years?)/iu.exec(normalized);
+    assert.ok(match, label + ': native date cannot be interpreted against GF source for Entry ' + id);
+    const unit = units[match[2].toLowerCase()];
+    const created = Date.parse(gfDate.replace(' ', 'T') + (gfDate.includes('Z') ? '' : 'Z'));
+    const displayedAt = Date.parse(capturedAt);
+    assert.ok(Number.isFinite(created) && Number.isFinite(displayedAt),
+      label + ': cannot bind relative date to host/GF time authority');
+    const elapsed = Math.max(0, (displayedAt - created) / 1000);
+    // Native localized human_time_diff rounds, so a one-unit boundary is
+    // legitimate; the independent GF timestamp must still bound its meaning.
+    assert.ok(Math.abs(elapsed - Number(match[1]) * unit) <= Math.max(unit * 1.1, 12),
+      label + ': native relative date diverges from GFAPI source on Entry ' + id);
+  }
   for (const id of baseline.visible_ids) {
     const a = observed.rows[String(id)], b = baseline.rows[String(id)];
     assert.ok(a && b, label + ': native entry row missing ' + id);
@@ -180,6 +210,8 @@ function assertRawNativeEquivalence(observed, baseline, label) {
       label + ': host-native source date differs on entry ' + id);
     assert.ok(a.date_display && b.date_display,
       label + ': native date field not materialized on entry ' + id);
+    validateNativeRelativeDate(a.date_display, a.observed_at, id);
+    validateNativeRelativeDate(b.date_display, b.observed_at, id);
   }
 }
 async function captureNativeFallback(route, raw) {
@@ -271,6 +303,7 @@ async function captureNativeFallback(route, raw) {
           stable_cells: stableCells,
           date_display: date_created || null,
           native_date: nativeData[String(id)],
+          observed_at: new Date().toISOString(),
         };
       }
       const next = p.locator(selector + ' [ref="btNext"]');
