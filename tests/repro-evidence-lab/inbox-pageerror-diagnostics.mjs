@@ -26,6 +26,7 @@ export async function instrumentInboxPage(page, report, identity) {
   const state = { route: identity.route, phase: identity.phase || 'before-navigation' };
   const scripts = new Map();
   const outstanding = [];
+  const resources = [];
   const result = {
     route: identity.route, execution: identity.execution || 'gpp', pageerrors: [],
     exceptions: [], script_responses: [], script_catalog: [],
@@ -55,6 +56,7 @@ export async function instrumentInboxPage(page, report, identity) {
       request_resource_type: type,
     };
     result.script_responses.push(record);
+    resources.push({ response, record });
     if (!/javascript|ecmascript/.test(mime) || response.status() >= 400) {
       outstanding.push((async () => {
         try { record.response_signature = signature(await response.body()); }
@@ -117,6 +119,20 @@ export async function instrumentInboxPage(page, report, identity) {
     setPhase: phase,
     async flush() {
       await Promise.allSettled(outstanding);
+      // MIME alone is not proof of bytes. If CDP associates a parse error
+      // with a script URL, inspect that exact response even if HTTP advertised
+      // a JavaScript MIME (mislabelled HTML is a real failure mode).
+      const implicated = new Set([
+        ...result.exceptions.map(e => e.url),
+        ...result.exceptions.flatMap(e => e.stack_frames.map(f => f.url)),
+        ...result.failed_parse_scripts.map(e => e.url),
+      ].filter(value => value && !value.startsWith('[')));
+      await Promise.allSettled(resources.filter(x =>
+        implicated.has(x.record.url) && !x.record.response_signature).map(async x => {
+        try { x.record.response_signature = signature(await x.response.body()); }
+        catch (e) { x.record.signature_error = String(e).slice(0, 120); }
+      }));
+
       const groups = new Map();
       const matched = new Set();
       for (const error of result.pageerrors) {
