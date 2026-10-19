@@ -156,6 +156,149 @@ function expectedCells(witness) {
   const composed = composedSourceStrings(witness);
   return { [nameColumn]: composed.name, [schoolColumn]: composed.school_grade };
 }
+// Same predicate accepts genuine RAW_NATIVE and must reject an unrelated
+// (but non-Ready) column configuration. Compare the host's actual definitions,
+// not only the set of fields that differs from qualified Ready.
+function assertRawNativeEquivalence(observed, baseline, label) {
+  assert.deepEqual(observed.column_defs, baseline.column_defs,
+    label + ': fallback is not the exact host-native column configuration/order');
+  assert.deepEqual(observed.page_ids, baseline.page_ids,
+    label + ': fallback native page identities/order differ from RAW_NATIVE');
+  assert.deepEqual(observed.visible_ids, baseline.visible_ids,
+    label + ': fallback native page membership differs from RAW_NATIVE');
+  assert.deepEqual(observed.entry_links, baseline.entry_links,
+    label + ': fallback native Entry Detail links differ from RAW_NATIVE');
+  // Gravity Flow owns humanized relative dates. Their display texts can advance
+  // between sequential navigations; compare stable host row date data as well
+  // as the presence of the authentic materialized date cell instead.
+  for (const id of baseline.visible_ids) {
+    const a = observed.rows[String(id)], b = baseline.rows[String(id)];
+    assert.ok(a && b, label + ': native entry row missing ' + id);
+    assert.deepEqual(a.stable_cells, b.stable_cells,
+      label + ': native materialized field value mismatch on entry ' + id);
+    assert.equal(a.native_date, b.native_date,
+      label + ': host-native source date differs on entry ' + id);
+    assert.ok(a.date_display && b.date_display,
+      label + ': native date field not materialized on entry ' + id);
+  }
+}
+function nativeDefinition(def) {
+  // Deliberately compare host-defined identity and presentation attributes;
+  // function-valued AG Grid renderer callbacks are host-owned, not JSON data.
+  const names = ['field', 'colId', 'displayKey', 'headerName', 'hide',
+    'pinned', 'sortable', 'filter', 'resizable', 'width', 'minWidth', 'maxWidth',
+    'cellRenderer', 'valueFormatter'];
+  return Object.fromEntries(names.filter(k => Object.hasOwn(def, k))
+    .map(k => [k, typeof def[k] === 'function' ? '[native callback]' : def[k]]));
+}
+async function captureNativeFallback(route, raw) {
+  // Each request gets a fresh storage partition: no persisted AG Grid column,
+  // sorting, paging or filter state crosses a native/GPP comparison boundary.
+  const context = await browser.newContext({ locale: 'fa-IR' });
+  await context.addCookies(cookies('bootstrap_admin'));
+  const p = await context.newPage();
+  p.on('pageerror', e => pageErrors.push(String(e).slice(0, 700)));
+  const instrument = await instrumentInboxPage(p, evidence.pageerror_diagnostics,
+    { route: route.name + (raw ? ':RAW_NATIVE' : ':GPP'), execution: raw ? 'raw_native' : 'gpp' });
+  diagnostics.push(instrument);
+  try {
+    const url = new URL(route.url);
+    if (raw) url.searchParams.set('wu21_native_inbox_baseline', 'raw_native');
+    instrument.setPhase('native-fallback:initial-navigation');
+    await p.setViewportSize({ width: 1440, height: 900 });
+    const response = await p.goto(url.href, { waitUntil: 'networkidle', timeout: 45000 });
+    assert.equal(response?.status(), 200, route.name + ': native reference HTTP failed');
+    await p.locator(selector + ' .ag-root-wrapper').waitFor({ timeout: 30000 });
+    assert.equal(await p.locator(selector).count(), 1, 'RAW_NATIVE lost genuine Flow Inbox');
+    assert.equal(await p.locator('[data-gpp-inbox-surface="gravity_flow.inbox"]').count(),
+      raw ? 0 : 1, route.name + ': source lifecycle isolation failed');
+    const columnDefs = await p.locator(selector).evaluate(grid => {
+      const key = grid.getAttribute('data-grid-id') || 'inbox_default';
+      return window.gflow_config?.grids?.[key]?.grid_options?.columnDefs?.map(def => {
+        const names = ['field', 'colId', 'displayKey', 'headerName', 'hide',
+          'pinned', 'sortable', 'filter', 'resizable', 'width', 'minWidth', 'maxWidth',
+          'cellRenderer', 'valueFormatter'];
+        return Object.fromEntries(names.filter(k => Object.hasOwn(def, k))
+          .map(k => [k, typeof def[k] === 'function' ? '[native callback]' : def[k]]));
+      });
+    });
+    assert.ok(Array.isArray(columnDefs) && columnDefs.length > 0, 'Host columnDefs unavailable');
+    const columns = columnDefs.filter(x => !x.hide).map(x => String(x.colId || x.field));
+    const pages = [], observedIds = [], observedRows = {}, links = {};
+    for (let step = 0; step < 20; step++) {
+      instrument.setPhase('native-fallback:page-' + (step + 1));
+      const ids = await p.locator(rows).evaluateAll(nodes =>
+        nodes.map(n => Number(n.getAttribute('row-id'))));
+      assert.ok(ids.length && ids.every(Number.isSafeInteger), 'Host Grid did not materialize valid row IDs');
+      for (const id of ids) {
+        assert.ok(!observedIds.includes(id), 'Native Grid repeated ID across pages: ' + id);
+        observedIds.push(id);
+      }
+      pages.push(ids);
+      const nativeData = await p.locator(selector).evaluate((grid, ids) => {
+        const key = grid.getAttribute('data-grid-id') || 'inbox_default';
+        const api = window.gflow_config?.grids?.[key]?.grid_options?.api;
+        return Object.fromEntries(ids.map(id => [
+          String(id), api?.getRowNode?.(String(id))?.data?.date_created ?? null,
+        ]));
+      }, ids);
+      // Preserve genuine AG Grid cell materialization; never populate values
+      // from GPP's own composition nor mutate Grid state to satisfy the oracle.
+      const cellValues = {};
+      for (const factor of [0, 0.5, 1]) {
+        await p.locator(selector).evaluate((grid, f) => {
+          const bar = grid.querySelector('.ag-body-horizontal-scroll-viewport')
+            || grid.querySelector('.ag-center-cols-viewport');
+          if (bar) bar.scrollLeft = Math.round((bar.scrollWidth - bar.clientWidth) * f);
+        }, factor);
+        await p.waitForTimeout(85);
+        for (const id of ids) for (const col of columns) {
+          const cell = p.locator(selector + ' .ag-row[row-id="' + id +
+            '"] .ag-cell[col-id="' + col + '"]').first();
+          if (await cell.count() === 1) {
+            cellValues[id] ??= {};
+            cellValues[id][col] = plain(await cell.innerText());
+          }
+        }
+      }
+      for (const id of ids) {
+        const cells = cellValues[id] || {};
+        for (const col of columns) {
+          assert.ok(Object.hasOwn(cells, col), route.name + ': missing native materialized ' + col);
+        }
+        const anchors = await p.locator(selector +
+          ' .ag-row[row-id="' + id + '"] a[href*="view=entry"]').evaluateAll(nodes =>
+          nodes.map(n => n.getAttribute('href')).filter(Boolean));
+        assert.ok(anchors.length > 0, route.name + ': native entry link missing for ' + id);
+        links[String(id)] = anchors.map(value => {
+          const target = new URL(value, url.href);
+          return target.origin + target.pathname + '?view=' + target.searchParams.get('view') +
+            '&id=' + target.searchParams.get('id') + '&lid=' + target.searchParams.get('lid');
+        }).sort();
+        const { date_created, ...stableCells } = cells;
+        observedRows[String(id)] = {
+          stable_cells: stableCells,
+          date_display: date_created || null,
+          native_date: nativeData[String(id)],
+        };
+      }
+      const next = p.locator(selector + ' [ref="btNext"]');
+      if (await next.count() !== 1 || await next.isDisabled() ||
+          (await next.getAttribute('class') || '').includes('ag-disabled')) break;
+      const prior = ids.join(',');
+      await next.click();
+      await p.waitForFunction(({ rows, prior }) => [...document.querySelectorAll(rows)]
+        .map(n => n.getAttribute('row-id')).join(',') !== prior, { rows, prior });
+      if (step === 19) throw Error('RAW_NATIVE paging did not terminate');
+    }
+    return { raw, column_defs: columnDefs, page_ids: pages,
+      visible_ids: observedIds, rows: observedRows, entry_links: links };
+  } finally {
+    await instrument.flush();
+    await context.close();
+  }
+}
+
 function assertRenderedSemanticCells(actual, witness, label) {
   assert.ok(actual && typeof actual === 'object', label + ': no rendered semantic-cell observation');
   for (const [column, expectedText] of Object.entries(expectedCells(witness))) {
@@ -362,6 +505,17 @@ try {
         route.name + ': unsupported First+Last composition leaked into fallback');
       assert.ok(!allText.includes(unsupported.school_grade),
         route.name + ': unsupported School+Grade composition leaked into fallback');
+      const observedNative = await captureNativeFallback(route, false);
+      const referenceNative = await captureNativeFallback(route, true);
+      const baselineAuthority = authoritativeIds(mixed.native_per_form[String(route.form_id)], route.name);
+      assertNativeOutputMembership(observedNative.visible_ids, baselineAuthority, route.name + ':GPP');
+      assertNativeOutputMembership(referenceNative.visible_ids, baselineAuthority, route.name + ':RAW_NATIVE');
+      assertRawNativeEquivalence(observedNative, referenceNative, route.name);
+      evidence.raw_native_fallback[route.name] = {
+        equivalent: true, form_id: route.form_id, columns: observedNative.column_defs,
+        authorized_ids: baselineAuthority, raw_native: referenceNative,
+        gpp_fallback: observedNative,
+      };
     }
     tracker.setPhase(route.name + ':native-entry-link');
     const linkId = Number(route.entry_id || mixed.entries.complete);
@@ -518,6 +672,26 @@ try {
     /authentic AG Grid semantic cell mismatch/,
     'The real semantic-output predicate failed to reject controlled incorrect cell text'
   );
+  // This control differs from Ready too, so the old not-equal-to-Ready oracle
+  // would accept it. The exact same native predicate must reject it.
+  const nativeFallback = evidence.raw_native_fallback['form-scoped-unproven'];
+  assert.ok(nativeFallback?.equivalent, 'Missing real native fallback before falsification');
+  const unrelatedDefinition = { field: 'unrelated_non_native_column', headerName: 'not native' };
+  const unrelatedColumns = { ...nativeFallback.gpp_fallback,
+    column_defs: [unrelatedDefinition, ...nativeFallback.gpp_fallback.column_defs] };
+  assert.notDeepEqual(unrelatedColumns.column_defs.map(x => x.field).sort(),
+    mixed.header_projection.ready.column_ids.map(String).sort(),
+    'Historical not-Ready oracle did not admit the unrelated definition');
+  assert.throws(
+    () => assertRawNativeEquivalence(unrelatedColumns, nativeFallback.raw_native,
+      'forged non-native column'),
+    /not the exact host-native column configuration\/order/,
+    'RAW_NATIVE oracle accepted unrelated non-native column injection'
+  );
+  evidence.raw_native_fallback.negative_control = {
+    mutation: 'unrelated_non_native_column', old_not_ready_predicate_would_accept: true,
+    exact_native_equivalence_predicate_rejected: true,
+  };
   evidence.negative_control = {
     method: 'SAME_NATIVE_OUTPUT_PREDICATES', row_falsifications: rowFalsifications,
     wrong_observed_composed_cell: { entry_id: witness.entry_id, column: nameColumn, rejected: true },
