@@ -165,6 +165,41 @@ foreach ( array( 'unproven', 'invalidated' ) as $stage ) {
         ( $mutation['mutated_pdf_result'] ?? null ) === 'REJECTED_AS_REQUIRED' &&
         ( $mutation['original_pdf_raster_result'] ?? null ) === 'ACCEPTED_AS_REQUIRED',
         'Unselected PDF mutation/positive control not exercised: ' . $stage );
+    $prefix = 'connected-print-' . $stage . '-negative/selected-gender-in-unselected';
+    $mutant = $dir . '/' . $prefix . '.pdf';
+    $mutant_first = $dir . '/' . $prefix . '-1.png';
+    $mutant_second = $dir . '/' . $prefix . '-2.png';
+    foreach ( array( $mutant, $mutant_first, $mutant_second ) as $path ) {
+        $assert( is_file( $path ) && filesize( $path ) > 100, 'Retained print-only mutation absent: ' . $path );
+        $relative = substr( $path, strlen( $dir ) + 1 );
+        $evidence[ $relative ] = array( 'bytes' => filesize( $path ), 'sha256' => hash_file( 'sha256', $path ) );
+    }
+    $baseline_png = $dir . '/connected-print-' . $stage . '-page-1.png';
+    $assert( hash_file( 'sha256', $mutant_first ) !== hash_file( 'sha256', $baseline_png ),
+        'Print-only mutation has identical first-page raster pixels: ' . $stage );
+    // Recheck the original unselected DOC->PDF false-acceptance mechanism from
+    // retained bytes, not the browser's JSON statement.
+    $mutant_args = array(
+        __DIR__ . '/verify-connected-print-output.mjs',
+        $mutant, $mutant_first, $mutant_second,
+        $host['expected_first_name_value'] . ' ' . $host['expected_last_name_value'],
+        $expected['canonical_print_label'],
+        $expected['host_raw_value'],
+        $expected['host_display_value'],
+        $stage,
+    );
+    $mutant_log = array();
+    $mutant_exit = -1;
+    exec( 'node ' . implode( ' ', array_map( 'escapeshellarg', $mutant_args ) ) . ' 2>&1', $mutant_log, $mutant_exit );
+    $assert( 0 !== $mutant_exit && false !== strpos(
+        implode( "\n", $mutant_log ),
+        'Unexpected selected canonical gender indicator in unselected printed PDF page 1'
+    ), 'The current mutant PDF was not rejected for its printed canonical indicator: ' . $stage );
+    $printed = array();
+    $printed_exit = -1;
+    exec( 'pdftotext -f 1 -l 1 -layout ' . escapeshellarg( $mutant ) . ' - 2>&1', $printed, $printed_exit );
+    $assert( 0 === $printed_exit && false !== strpos( implode( "\n", $printed ), '✓' ),
+        'Retained mutant PDF does not contain an extractable selected checkmark: ' . $stage );
 }
 
 $meta = $load( 'artifact-identity' );
