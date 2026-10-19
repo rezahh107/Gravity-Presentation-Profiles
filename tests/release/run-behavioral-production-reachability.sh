@@ -160,6 +160,8 @@ connected_browser invalidated
 connected_row_action after-choice-rebind repair student.gender choice
 connected_row_action after-connected-final print-option student.gender ""
 connected_browser final
+# Validate the current exported files again before publishing the gate result.
+# The PHP validator invokes the same independent Poppler PDF/raster verifier.
 
 php "$ROOT/tests/release/validate-behavioral-production-reachability.php" "$EVIDENCE_DIR"
 php "$ROOT/tests/release/validate-connected-print.php" "$EVIDENCE_DIR"
