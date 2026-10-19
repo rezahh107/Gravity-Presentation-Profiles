@@ -83,19 +83,7 @@ try {
     }
     const ticks = words.filter(word => normalized(word.text) === '✓');
     if (page === 1 && markedStage) {
-      requireOutput(new RegExp('✓\\s*' + femaleLabel.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\    if (page === 1) {
       requireOutput(new RegExp('✓\\s*' + femaleLabel.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&'), 'u').test(text), 'Selected canonical female indicator absent from printed PDF page one');
-      const ticks = words.filter(word=>word.text==='✓');
-      requireOutput(ticks.length === 1, 'Expected exactly one page-one selected checkmark in PDF');
-      // Ignore the nearby printed circle/box border: only central checkmark
-      // ink counts. Otherwise white-on-white check text could falsely PASS.
-      const mark = ticks[0];
-      const mid = {x1:mark.x1+0.2*(mark.x2-mark.x1),x2:mark.x2-0.2*(mark.x2-mark.x1),
-        y1:mark.y1+0.3*(mark.y2-mark.y1),y2:mark.y2-0.3*(mark.y2-mark.y1)};
-      requireOutput(inkWithin(mid,pgm,pageSize) >= 2, 'Selected canonical indicator is invisible on page-one raster');
-    } else {
-      requireOutput(!words.some(word => word.text === '✓'), 'Unexpected selected canonical indicator on page two');
-    }'), 'u').test(text), 'Selected canonical female indicator absent from printed PDF page one');
       requireOutput(ticks.length === 1, 'Expected exactly one page-one selected checkmark in PDF');
       // Ignore nearby printed circle/box border; count only glyph interior.
       const mark = ticks[0];
@@ -103,10 +91,9 @@ try {
         y1:mark.y1+0.3*(mark.y2-mark.y1),y2:mark.y2-0.3*(mark.y2-mark.y1)};
       requireOutput(inkWithin(mid,pgm,pageSize) >= 2, 'Selected canonical indicator is invisible on page-one raster');
     } else {
-      // Current admitted Print choice representation is a text checkmark in
-      // the marker <i>. Detect it in BOTH text-extraction formats; a CSS
-      // ::before/::after checkmark is also emitted as PDF text by Chromium.
-      // This is NOT a universal proof against non-text vector/icon marks.
+      // The admitted checkmark is text in <i>. Print CSS ::before/::after
+      // emitted as text is also detected. Non-text vector/icon marks remain
+      // outside this bounded indicator representation proof.
       requireOutput(!text.includes('✓') && ticks.length === 0,
         'Unexpected selected canonical gender indicator in unselected printed PDF page ' + page + ' (stage ' + stage + ')');
     }
