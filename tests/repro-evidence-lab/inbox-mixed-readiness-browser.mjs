@@ -407,6 +407,7 @@ try {
     // across independent native route configurations rather than implicitly
     // carrying a multi-form column-state snapshot into a form-scoped probe.
     if (evidence.routes.length > 0) {
+      await tracker.flush(); // response bodies must be read before closing this route's CDP target
       await op.close();
       op = await browser.newContext({ locale: 'fa-IR' });
       await op.addCookies(cookies('bootstrap_admin'));
@@ -603,6 +604,7 @@ try {
   const opText = await opPage.locator('body').innerText();
   assert.ok(opText.includes('SYN-MIX-Ready'), 'Authorized host Entry Detail lacks protected entry witness.');
   evidence.authorization.operator = { http: authResponse?.status(), protected_witness_visible: true, url: opPage.url() };
+  await opDetailTracker.flush();
   await opPage.close();
 
   const vp = await viewer.newPage();
@@ -618,6 +620,7 @@ try {
   const viewerRows = await vp.locator(rows).count();
   assert.equal(viewerRows, 0, 'Unassigned viewer gained native Inbox rows.');
   evidence.authorization.viewer.native_row_count = viewerRows;
+  await viewerTracker.flush();
   await vp.close();
 
   // Supported lifecycle mutation: establish an authentic native-only
