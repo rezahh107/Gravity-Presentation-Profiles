@@ -156,6 +156,23 @@ if ( is_wp_error( $entry_id ) ) {
     throw new RuntimeException( $entry_id->get_error_message() );
 }
 
+$second_entry_id = GFAPI::add_entry(
+    array(
+        'form_id' => $form_id,
+        'created_by' => (int) $admin->ID,
+        (string) $first_name_id => 'Secondary',
+        (string) $last_name_id => 'Synthetic',
+        (string) $choice_id => (string) $choice_field->choices[1]['value'],
+    )
+);
+if ( is_wp_error( $second_entry_id ) ) {
+    throw new RuntimeException( $second_entry_id->get_error_message() );
+}
+$flow_api->process_workflow( $second_entry_id );
+if ( ! $flow_api->get_current_step( GFAPI::get_entry( $second_entry_id ) ) ) {
+    throw new RuntimeException( 'Second entry did not enter the native Flow step.' );
+}
+
 $flow_api->process_workflow( $entry_id );
 $current = $flow_api->get_current_step( GFAPI::get_entry( $entry_id ) );
 if ( ! $current || 'approval' !== $current->get_type() || (int) $current->get_id() !== (int) $step_id ) {
@@ -173,6 +190,7 @@ $manifest = array(
     'form_id' => $form_id,
     'form_title' => $form['title'],
     'entry_id' => (int) $entry_id,
+    'second_entry_id' => (int) $second_entry_id,
     'fields' => array(
         'first_name' => array( 'id' => $first_name_id, 'label' => 'Behavioral First Name', 'type' => 'text' ),
         'last_name' => array( 'id' => $last_name_id, 'label' => 'Behavioral Last Name', 'type' => 'text' ),
