@@ -126,15 +126,23 @@ async function visibleRowIds() {
 const nameColumn = String(mixed.header_projection.ready?.column_ids?.[1] ?? '');
 const schoolColumn = String(mixed.header_projection.ready?.column_ids?.[3] ?? '');
 assert.ok(nameColumn && schoolColumn && nameColumn !== schoolColumn);
-const readyWitnesses = Object.values(mixed.source_witnesses ?? {});
-assert.equal(readyWitnesses.length, 2, 'Missing independent Gravity Forms cell witnesses');
+const readyWitnesses = ['complete', 'missing_required_values']
+  .map(key => mixed.source_witnesses?.[key]);
+assert.ok(readyWitnesses.every(Boolean), 'Missing independent Gravity Forms Ready cell witnesses');
+for (const key of ['unproven_form', 'unconfigured_form']) {
+  assert.ok(mixed.source_witnesses?.[key], 'Missing Gravity Forms fallback witness ' + key);
+}
 function plain(source) { return String(source ?? '').replace(/\s+/gu, ' ').trim(); }
+function composedSourceStrings(witness) {
+  return {
+    name: [witness.first, witness.last].map(plain).filter(Boolean).join(' '),
+    school_grade: [witness.school, witness.grade].map(plain).filter(Boolean).join(' — '),
+  };
+}
 function expectedCells(witness) {
   assert.equal(Number(witness.form_id), Number(mixed.forms.ready), 'GF witness does not belong to Ready form');
-  return {
-    [nameColumn]: [witness.first, witness.last].map(plain).filter(Boolean).join(' '),
-    [schoolColumn]: [witness.school, witness.grade].map(plain).filter(Boolean).join(' — '),
-  };
+  const composed = composedSourceStrings(witness);
+  return { [nameColumn]: composed.name, [schoolColumn]: composed.school_grade };
 }
 function assertRenderedSemanticCells(actual, witness, label) {
   assert.ok(actual && typeof actual === 'object', label + ': no rendered semantic-cell observation');
@@ -325,11 +333,19 @@ try {
       const expectedEntry = Number(mixed.entries[role]);
       assert.ok(routeExpected.includes(expectedEntry), route.name + ': expected native Entry absent');
       const allText = record.paginated.fallback_cell_texts.map(plain);
-      // A native fallback is not allowed to acquire values composed only by
-      // Ready-form GPP presentation. Check observed cells, not guessed headers.
-      assert.ok(!allText.includes('MIX-' + (role === 'unproven_form' ? 'Unproven' : 'Unconfigured') + ' Synthetic Last'),
+      const witness = mixed.source_witnesses[role];
+      assert.equal(Number(witness.form_id), Number(route.form_id),
+        route.name + ': fallback source witness belongs to another form');
+      assert.equal(Number(witness.entry_id), expectedEntry,
+        route.name + ': fallback source witness belongs to another Entry');
+      const unsupported = composedSourceStrings(witness);
+      assert.ok(plain(witness.last) && plain(witness.school),
+        route.name + ': fallback negative witness is not discriminating');
+      // GPP composition is only authorized for the Ready form. Inspect actual
+      // rendered native cells; derive unsupported combinations from GF data.
+      assert.ok(!allText.includes(unsupported.name),
         route.name + ': unsupported First+Last composition leaked into fallback');
-      assert.ok(!allText.includes('Synthetic School — Synthetic Grade'),
+      assert.ok(!allText.includes(unsupported.school_grade),
         route.name + ': unsupported School+Grade composition leaked into fallback');
     }
     const linkId = Number(route.entry_id || mixed.entries.complete);
@@ -465,6 +481,9 @@ try {
       ? authoritativeIds(mixed.native_per_form[String(route.form_id)], route.name)
       : globalAuthorized;
     assert.ok(!authorized.includes(forged), 'Forged ID accidentally authorized by native host.');
+    // Reproduce the original blind spot: presence-only logic accepted extras.
+    assert.equal(authorized.every(id => [...observed, forged].includes(id)), true,
+      'The historical presence-only oracle was not reproduced.');
     assert.throws(
       () => assertNativeOutputMembership([...observed, forged], authorized, route.name),
       /observed native Grid membership differs from full host-authorized set/,
