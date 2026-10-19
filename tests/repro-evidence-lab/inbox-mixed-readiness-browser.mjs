@@ -38,6 +38,7 @@ assert.ok(host.block_url && host.unrelated_url, 'Authentic registered Inbox Bloc
 const routes = [
   { name: 'shortcode', url: fixture.frontend_inbox_url },
   { name: 'block', url: host.block_url },
+  { name: 'form-scoped', url: mixed.form_scoped.url },
 ];
 const evidence = {
   schema_version: '1.0.0',
@@ -136,7 +137,11 @@ try {
       assert.equal(facts.rtl_header, 'rtl');
       assert.ok(facts.host_dom_preserved && facts.native_pager);
       assert.ok(facts.native_rows > 0);
-      assert.equal(facts.headers.length, 5, 'Five-column native contract changed.');
+      if (route.name === 'form-scoped') {
+        assert.equal(facts.headers.length, 5, 'Form-scoped host-aligned five-column contract changed.');
+      } else {
+        assert.ok(facts.headers.length >= 1, 'Native multi-form Inbox exposed no columns.');
+      }
       assert.equal(facts.physical.length, 4, 'Owner-authorized four-node physical axis is absent.');
       for (const node of facts.physical) assert.equal(node.direction, 'ltr', 'Owner physical LTR exception drifted.');
       assert.ok(facts.scroll_width <= facts.client_width + 3, 'Document-wide overflow at ' + width);
@@ -144,9 +149,16 @@ try {
     }
     await openInbox(route);
     record.paginated = await traverseNativePaging();
-    for (const id of present) {
+    const routeExpected = route.name === 'form-scoped'
+      ? [mixed.entries.complete, mixed.entries.missing_required_values].map(Number)
+      : present;
+    for (const id of routeExpected) {
       assert.ok(record.paginated.visible_ids.includes(id),
         'Native host-authorized entry disappeared from ' + route.name + ': ' + id);
+    }
+    if (route.name === 'form-scoped') {
+      assert.ok(!record.paginated.visible_ids.includes(Number(mixed.entries.unproven_form)),
+        'Native form scope leaked an entry from a different form.');
     }
     const linkId = Number(mixed.entries.complete);
     await openInbox(route);
