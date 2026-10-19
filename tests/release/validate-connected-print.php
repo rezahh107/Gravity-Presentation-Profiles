@@ -95,6 +95,11 @@ $positive = $view['final'];
 $assert( ! empty( $positive['native_print_preserved'] ) && ! empty( $positive['bulk_failed_closed'] ) && ! empty( $positive['unauthorized_authenticated_viewer_denied'] ), 'Native non-dossier/bulk/permission negative was not exercised.' );
 $assert( ( $positive['pdf']['pages'] ?? null ) === 2 && ( $positive['layout']['clipped_values'] ?? -1 ) === 0 && ( $positive['layout']['clipped_sheets'] ?? -1 ) === 0, 'Chromium PDF/presentation geometry was not proven.' );
 
+// Every proof stage must export and verify real PDF/raster evidence, not just DOM.
+foreach ( $view as $stage => $item ) {
+    $assert( ! empty( $item['post_export_pdf_raster_verified'] ) && ( $item['pdf']['pages'] ?? null ) === 2,
+        'Missing stage-scoped PDF/raster verification: ' . $stage );
+}
 $assert( ! empty( $positive['post_export_pdf_raster_verified'] ), 'Browser did not verify the actual exported PDF and raster pages.' );
 $falsified = $load( 'connected-print-falsification' );
 $expected_falsifications = array(
@@ -112,31 +117,55 @@ foreach ( (array) ( $falsified['results'] ?? array() ) as $result ) {
 }
 $assert( $actual_falsifications === $expected_falsifications, 'Post-export PDF/raster falsifications did not exercise every required control.' );
 
-// Independently re-run the post-export verifier against the files present
-// RIGHT NOW. A stale browser JSON PASS cannot rescue changed/blank artifacts.
-$verify_args = array(
-    __DIR__ . '/verify-connected-print-output.mjs',
-    $dir . '/connected-print.pdf',
-    $dir . '/connected-print-page-1.png',
-    $dir . '/connected-print-page-2.png',
-    $host['expected_first_name_value'] . ' ' . $host['expected_last_name_value'],
-    $expected['canonical_print_label'],
-    $expected['host_raw_value'],
-    $expected['host_display_value'],
-);
-$command = 'node ' . implode( ' ', array_map( 'escapeshellarg', $verify_args ) ) . ' 2>&1';
-$verification_log = array();
-$verification_exit = -1;
-exec( $command, $verification_log, $verification_exit );
-$assert( 0 === $verification_exit && in_array( 'GPP_CONNECTED_PRINT_OUTPUT_PASS pdf_pages=2 names=2 female_mark=1 raster_pages=2', $verification_log, true ),
-    'Post-export PDF/raster file verification failed: ' . implode( ' | ', array_slice( $verification_log, -4 ) ) );
-
+// Independently re-run the SAME verifier on CURRENT exported PDF/raster
+// bytes for all stages before publishing the PASS report.
 $evidence = array();
-foreach ( array( 'connected-print-dossier.html', 'connected-print.pdf', 'connected-print-page-1.png', 'connected-print-page-2.png' ) as $file ) {
-    $path = $dir . '/' . $file;
-    $assert( is_file( $path ) && filesize( $path ) > 100, 'Required rendered HTML/PDF page evidence absent: ' . $file );
-    $evidence[ $file ] = array( 'bytes' => filesize( $path ), 'sha256' => hash_file( 'sha256', $path ) );
+foreach ( array( 'unproven', 'confirmed', 'invalidated', 'final' ) as $stage ) {
+    $prefix = 'final' === $stage ? 'connected-print' : 'connected-print-' . $stage;
+    $verify_args = array(
+        __DIR__ . '/verify-connected-print-output.mjs',
+        $dir . '/' . $prefix . '.pdf',
+        $dir . '/' . $prefix . '-page-1.png',
+        $dir . '/' . $prefix . '-page-2.png',
+        $host['expected_first_name_value'] . ' ' . $host['expected_last_name_value'],
+        $expected['canonical_print_label'],
+        $expected['host_raw_value'],
+        $expected['host_display_value'],
+        $stage,
+    );
+    $command = 'node ' . implode( ' ', array_map( 'escapeshellarg', $verify_args ) ) . ' 2>&1';
+    $verification_log = array();
+    $verification_exit = -1;
+    exec( $command, $verification_log, $verification_exit );
+    $expected_pass = 'GPP_CONNECTED_PRINT_OUTPUT_PASS stage=' . $stage . ' pdf_pages=2 names=2 female_mark=' .
+        ( in_array( $stage, array( 'confirmed', 'final' ), true ) ? '1' : '0' ) . ' raster_pages=2';
+    $assert( 0 === $verification_exit && in_array( $expected_pass, $verification_log, true ),
+        'Current stage-exported PDF/raster verification failed at ' . $stage . ': ' . implode( ' | ', array_slice( $verification_log, -4 ) ) );
+    foreach ( array( $prefix . '.pdf', $prefix . '-page-1.png', $prefix . '-page-2.png' ) as $file ) {
+        $path = $dir . '/' . $file;
+        $assert( is_file( $path ) && filesize( $path ) > 100, 'Rendered stage evidence absent: ' . $file );
+        $evidence[ $file ] = array( 'bytes' => filesize( $path ), 'sha256' => hash_file( 'sha256', $path ) );
+    }
 }
+$html_path = $dir . '/connected-print-dossier.html';
+$assert( is_file( $html_path ) && filesize( $html_path ) > 100, 'Final rendered dossier HTML absent.' );
+$evidence['connected-print-dossier.html'] = array( 'bytes' => filesize( $html_path ), 'sha256' => hash_file( 'sha256', $html_path ) );
+
+// The print-only mutation must be material in the current PDF and fail under
+// stage-aware Poppler validation. These per-stage falsification reports are
+// generated by Chromium, not synthesized by the final PHP validator.
+foreach ( array( 'unproven', 'invalidated' ) as $stage ) {
+    $mutation = $load( 'connected-print-' . $stage . '-falsification' );
+    $assert( ( $mutation['stage'] ?? null ) === $stage &&
+        ( $mutation['source'] ?? null ) === 'PRINT_ONLY_CSS_IN_NATIVE_CHROMIUM_PDF' &&
+        ( $mutation['dom_female_unselected'] ?? null ) === true &&
+        ( $mutation['mutation_materialized_in_pdf'] ?? null ) === true &&
+        ( $mutation['extracted_text_indicator'] ?? null ) === '✓' &&
+        ( $mutation['mutated_pdf_result'] ?? null ) === 'REJECTED_AS_REQUIRED' &&
+        ( $mutation['original_pdf_raster_result'] ?? null ) === 'ACCEPTED_AS_REQUIRED',
+        'Unselected PDF mutation/positive control not exercised: ' . $stage );
+}
+
 $meta = $load( 'artifact-identity' );
 $assert( ! empty( $meta['zip_sha256'] ) && ! empty( $meta['installed_tree_matches_zip'] ) && empty( $meta['installed_plugin_dir_is_link'] ), 'Connected acceptance not tied to exact installed ZIP.' );
 $report = array(
@@ -167,6 +196,8 @@ $report = array(
         'two_page_a4_portrait_chromium_pdf' => 'PASS',
         'page_scoped_pdf_semantics_and_raster_visibility' => 'PASS',
         'post_export_falsifications' => 'PASS',
+        'four_stage_pdf_raster_semantics' => 'PASS',
+        'unproven_invalidated_print_only_falsification' => 'PASS',
         'target_production' => 'NOT_PROVEN',
         'physical_printer' => 'NOT_PROVEN',
     ),
