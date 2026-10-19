@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { instrumentInboxPage } from './inbox-pageerror-diagnostics.mjs';
 
 // Post-baseline authentic acceptance. All host content and GPP binding state
 // are provisioned by inbox-mixed-readiness-fixture.php via real product APIs.
@@ -55,6 +56,8 @@ const evidence = {
   negative_control: null,
   native_output_oracle: { method: 'NATIVE_OUTPUT_EQUIVALENCE_ORACLE', route_memberships: {}, semantic_cells: {} },
   errors: [],
+  pageerror_diagnostics: { probes: [] },
+  raw_native_fallback: {},
 };
 const browser = await chromium.launch({ headless: true });
 let op = await browser.newContext({ locale: 'fa-IR' });
@@ -105,9 +108,18 @@ assert.ok(mixed.native_per_form[String(mixed.forms.ready)].pages > 1,
 // It is documented in host evidence; do not fake rows or change assignments.
 assert.ok(present.includes(mixed.entries.complete) && present.includes(mixed.entries.missing_required_values));
 const pageErrors = [];
-page.on('pageerror', e => pageErrors.push(String(e).slice(0, 700)));
+const diagnostics = [];
+async function armDiagnostics(p, route, execution = 'gpp') {
+  p.on('pageerror', e => pageErrors.push(String(e).slice(0, 700)));
+  const tracker = await instrumentInboxPage(p, evidence.pageerror_diagnostics, { route, execution });
+  diagnostics.push(tracker);
+  return tracker;
+}
+let tracker;
+
 
 async function openInbox(route, width = 1440, height = 900) {
+  tracker.setPhase(route.name + ':navigate:' + width);
   await page.setViewportSize({ width, height });
   const response = await page.goto(route.url, { waitUntil: 'networkidle', timeout: 45000 });
   assert.equal(response?.status(), 200, 'Native Inbox HTTP render failed: ' + route.name);
@@ -216,6 +228,7 @@ async function traverseNativePaging(qualified = false) {
     semantic_cells: semanticCells, fallback_cell_texts: nativeCellTexts };
 }
 try {
+  tracker = await armDiagnostics(page, 'shortcode');
   for (const route of routes) {
     // AG Grid owns persisted grid state. Isolate the *test browser storage*
     // across independent native route configurations rather than implicitly
@@ -225,8 +238,9 @@ try {
       op = await browser.newContext({ locale: 'fa-IR' });
       await op.addCookies(cookies('bootstrap_admin'));
       page = await op.newPage();
-      page.on('pageerror', e => pageErrors.push(String(e).slice(0, 700)));
+      tracker = await armDiagnostics(page, route.name);
     }
+    tracker.setPhase(route.name + ':before-responsive-probes');
     const record = { route: route.name, url: route.url, viewports: [], paginated: null, navigation: null };
     evidence.routes.push(record);
     for (const width of [1440, 414, 390, 360, 320]) {
@@ -295,6 +309,7 @@ try {
       record.viewports.push({ width, ...facts });
     }
     await openInbox(route);
+    tracker.setPhase(route.name + ':native-pagination');
     record.paginated = await traverseNativePaging(route.name === 'form-scoped');
     const routeAuthority = route.form_id
       ? mixed.native_per_form[String(route.form_id)] : mixed.native_operator;
@@ -348,6 +363,7 @@ try {
       assert.ok(!allText.includes(unsupported.school_grade),
         route.name + ': unsupported School+Grade composition leaked into fallback');
     }
+    tracker.setPhase(route.name + ':native-entry-link');
     const linkId = Number(route.entry_id || mixed.entries.complete);
     await openInbox(route);
     // Search is native AG Grid. No GPP row insertion or GPP form filtering.
@@ -394,6 +410,7 @@ try {
     }
   }
 
+  tracker.setPhase('authorization:entry-detail');
   const opDetail = evidence.routes[0].navigation.url;
   const opPage = await op.newPage();
   const authResponse = await opPage.goto(opDetail, { waitUntil: 'networkidle' });
@@ -463,6 +480,7 @@ try {
   await openInbox(routes[0]);
   evidence.native_global_fallback.restored_shell = true;
 
+  tracker.setPhase('unrelated-page:navigate');
   await page.goto(host.unrelated_url, { waitUntil: 'networkidle' });
   evidence.unrelated = await page.evaluate(() => ({
     gpp_shell_count: document.querySelectorAll('[data-gpp-inbox-surface="gravity_flow.inbox"]').length,
@@ -511,6 +529,7 @@ try {
   evidence.status = 'FAIL';
   evidence.errors.push(String(error?.stack || error).slice(0, 4500));
 } finally {
+  await Promise.allSettled(diagnostics.map(d => d.flush()));
   fs.writeFileSync(path.join(out, 'inbox-mixed-readiness-browser.json'), JSON.stringify(evidence, null, 2) + '\n');
   await op.close();
   await viewer.close();
