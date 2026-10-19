@@ -126,7 +126,7 @@ function mixed_map( $repair, $operations, $form_id, $slot, $field_id ) {
 function mixed_inbox_rows( $user_id, $args = array() ) {
     // Fully enumerate the host-authorized native result. One page_size=100
     // request is not a completeness proof, even for a small synthetic fixture.
-    $page_size = 2; // Force more than one API request in the Ready form fixture.
+    $page_size = 1; // Two Ready Entries must force two native API pages.
     $ids = array();
     $total_expected = null;
     $pages = 0;
