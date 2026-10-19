@@ -529,6 +529,15 @@ jobs:
       - name: Verify Card Mode vertical geometry and native lifecycle
         run: node tests/repro-evidence-lab/inbox-card-geometry-browser-tests.mjs
 
+      - name: Accept mixed-readiness on authentic Gravity Flow native Inbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/inbox-mixed-readiness-fixture.php
+          test -s "$WU21_ARTIFACT_DIR/inbox-mixed-readiness-php.json"
+          node tests/repro-evidence-lab/inbox-mixed-readiness-browser.mjs
+          test -s "$WU21_ARTIFACT_DIR/inbox-mixed-readiness-browser.json"
+
       - name: Publish Inbox visual diagnostic summary
         if: always()
         shell: bash
@@ -567,6 +576,8 @@ jobs:
             /tmp/wu21-artifacts/${{ steps.evidence.outputs.evidence_file }}
             /tmp/wu21-artifacts/runtime.json
             /tmp/wu21-artifacts/fixture-manifest.json
+            /tmp/wu21-artifacts/inbox-mixed-readiness-php.json
+            /tmp/wu21-artifacts/inbox-mixed-readiness-browser.json
             /tmp/wu21-artifacts/php-results.json
             /tmp/wu21-artifacts/browser-results.json
             /tmp/wu21-artifacts/generic-no-code-form-e2e-results.json
