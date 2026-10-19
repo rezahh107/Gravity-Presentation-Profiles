@@ -206,7 +206,7 @@ jobs:
             build/release/publication-prerequisites.json
             build/release/behavioral-production-reachability.json
             build/release/behavioral-production-reachability/connected-print-acceptance.json
-            build/release/behavioral-production-reachability/connected-print-{unproven,confirmed,invalidated,final}.json
+            build/release/behavioral-production-reachability/connected-print-*.json
             build/release/behavioral-production-reachability/connected-print-dossier.html
             build/release/behavioral-production-reachability/connected-print.pdf
             build/release/behavioral-production-reachability/connected-print-page-*.png
