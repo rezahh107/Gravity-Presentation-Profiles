@@ -20,6 +20,7 @@ use GravityPresentationProfiles\GravityForms\OperationsSetupService;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationModel;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxRuntimeEvidence;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
 
 $artifact_dir = getenv( 'WU21_ARTIFACT_DIR' );
 $manifest = get_option( 'gpp_wu21_fixture_manifest' );
@@ -259,6 +260,18 @@ $wrapped = InboxPresentationAdapter::filterShortcodeInbox( $native_markup, array
 mixed_assert( strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) !== false
     && strpos( $wrapped, $native_markup ) !== false, 'Active global shell must preserve the untouched host tree.' );
 
+// The production five-column native-filter adapter (distinct from the shell
+// model) must admit only an exact, unambiguous, source-proven form context.
+InboxTableHeaderPresentation::resetRuntimeCache();
+$ready_header = InboxTableHeaderPresentation::initialGeometryContract( array( 'form_id' => $ready_form ) );
+$unproven_header = InboxTableHeaderPresentation::initialGeometryContract( array( 'form_id' => $partial_form ) );
+$unconfigured_header = InboxTableHeaderPresentation::initialGeometryContract( array( 'form_id' => $unconfigured_form ) );
+$unscoped_header = InboxTableHeaderPresentation::initialGeometryContract( array() );
+mixed_assert( is_array( $ready_header ) && count( $ready_header['column_ids'] ) === 5,
+    'Production native-filter header did not admit the truly qualified Ready form.' );
+mixed_assert( null === $unproven_header && null === $unconfigured_header && null === $unscoped_header,
+    'Native-filter header admitted unproven, unconfigured or ambiguous form authority.' );
+
 $form_scoped_page_id = wp_insert_post( array(
     'post_title' => 'WU21 Mixed Ready Form-Scoped Inbox',
     'post_status' => 'publish',
@@ -277,6 +290,7 @@ $results = array(
     'form_scoped' => array( 'page_id' => (int) $form_scoped_page_id, 'url' => $form_scoped_url, 'form_id' => $ready_form ),
     'entries' => array( 'complete' => $complete_id, 'missing_required_values' => $missing_id, 'unproven_form' => $unproven_id, 'unconfigured_form' => $unconfigured_id ),
     'semantic_readiness' => array( 'complete' => $ready, 'missing_values' => $missing, 'unproven' => $unproven, 'unconfigured' => $unconfigured, 'post_remap' => $stale, 'post_requalification' => $requalified ),
+    'header_projection' => array( 'ready' => $ready_header, 'unproven' => $unproven_header, 'unconfigured' => $unconfigured_header, 'unscoped' => $unscoped_header ),
     'source_versions' => array( 'pre_remap' => $before_remap['binding_set_version'], 'invalidated' => $after_remap['binding_set_version'], 'requalified' => mixed_artifact( $ready_form )['binding_set_version'] ),
     'native_operator' => $native_operator,
     'native_viewer' => $native_viewer,
