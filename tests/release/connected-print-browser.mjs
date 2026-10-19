@@ -43,8 +43,8 @@ try {
     if (finance.some(v => v.trim())) throw Error('Unbound finance populated');
     if (await root.locator('.gpp-print-receipt-row').count() !== 5 || await root.locator('.gpp-print-cheque-row').count() !== 6) throw Error('Approved finance blanks were changed');
     const report = {stage, native_print_request:true, source_names:names, pages_dom:pages, female_selected:female[0].checked, male_selected:male[0].checked, finance_blank:true, no_raw_label_confusion:true};
+    await page.emulateMedia({media:'print'});
     if (stage === 'final') {
-      await page.emulateMedia({media:'print'});
       const metrics = await root.evaluate(el => {
         const sheets = [...el.querySelectorAll('.gpp-print-sheet')];
         const values = [...el.querySelectorAll('.print-value')].filter(n => n.textContent.trim());
@@ -52,7 +52,9 @@ try {
       });
       if (metrics.clipped_values || metrics.clipped_sheets) throw Error('Rendered dossier clipped');
       report.layout = metrics;
-      const pdf = path.join(out,'connected-print.pdf');
+    }
+    const basename = stage === 'final' ? 'connected-print' : 'connected-print-' + stage;
+    const pdf = path.join(out, basename+'.pdf');
       await page.pdf({path:pdf,printBackground:true,preferCSSPageSize:true,scale:1});
       const info = spawnSync('pdfinfo',[pdf],{encoding:'utf8'});
       const count = Number(info.stdout.match(/^Pages:\s+(\d+)/m)?.[1]);
@@ -60,9 +62,9 @@ try {
       const w=Number(match?.[1]),h=Number(match?.[2]);
       if (info.status !== 0 || count !== 2 || Math.abs(w-595.28)>=2 || Math.abs(h-841.89)>=2 || w>=h) throw Error('PDF page count/A4 portrait failed: '+info.stdout);
       report.pdf = {pages:count,width_pt:w,height_pt:h};
-      fs.writeFileSync(path.join(out,'connected-print-dossier.html'),await root.evaluate(el=>el.outerHTML)+'\n');
-      const raster = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',pdf,path.join(out,'connected-print-page')],{encoding:'utf8'});
-      if (raster.status !== 0 || !fs.existsSync(path.join(out,'connected-print-page-1.png')) || !fs.existsSync(path.join(out,'connected-print-page-2.png'))) throw Error('PDF page images not captured');
+      if (stage === 'final') fs.writeFileSync(path.join(out,'connected-print-dossier.html'),await root.evaluate(el=>el.outerHTML)+'\n');
+      const raster = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',pdf,path.join(out,basename+'-page')],{encoding:'utf8'});
+      if (raster.status !== 0 || !fs.existsSync(path.join(out,basename+'-page-1.png')) || !fs.existsSync(path.join(out,basename+'-page-2.png'))) throw Error('PDF page images not captured');
       // This is the enforcement boundary: verify the exported PDF and its
       // actual raster pages, not the DOM that existed before page.pdf().
       const verifier = fileURLToPath(new URL('./verify-connected-print-output.mjs', import.meta.url));
@@ -73,7 +75,8 @@ try {
           verifier, pdfFile, firstRaster, secondRaster, expectedName,
           fixture.expected_choice.canonical_print_label,
           fixture.expected_choice.host_raw_value,
-          fixture.expected_choice.host_display_value
+          fixture.expected_choice.host_display_value,
+          stage
         ], { encoding:'utf8', maxBuffer:20*1024*1024 });
         return { accepted:result.status === 0 && !result.error,
           message:String(result.stderr || result.stdout || result.error?.message || '').trim() };
@@ -81,6 +84,59 @@ try {
       const baseline = verify(pdf, rasterOne, rasterTwo);
       if (!baseline.accepted || !baseline.message.includes('GPP_CONNECTED_PRINT_OUTPUT_PASS')) throw Error('Post-export PDF/raster verification failed: '+baseline.message);
       report.post_export_pdf_raster_verified = true;
+      if (stage === 'unproven' || stage === 'invalidated') {
+        // PRI-FND-002: reproduce the original false-acceptance boundary.
+        // This is a PRINT-ONLY pseudo-element, so the native unselected DOM
+        // and GF/Flow mapping state are unchanged.
+        const marker = page.locator('.gpp-print-sheet[data-gpp-print-page="front"] .front-study .front-options .paper-choice:first-child i');
+        if (await marker.count() !== 1 ||
+            (await marker.textContent()).trim() !== '' ||
+            await marker.getAttribute('data-gpp-checked') !== null ||
+            !(await marker.locator('xpath=..').innerText()).includes(fixture.expected_choice.canonical_print_label)) {
+          throw Error('Cannot establish unselected female DOM control before print mutation: '+stage);
+        }
+        const css = '@media print {.gpp-print-sheet[data-gpp-print-page="front"] .front-study .front-options .paper-choice:first-child i::after {content:"✓"!important;display:inline!important;font-family:Arial,sans-serif!important;font-weight:900!important;font-size:11px!important;color:#000!important}}';
+        const mutation = await page.addStyleTag({content:css});
+        const dir = fs.mkdtempSync(path.join(out,'connected-print-'+stage+'-negative-'));
+        try {
+          const pseudo = await marker.evaluate(el => getComputedStyle(el, '::after').content);
+          if (!pseudo.includes('✓') || (await marker.textContent()).trim() !== '' ||
+              await marker.getAttribute('data-gpp-checked') !== null) {
+            throw Error('Print-only mutation did not preserve unselected DOM state: '+stage);
+          }
+          const mutantPdf = path.join(dir,'selected-gender-in-unselected.pdf');
+          await page.pdf({path:mutantPdf,printBackground:true,preferCSSPageSize:true,scale:1});
+          const extracted = spawnSync('pdftotext',['-f','1','-l','1','-layout',mutantPdf,'-'],{encoding:'utf8'});
+          if (extracted.status !== 0 ||
+              !extracted.stdout.includes('✓') ||
+              !extracted.stdout.includes(fixture.expected_choice.canonical_print_label)) {
+            throw Error('Print-media mutant did not materially create a selected indicator in the exported PDF: '+stage);
+          }
+          const prefix = path.join(dir,'selected-gender-in-unselected');
+          const images = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',mutantPdf,prefix],{encoding:'utf8'});
+          if (images.status !== 0) throw Error('Cannot rasterize print-only mutation: '+stage+' '+images.stderr);
+          const rejected = verify(mutantPdf,prefix+'-1.png',prefix+'-2.png');
+          const requiredReason = 'Unexpected selected canonical gender indicator in unselected printed PDF page 1';
+          if (rejected.accepted || !rejected.message.includes(requiredReason)) {
+            throw Error('Unselected stage falsely accepted a printed gender indicator: '+stage+' '+rejected.message);
+          }
+          const preserved = verify(pdf,rasterOne,rasterTwo);
+          if (!preserved.accepted || !preserved.message.includes('GPP_CONNECTED_PRINT_OUTPUT_PASS stage='+stage+' ')) {
+            throw Error('Original unselected PDF/raster positive control lost: '+stage+' '+preserved.message);
+          }
+          fs.writeFileSync(path.join(out,'connected-print-'+stage+'-falsification.json'),JSON.stringify({
+            stage, source:'PRINT_ONLY_CSS_IN_NATIVE_CHROMIUM_PDF',
+            dom_female_unselected:true, mutation_materialized_in_pdf:true,
+            extracted_text_indicator:'✓',
+            mutated_pdf_result:'REJECTED_AS_REQUIRED',
+            original_pdf_raster_result:'ACCEPTED_AS_REQUIRED'
+          },null,2)+'\n');
+        } finally {
+          fs.rmSync(dir,{recursive:true,force:true});
+          await mutation.evaluate(el=>el.remove());
+        }
+      }
+      if (stage === 'final') {
       const negativeCases = [
         {
           key:'first_page_name_print_only_hidden',
