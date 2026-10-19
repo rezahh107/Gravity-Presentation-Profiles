@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const [stage, fixturePath, baseUrl, out] = process.argv.slice(2);
 if (!['unproven','confirmed','invalidated','final'].includes(stage) || !fs.existsSync(fixturePath || '') || !out || !/^http:\/\/127\.0\.0\.1:\d+$/.test(baseUrl || '')) throw Error('Invalid connected Print probe arguments');
@@ -62,6 +63,92 @@ try {
       fs.writeFileSync(path.join(out,'connected-print-dossier.html'),await root.evaluate(el=>el.outerHTML)+'\n');
       const raster = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',pdf,path.join(out,'connected-print-page')],{encoding:'utf8'});
       if (raster.status !== 0 || !fs.existsSync(path.join(out,'connected-print-page-1.png')) || !fs.existsSync(path.join(out,'connected-print-page-2.png'))) throw Error('PDF page images not captured');
+      // This is the enforcement boundary: verify the exported PDF and its
+      // actual raster pages, not the DOM that existed before page.pdf().
+      const verifier = fileURLToPath(new URL('./verify-connected-print-output.mjs', import.meta.url));
+      const rasterOne = path.join(out, 'connected-print-page-1.png');
+      const rasterTwo = path.join(out, 'connected-print-page-2.png');
+      const verify = (pdfFile, firstRaster, secondRaster) => {
+        const result = spawnSync(process.execPath, [
+          verifier, pdfFile, firstRaster, secondRaster, expectedName,
+          fixture.expected_choice.canonical_print_label,
+          fixture.expected_choice.host_raw_value,
+          fixture.expected_choice.host_display_value
+        ], { encoding:'utf8', maxBuffer:20*1024*1024 });
+        return { accepted:result.status === 0 && !result.error,
+          message:String(result.stderr || result.stdout || result.error?.message || '').trim() };
+      };
+      const baseline = verify(pdf, rasterOne, rasterTwo);
+      if (!baseline.accepted || !baseline.message.includes('GPP_CONNECTED_PRINT_OUTPUT_PASS')) throw Error('Post-export PDF/raster verification failed: '+baseline.message);
+      report.post_export_pdf_raster_verified = true;
+      const negativeCases = [
+        {
+          key:'first_page_name_print_only_hidden',
+          css:'@media print {.gpp-print-sheet[data-gpp-print-page="front"] .front-name-row .front-line:first-child .print-value {visibility:hidden!important}}',
+          selector:'.gpp-print-sheet[data-gpp-print-page="front"] .front-name-row .front-line:first-child .print-value',
+          reason:'Printed full name absent from PDF page 1'
+        },
+        {
+          key:'second_page_name_print_only_hidden',
+          css:'@media print {.gpp-print-sheet[data-gpp-print-page="back"] .paper-student-identity .name-field .print-value {visibility:hidden!important}}',
+          selector:'.gpp-print-sheet[data-gpp-print-page="back"] .paper-student-identity .name-field .print-value',
+          reason:'Printed full name absent from PDF page 2'
+        },
+        {
+          key:'selected_gender_indicator_print_only_hidden',
+          css:'@media print {.gpp-print-sheet[data-gpp-print-page="front"] .paper-choice i[data-gpp-checked="1"] {visibility:hidden!important}}',
+          selector:'.gpp-print-sheet[data-gpp-print-page="front"] .paper-choice i[data-gpp-checked="1"]',
+          reason:'Selected canonical female indicator absent from printed PDF page one'
+        }
+      ];
+      const falsifications = [];
+      const mutants = fs.mkdtempSync(path.join(out, 'connected-print-negative-'));
+      try {
+        for (const scenario of negativeCases) {
+          const style = await page.addStyleTag({content:scenario.css});
+          try {
+            if (await page.locator(scenario.selector).count() !== 1 ||
+              await page.locator(scenario.selector).evaluate(el => getComputedStyle(el).visibility) !== 'hidden' ||
+              !(await root.innerText()).includes(expectedName)) {
+              throw Error('Print-only falsification did not preserve the DOM while hiding its printed target: '+scenario.key);
+            }
+            const mutatedPdf = path.join(mutants, scenario.key+'.pdf');
+            await page.pdf({path:mutatedPdf,printBackground:true,preferCSSPageSize:true,scale:1});
+            const prefix = path.join(mutants,scenario.key);
+            const result = spawnSync('pdftoppm',['-f','1','-l','2','-png','-r','96',mutatedPdf,prefix],{encoding:'utf8'});
+            if (result.status !== 0) throw Error('Poppler mutation rendering failed: '+result.stderr);
+            const verdict = verify(mutatedPdf,prefix+'-1.png',prefix+'-2.png');
+            if (verdict.accepted || !verdict.message.includes(scenario.reason)) {
+              throw Error('Post-export verifier failed to falsify '+scenario.key+': '+verdict.message);
+            }
+            falsifications.push({case:scenario.key, result:'REJECTED_AS_REQUIRED', reason:scenario.reason});
+          } finally {
+            await style.evaluate(el => el.remove());
+          }
+        }
+        // Exact original PDF + raster must remain valid. Only the raster is
+        // corrupted in this negative control: PDF content and geometry are intact.
+        const white = await page.evaluate(() => {
+          const canvas=document.createElement('canvas');
+          canvas.width=794; canvas.height=1123;
+          const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,794,1123);
+          return canvas.toDataURL('image/png').split(',')[1];
+        });
+        const blank = path.join(mutants,'blank.png');
+        fs.writeFileSync(blank,Buffer.from(white,'base64'));
+        const rasterVerdict = verify(pdf,blank,rasterTwo);
+        if (rasterVerdict.accepted || !rasterVerdict.message.includes('Captured raster does not match the actual PDF page 1')) {
+          throw Error('Blank-raster falsification not rejected: '+rasterVerdict.message);
+        }
+        falsifications.push({case:'blank_raster_substitution',result:'REJECTED_AS_REQUIRED',reason:'Captured raster does not match the actual PDF page 1'});
+      } finally {
+        fs.rmSync(mutants,{recursive:true,force:true});
+      }
+      const recheck = verify(pdf,rasterOne,rasterTwo);
+      if (!recheck.accepted || !recheck.message.includes('GPP_CONNECTED_PRINT_OUTPUT_PASS')) throw Error('Original valid PDF/raster not preserved: '+recheck.message);
+      falsifications.push({case:'original_pdf_and_rasters_preserved',result:'ACCEPTED_AS_REQUIRED'});
+      report.output_falsifications = falsifications;
+      fs.writeFileSync(path.join(out,'connected-print-falsification.json'),JSON.stringify({authority:'CURRENT_RUN_CHROMIUM_PDF_AND_POPPLER_RASTERS',results:falsifications},null,2)+'\n');
       await page.goto(entryUrl,{waitUntil:'networkidle'});
       if (await page.locator('.gpp-print-dossier').count() || await page.locator('#view-container > form').count()!==1 || !await page.locator('#view-container > form').evaluate(n=>getComputedStyle(n).display!=='none')) throw Error('Ordinary native Print altered');
       report.native_print_preserved = true;
