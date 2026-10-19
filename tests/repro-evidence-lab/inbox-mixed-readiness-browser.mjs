@@ -119,7 +119,7 @@ async function openInbox(route, width = 1440, height = 900) {
 }
 
 async function visibleRowIds() {
-  return page.locator(rows).evaluateAll(nodes => nodes.map(n => Number(n.getAttribute('row-id'))).filter(Number.isInteger));
+  return page.locator(rows).evaluateAll(nodes => nodes.map(n => Number(n.getAttribute('row-id'))));
 }
 // The only semantic expectations come from actual GFAPI::get_entry source
 // witnesses, never from GPP's rendered output or a parallel value service.
