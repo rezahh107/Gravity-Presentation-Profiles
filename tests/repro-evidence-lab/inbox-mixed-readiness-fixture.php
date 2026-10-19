@@ -259,11 +259,22 @@ $wrapped = InboxPresentationAdapter::filterShortcodeInbox( $native_markup, array
 mixed_assert( strpos( $wrapped, 'data-gpp-inbox-surface="gravity_flow.inbox"' ) !== false
     && strpos( $wrapped, $native_markup ) !== false, 'Active global shell must preserve the untouched host tree.' );
 
+$form_scoped_page_id = wp_insert_post( array(
+    'post_title' => 'WU21 Mixed Ready Form-Scoped Inbox',
+    'post_status' => 'publish',
+    'post_type' => 'page',
+    'post_content' => '[gravityflow page="inbox" form="' . $ready_form . '"]',
+), true );
+mixed_assert( ! is_wp_error( $form_scoped_page_id ) && (int) $form_scoped_page_id > 0, 'Authentic form-scoped native Inbox page could not be created.' );
+$form_scoped_url = get_permalink( (int) $form_scoped_page_id );
+mixed_assert( is_string( $form_scoped_url ) && '' !== $form_scoped_url, 'Native form-scoped Inbox URL unavailable.' );
+
 $results = array(
     'schema_version' => '1.0.0',
     'data_class' => 'SYNTHETIC_NON_PII',
     'evidence_kind' => 'PINNED_WU21_AUTHENTIC_GF_FLOW_POST_BASELINE',
     'forms' => array( 'ready' => $ready_form, 'unproven' => $partial_form, 'unconfigured' => $unconfigured_form ),
+    'form_scoped' => array( 'page_id' => (int) $form_scoped_page_id, 'url' => $form_scoped_url, 'form_id' => $ready_form ),
     'entries' => array( 'complete' => $complete_id, 'missing_required_values' => $missing_id, 'unproven_form' => $unproven_id, 'unconfigured_form' => $unconfigured_id ),
     'semantic_readiness' => array( 'complete' => $ready, 'missing_values' => $missing, 'unproven' => $unproven, 'unconfigured' => $unconfigured, 'post_remap' => $stale, 'post_requalification' => $requalified ),
     'source_versions' => array( 'pre_remap' => $before_remap['binding_set_version'], 'invalidated' => $after_remap['binding_set_version'], 'requalified' => mixed_artifact( $ready_form )['binding_set_version'] ),
