@@ -29,7 +29,7 @@ export async function instrumentInboxPage(page, report, identity) {
   const result = {
     route: identity.route, execution: identity.execution || 'gpp', pageerrors: [],
     exceptions: [], script_responses: [], script_catalog: [],
-    debugger: 'NOT_ATTACHED', diagnostic_errors: [],
+    debugger: 'NOT_ATTACHED', failed_parse_scripts: [], diagnostic_errors: [],
   };
   report.probes.push(result);
   const phase = name => { state.phase = name; };
@@ -38,7 +38,7 @@ export async function instrumentInboxPage(page, report, identity) {
     result.pageerrors.push({
       route: state.route, phase: state.phase, document: safeUrl(page.url()),
       message: String(error).slice(0, 400), stack: safeStack(error?.stack),
-      ordinal: result.pageerrors.length + 1,
+      ordinal: result.pageerrors.length + 1, observed_at_ms: Date.now(),
     });
   });
   page.on('response', response => {
@@ -67,12 +67,27 @@ export async function instrumentInboxPage(page, report, identity) {
         execution_context_id: params.executionContextId,
       });
     });
+    // SyntaxError may prevent scriptParsed entirely. Failed-to-parse events
+    // are therefore authoritative correlation candidates, not an optional log.
+    session.on('Debugger.scriptFailedToParse', params => {
+      const source = {
+        route: state.route, phase: state.phase, document: safeUrl(page.url()),
+        url: params.url ? safeUrl(params.url) : '[inline-or-evaluated]',
+        start_line: params.startLine, start_column: params.startColumn,
+        end_line: params.endLine, end_column: params.endColumn,
+        script_id: params.scriptId || null, execution_context_id: params.executionContextId,
+        observed_at_ms: Date.now(),
+      };
+      result.failed_parse_scripts.push(source);
+      if (params.scriptId) scripts.set(params.scriptId, source);
+    });
     session.on('Runtime.exceptionThrown', ({ exceptionDetails: details }) => {
       const frames = details.stackTrace?.callFrames || [];
       const location = frames[0] || {};
       const script = scripts.get(location.scriptId || details.scriptId);
       result.exceptions.push({
         route: state.route, phase: state.phase, document: safeUrl(page.url()),
+        observed_at_ms: Date.now(),
         text: String(details.text || '').slice(0, 300),
         description: safeStack(details.exception?.description),
         url: details.url ? safeUrl(details.url) : script?.url || '[not-reported]',
@@ -99,13 +114,31 @@ export async function instrumentInboxPage(page, report, identity) {
     async flush() {
       await Promise.allSettled(outstanding);
       const groups = new Map();
+      const matched = new Set();
       for (const error of result.pageerrors) {
-        const event = result.exceptions.find(e => e.phase === error.phase &&
-          (e.description.includes(error.message) || error.message.includes(e.text)));
-        const key = JSON.stringify([error.phase, error.message, event?.url || '[unknown]']);
+        const candidates = result.exceptions.map((e, i) => ({ e, i }))
+          .filter(({ e, i }) => !matched.has(i) && e.phase === error.phase &&
+            (e.description.includes(error.message) || error.message.includes(e.text) ||
+              e.description.includes('Unexpected token')));
+        candidates.sort((a, b) =>
+          Math.abs(a.e.observed_at_ms - error.observed_at_ms) -
+          Math.abs(b.e.observed_at_ms - error.observed_at_ms));
+        const candidate = candidates[0];
+        if (candidate) matched.add(candidate.i);
+        const exception = candidate?.e;
+        const related = result.failed_parse_scripts.filter(f =>
+          f.phase === error.phase && Math.abs(f.observed_at_ms - error.observed_at_ms) < 2500);
+        const source = exception?.url && exception.url !== '[not-reported]'
+          ? exception.url : related.length === 1 ? related[0].url : '[not-discriminated]';
+        const key = JSON.stringify([error.phase, error.message, source]);
         const group = groups.get(key) || { phase: error.phase, message: error.message,
-          source: event?.url || '[unknown]', occurrences: [] };
-        group.occurrences.push(error.ordinal);
+          source, occurrences: [] };
+        group.occurrences.push({
+          ordinal: error.ordinal, exception_index: candidate?.i ?? null,
+          failed_parse_candidates: related.map(f => ({
+            url: f.url, line: f.start_line, column: f.start_column, script_id: f.script_id,
+          })),
+        });
         groups.set(key, group);
       }
       result.grouped = [...groups.values()];
