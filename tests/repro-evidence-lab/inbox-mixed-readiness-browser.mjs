@@ -182,15 +182,6 @@ function assertRawNativeEquivalence(observed, baseline, label) {
       label + ': native date field not materialized on entry ' + id);
   }
 }
-function nativeDefinition(def) {
-  // Deliberately compare host-defined identity and presentation attributes;
-  // function-valued AG Grid renderer callbacks are host-owned, not JSON data.
-  const names = ['field', 'colId', 'displayKey', 'headerName', 'hide',
-    'pinned', 'sortable', 'filter', 'resizable', 'width', 'minWidth', 'maxWidth',
-    'cellRenderer', 'valueFormatter'];
-  return Object.fromEntries(names.filter(k => Object.hasOwn(def, k))
-    .map(k => [k, typeof def[k] === 'function' ? '[native callback]' : def[k]]));
-}
 async function captureNativeFallback(route, raw) {
   // Each request gets a fresh storage partition: no persisted AG Grid column,
   // sorting, paging or filter state crosses a native/GPP comparison boundary.
