@@ -54,11 +54,11 @@ const evidence = {
   errors: [],
 };
 const browser = await chromium.launch({ headless: true });
-const op = await browser.newContext({ locale: 'fa-IR' });
+let op = await browser.newContext({ locale: 'fa-IR' });
 const viewer = await browser.newContext({ locale: 'fa-IR' });
 await op.addCookies(cookies('bootstrap_admin'));
 await viewer.addCookies(cookies('wu21_viewer'));
-const page = await op.newPage();
+let page = await op.newPage();
 const selector = '[data-js="gflow-inbox"]';
 const rows = selector + ' .ag-center-cols-container .ag-row[row-id]';
 const expected = Object.values(mixed.entries).map(Number);
@@ -107,6 +107,16 @@ async function traverseNativePaging() {
 }
 try {
   for (const route of routes) {
+    // AG Grid owns persisted grid state. Isolate the *test browser storage*
+    // across independent native route configurations rather than implicitly
+    // carrying a multi-form column-state snapshot into a form-scoped probe.
+    if (evidence.routes.length > 0) {
+      await op.close();
+      op = await browser.newContext({ locale: 'fa-IR' });
+      await op.addCookies(cookies('bootstrap_admin'));
+      page = await op.newPage();
+      page.on('pageerror', e => pageErrors.push(String(e).slice(0, 700)));
+    }
     const record = { route: route.name, url: route.url, viewports: [], paginated: null, navigation: null };
     evidence.routes.push(record);
     for (const width of [1440, 414, 390, 360, 320]) {
