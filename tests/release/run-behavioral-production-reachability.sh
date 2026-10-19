@@ -128,4 +128,38 @@ GPP_BEHAVIOR_STATE_COMMAND=after-inbox-rerun php "$WPCLI" --path="$WP_PATH" eval
 
 GPP_BEHAVIOR_STATE_COMMAND=runtime php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/runtime.json"
 
+
+# The connected end-to-end test never provisions GPP lifecycle state.
+# It posts actual Mapping & Binding Health controls with fresh GF nonces.
+connected_row_action() {
+  local tag="$1" mode="$2" slot="$3" source_key="$4"
+  local before="$EVIDENCE_DIR/connected-before-$tag.html"
+  curl -fsS -b "$COOKIES" -c "$COOKIES" "$SETTINGS_URL" -o "$before"
+  php "$ROOT/tests/release/behavioral-http-form.php" "$mode" "$before" "$FIXTURE" "$slot" "$source_key" > "$EVIDENCE_DIR/connected-$tag-payload.txt"
+  curl -fsS -L -b "$COOKIES" -c "$COOKIES" -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data-binary @"$EVIDENCE_DIR/connected-$tag-payload.txt" "$SETTINGS_URL" -o "$EVIDENCE_DIR/connected-after-$tag.html"
+  GPP_BEHAVIOR_STATE_COMMAND="$tag" php "$WPCLI" --path="$WP_PATH" eval-file "$ROOT/tests/release/behavioral-state.php" > "$EVIDENCE_DIR/$tag.json"
+}
+connected_browser() {
+  local stage="$1"
+  GPP_TEST_ADMIN_USER=release_admin \
+  GPP_TEST_ADMIN_PASS=gpp-release-smoke-2026 \
+  GPP_TEST_VIEWER_USER=release_viewer \
+  GPP_TEST_VIEWER_PASS=gpp-synthetic-viewer-2026 \
+    node "$ROOT/tests/release/connected-print-browser.mjs" "$stage" "$FIXTURE" "$BASE_URL" "$EVIDENCE_DIR"
+}
+connected_row_action after-last-name repair student.last_name last_name
+connected_row_action after-gender-bind repair student.gender choice
+connected_browser unproven
+connected_row_action after-choice-confirm print-option student.gender ""
+connected_browser confirmed
+# This other real GF choice field has the same raw value. A stale Print map
+# still must not survive source identity changes.
+connected_row_action after-choice-change repair student.gender alternate_choice
+connected_browser invalidated
+connected_row_action after-choice-rebind repair student.gender choice
+connected_row_action after-connected-final print-option student.gender ""
+connected_browser final
+
 php "$ROOT/tests/release/validate-behavioral-production-reachability.php" "$EVIDENCE_DIR"
+php "$ROOT/tests/release/validate-connected-print.php" "$EVIDENCE_DIR"
