@@ -278,7 +278,8 @@ mixed_assert( null === $unproven_header && null === $unconfigured_header && null
 $host_column_hook = array();
 $before_columns = static function ( $columns, $args ) use ( &$host_column_hook ) {
     $host_column_hook[] = array(
-        'host_args' => $args,
+        'host_form_id' => is_array( $args ) ? ( $args['form_id'] ?? null ) : null,
+        'host_arg_keys' => is_array( $args ) ? array_keys( $args ) : null,
         'before_keys' => is_array( $columns ) ? array_keys( $columns ) : null,
         'after_keys' => null,
     );
@@ -293,14 +294,13 @@ $after_columns = static function ( $columns, $args ) use ( &$host_column_hook ) 
 };
 add_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN, 2 );
 add_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX, 2 );
+$previous_buffer_level = ob_get_level();
 try {
     ob_start();
     do_shortcode( '[gravityflow page="inbox" form="' . $ready_form . '"]' );
-    ob_end_clean();
 } finally {
-    if ( ob_get_level() > 0 ) {
-        // The probe owns only the buffer it explicitly opened.
-        // There should be no unclosed nested output after shortcode execution.
+    while ( ob_get_level() > $previous_buffer_level ) {
+        ob_end_clean();
     }
     remove_filter( 'gravityflow_columns_inbox_table', $before_columns, PHP_INT_MIN );
     remove_filter( 'gravityflow_columns_inbox_table', $after_columns, PHP_INT_MAX );
