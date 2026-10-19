@@ -42,13 +42,17 @@ export async function instrumentInboxPage(page, report, identity) {
     });
   });
   page.on('response', response => {
-    if (response.request().resourceType() !== 'script') return;
+    const type = response.request().resourceType();
+    if (!['script', 'xhr', 'fetch'].includes(type)) return;
     const headers = response.headers();
     const mime = (headers['content-type'] || '[missing]').split(';')[0].toLowerCase();
+    // A fetch/eval path can parse HTML as JS without a script-tag request.
+    // Capture only suspicious non-script resources, never arbitrary API bodies.
+    if (type !== 'script' && !/html|xml/.test(mime) && response.status() < 400) return;
     const record = {
       route: state.route, phase: state.phase, document: safeUrl(page.url()),
       url: safeUrl(response.url()), status: response.status(), mime,
-      request_resource_type: 'script',
+      request_resource_type: type,
     };
     result.script_responses.push(record);
     if (!/javascript|ecmascript/.test(mime) || response.status() >= 400) {
