@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { instrumentInboxPage } from './inbox-pageerror-diagnostics.mjs';
 
@@ -243,16 +244,25 @@ async function captureNativeFallback(route, raw) {
       raw ? 0 : 1, route.name + ': source lifecycle isolation failed');
     const columnDefs = await p.locator(selector).evaluate(grid => {
       const key = grid.getAttribute('data-grid-id') || 'inbox_default';
-      return window.gflow_config?.grids?.[key]?.grid_options?.columnDefs?.map(def => {
-        const names = ['field', 'colId', 'displayKey', 'headerName', 'hide',
-          'pinned', 'sortable', 'filter', 'resizable', 'width', 'minWidth', 'maxWidth',
-          'cellRenderer', 'valueFormatter'];
-        return Object.fromEntries(names.filter(k => Object.hasOwn(def, k))
-          .map(k => [k, typeof def[k] === 'function' ? '[native callback]' : def[k]]));
-      });
+      return window.gflow_config?.grids?.[key]?.grid_options?.columnDefs?.map(def =>
+        Object.fromEntries(Object.keys(def).sort().map(key => [
+          key, typeof def[key] === 'function'
+            ? { __native_function_source__: Function.prototype.toString.call(def[key]) }
+            : def[key],
+        ])));
     });
     assert.ok(Array.isArray(columnDefs) && columnDefs.length > 0, 'Host columnDefs unavailable');
-    const columns = columnDefs.filter(x => !x.hide).map(x => String(x.colId || x.field));
+    // Compare every host columnDef property and native formatter identity.
+    // Browser callback source is hashed in Node and NEVER written to artifacts.
+    const canonicalDefs = columnDefs.map(def => Object.fromEntries(
+      Object.entries(def).map(([key, value]) => [
+        key, value && typeof value.__native_function_source__ === 'string'
+          ? { native_callback_sha256: createHash('sha256')
+            .update(value.__native_function_source__).digest('hex') }
+          : value,
+      ])
+    ));
+    const columns = canonicalDefs.filter(x => !x.hide).map(x => String(x.colId || x.field));
     const pages = [], observedIds = [], observedRows = {}, links = {};
     for (let step = 0; step < 20; step++) {
       instrument.setPhase('native-fallback:page-' + (step + 1));
@@ -321,7 +331,7 @@ async function captureNativeFallback(route, raw) {
         .map(n => n.getAttribute('row-id')).join(',') !== prior, { rows, prior });
       if (step === 19) throw Error('RAW_NATIVE paging did not terminate');
     }
-    return { raw, column_defs: columnDefs, page_ids: pages,
+    return { raw, column_defs: canonicalDefs, page_ids: pages,
       visible_ids: observedIds, rows: observedRows, entry_links: links };
   } finally {
     await instrument.flush();
