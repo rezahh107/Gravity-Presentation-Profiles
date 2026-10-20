@@ -304,17 +304,7 @@ jobs:
             echo '::error::GitHub immutable-release verification failed before a valid HTTP response; publication remains blocked.'
             exit 1
           fi
-          if [[ "$http_code" != '200' ]]; then
-            reason="$(jq -r '(.message // "not provided") | tostring | gsub("[\\r\\n]"; " ")' "$response_file" 2>/dev/null || printf 'unreadable GitHub API response')"
-            accepted_permissions="$(grep -i '^x-accepted-github-permissions:' "$headers_file" | tail -n1 | cut -d: -f2- | tr -d '\r' || true)"
-            retry_after="$(grep -i '^retry-after:' "$headers_file" | tail -n1 | cut -d: -f2- | tr -d '\r' || true)"
-            echo "::error::GitHub immutable-release verification blocked: HTTP $http_code; message=$reason; accepted_permissions=${accepted_permissions:-not supplied}; retry_after=${retry_after:-not supplied}. Publication remains blocked."
-            exit 1
-          fi
-          if [[ "$(jq -r '.enabled // false' "$response_file")" != 'true' ]]; then
-            echo '::error::GitHub immutable-release verification returned HTTP 200 without enabled=true; publication remains blocked.'
-            exit 1
-          fi
+          python3 scripts/release/immutable-release-admission.py "$http_code" "$response_file" "$headers_file"
 
       - name: Resolve future version and reject existing immutable identity conflicts
         env:
