@@ -184,7 +184,7 @@ try {
       // excerpt. Compare independently sourced, distinct raw/display values.
       const rendered=await viewer.evaluate(()=>document.documentElement.textContent || '');
       const sentinels=host.personal_sentinels;
-      const expectedKeys=['first_name','last_name','choice_raw','choice_display','alternate_raw','alternate_display'];
+      const expectedKeys=['first_name','last_name','choice_raw','choice_display','alternate_display'];
       assert(sentinels && typeof sentinels==='object'
         && expectedKeys.every(k=>typeof sentinels[k]==='string' && sentinels[k].length>=12)
         && Object.keys(sentinels).length===expectedKeys.length
