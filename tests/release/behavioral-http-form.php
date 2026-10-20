@@ -6,8 +6,8 @@ if ( PHP_SAPI !== 'cli' ) {
 $mode      = isset( $argv[1] ) ? $argv[1] : '';
 $html_path = isset( $argv[2] ) ? $argv[2] : '';
 $fixture   = isset( $argv[3] ) ? json_decode( (string) file_get_contents( $argv[3] ), true ) : null;
-if ( ! in_array( $mode, array( 'setup', 'inbox', 'repair', 'print-option' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
-    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|inbox|repair|print-option> <settings.html> <fixture.json> [slot] [host-field-key]\n" );
+if ( ! in_array( $mode, array( 'setup', 'inbox', 'entry', 'repair', 'print-option' ), true ) || ! is_file( $html_path ) || ! is_array( $fixture ) ) {
+    fwrite( STDERR, "Usage: behavioral-http-form.php <setup|inbox|entry|repair|print-option> <settings.html> <fixture.json> [slot] [host-field-key]\n" );
     exit( 1 );
 }
 
@@ -65,9 +65,9 @@ foreach ( $xpath->query( './/select', $form ) as $select ) {
     $fields[ $name ] = $selected;
 }
 
-if ( in_array( $mode, array( 'setup', 'inbox' ), true ) ) {
+if ( in_array( $mode, array( 'setup', 'inbox', 'entry' ), true ) ) {
     $wanted       = 'form:' . (int) $fixture['form_id'];
-    $field_suffix = 'setup' === $mode ? 'operations_setup_action' : 'inbox_setup_action';
+    $field_suffix = 'setup' === $mode ? 'operations_setup_action' : ( 'inbox' === $mode ? 'inbox_setup_action' : 'entry_detail_setup_action' );
     $matched      = false;
     foreach ( $xpath->query( './/select[contains(@name,"' . $field_suffix . '")]', $form ) as $select ) {
         foreach ( $xpath->query( './option', $select ) as $option ) {
@@ -98,6 +98,7 @@ if ( in_array( $mode, array( 'setup', 'inbox' ), true ) ) {
     $allowed = array(
         'student.first_name' => array( 'first_name' ),
         'student.last_name' => array( 'last_name' ),
+        'student.home_phone' => array( 'empty_phone', 'replacement_empty_phone' ),
         'student.gender' => array( 'choice', 'alternate_choice' ),
     );
     if ( ! isset( $allowed[ $slot ] ) || ( 'repair' === $mode && ! in_array( $field_key, $allowed[ $slot ], true ) ) || ( 'print-option' === $mode && 'student.gender' !== $slot ) ) {
