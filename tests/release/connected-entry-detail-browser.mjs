@@ -94,15 +94,22 @@ try {
       dossierPrint:document.querySelectorAll('.gpp-entry-print-utility[data-gpp-print-utility="dossier"]').length,
       nativeRoute:location.search,
       nativeUrl:location.href,
-      // Only explicit native Gravity Flow status-value markers are comparable.
-      // A generic action panel or a GPP semantic slot is not proof that
-      // Gravity Flow actually displays the raw host status.
-      visibleNativeStatuses:[...document.querySelectorAll('[data-gravityflow-status]')]
-        .filter(el=>visible(el) && !el.closest('.gpp-entry-dossier'))
-        .map(el=>({selector:'[data-gravityflow-status]',text:(el.textContent||'').trim()})),
+      // The pinned Gravity Flow native Workflow panel visibly renders
+      // "Status: Pending" (not a data-gravityflow-status attribute). Read
+      // *visible native text*, scoped to the actual native status box.
+      // Do not infer status from GPP dossier, step title or hidden markup.
+      visibleNativeStatuses:status && visible(status)
+        ? status.innerText.split(/\r?\n/).map(t=>t.trim())
+            .filter(line=>/^Status:\s*\S+/i.test(line))
+            .map(line=>({selector:'.gravityflow-status-box',label:'Status',
+              text:line.replace(/^Status:\s*/i,'').trim()}))
+        :[],
       nativeStatusInspection:{
         statusBoxPresent:!!status,
-        nativeStatusMarkers:document.querySelectorAll('[data-gravityflow-status]').length
+        nativeStatusLineCount:status && visible(status)
+          ? status.innerText.split(/\r?\n/).filter(line=>/^Status:\s*\S+/i.test(line.trim())).length
+          :0,
+        source:'native_status_box_visible_innerText'
       },
       overlap:(()=>{
         const d=document.querySelector('.gpp-entry-dossier')?.getBoundingClientRect(),s=status?.getBoundingClientRect();
@@ -131,9 +138,16 @@ try {
   report.keyboard_focus_native_control = true;
 
   const statuses=hostDom.visibleNativeStatuses;
+  // This pinned English native Approval fixture shows "Status: Pending".
+  // Match its capitalization-insensitive exact token against Flow's native
+  // get_status() value; do not translate or invent other status labels.
   assert(Array.isArray(statuses)
-    && statuses.every(x=>x.text !== '' && x.text === String(host.native_status)),
+    && statuses.every(x=>x.text !== ''
+      && x.text.toLocaleLowerCase('en-US') === String(host.native_status).toLocaleLowerCase('en-US')),
     'native_visible_status_does_not_equal_gravity_flow_api');
+  if (String(host.native_status) === 'pending') {
+    assert(statuses.length === 1, 'pinned_native_visible_pending_status_missing');
+  }
   report.workflow_status_evidence={
     result:statuses.length>0?'COMPARABLE_VISIBLE_MATCH':'NOT_PROVEN_VISIBLE_EQUIVALENCE',
     native_raw:host.native_status,
