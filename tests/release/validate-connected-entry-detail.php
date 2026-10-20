@@ -161,14 +161,24 @@ foreach ( array( 'initial', 'empty', 'stale', 'requalified' ) as $stage ) {
         && ( $status['source'] ?? null ) === 'actual_native_browser_dom'
         && is_array( $status['candidates'] ?? null )
         && ( $status['inspection']['statusBoxPresent'] ?? false ) === true
-        && is_int( $status['inspection']['nativeStatusMarkers'] ?? null ),
+        && ( $status['inspection']['source'] ?? null ) === 'native_status_box_visible_innerText'
+        && is_int( $status['inspection']['nativeStatusLineCount'] ?? null )
+        && $status['inspection']['nativeStatusLineCount'] === count( $status['candidates'] ),
         'native_status_inspection_evidence_missing_' . $stage );
+    // The pinned native English Approval panel displays "Status: Pending".
+    // The exact native status value is sourced from Gravity_Flow_API.
+    if ( 'pending' === $host['native_status'] ) {
+        $check( count( $status['candidates'] ) === 1,
+            'pinned_native_visible_status_line_not_found_' . $stage );
+    }
     if ( count( $status['candidates'] ) > 0 ) {
         $check( ( $status['result'] ?? null ) === 'COMPARABLE_VISIBLE_MATCH',
             'comparable_native_status_not_proven_' . $stage );
         foreach ( $status['candidates'] as $candidate ) {
-            $check( ( $candidate['selector'] ?? null ) === '[data-gravityflow-status]'
-                && ( $candidate['text'] ?? null ) === $host['native_status'],
+            $check( ( $candidate['selector'] ?? null ) === '.gravityflow-status-box'
+                && ( $candidate['label'] ?? null ) === 'Status'
+                && is_string( $candidate['text'] ?? null )
+                && strtolower( $candidate['text'] ) === strtolower( $host['native_status'] ),
                 'native_visible_status_mismatch_' . $stage );
         }
     } else {
