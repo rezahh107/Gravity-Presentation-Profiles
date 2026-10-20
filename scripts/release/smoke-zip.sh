@@ -112,6 +112,7 @@ done
 
 bash "$ROOT/tests/release/run-behavioral-production-reachability.sh" \
     "$ROOT" "$ZIP" "$WPCLI" "$WP_PATH" "$BASE_URL" "$BEHAVIOR_DIR"
+php "$ROOT/tests/release/validate-connected-entry-detail.php" "$BEHAVIOR_DIR"
 cp "$BEHAVIOR_DIR/behavioral-production-reachability.json" "$ROOT/build/release/behavioral-production-reachability.json"
 
 echo "GPP_RELEASE_BEHAVIORAL_EVIDENCE=$ROOT/build/release/behavioral-production-reachability.json"
