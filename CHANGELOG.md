@@ -8,13 +8,22 @@ The project follows Semantic Versioning for production releases.
 
 ### Added
 
-- Shipped a complete 17-topic bilingual in-plugin product guide in native Gravity Forms Add-On Settings and a native WordPress Persian gettext catalog for GPP-owned administration and form settings.
-- Added exact-head bilingual help/locale browser checks and release-package completeness guards for Help and translation assets.
+- Added a bundled 17-topic offline product guide in Persian and English, reachable through native Gravity Forms Add-On Settings, with packaged WordPress `fa_IR` translations for GPP-owned administration.
+- Added bounded Schema 1.1 operational color preference consumption on native Gravity Flow Inbox and GPP Entry Detail: `composition.surface_background`, `sections.heading_text`, and `labels.text` now change scoped, browser-computed paint when backed by validated immutable profile tokens. Print, workflow authority, and legacy SRWF Schema 1.0 presentation remain unchanged.
+- Added a connected non-SRWF Gravity Forms profile acceptance scenario covering real Admin import, explicit per-form enable/disable, native validation/submission, visual preferences, and unaffected unrelated forms; its test package is a prepared fixture, not output from a live external LLM.
 
 ### Changed
 
-- Removed a forced RTL admin-mapping wrapper so English can follow WordPress LTR, without changing SRWF frontend presentation, mapping lifecycle or Gravity Flow workflow ownership.
+- Improved Persian/English GPP administration through native WordPress user-locale handling, including Entry Detail design-variant controls, selected safe admin errors, and correct LTR mapping layout under English. GPP-owned operational frontend presentation remains Persian-only.
+- Clarified Correction/User Input button hierarchy: native completion remains the primary action and optional native Save Progress has a secondary visual treatment where the host renders it; localized the existing Entry Detail mapping submission label without changing its behavior.
+- Expanded pinned WordPress/Gravity Forms/Gravity Flow release qualification from the exact installed, non-symlinked ZIP to native Print with real field/choice mappings and two-page A4 PDF evidence, plus connected Entry Detail Admin setup, mapping repair, native Review display, source invalidation/requalification, and permission-denied checks. These are synthetic-host acceptance results, not proof of the Owner's live site or a physical print.
+- Expanded authentic browser qualification for Blocksy Free Inbox/operator flows, native Inbox mixed-readiness and fallback row preservation, and Hello Elementor's built distribution assets. Gravity Flow retains native Grid/query/authorization authority; the checks do not imply universal theme or version compatibility.
 
+### Fixed
+
+- Corrected scoped Schema 1.1 `controls.border` projection onto native Gravity Forms Orbital text, email, select, and textarea control borders without overriding native focus/error/disabled states.
+- Made committed-archive validation fail closed when Git metadata cannot be read, instead of silently accepting an incomplete archive inventory.
+- Declared four existing nullable PHP parameters explicitly nullable to avoid PHP 8.4 deprecation notices without changing their accepted values or runtime semantics.
 
 ## [0.4.1] - 2026-10-07
 
