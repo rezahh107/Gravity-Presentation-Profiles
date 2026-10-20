@@ -67,9 +67,11 @@ if [[ "$1" == 'run' && "$2" == 'list' ]]; then
             printf '[{"databaseId":991,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null},{"databaseId":991,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null}]\n' "$MOCK_SHA" "$MOCK_BRANCH" "$MOCK_SHA" "$MOCK_BRANCH"
             exit 0 ;;
         listPickNewest)
-            # Unsorted legitimate matches: select latest run ID, not first row.
-            printf '[{"databaseId":1091,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null},{"databaseId":991,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null}]\n' "$MOCK_SHA" "$MOCK_BRANCH" "$MOCK_SHA" "$MOCK_BRANCH"
-            exit 0 ;;
+            # Two unsorted valid CI runs: select latest ID for that workflow.
+            if [[ "$wf" == 'ci.yml' ]]; then
+                printf '[{"databaseId":1091,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null},{"databaseId":991,"headSha":"%s","headBranch":"%s","event":"workflow_dispatch","status":"queued","conclusion":null}]\n' "$MOCK_SHA" "$MOCK_BRANCH" "$MOCK_SHA" "$MOCK_BRANCH"
+                exit 0
+            fi ;;
         parentMixed|parentList503|parentListPersistent|parentList403|parentMalformed)
             if [[ "$wf" == 'wu21-repro-evidence-lab.yml' ]]; then
                 case "$MOCK_CASE" in
@@ -191,5 +193,4 @@ run_good_parent parentMixed
 for scenario in listPersistent list403 listMixedErrors listMalformed listWrongRoot listMultiDoc listWrongSha listWrongBranch listWrongEvent listBadId listDuplicateId parentListPersistent parentList403 parentMalformed; do
     run_bad_parent "$scenario"
 done
-[[ "$(cat "$MOCK_STATE/list_992")" == 1 ]] || true
 echo 'GPP_TRANSIENT_GITHUB_503_WAITER_TESTS_PASS view_positive=2 view_negative=11 list_recovery=PASS six_run_mixed=PASS latest_id=PASS fail_closed=PASS dispatches=6'
