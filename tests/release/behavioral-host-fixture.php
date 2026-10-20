@@ -62,8 +62,8 @@ $choice_id     = $add_field(
     'Behavioral Choice',
     array(
         'choices' => array(
-            array( 'text' => 'Synthetic Female', 'value' => 'source-value-f-91' ),
-            array( 'text' => 'Synthetic Male', 'value' => 'source-value-m-26' ),
+            array( 'text' => 'G5FemaleLQ56', 'value' => 'G5FemaleRawH26' ),
+            array( 'text' => 'G5MaleLabelF73', 'value' => 'G5MaleRawB84' ),
         ),
     )
 );
@@ -75,8 +75,8 @@ $alternate_choice_id = $add_field(
     'Behavioral Alternate Choice',
     array(
         'choices' => array(
-            array( 'text' => 'Synthetic Female', 'value' => 'source-value-f-91' ),
-            array( 'text' => 'Synthetic Male', 'value' => 'source-value-m-26' ),
+            array( 'text' => 'G5FemaleLQ56', 'value' => 'G5FemaleRawH26' ),
+            array( 'text' => 'G5MaleLabelF73', 'value' => 'G5MaleRawB84' ),
         ),
     )
 );
@@ -143,14 +143,14 @@ if ( ! $step_id || is_wp_error( $step_id ) ) {
     throw new RuntimeException( 'Native Gravity Flow approval step could not be created.' );
 }
 
-$synthetic_first = 'Reachability Ada';
+$synthetic_first = 'G5FirstQa821';
 $entry_id = GFAPI::add_entry(
     array(
         'form_id' => $form_id,
         (string) $first_name_id => $synthetic_first,
-        (string) $last_name_id => 'Synthetic',
+        (string) $last_name_id => 'G5LastXw193',
         (string) $choice_id => $raw_choice,
-        (string) $alternate_choice_id => $raw_choice,
+        (string) $alternate_choice_id => (string) $choice_field->choices[1]['value'],
         'created_by' => (int) $admin->ID,
     )
 );
@@ -212,7 +212,12 @@ $manifest = array(
         'replacement_empty_phone' => array( 'id' => $replacement_empty_phone_id, 'label' => 'Behavioral Empty Phone B', 'type' => 'text' ),
     ),
     'expected_first_name_value' => $synthetic_first,
-    'expected_last_name_value' => 'Synthetic',
+    'expected_last_name_value' => 'G5LastXw193',
+    'expected_native_created_at' => (string) ( GFAPI::get_entry( (int) $entry_id )['date_created'] ?? '' ),
+    'expected_alternate_choice' => array(
+        'host_raw_value' => (string) $choice_field->choices[1]['value'],
+        'host_display_value' => (string) $choice_field->choices[1]['text'],
+    ),
     'expected_choice' => array(
         'host_raw_value' => $raw_choice,
         'host_display_value' => $display_choice,
