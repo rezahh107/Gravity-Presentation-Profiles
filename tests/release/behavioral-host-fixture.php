@@ -67,6 +67,8 @@ $choice_id     = $add_field(
         ),
     )
 );
+$empty_phone_id = $add_field( $form, 'text', 'Behavioral Empty Phone A', array( 'isRequired' => false ) );
+$replacement_empty_phone_id = $add_field( $form, 'text', 'Behavioral Empty Phone B', array( 'isRequired' => false ) );
 $alternate_choice_id = $add_field(
     $form,
     'radio',
@@ -88,7 +90,7 @@ $form = GFAPI::get_form( $form_id );
 if ( ! is_array( $form ) ) {
     throw new RuntimeException( 'Synthetic form disappeared after update.' );
 }
-foreach ( array( $first_name_id, $last_name_id, $choice_id, $alternate_choice_id ) as $field_id ) {
+foreach ( array( $first_name_id, $last_name_id, $choice_id, $alternate_choice_id, $empty_phone_id, $replacement_empty_phone_id ) as $field_id ) {
     $field = GFAPI::get_field( $form, $field_id );
     if ( ! is_object( $field ) ) {
         throw new RuntimeException( 'Host-assigned synthetic field could not be resolved: ' . $field_id );
@@ -140,6 +142,16 @@ $step_id = $flow_api->add_step(
 if ( ! $step_id || is_wp_error( $step_id ) ) {
     throw new RuntimeException( 'Native Gravity Flow approval step could not be created.' );
 }
+
+// The native Approval Review must be genuinely read-only: this is host-owned
+// synthetic workflow configuration, not a GPP permission or display override.
+$step_meta = gravity_flow()->get_feed_meta( $step_id );
+$step_meta['editable_fields'] = array();
+$step_meta['instructionsEnable'] = '1';
+$step_meta['instructionsValue'] = 'Synthetic behavioral review instructions.';
+$step_meta['note_mode'] = 'optional';
+$step_meta['revertEnable'] = '1';
+gravity_flow()->update_feed_meta( $step_id, $step_meta );
 
 $synthetic_first = 'Reachability Ada';
 $entry_id = GFAPI::add_entry(
@@ -196,6 +208,8 @@ $manifest = array(
         'last_name' => array( 'id' => $last_name_id, 'label' => 'Behavioral Last Name', 'type' => 'text' ),
         'choice' => array( 'id' => $choice_id, 'label' => 'Behavioral Choice', 'type' => 'radio' ),
         'alternate_choice' => array( 'id' => $alternate_choice_id, 'label' => 'Behavioral Alternate Choice', 'type' => 'radio' ),
+        'empty_phone' => array( 'id' => $empty_phone_id, 'label' => 'Behavioral Empty Phone A', 'type' => 'text' ),
+        'replacement_empty_phone' => array( 'id' => $replacement_empty_phone_id, 'label' => 'Behavioral Empty Phone B', 'type' => 'text' ),
     ),
     'expected_first_name_value' => $synthetic_first,
     'expected_last_name_value' => 'Synthetic',
