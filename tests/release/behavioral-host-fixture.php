@@ -148,7 +148,7 @@ $entry_id = GFAPI::add_entry(
     array(
         'form_id' => $form_id,
         (string) $first_name_id => $synthetic_first,
-        (string) $last_name_id => 'G5LastXw193',
+        (string) $last_name_id => 'G5LastXw1934',
         (string) $choice_id => $raw_choice,
         (string) $alternate_choice_id => (string) $choice_field->choices[1]['value'],
         'created_by' => (int) $admin->ID,
@@ -212,7 +212,7 @@ $manifest = array(
         'replacement_empty_phone' => array( 'id' => $replacement_empty_phone_id, 'label' => 'Behavioral Empty Phone B', 'type' => 'text' ),
     ),
     'expected_first_name_value' => $synthetic_first,
-    'expected_last_name_value' => 'G5LastXw193',
+    'expected_last_name_value' => 'G5LastXw1934',
     'expected_native_created_at' => (string) ( GFAPI::get_entry( (int) $entry_id )['date_created'] ?? '' ),
     'expected_alternate_choice' => array(
         'host_raw_value' => (string) $choice_field->choices[1]['value'],
