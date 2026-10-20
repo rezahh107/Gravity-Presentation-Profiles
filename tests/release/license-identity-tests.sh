@@ -50,8 +50,10 @@ if [[ "$ORIGINAL_VERSION" != '0.0.0-dev' ]]; then
     }
     php "$CHECKER" --root="$ROOT" --mode=dry-run > "$WORK/actual-candidate.json"
     assert_ready "$WORK/actual-candidate.json"
-    expect_fail php "$CHECKER" --root="$ROOT" --mode=publish
-    php "$CHECKER" --root="$ROOT" --mode=publish > "$WORK/actual-candidate-publish.json" 2>/dev/null && exit 1 || true
+    if php "$CHECKER" --root="$ROOT" --mode=publish > "$WORK/actual-candidate-publish.json" 2>/dev/null; then
+        echo 'Production-versioned source unexpectedly passed publish-start prerequisite.' >&2
+        exit 1
+    fi
     assert_blocker "$WORK/actual-candidate-publish.json" 'production_version_source_requires_recovery'
     php "$ROOT/scripts/release/prepare-development-continuation.php" \
         --root="$APPROVED" --released-version="$ORIGINAL_VERSION" >/dev/null
