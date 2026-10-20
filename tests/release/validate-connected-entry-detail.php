@@ -88,10 +88,28 @@ foreach ( $identity as $version => $hash ) {
     $check( ( $requalified['binding']['installed_artifact_hashes'][ $version ] ?? null ) === $hash,
         'immutable_binding_history_was_rewritten' );
 }
+$stage_snapshots = array(
+    'initial' => $adopted,
+    'empty' => $empty,
+    'stale' => $stale,
+    'requalified' => $requalified,
+);
 $reports = array();
 foreach ( array( 'initial', 'empty', 'stale', 'requalified' ) as $stage ) {
     $host = $read( 'connected-entry-host-' . $stage );
     $view = $read( 'connected-entry-' . $stage );
+    $expected = $stage_snapshots[ $stage ];
+    $check( ( $host['binding_identity'] ?? null ) === ( $expected['binding']['activation'] ?? null ),
+        'host_binding_identity_not_connected_' . $stage );
+    foreach ( array( 'entry.created_at', 'workflow.current_step', 'workflow.status',
+        'student.first_name', 'student.last_name', 'student.home_phone' ) as $key ) {
+        $source = $binding( $expected, $key );
+        $seen = $host['binding_source_refs'][ $key ] ?? null;
+        $check( is_array( $source ) && is_array( $seen )
+            && ( $source['state'] ?? null ) === ( $seen['state'] ?? null )
+            && ( $source['source_ref'] ?? null ) === ( $seen['source_ref'] ?? null ),
+            'native_host_source_not_bound_to_lifecycle_' . $stage . '_' . $key );
+    }
     $check( $host['stage'] === $stage && $view['stage'] === $stage
         && ( $view['connected'] ?? false ) === true, 'wrong_stage_or_unconnected_browser_' . $stage );
     $check( $host['native_step_type'] === 'approval'
@@ -102,12 +120,93 @@ foreach ( array( 'initial', 'empty', 'stale', 'requalified' ) as $stage ) {
     $check( $host['native_first_raw'] === $fixture['expected_first_name_value']
         && $host['native_last_raw'] === $fixture['expected_last_name_value'],
         'host_value_witness_missing_' . $stage );
+    $placeholder = array(
+        'initial' => 'نگاشت نشده', 'empty' => 'ثبت نشده',
+        'stale' => 'نگاشت معتبر نیست', 'requalified' => 'ثبت نشده',
+    );
+    $check( ( $view['host']['homePhone'] ?? null ) === $placeholder[ $stage ]
+        && ( $view['host']['mobile'] ?? null ) === 'نگاشت نشده',
+        'browser_did_not_witness_stage_specific_degradation_' . $stage );
+    $native = $view['native'] ?? null;
+    $actions = array_column( (array) ( $native['nativeActions'] ?? array() ), 'value' );
+    $check( is_array( $native )
+        && ( $native['nativeListPresent'] ?? false ) === true
+        && ( $native['nativeListVisible'] ?? true ) === false
+        && ( $native['statusCount'] ?? 0 ) === 1
+        && ( $native['statusVisible'] ?? false ) === true
+        && ( $native['statusInsideDossier'] ?? true ) === false
+        && ( $native['nativeNonce'] ?? false ) === true
+        && ( $native['nativeNote'] ?? false ) === true
+        && ( $native['timelineVisible'] ?? false ) === true
+        && ( $native['timelineInsideDossier'] ?? true ) === false
+        && ( $native['nativePrint'] ?? false ) === true
+        && ( $native['dossierPrint'] ?? 0 ) === 1
+        && is_numeric( $native['overlap'] ?? null ) && $native['overlap'] < 1
+        && count( $actions ) === 3
+        && count( array_diff( array( 'approved', 'rejected', 'revert' ), $actions ) ) === 0
+        && count( array_filter( (array) ( $native['nativeActions'] ?? array() ),
+            static function ( $button ) { return ( $button['disabled'] ?? true ) === true; } ) ) === 0,
+        'native_controls_or_suppression_unwitnessed_' . $stage );
+    $check( ( $host['native_created_at'] ?? null ) === ( $fixture['expected_native_created_at'] ?? null )
+        && is_string( $host['native_created_at'] ?? null ) && '' !== $host['native_created_at'],
+        'date_creation_source_not_independently_witnessed_' . $stage );
+    $check( ( $host['date_source'] ?? null ) === array( 'type' => 'gravity_forms.entry_meta', 'meta_key' => 'date_created' )
+        && ( $host['date_display_provenance'] ?? null ) === 'gfapi_date_created_via_existing_bound_host_value_reader'
+        && is_string( $host['native_created_display'] ?? null ) && '' !== $host['native_created_display']
+        && ( $view['host']['entryCreated'] ?? null ) === $host['native_created_display'],
+        'displayed_creation_date_not_connected_to_host_date_provider_' . $stage );
+    $status = $view['workflow_status_evidence'] ?? null;
+    $check( is_array( $status )
+        && ( $status['native_raw'] ?? null ) === $host['native_status']
+        && ( $status['source'] ?? null ) === 'actual_native_browser_dom'
+        && is_array( $status['candidates'] ?? null )
+        && ( $status['inspection']['statusBoxPresent'] ?? false ) === true
+        && is_int( $status['inspection']['nativeStatusMarkers'] ?? null ),
+        'native_status_inspection_evidence_missing_' . $stage );
+    if ( count( $status['candidates'] ) > 0 ) {
+        $check( ( $status['result'] ?? null ) === 'COMPARABLE_VISIBLE_MATCH',
+            'comparable_native_status_not_proven_' . $stage );
+        foreach ( $status['candidates'] as $candidate ) {
+            $check( ( $candidate['selector'] ?? null ) === '[data-gravityflow-status]'
+                && ( $candidate['text'] ?? null ) === $host['native_status'],
+                'native_visible_status_mismatch_' . $stage );
+        }
+    } else {
+        $check( ( $status['result'] ?? null ) === 'NOT_PROVEN_VISIBLE_EQUIVALENCE',
+            'unsupported_native_status_equivalence_claim_' . $stage );
+    }
     $check( $view['host']['currentStep'] === $host['native_step_name']
         && $view['host']['first'] === $host['native_first_raw']
         && $view['host']['last'] === $host['native_last_raw'],
         'browser_not_reading_actual_host_values_' . $stage );
     $check( ( $host['phone_source_exists'] ?? null ) === ( $stage === 'empty' || $stage === 'requalified' ),
         'stale_source_or_rebound_status_inaccurate_' . $stage );
+    $route = $view['native']['nativeRoute'] ?? '';
+    $url = $view['native']['nativeUrl'] ?? '';
+    $parts = is_string( $url ) ? parse_url( $url ) : false;
+    $query = array();
+    if ( is_array( $parts ) ) parse_str( $parts['query'] ?? '', $query );
+    $check( is_string( $route ) && str_contains( $route, 'page=gravityflow-inbox' )
+        && ( $query['page'] ?? null ) === 'gravityflow-inbox'
+        && ( $query['view'] ?? null ) === 'entry'
+        && (string) ( $query['id'] ?? '' ) === (string) $fixture['form_id']
+        && (string) ( $query['lid'] ?? '' ) === (string) $fixture['entry_id'],
+        'browser_not_at_native_entry_detail_route_' . $stage );
+    $check( count( $view['viewports'] ) === 4
+        && array_column( $view['viewports'], 'width' ) === array( 1440, 414, 390, 320 )
+        && count( array_filter( $view['viewports'], static function ( $v ) {
+            return ( $v['dossierVisible'] ?? false ) !== true
+                || ! is_numeric( $v['regionScrollWidth'] ?? null )
+                || ! is_numeric( $v['regionClientWidth'] ?? null )
+                || $v['regionScrollWidth'] > $v['regionClientWidth'] + 3
+                || ! is_numeric( $v['statusOverlap'] ?? null ) || $v['statusOverlap'] >= 1;
+        } ) ) === 0
+        && ( $view['text_200_percent']['dossierVisible'] ?? false ) === true
+        && is_numeric( $view['text_200_percent']['overlap'] ?? null )
+        && $view['text_200_percent']['overlap'] < 1
+        && ( $view['text_200_percent']['fontSize'] ?? null ) !== '16px'
+        && ( $view['keyboard_focus_native_control'] ?? false ) === true,
+        'viewport_or_keyboard_evidence_missing_' . $stage );
     $check( count( $view['viewports'] ) === 4 && ( $view['keyboard_focus_native_control'] ?? false ) === true,
         'responsive_or_keyboard_acceptance_missing_' . $stage );
     $reports[ $stage ] = array(
@@ -118,6 +217,32 @@ foreach ( array( 'initial', 'empty', 'stale', 'requalified' ) as $stage ) {
     );
 }
 $authorized = $read( 'connected-entry-requalified' );
+$personal = array(
+    'first_name' => $fixture['expected_first_name_value'],
+    'last_name' => $fixture['expected_last_name_value'],
+    'choice_raw' => $fixture['expected_choice']['host_raw_value'],
+    'choice_display' => $fixture['expected_choice']['host_display_value'],
+    'alternate_raw' => $fixture['expected_alternate_choice']['host_raw_value'],
+    'alternate_display' => $fixture['expected_alternate_choice']['host_display_value'],
+);
+$check( count( array_unique( array_values( $personal ) ) ) === count( $personal ),
+    'native_personal_sentinels_must_be_distinct' );
+foreach ( array( 'initial', 'empty', 'stale', 'requalified' ) as $stage ) {
+    $host = $read( 'connected-entry-host-' . $stage );
+    $check( ( $host['personal_sentinels'] ?? null ) === $personal,
+        'disconnected_native_personal_sentinels_' . $stage );
+}
+$negative = $authorized['unauthorized_viewer'] ?? array();
+$keys = array_keys( $personal );
+$checked = $negative['tested_sentinel_keys'] ?? null;
+$check( is_array( $checked ) && count( $checked ) === count( $keys )
+    && count( array_diff( $keys, $checked ) ) === 0
+    && count( array_diff( $checked, $keys ) ) === 0
+    && ( $negative['sentinel_count'] ?? null ) === count( $keys )
+    && ( $negative['surname_only_mutation_detected'] ?? false ) === true
+    && ( $negative['source'] ?? null ) === 'entire_document_text_against_independent_gfapi_host_sentinels'
+    && ( $negative['exposed_sentinel_keys'] ?? null ) === array(),
+    'unauthorized_native_personal_coverage_missing' );
 $check( ( $authorized['unauthorized_viewer']['no_dossier'] ?? false )
     && ( $authorized['unauthorized_viewer']['no_workflow_action'] ?? false )
     && ( $authorized['unauthorized_viewer']['no_host_value'] ?? false ),
