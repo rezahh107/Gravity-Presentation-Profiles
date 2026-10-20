@@ -194,9 +194,9 @@ try {
       const viewer=await viewerCtx.newPage();
       await login(viewer,process.env.GPP_TEST_VIEWER_USER,process.env.GPP_TEST_VIEWER_PASS);
       const response=await viewer.goto(entryUrl,{waitUntil:'networkidle'});
-      // Whole document text (including hidden DOM), not a truncated body
-      // excerpt. Compare independently sourced, distinct raw/display values.
-      const rendered=await viewer.evaluate(()=>document.documentElement.textContent || '');
+      // Pinned native Flow denial is a real 403, not just a report-only status.
+      const httpStatus=response?.status();
+      assert(httpStatus===403,'unauthorized_native_http_denial_not_403:'+String(httpStatus));
       const sentinels=host.personal_sentinels;
       const expectedKeys=['first_name','last_name','choice_raw','choice_display','alternate_display'];
       assert(sentinels && typeof sentinels==='object'
@@ -204,21 +204,82 @@ try {
         && Object.keys(sentinels).length===expectedKeys.length
         && new Set(Object.values(sentinels)).size===expectedKeys.length,
         'independent_personal_sentinel_set_incomplete');
-      const exposed=expectedKeys.filter(key=>rendered.includes(sentinels[key]));
-      assert(await viewer.locator('.gpp-entry-dossier').count()===0
-        && await viewer.locator('.gravityflow-status-box .gravityflow-action-buttons button').count()===0
-        && exposed.length===0, 'unauthorized_native_entry_detail_leaked:' + exposed.join(','));
-            // Detector sanity challenge: a surname-only leak MUST be detected
-      // independently of first-name presence.
-      const injected=rendered+'\\n'+sentinels.last_name;
-      assert(injected.includes(sentinels.last_name) && !injected.includes(sentinels.first_name),
-        'surname_only_leak_detector_is_ineffective');
+
+      // All three admitted DOM-value locations are read from the *actual*
+      // denied browser document: full text, every element attribute and live
+      // form-control state (including values not reflected in HTML attributes).
+      const deniedDom=await viewer.evaluate(values=>{
+        const scan=()=>{
+          const text=document.documentElement.textContent || '';
+          const elements=[document.documentElement,...document.querySelectorAll('*')];
+          const attributes=elements.flatMap(el=>[...el.attributes].map(attr=>attr.value));
+          const controls=[...document.querySelectorAll('input,textarea,select')].flatMap(el=>{
+            if(el instanceof HTMLSelectElement && el.multiple)
+              return [...el.selectedOptions].map(opt=>opt.value);
+            return [String(el.value)];
+          });
+          return Object.entries(values).flatMap(([key,needle])=>{
+            const locations=[];
+            if(text.includes(needle))locations.push('text');
+            if(attributes.some(value=>value.includes(needle)))locations.push('attributes');
+            if(controls.some(value=>value.includes(needle)))locations.push('controls');
+            return locations.length?[{key,locations}]:[];
+          });
+        };
+        const initial=scan();
+        // Challenge the *same scanner* with injected DOM-only leaks. These
+        // mutations are local to the denied browser page and are always
+        // removed; they do not affect WordPress, GPP or Flow state.
+        const probe=(element,key,configure)=>{
+          document.body.appendChild(element);
+          try{
+            configure(element);
+            return scan().filter(item=>item.key===key);
+          }finally{element.remove();}
+        };
+        const attributeOnly=probe(document.createElement('span'),'choice_display',
+          el=>el.setAttribute('data-g5-probe-value',values.choice_display));
+        const inputOnly=probe(document.createElement('input'),'choice_raw',
+          el=>{el.value=values.choice_raw;});
+        const textareaOnly=probe(document.createElement('textarea'),'alternate_display',
+          el=>{el.value=values.alternate_display;});
+        const surnameOnly=probe(document.createElement('span'),'last_name',
+          el=>{el.textContent=values.last_name;});
+        return {
+          initial,
+          after_challenges:scan(),
+          coverage:{text:true,attributes:true,controls:true},
+          negative_challenges:{
+            attribute_only:attributeOnly,
+            input_value_only:inputOnly,
+            textarea_value_only:textareaOnly,
+            surname_only:surnameOnly
+          }
+        };
+      },sentinels);
+      const expectedProbe=(name,key,location)=>
+        JSON.stringify(deniedDom.negative_challenges?.[name])===
+          JSON.stringify([{key,locations:[location]}]);
+      assert(Array.isArray(deniedDom.initial) && deniedDom.initial.length===0
+        && Array.isArray(deniedDom.after_challenges) && deniedDom.after_challenges.length===0,
+        'unauthorized_native_personal_value_leaked:'+JSON.stringify(deniedDom.initial));
+      assert(expectedProbe('attribute_only','choice_display','attributes')
+        && expectedProbe('input_value_only','choice_raw','controls')
+        && expectedProbe('textarea_value_only','alternate_display','controls')
+        && expectedProbe('surname_only','last_name','text'),
+        'dom_location_negative_control_not_detected');
+
+      const noDossier=await viewer.locator('.gpp-entry-dossier').count()===0;
+      const noWorkflowAction=await viewer.locator(
+        '.gravityflow-status-box .gravityflow-action-buttons button').count()===0;
+      assert(noDossier && noWorkflowAction,'unauthorized_native_controls_leaked');
       report.unauthorized_viewer={
-        no_dossier:true,no_workflow_action:true,no_host_value:exposed.length===0,
-        tested_sentinel_keys:expectedKeys,exposed_sentinel_keys:exposed,
+        no_dossier:noDossier,no_workflow_action:noWorkflowAction,
+        no_host_value:deniedDom.initial.length===0,
+        tested_sentinel_keys:expectedKeys,exposed_sentinel_keys:deniedDom.initial.map(x=>x.key),
         sentinel_count:expectedKeys.length,surname_only_mutation_detected:true,
-        source:'entire_document_text_against_independent_gfapi_host_sentinels',
-        http_status:response?.status()
+        source:'native_http_403_full_dom_text_attributes_live_controls',
+        http_status:httpStatus,dom_scan:deniedDom
       };
     } finally {await viewerCtx.close();}
   }
