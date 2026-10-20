@@ -69,7 +69,7 @@ GPP_RELEASE_DB_NAME="$DB_NAME" GPP_RELEASE_BASE_URL="http://127.0.0.1:8091" \
 if [[ "$RESULT" -eq 0 ]] ||
     grep -Fq 'GPP_RELEASE_ZIP_SMOKE_PASS' "$WORK/mutant-smoke.log" ||
     ! grep -Fq 'GPP_CONNECTED_PRINT_FINAL_PASS' "$WORK/mutant-smoke.log" ||
-    ! grep -Fq 'GPP_CONNECTED_ENTRY_FAIL missing after-entry-setup' "$WORK/mutant-smoke.log"; then
+    ! grep -Fq 'GPP_CONNECTED_ENTRY_FAIL missing before-entry-setup' "$WORK/mutant-smoke.log"; then
   tail -n 90 "$WORK/mutant-smoke.log" >&2
   echo "GPP_GOAL5_PARENT_MUTANT_FAILED_EXPECTED_REJECTION actual_status=$RESULT" >&2
   exit 1
@@ -84,7 +84,7 @@ mutation=comment_exact_goal5_call
 full_isolated_installed_zip_smoke_executed=true
 preseeded_stale_positive_evidence_erased=true
 print_final_stage_passed=true
-independent_goal5_validator_rejected_missing_after_entry_setup=true
+independent_goal5_validator_rejected_missing_before_entry_setup=true
 mutant_exit_status=$RESULT
 zip_smoke_success_marker_emitted=false
 EOF
