@@ -75,7 +75,7 @@ $alternate_choice_id = $add_field(
     'Behavioral Alternate Choice',
     array(
         'choices' => array(
-            array( 'text' => 'G5FemaleLQ56', 'value' => 'G5FemaleRawH26' ),
+            array( 'text' => 'G5AlternateQ732', 'value' => 'G5FemaleRawH26' ),
             array( 'text' => 'G5MaleLabelF73', 'value' => 'G5MaleRawB84' ),
         ),
     )
@@ -150,7 +150,7 @@ $entry_id = GFAPI::add_entry(
         (string) $first_name_id => $synthetic_first,
         (string) $last_name_id => 'G5LastXw1934',
         (string) $choice_id => $raw_choice,
-        (string) $alternate_choice_id => (string) $choice_field->choices[1]['value'],
+        (string) $alternate_choice_id => $raw_choice,
         'created_by' => (int) $admin->ID,
     )
 );
@@ -215,8 +215,8 @@ $manifest = array(
     'expected_last_name_value' => 'G5LastXw1934',
     'expected_native_created_at' => (string) ( GFAPI::get_entry( (int) $entry_id )['date_created'] ?? '' ),
     'expected_alternate_choice' => array(
-        'host_raw_value' => (string) $choice_field->choices[1]['value'],
-        'host_display_value' => (string) $choice_field->choices[1]['text'],
+        'host_raw_value' => $raw_choice,
+        'host_display_value' => 'G5AlternateQ732',
     ),
     'expected_choice' => array(
         'host_raw_value' => $raw_choice,
