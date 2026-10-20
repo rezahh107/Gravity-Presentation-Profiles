@@ -213,6 +213,9 @@ jobs:
             build/release/behavioral-production-reachability/connected-print-*.pdf
             build/release/behavioral-production-reachability/connected-print-*-page-*.png
             build/release/behavioral-production-reachability/connected-print-*-negative/*
+            build/release/behavioral-production-reachability/connected-entry-acceptance.json
+            build/release/behavioral-production-reachability/connected-entry-*.json
+            build/release/behavioral-production-reachability/connected-entry-*.png
           if-no-files-found: error
           retention-days: 30
 
