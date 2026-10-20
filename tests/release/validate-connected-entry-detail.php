@@ -222,7 +222,6 @@ $personal = array(
     'last_name' => $fixture['expected_last_name_value'],
     'choice_raw' => $fixture['expected_choice']['host_raw_value'],
     'choice_display' => $fixture['expected_choice']['host_display_value'],
-    'alternate_raw' => $fixture['expected_alternate_choice']['host_raw_value'],
     'alternate_display' => $fixture['expected_alternate_choice']['host_display_value'],
 );
 $check( count( array_unique( array_values( $personal ) ) ) === count( $personal ),
