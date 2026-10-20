@@ -6,6 +6,8 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
 ### Added
 
 - Added a bundled 17-topic offline product guide in Persian and English, reachable through native Gravity Forms Add-On Settings, with packaged WordPress `fa_IR` translations for GPP-owned administration.
