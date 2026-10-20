@@ -44,7 +44,7 @@ discover_run_id() {
                 elif ([.[0][].databaseId] | unique | length) != (.[0] | length) then
                     error("Duplicate run IDs in qualification discovery")
                 else
-                    [.[0][] | .databaseId] | sort | last // ""
+                    [.[0][] | select(.headSha == $sha) | .databaseId] | sort | last // ""
                 end
                 ' 2>/dev/null)"; then
                 echo "Malformed or mismatched exact-candidate run discovery: $workflow" >&2
