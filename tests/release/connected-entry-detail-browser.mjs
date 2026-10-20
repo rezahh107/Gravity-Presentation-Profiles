@@ -58,6 +58,14 @@ try {
   assert(facts.gender === String(host.native_choice_display), 'host_display_not_raw_choice');
   assert(host.native_choice_raw !== host.native_choice_display && !facts.gender.includes(host.native_choice_raw), 'no_raw_label_conflation');
   assert(facts.currentStep === host.native_step_name && facts.currentStep !== '', 'live_native_current_step');
+  assert(host.date_source?.type === 'gravity_forms.entry_meta'
+    && host.date_source?.meta_key === 'date_created'
+    && host.date_display_provenance === 'gfapi_date_created_via_existing_bound_host_value_reader'
+    && typeof host.native_created_at === 'string' && host.native_created_at !== ''
+    && typeof host.native_created_display === 'string' && host.native_created_display !== '',
+    'independent_creation_date_host_source_or_provider_missing');
+  assert(facts.entryCreated === host.native_created_display,
+    'displayed_creation_date_differs_from_independent_host_formatter');
   assert(facts.mobile === 'نگاشت نشده', 'unmapped_semantic_must_degrade');
   assert(facts.financial.every(v=>v !== '125000000' && v !== '110000000'), 'finance_must_remain_unmapped');
   const expectedPhone = stage === 'initial' ? 'نگاشت نشده'
@@ -85,6 +93,17 @@ try {
       nativePrint:!!document.querySelector('.detail-view-print'),
       dossierPrint:document.querySelectorAll('.gpp-entry-print-utility[data-gpp-print-utility="dossier"]').length,
       nativeRoute:location.search,
+      nativeUrl:location.href,
+      // Only explicit native Gravity Flow status-value markers are comparable.
+      // A generic action panel or a GPP semantic slot is not proof that
+      // Gravity Flow actually displays the raw host status.
+      visibleNativeStatuses:[...document.querySelectorAll('[data-gravityflow-status]')]
+        .filter(el=>visible(el) && !el.closest('.gpp-entry-dossier'))
+        .map(el=>({selector:'[data-gravityflow-status]',text:(el.textContent||'').trim()})),
+      nativeStatusInspection:{
+        statusBoxPresent:!!status,
+        nativeStatusMarkers:document.querySelectorAll('[data-gravityflow-status]').length
+      },
       overlap:(()=>{
         const d=document.querySelector('.gpp-entry-dossier')?.getBoundingClientRect(),s=status?.getBoundingClientRect();
         return d&&s?Math.max(0,Math.min(d.right,s.right)-Math.max(d.left,s.left))*Math.max(0,Math.min(d.bottom,s.bottom)-Math.max(d.top,s.top)):null;
@@ -100,7 +119,9 @@ try {
     'native_approval_reject_revert_controls');
   assert(hostDom.nativeActions.every(b=>!b.disabled), 'native_actions_disabled_unexpectedly');
   assert(hostDom.overlap !== null && hostDom.overlap < 1, 'status_dossier_overlap');
-  assert(hostDom.nativeRoute.includes('page=gravityflow-inbox') && hostDom.nativeRoute.includes('view=entry'),
+  assert(hostDom.nativeRoute.includes('page=gravityflow-inbox') && hostDom.nativeRoute.includes('view=entry')
+    && new URL(hostDom.nativeUrl).searchParams.get('id') === String(fixture.form_id)
+    && new URL(hostDom.nativeUrl).searchParams.get('lid') === String(fixture.entry_id),
     'native_navigation_replaced');
 
   const approve=page.locator('.gravityflow-status-box .gravityflow-action-buttons button[value="approved"]');
@@ -108,6 +129,18 @@ try {
   assert(await approve.evaluate(el=>document.activeElement===el && el.tabIndex>=0), 'native_approve_not_keyboard_focusable');
   await page.keyboard.press('Tab');
   report.keyboard_focus_native_control = true;
+
+  const statuses=hostDom.visibleNativeStatuses;
+  assert(Array.isArray(statuses)
+    && statuses.every(x=>x.text !== '' && x.text === String(host.native_status)),
+    'native_visible_status_does_not_equal_gravity_flow_api');
+  report.workflow_status_evidence={
+    result:statuses.length>0?'COMPARABLE_VISIBLE_MATCH':'NOT_PROVEN_VISIBLE_EQUIVALENCE',
+    native_raw:host.native_status,
+    candidates:statuses,
+    inspection:hostDom.nativeStatusInspection,
+    source:'actual_native_browser_dom'
+  };
 
   const viewports=[];
   for (const width of [1440,414,390,320]) {
@@ -147,11 +180,32 @@ try {
       const viewer=await viewerCtx.newPage();
       await login(viewer,process.env.GPP_TEST_VIEWER_USER,process.env.GPP_TEST_VIEWER_PASS);
       const response=await viewer.goto(entryUrl,{waitUntil:'networkidle'});
-      const text=(await viewer.locator('body').innerText()).slice(0,20000);
+      // Whole document text (including hidden DOM), not a truncated body
+      // excerpt. Compare independently sourced, distinct raw/display values.
+      const rendered=await viewer.evaluate(()=>document.documentElement.textContent || '');
+      const sentinels=host.personal_sentinels;
+      const expectedKeys=['first_name','last_name','choice_raw','choice_display','alternate_raw','alternate_display'];
+      assert(sentinels && typeof sentinels==='object'
+        && expectedKeys.every(k=>typeof sentinels[k]==='string' && sentinels[k].length>=12)
+        && Object.keys(sentinels).length===expectedKeys.length
+        && new Set(Object.values(sentinels)).size===expectedKeys.length,
+        'independent_personal_sentinel_set_incomplete');
+      const exposed=expectedKeys.filter(key=>rendered.includes(sentinels[key]));
       assert(await viewer.locator('.gpp-entry-dossier').count()===0
         && await viewer.locator('.gravityflow-status-box .gravityflow-action-buttons button').count()===0
-        && !text.includes(host.native_first_raw), 'unauthorized_native_entry_detail_leaked');
-      report.unauthorized_viewer={no_dossier:true,no_workflow_action:true,no_host_value:true,http_status:response?.status()};
+        && exposed.length===0, 'unauthorized_native_entry_detail_leaked:' + exposed.join(','));
+            // Detector sanity challenge: a surname-only leak MUST be detected
+      // independently of first-name presence.
+      const injected=rendered+'\\n'+sentinels.last_name;
+      assert(injected.includes(sentinels.last_name) && !injected.includes(sentinels.first_name),
+        'surname_only_leak_detector_is_ineffective');
+      report.unauthorized_viewer={
+        no_dossier:true,no_workflow_action:true,no_host_value:exposed.length===0,
+        tested_sentinel_keys:expectedKeys,exposed_sentinel_keys:exposed,
+        sentinel_count:expectedKeys.length,surname_only_mutation_detected:true,
+        source:'entire_document_text_against_independent_gfapi_host_sentinels',
+        http_status:response?.status()
+      };
     } finally {await viewerCtx.close();}
   }
   report.host=facts;
