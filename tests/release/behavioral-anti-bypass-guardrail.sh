@@ -15,6 +15,7 @@ FILES=(
   "$ROOT/tests/release/connected-entry-detail-browser.mjs"
   "$ROOT/tests/release/validate-connected-entry-detail.php"
   "$ROOT/tests/release/run-connected-entry-detail.sh"
+  "$ROOT/tests/release/falsify-connected-entry-detail.py"
 )
 for file in "${FILES[@]}"; do [[ -f "$file" ]] || { echo "Missing behavioral helper: $file" >&2; exit 1; }; done
 if grep -En '(^|[^[:alnum:]_])(update_option|add_option|delete_option)[[:space:]]*\(' "${FILES[@]}"; then
