@@ -249,9 +249,27 @@ $check( is_array( $checked ) && count( $checked ) === count( $keys )
     && count( array_diff( $checked, $keys ) ) === 0
     && ( $negative['sentinel_count'] ?? null ) === count( $keys )
     && ( $negative['surname_only_mutation_detected'] ?? false ) === true
-    && ( $negative['source'] ?? null ) === 'entire_document_text_against_independent_gfapi_host_sentinels'
+    && ( $negative['source'] ?? null ) === 'native_http_403_full_dom_text_attributes_live_controls'
     && ( $negative['exposed_sentinel_keys'] ?? null ) === array(),
     'unauthorized_native_personal_coverage_missing' );
+// The HTTP 403 is authority evidence, not merely a field written to a report.
+$check( ( $negative['http_status'] ?? null ) === 403, 'native_denial_http_403_not_proven' );
+$dom_scan = $negative['dom_scan'] ?? null;
+$check( is_array( $dom_scan )
+    && ( $dom_scan['coverage'] ?? null ) === array( 'text' => true, 'attributes' => true, 'controls' => true )
+    && ( $dom_scan['initial'] ?? null ) === array()
+    && ( $dom_scan['after_challenges'] ?? null ) === array(),
+    'native_denial_dom_location_coverage_not_proven' );
+$expected_probes = array(
+    'attribute_only' => array( 'key' => 'choice_display', 'locations' => array( 'attributes' ) ),
+    'input_value_only' => array( 'key' => 'choice_raw', 'locations' => array( 'controls' ) ),
+    'textarea_value_only' => array( 'key' => 'alternate_display', 'locations' => array( 'controls' ) ),
+    'surname_only' => array( 'key' => 'last_name', 'locations' => array( 'text' ) ),
+);
+foreach ( $expected_probes as $name => $result ) {
+    $check( ( $dom_scan['negative_challenges'][ $name ] ?? null ) === array( $result ),
+        'native_denial_dom_location_falsification_missing_' . $name );
+}
 $check( ( $authorized['unauthorized_viewer']['no_dossier'] ?? false )
     && ( $authorized['unauthorized_viewer']['no_workflow_action'] ?? false )
     && ( $authorized['unauthorized_viewer']['no_host_value'] ?? false ),
