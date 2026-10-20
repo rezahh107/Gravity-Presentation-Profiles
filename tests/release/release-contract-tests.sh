@@ -452,4 +452,11 @@ if grep -Fq 'pull_request_target:' "$WORKFLOW"; then
 fi
 
 grep -Fq 'workflow_dispatch:' "$ROOT/.github/workflows/ci.yml"
+
+# A development CI/dry-run must also run the SAME contract and license tests
+# on a locally committed production-versioned candidate before any Owner publish.
+# Actual candidate CI already exercises that branch directly and never recurses.
+if [[ "$CURRENT_SOURCE_VERSION" == '0.0.0-dev' ]]; then
+    bash "$ROOT/tests/release/candidate-source-contract-regression.sh"
+fi
 printf 'GPP_RELEASE_CONTRACT_TESTS_PASS zip_sha256=%s candidate=%s continuation=%s\n' "$SHA_RELATIVE" "$CANDIDATE_SHA" "$CONTINUATION_SHA"
