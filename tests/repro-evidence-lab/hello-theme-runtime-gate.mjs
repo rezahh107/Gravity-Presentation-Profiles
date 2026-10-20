@@ -78,7 +78,7 @@ async function verifyBrowser(urlBase) {
       'HELLO_BROWSER_INFRASTRUCTURE_FAILURE: synthetic Inbox origin differs');
     const response = await page.goto(inboxUrl, { waitUntil: 'networkidle', timeout: 45000 });
     assert.equal(response?.status(), 200, 'HELLO_BROWSER_INBOX_HTTP_FAILED');
-    assert.ok(await page.locator('body').evaluate(body => body.classList.contains('hello-elementor')),
+    assert.ok(await page.locator('body').evaluate(body => [...body.classList].some(name => name === 'theme-hello-elementor' || name === 'wp-theme-hello-elementor')),
       'HELLO_BROWSER_THEME_NOT_ACTIVE');
     for (const name of ['assets/js/hello-frontend.js', 'assets/css/reset.css', 'assets/css/theme.css']) {
       const match = seen.find(item => item.path === name);
