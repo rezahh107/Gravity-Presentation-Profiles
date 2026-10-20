@@ -289,12 +289,22 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$GPP_RELEASE_ADMIN_READ_TOKEN" || { echo 'Missing fine-grained Administration(read) token required to prove immutable releases are enabled.' >&2; exit 1; }
-          response="$(curl -sS --fail-with-body \
+          # Preserve GitHub's safe error message and permission hints for
+          # diagnosis. Never print the credential, full request, or raw headers.
+          response_file="$(mktemp)"
+          headers_file="$(mktemp)"
+          trap 'rm -f "$response_file" "$headers_file"' EXIT
+          if ! http_code="$(curl --silent --show-error \
+            --output "$response_file" --dump-header "$headers_file" \
+            --write-out '%{http_code}' \
             -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GPP_RELEASE_ADMIN_READ_TOKEN" \
             -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/immutable-releases")"
-          test "$(printf '%s' "$response" | jq -r '.enabled')" = 'true'
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/immutable-releases")"; then
+            echo '::error::GitHub immutable-release verification failed before a valid HTTP response; publication remains blocked.'
+            exit 1
+          fi
+          python3 scripts/release/immutable-release-admission.py "$http_code" "$response_file" "$headers_file"
 
       - name: Resolve future version and reject existing immutable identity conflicts
         env:

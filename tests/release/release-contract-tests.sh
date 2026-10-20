@@ -29,6 +29,7 @@ addon_version() {
 }
 
 bash "$ROOT/tests/release/smoke-endpoint-contract-tests.sh"
+python3 "$ROOT/tests/release/immutable-release-admission-tests.py"
 
 # The canonical author identity is part of release identity, not mutable release data.
 # Source, candidate, packaged artifact, and development continuation must all retain it.
