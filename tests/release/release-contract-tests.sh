@@ -315,7 +315,7 @@ sed -i 's/Requires PHP: 8\.2/Requires PHP: 8.3/' "$PREREQ/gravity-presentation-p
 php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=dry-run > "$WORK/metadata-mismatch.json"
 require_marker "$WORK/metadata-mismatch.json" 'compatibility_metadata_mismatch:php_min'
 expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish
-cp "$ROOT/gravity-presentation-profiles.php" "$PREREQ/gravity-presentation-profiles.php"
+cp "$WORK/dev-source/gravity-presentation-profiles.php" "$PREREQ/gravity-presentation-profiles.php"
 
 php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$PREREQ" --mode=publish > "$WORK/compat-valid.json"
 require_marker "$WORK/compat-valid.json" '"publication_ready": true'
