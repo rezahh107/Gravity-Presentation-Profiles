@@ -165,3 +165,6 @@ connected_browser final
 
 php "$ROOT/tests/release/validate-behavioral-production-reachability.php" "$EVIDENCE_DIR"
 php "$ROOT/tests/release/validate-connected-print.php" "$EVIDENCE_DIR"
+
+# Independent Goal 5 acceptance shares the exact installed ZIP and host fixture.
+bash "$ROOT/tests/release/run-connected-entry-detail.sh" "$ROOT" "$WPCLI" "$WP_PATH" "$BASE_URL" "$EVIDENCE_DIR"
