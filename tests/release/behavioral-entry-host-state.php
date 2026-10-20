@@ -63,7 +63,6 @@ $personal_sentinels = array(
     'last_name' => (string) ( $entry[ $last_id ] ?? '' ),
     'choice_raw' => (string) ( $entry[ $choice_id ] ?? '' ),
     'choice_display' => trim( wp_strip_all_tags( (string) $choice_field->get_value_entry_detail( $entry[ $choice_id ], $entry, true, 'text' ) ) ),
-    'alternate_raw' => (string) ( $entry[ $alternate_id ] ?? '' ),
     'alternate_display' => trim( wp_strip_all_tags( (string) $alternate_field->get_value_entry_detail( $entry[ $alternate_id ], $entry, true, 'text' ) ) ),
 );
 if ( count( array_unique( array_values( $personal_sentinels ) ) ) !== count( $personal_sentinels ) ) {
@@ -103,7 +102,7 @@ if ( (int) $result['native_step_id'] !== (int) $fixture['native_authority']['app
     || $result['native_created_at'] !== $fixture['expected_native_created_at']
     || $result['native_choice_raw'] !== $fixture['expected_choice']['host_raw_value']
     || $result['native_choice_display'] !== $fixture['expected_choice']['host_display_value']
-    || $personal_sentinels['alternate_raw'] !== $fixture['expected_alternate_choice']['host_raw_value']
+    || (string) ( $entry[ $alternate_id ] ?? '' ) !== $fixture['expected_alternate_choice']['host_raw_value']
     || $personal_sentinels['alternate_display'] !== $fixture['expected_alternate_choice']['host_display_value'] ) {
     throw new RuntimeException( 'Host truth does not support connected Entry Detail Review.' );
 }
