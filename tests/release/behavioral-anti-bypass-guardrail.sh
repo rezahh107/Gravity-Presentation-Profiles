@@ -63,4 +63,8 @@ for marker in 'behavioral-http-form.php' 'connected-entry-detail-browser.mjs' 'b
     exit 1
   }
 done
+grep -Fq 'falsify-connected-entry-detail.py' "$ENTRY_RUNNER" || {
+  echo 'Connected Entry Detail must prove false-PASS rejection on authentic evidence.' >&2
+  exit 1
+}
 echo 'GPP_BEHAVIORAL_ANTI_BYPASS_GUARDRAIL_PASS'
