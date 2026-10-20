@@ -39,10 +39,33 @@ release_assert_author_identity "$ROOT"
 release_assert_version_mirrors "$ROOT"
 [[ "$(release_plugin_author "$ROOT")" == 'Reza Hashemi Hosseini' ]]
 
+# Repository CI exercises both development HEAD and the exact prepared
+# production-versioned candidate. Test development-only mutations against a
+# disposable copy; never re-version the actual candidate or relax preflight.
+CURRENT_SOURCE_VERSION="$(release_plugin_version "$ROOT")"
+if [[ "$CURRENT_SOURCE_VERSION" != '0.0.0-dev' ]]; then
+    release_is_production_version "$CURRENT_SOURCE_VERSION" || {
+        echo "Invalid source version for release contract tests: $CURRENT_SOURCE_VERSION" >&2
+        exit 1
+    }
+    grep -Fq "## [$CURRENT_SOURCE_VERSION] - " "$ROOT/CHANGELOG.md" || {
+        echo 'Production candidate lacks its matching Changelog release section.' >&2
+        exit 1
+    }
+fi
+
 mkdir -p "$WORK/dev-source"
 git -C "$ROOT" archive HEAD | tar -x -C "$WORK/dev-source"
 [[ "$(plugin_author "$WORK/dev-source")" == 'Reza Hashemi Hosseini' ]]
 release_assert_author_identity "$WORK/dev-source"
+if [[ "$CURRENT_SOURCE_VERSION" != '0.0.0-dev' ]]; then
+    # Only the synthetic source fixture receives canonical development reset.
+    php "$ROOT/scripts/release/prepare-development-continuation.php" \
+        --root="$WORK/dev-source" --released-version="$CURRENT_SOURCE_VERSION" >/dev/null
+fi
+release_assert_version_mirrors "$WORK/dev-source"
+[[ "$(plugin_version "$WORK/dev-source")" == '0.0.0-dev' ]]
+[[ "$(addon_version "$WORK/dev-source")" == '0.0.0-dev' ]]
 
 AUTHOR_MISSING="$WORK/author-missing"
 cp -a "$WORK/dev-source" "$AUTHOR_MISSING"
@@ -211,7 +234,15 @@ expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WO
 php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=dry-run > "$WORK/prerequisites.json"
 require_marker "$WORK/prerequisites.json" '"publication_ready": true'
 require_marker "$WORK/prerequisites.json" '"blockers": []'
-require_marker "$WORK/prerequisites.json" 'development_source_version'
+if [[ "$CURRENT_SOURCE_VERSION" == '0.0.0-dev' ]]; then
+    require_marker "$WORK/prerequisites.json" 'development_source_version'
+else
+    require_marker "$WORK/prerequisites.json" 'production_version_already_prepared'
+    if grep -Fq 'development_source_version' "$WORK/prerequisites.json"; then
+        echo 'Production candidate was incorrectly classified as development source.' >&2
+        exit 1
+    fi
+fi
 require_marker "$WORK/prerequisites.json" '"wordpress_min": "6.8.3"'
 require_marker "$WORK/prerequisites.json" '"php_min": "8.2"'
 require_marker "$WORK/prerequisites.json" '"gravity_forms_min": "3.1.1.1"'
@@ -220,8 +251,15 @@ if grep -Fq 'missing_license' "$WORK/prerequisites.json" || grep -Fq 'missing_co
     echo 'Resolved release prerequisites unexpectedly report an implementation-time blocker.' >&2
     exit 1
 fi
-php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=publish > "$WORK/prerequisites-publish.json"
-require_marker "$WORK/prerequisites-publish.json" '"publication_ready": true'
+if [[ "$CURRENT_SOURCE_VERSION" == '0.0.0-dev' ]]; then
+    php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=publish > "$WORK/prerequisites-publish.json"
+    require_marker "$WORK/prerequisites-publish.json" '"publication_ready": true'
+else
+    # A production-versioned candidate must remain REJECTED as new publish-start main.
+    expect_fail php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=publish
+    php "$ROOT/scripts/release/check-publication-prerequisites.php" --root="$ROOT" --mode=dry-run > "$WORK/prerequisites-production-source.json"
+    require_marker "$WORK/prerequisites-production-source.json" 'production_version_already_prepared'
+fi
 
 PREREQ="$WORK/prereq"
 cp -a "$WORK/dev-source" "$PREREQ"
