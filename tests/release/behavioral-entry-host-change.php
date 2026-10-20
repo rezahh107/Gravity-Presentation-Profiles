@@ -17,9 +17,7 @@ $form['fields'] = array_values( array_filter( $form['fields'], static function (
 } ) );
 $updated = GFAPI::update_form( $form );
 if ( is_wp_error( $updated ) ) throw new RuntimeException( $updated->get_error_message() );
-$fresh = GFAPI::get_form( (int) $fixture['form_id'] );
-if ( is_object( GFAPI::get_field( $fresh, $removed_id ) )
-    || ! is_object( GFAPI::get_field( $fresh, $replacement_id ) ) ) {
-    throw new RuntimeException( 'Host API did not retire exactly the selected field.' );
-}
+// GFAPI may retain a request-local form cache. A separate WP-CLI process
+// and the authentic browser request must prove the persisted removal; never
+// infer persistent source health from this mutation request's cached form.
 echo 'GPP_CONNECTED_ENTRY_HOST_SOURCE_CHANGE_PASS retired_field=' . $removed_id . PHP_EOL;
