@@ -62,3 +62,4 @@ entry_mapping after-entry-rebind replacement_empty_phone
 entry_setup after-entry-requalification
 entry_browser requalified
 php "$ROOT/tests/release/validate-connected-entry-detail.php" "$EVIDENCE_DIR"
+python3 "$ROOT/tests/release/falsify-connected-entry-detail.py" "$ROOT" "$EVIDENCE_DIR"
