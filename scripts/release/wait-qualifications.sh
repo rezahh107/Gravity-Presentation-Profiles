@@ -31,8 +31,10 @@ for workflow in "${WORKFLOWS[@]}"; do
         sleep 2
     done
     [[ -n "$run_id" ]] || { echo "No exact-source workflow run appeared for $workflow" >&2; exit 1; }
-    gh run watch "$run_id" --exit-status
-    row="$(gh run view "$run_id" --json databaseId,headSha,conclusion,workflowName)"
+    # Read-only bounded polling survives a transient GitHub API 5xx while
+    # preserving exact source, branch and completed-success requirements.
+    # No re-dispatch or "success" inferred from a temporary API failure.
+    row="$(bash "$(dirname "$0")/poll-qualification-run.sh" "$run_id" "$SHA" "$BRANCH" "$workflow")"
     observed_sha="$(printf '%s' "$row" | jq -r '.headSha')"
     conclusion="$(printf '%s' "$row" | jq -r '.conclusion')"
     [[ "$observed_sha" == "$SHA" ]] || { echo "Workflow $workflow ran a different source: $observed_sha" >&2; exit 1; }
