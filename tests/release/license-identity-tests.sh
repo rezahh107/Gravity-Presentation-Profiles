@@ -30,16 +30,42 @@ assert_blocker() {
     ' "$1" "$2"
 }
 
-# Positive control: the exact approved source resolves all repository publication prerequisites.
+# Preserve both distinct contracts: approved development source may start a
+# release, while an already production-versioned candidate must NOT start a new
+# publication. Candidate CI uses a disposable development fixture for license
+# mutation controls; the exact candidate checkout is never modified.
 [[ "$(sha256sum "$ROOT/LICENSE" | awk '{print $1}')" == "$APPROVED_LICENSE_SHA256" ]]
-php "$CHECKER" --root="$ROOT" --mode=dry-run > "$WORK/approved.json"
+# shellcheck source=scripts/release/release-lib.sh
+source "$ROOT/scripts/release/release-lib.sh"
+release_assert_version_mirrors "$ROOT"
+ORIGINAL_VERSION="$(release_plugin_version "$ROOT")"
+
+APPROVED="$WORK/approved-source"
+mkdir -p "$APPROVED"
+git -C "$ROOT" archive HEAD | tar -x -C "$APPROVED"
+if [[ "$ORIGINAL_VERSION" != '0.0.0-dev' ]]; then
+    release_is_production_version "$ORIGINAL_VERSION" || {
+        echo 'Invalid release contract source version in license identity tests.' >&2
+        exit 1
+    }
+    php "$CHECKER" --root="$ROOT" --mode=dry-run > "$WORK/actual-candidate.json"
+    assert_ready "$WORK/actual-candidate.json"
+    expect_fail php "$CHECKER" --root="$ROOT" --mode=publish
+    php "$CHECKER" --root="$ROOT" --mode=publish > "$WORK/actual-candidate-publish.json" 2>/dev/null && exit 1 || true
+    assert_blocker "$WORK/actual-candidate-publish.json" 'production_version_source_requires_recovery'
+    php "$ROOT/scripts/release/prepare-development-continuation.php" \
+        --root="$APPROVED" --released-version="$ORIGINAL_VERSION" >/dev/null
+fi
+release_assert_version_mirrors "$APPROVED"
+[[ "$(release_plugin_version "$APPROVED")" == '0.0.0-dev' ]]
+
+php "$CHECKER" --root="$APPROVED" --mode=dry-run > "$WORK/approved.json"
 assert_ready "$WORK/approved.json"
-php "$CHECKER" --root="$ROOT" --mode=publish > "$WORK/approved-publish.json"
+php "$CHECKER" --root="$APPROVED" --mode=publish > "$WORK/approved-publish.json"
 assert_ready "$WORK/approved-publish.json"
 
 SOURCE="$WORK/source"
-mkdir -p "$SOURCE"
-git -C "$ROOT" archive HEAD | tar -x -C "$SOURCE"
+cp -a "$APPROVED" "$SOURCE"
 
 # PRI-FND-001 original defect: arbitrary non-empty LICENSE bytes must now fail closed.
 printf '%s\n' 'arbitrary non-empty license bytes' > "$SOURCE/LICENSE"
@@ -72,7 +98,7 @@ sed -i 's/License: GPL v2 or later/License: GPL v3 or later/' "$SOURCE/gravity-p
 php "$CHECKER" --root="$SOURCE" --mode=dry-run > "$WORK/wrong-plugin-license.json"
 assert_blocker "$WORK/wrong-plugin-license.json" 'license_identity_mismatch:plugin_header'
 expect_fail php "$CHECKER" --root="$SOURCE" --mode=publish
-cp "$ROOT/gravity-presentation-profiles.php" "$SOURCE/gravity-presentation-profiles.php"
+cp "$APPROVED/gravity-presentation-profiles.php" "$SOURCE/gravity-presentation-profiles.php"
 
 sed -i '/^[[:space:]]*\*[[:space:]]*License:/d' "$SOURCE/gravity-presentation-profiles.php"
 php "$CHECKER" --root="$SOURCE" --mode=dry-run > "$WORK/missing-plugin-license.json"
