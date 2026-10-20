@@ -6,8 +6,15 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 CANDIDATE="$WORK/release-candidate"
-mkdir -p "$CANDIDATE"
-git -C "$ROOT" archive HEAD | tar -x -C "$CANDIDATE"
+SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+# The canonical release ZIP archive deliberately export-ignores tests, so it
+# cannot be used as the source of a self-testing repository fixture. Clone the
+# locally checked-out exact commit instead; --no-local works on shallow CI.
+git clone --quiet --no-local --no-checkout "$ROOT" "$CANDIDATE"
+git -C "$CANDIDATE" checkout --quiet --detach "$SOURCE_SHA"
+git -C "$CANDIDATE" remote remove origin
+test -f "$CANDIDATE/tests/release/release-contract-tests.sh"
+test -f "$CANDIDATE/tests/release/license-identity-tests.sh"
 
 # [Unreleased] may be empty after a release. Add only a synthetic fixture note.
 php -r '
@@ -21,7 +28,6 @@ if (file_put_contents($path,str_replace($needle,$fixture,$text))===false) exit(1
 
 php "$CANDIDATE/scripts/release/prepare-candidate.php" \
     --root="$CANDIDATE" --version=8.6.5 --date=2030-01-02 >/dev/null
-git -C "$CANDIDATE" init -q
 git -C "$CANDIDATE" config user.name 'gpp-contract-fixture'
 git -C "$CANDIDATE" config user.email 'gpp-contract-fixture@example.invalid'
 git -C "$CANDIDATE" add -A
