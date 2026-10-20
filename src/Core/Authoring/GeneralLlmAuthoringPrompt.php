@@ -129,9 +129,11 @@ final class GeneralLlmAuthoringPrompt {
         $lines[] = '';
         $lines[] = 'Do not add other token categories just because the schema may admit internal values elsewhere. This authoring vocabulary exposes only token categories consumed by the current supported Gravity Forms declarative runtime.';
         $lines[] = '';
-        $lines[] = '## Complete supported mutable presentation vocabulary';
+        $lines[] = '## Schema-admitted presentation vocabulary (not a blanket runtime-verified list)';
         $lines[] = '';
         $lines[] = 'All paths below apply only to `gravity_forms.form`. Omit preferences the user has not selected or that cannot be resolved confidently.';
+        $lines[] = 'Schema acceptance, emitted CSS variables and a class name do not prove visible browser behavior. Browser-qualified in the pinned generic Gravity Forms 3.1.1.1/WU21 fixture: `composition.surface_background` (form wrapper paint), `controls.border` (normal-state text/email/select/textarea native borders), and `primary_action.background` (submit button paint), at 1440, 390 and 320 px. The colors and exact field set are fixture evidence, not a universal guarantee for other themes, add-ons or owner production sites.';
+        $lines[] = 'Other listed preferences remain authorable schema values, but visible runtime application is NOT_PROVEN by that evidence; do not call them verified, promise visual fidelity, or claim broad field/add-on support. Verify host-specific boundaries or explicitly report the limit before authoring.';
 
         foreach ( $contract['presentation'] as $block => $preferences ) {
             foreach ( $preferences as $name => $rule ) {
