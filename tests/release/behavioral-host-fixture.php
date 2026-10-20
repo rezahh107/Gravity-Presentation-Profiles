@@ -143,16 +143,6 @@ if ( ! $step_id || is_wp_error( $step_id ) ) {
     throw new RuntimeException( 'Native Gravity Flow approval step could not be created.' );
 }
 
-// The native Approval Review must be genuinely read-only: this is host-owned
-// synthetic workflow configuration, not a GPP permission or display override.
-$step_meta = gravity_flow()->get_feed_meta( $step_id );
-$step_meta['editable_fields'] = array();
-$step_meta['instructionsEnable'] = '1';
-$step_meta['instructionsValue'] = 'Synthetic behavioral review instructions.';
-$step_meta['note_mode'] = 'optional';
-$step_meta['revertEnable'] = '1';
-gravity_flow()->update_feed_meta( $step_id, $step_meta );
-
 $synthetic_first = 'Reachability Ada';
 $entry_id = GFAPI::add_entry(
     array(
@@ -190,6 +180,16 @@ $current = $flow_api->get_current_step( GFAPI::get_entry( $entry_id ) );
 if ( ! $current || 'approval' !== $current->get_type() || (int) $current->get_id() !== (int) $step_id ) {
     throw new RuntimeException( 'Entry did not enter the authentic native Flow approval step.' );
 }
+
+// The synthetic host Approval is now running, so its native Step API owns
+// its feed metadata. This is the same host setup seam used in WU18.
+$step_meta = $current->get_feed_meta();
+$step_meta['editable_fields'] = array();
+$step_meta['instructionsEnable'] = '1';
+$step_meta['instructionsValue'] = 'Synthetic behavioral review instructions.';
+$step_meta['note_mode'] = 'optional';
+$step_meta['revertEnable'] = '1';
+gravity_flow()->update_feed_meta( $current->get_id(), $step_meta );
 
 if ( null !== get_option( VisualPackageLifecycle::OPTION_NAME, null ) || null !== get_option( BindingSetLifecycle::OPTION_NAME, null ) ) {
     fwrite( STDERR, "Creating host test data unexpectedly mutated GPP lifecycle state.\n" );
