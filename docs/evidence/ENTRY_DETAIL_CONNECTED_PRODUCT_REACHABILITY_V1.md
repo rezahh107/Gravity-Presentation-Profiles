@@ -1,8 +1,11 @@
 # Goal 5 — Connected Entry Detail Production Reachability
 
-Status: **PR #163 baseline Head c2f3073b919444838b2d66e9a4b26bed961eb252 verified; PRI-FND-001 successor CI and independent rereview require separate exact-Head evidence.**
+Status: **Connected G5 witness hardening implemented and exercised in a pinned synthetic installed-ZIP runtime; Owner-site acceptance NOT_PROVEN.** The precise current commit's status is authoritative in [PR #163 Checks](https://github.com/rezahh107/Gravity-Presentation-Profiles/pull/163/checks), not a static historical claim in this document. Independent external rereview is not implied by green CI.
 
-Baseline observed: [Repository CI run 39394371057](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371057) and [Release dry-run 39394371043](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371043). These runs predate the G5 witness hardening and **do not** qualify the repaired acceptance. Only fresh successor runs can establish that.
+- Baseline PR #163 Head `c2f3073b919444838b2d66e9a4b26bed961eb252`: [Repository CI run 39394371057](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371057) and [Release dry-run 39394371043](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371043).
+- Repaired PR #163 Head `25bf47f117da18393cfab597a9fe95f7719c5bfe`: [Repository CI run 39405647315](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39405647315) **SUCCESS**, [Release dry-run 39405647238](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39405647238) **SUCCESS**. Real ZIP Print tests, four real native Entry Detail browser stages and all eleven negative evidence mutations passed for *that exact Head*. A subsequent documentation-only Head must have its own checks observed before claiming exact-Head success.
+
+This is pinned synthetic WP/GF/Flow runtime evidence only (WordPress 6.8.3, Gravity Forms 3.1.1.1, Gravity Flow 3.1.0). Publication, Owner site and independent PR rereview are not proven.
 
 ## Scope and governing boundaries
 
