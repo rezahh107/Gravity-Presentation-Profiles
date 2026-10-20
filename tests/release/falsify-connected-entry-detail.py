@@ -38,6 +38,23 @@ cases = [
                          "source":"native_status_box_visible_innerText"},
            "candidates":[{"selector":".gravityflow-status-box",
                           "label":"Status","text":"G5_MUTANT_WRONG_STATUS"}]})),
+    ("http_200_instead_of_native_403", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"].__setitem__("http_status", 200)),
+    ("missing_native_denial_http_status", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"].pop("http_status")),
+    ("attribute_only_personal_exposure", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"]["dom_scan"].__setitem__("initial",
+         [{"key":"choice_display","locations":["attributes"]}])),
+    ("input_value_only_personal_exposure", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"]["dom_scan"].__setitem__("initial",
+         [{"key":"choice_raw","locations":["controls"]}])),
+    ("forged_authorization_evidence_source", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"].__setitem__("source", "FABRICATED_DENIAL")),
+    ("missing_authorization_dom_scan", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"].pop("dom_scan")),
+    ("fabricated_dom_negative_control", "connected-entry-requalified.json",
+     lambda d: d["unauthorized_viewer"]["dom_scan"]["negative_challenges"]
+         .__setitem__("attribute_only", [])),
     ("surname_only_exposure", "connected-entry-requalified.json",
      lambda d: d["unauthorized_viewer"].__setitem__("exposed_sentinel_keys", ["last_name"])),
     ("incomplete_denied_value_coverage", "connected-entry-requalified.json",
@@ -79,4 +96,4 @@ with tempfile.TemporaryDirectory(prefix="gpp-goal5-mutations-") as tmp:
     if not result.returncode or "GPP_CONNECTED_ENTRY_FAIL" not in result.stdout:
         raise SystemExit("FALSIFICATION_FAIL missing_stage: " + result.stdout[-800:])
     print("G5_EXPECTED_REJECTION_PASS missing_stage")
-print("G5_CONNECTED_ENTRY_FALSIFICATIONS_PASS authentic_positive=1 negative=11")
+print("G5_CONNECTED_ENTRY_FALSIFICATIONS_PASS authentic_positive=1 negative=18")
