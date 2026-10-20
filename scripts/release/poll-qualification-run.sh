@@ -30,7 +30,8 @@ for (( attempt=1; attempt<=MAX_POLLS; attempt++ )); do
                 echo "Qualification failed: $WORKFLOW run=$RUN_ID conclusion=$conclusion" >&2
                 exit 1
             fi
-            printf '%s' "$row" | jq -c .
+            # Preserve the prior qualification.json evidence shape.
+            printf '%s' "$row" | jq -c '{databaseId,headSha,conclusion,workflowName}'
             exit 0
         fi
         if [[ -n "$conclusion" ]]; then
