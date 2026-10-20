@@ -49,7 +49,7 @@ $add_field = static function ( array &$form, $type, $label, array $extra = array
     }
     $field->id         = $next_id;
     $field->label      = $label;
-    $field->isRequired = true;
+    $field->isRequired = isset( $extra['isRequired'] ) ? (bool) $extra['isRequired'] : true;
     $form['fields'][]  = $field;
     return $next_id;
 };
