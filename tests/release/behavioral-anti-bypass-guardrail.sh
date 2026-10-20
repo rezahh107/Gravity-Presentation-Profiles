@@ -10,6 +10,11 @@ FILES=(
   "$ROOT/tests/release/connected-print-browser.mjs"
   "$ROOT/tests/release/verify-connected-print-output.mjs"
   "$ROOT/tests/release/run-behavioral-production-reachability.sh"
+  "$ROOT/tests/release/behavioral-entry-host-state.php"
+  "$ROOT/tests/release/behavioral-entry-host-change.php"
+  "$ROOT/tests/release/connected-entry-detail-browser.mjs"
+  "$ROOT/tests/release/validate-connected-entry-detail.php"
+  "$ROOT/tests/release/run-connected-entry-detail.sh"
 )
 for file in "${FILES[@]}"; do [[ -f "$file" ]] || { echo "Missing behavioral helper: $file" >&2; exit 1; }; done
 if grep -En '(^|[^[:alnum:]_])(update_option|add_option|delete_option)[[:space:]]*\(' "${FILES[@]}"; then
@@ -42,6 +47,18 @@ done
 for consumer in "$ROOT/tests/release/connected-print-browser.mjs" "$ROOT/tests/release/validate-connected-print.php"; do
   grep -Fq 'verify-connected-print-output.mjs' "$consumer" || {
     echo "Post-export PDF/raster verifier not connected: $consumer" >&2
+    exit 1
+  }
+done
+# Preserve the independent Goal 5 installed-ZIP/native request boundary.
+grep -Fq 'run-connected-entry-detail.sh' "$RUNNER" || {
+  echo 'Connected Entry Detail is missing from the canonical release runner.' >&2
+  exit 1
+}
+ENTRY_RUNNER="$ROOT/tests/release/run-connected-entry-detail.sh"
+for marker in 'behavioral-http-form.php' 'connected-entry-detail-browser.mjs' 'behavioral-entry-host-state.php' 'behavioral-entry-host-change.php' 'validate-connected-entry-detail.php'; do
+  grep -Fq "$marker" "$ENTRY_RUNNER" || {
+    echo "Connected Entry Detail boundary is missing: $marker" >&2
     exit 1
   }
 done
