@@ -55,6 +55,8 @@ if [[ "$1" == 'run' && "$2" == 'list' ]]; then
             fi ;;
         listPersistent) echo 'HTTP 503: Service Unavailable' >&2; exit 1 ;;
         list403) echo 'HTTP 403: Forbidden' >&2; exit 1 ;;
+        list401) echo 'HTTP 401: Unauthorized' >&2; exit 1 ;;
+        list400) echo 'HTTP 400: Invalid request' >&2; exit 1 ;;
         listMixedErrors) echo 'HTTP 403: Forbidden; downstream HTTP 503' >&2; exit 1 ;;
         listMalformed) echo '{unparseable'; exit 0 ;;
         listWrongRoot) echo '{}'; exit 0 ;;
@@ -81,7 +83,7 @@ if [[ "$1" == 'run' && "$2" == 'list' ]]; then
                     parentMalformed) echo '[{not-json]'; exit 0 ;;
                 esac
             fi ;;
-        stable|temporary|parent503|persistent503|auth403|pending|failed|cancelled|premature|malformed|wrongSha|wrongBranch|wrongId|wrongEvent) ;;
+        stable|temporary|parent503|parentFailed|parentPending|persistent503|auth403|pending|failed|cancelled|premature|malformed|wrongSha|wrongBranch|wrongId|wrongEvent) ;;
         *) echo "Unknown mocked discovery scenario $MOCK_CASE" >&2; exit 99 ;;
     esac
     printf '[{"databaseId":%s,"headSha":"%s","headBranch":"%s","event":"%s","status":"queued","conclusion":null}]\n' "$id" "$sha" "$branch" "$event"
@@ -108,6 +110,10 @@ case "$MOCK_CASE" in
             echo 'failed to get run: HTTP 503: Service Unavailable' >&2
             exit 1
         fi ;;
+    parentFailed)
+        if [[ "$id" == '992' ]]; then conclusion='"failure"'; fi ;;
+    parentPending)
+        if [[ "$id" == '992' ]]; then status=in_progress; conclusion=null; fi ;;
     persistent503) echo 'HTTP 503: Service Unavailable' >&2; exit 1 ;;
     auth403) echo 'HTTP 403: Forbidden' >&2; exit 1 ;;
     pending) status=in_progress; conclusion=null ;;
@@ -119,7 +125,7 @@ case "$MOCK_CASE" in
     wrongBranch) branch='wrong-branch' ;;
     wrongId) output_id=999 ;;
     wrongEvent) event=push ;;
-    stable|listTemporary|listEmptyThenValid|listPersistent|list403|listMixedErrors|listMalformed|listWrongRoot|listMultiDoc|listWrongSha|listWrongBranch|listWrongEvent|listBadId|listDuplicateId|listPickNewest|parentList503|parentListPersistent|parentList403|parentMalformed) ;;
+    stable|listTemporary|listEmptyThenValid|listPersistent|list403|list401|list400|listMixedErrors|listMalformed|listWrongRoot|listMultiDoc|listWrongSha|listWrongBranch|listWrongEvent|listBadId|listDuplicateId|listPickNewest|parentList503|parentListPersistent|parentList403|parentMalformed) ;;
     *) exit 99 ;;
 esac
 printf '{"databaseId":%s,"headSha":"%s","headBranch":"%s","event":"%s","status":"%s","conclusion":%s,"workflowName":"Repository CI"}\n' "$output_id" "$sha" "$branch" "$event" "$status" "$conclusion"
@@ -190,7 +196,7 @@ run_good_parent parentMixed
 [[ "$(cat "$MOCK_STATE/list_992")" == 2 ]]
 [[ "$(cat "$MOCK_STATE/view_992")" == 2 ]]
 [[ "$(wc -l < "$MOCK_STATE/dispatches")" == 6 ]]
-for scenario in listPersistent list403 listMixedErrors listMalformed listWrongRoot listMultiDoc listWrongSha listWrongBranch listWrongEvent listBadId listDuplicateId parentListPersistent parentList403 parentMalformed; do
+for scenario in listPersistent list403 list401 list400 listMixedErrors listMalformed listWrongRoot listMultiDoc listWrongSha listWrongBranch listWrongEvent listBadId listDuplicateId parentListPersistent parentList403 parentMalformed parentFailed parentPending; do
     run_bad_parent "$scenario"
 done
 echo 'GPP_TRANSIENT_GITHUB_503_WAITER_TESTS_PASS view_positive=2 view_negative=11 list_recovery=PASS six_run_mixed=PASS latest_id=PASS fail_closed=PASS dispatches=6'
