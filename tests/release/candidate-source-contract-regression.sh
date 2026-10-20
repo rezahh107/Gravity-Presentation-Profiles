@@ -40,7 +40,7 @@ fi
 grep -Fq 'production_version_source_requires_recovery' "$WORK/candidate-publish.json"
 
 # Re-enter the affected suites against a real staged, committed candidate.
-GPP_RELEASE_CANDIDATE_NESTED_TEST=1 bash "$CANDIDATE/tests/release/release-contract-tests.sh"
-GPP_RELEASE_CANDIDATE_NESTED_TEST=1 bash "$CANDIDATE/tests/release/license-identity-tests.sh"
+bash "$CANDIDATE/tests/release/release-contract-tests.sh"
+bash "$CANDIDATE/tests/release/license-identity-tests.sh"
 
 echo 'GPP_PREPARED_CANDIDATE_SOURCE_CONTRACT_PASS version=8.6.5 publish_start=REJECTED'
