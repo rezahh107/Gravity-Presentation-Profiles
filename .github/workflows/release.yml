@@ -178,6 +178,10 @@ jobs:
         shell: bash
         run: bash scripts/release/smoke-zip.sh . "$GPP_RELEASE_ZIP" /tmp/gpp-release-wordpress
 
+      - name: Falsify the Goal 5 parent runner invocation
+        shell: bash
+        run: bash tests/release/falsify-parent-entry-invocation.sh . "$GPP_RELEASE_ZIP"
+
       - name: Emit bounded dry-run identity manifest
         shell: bash
         run: |
@@ -205,6 +209,7 @@ jobs:
             build/release/release-manifest.json
             build/release/publication-prerequisites.json
             build/release/behavioral-production-reachability.json
+            build/release/goal5-parent-invocation-regression.txt
             build/release/behavioral-production-reachability/connected-print-acceptance.json
             build/release/behavioral-production-reachability/connected-print-*.json
             build/release/behavioral-production-reachability/connected-print-dossier.html
@@ -213,6 +218,9 @@ jobs:
             build/release/behavioral-production-reachability/connected-print-*.pdf
             build/release/behavioral-production-reachability/connected-print-*-page-*.png
             build/release/behavioral-production-reachability/connected-print-*-negative/*
+            build/release/behavioral-production-reachability/connected-entry-acceptance.json
+            build/release/behavioral-production-reachability/connected-entry-*.json
+            build/release/behavioral-production-reachability/connected-entry-*.png
           if-no-files-found: error
           retention-days: 30
 

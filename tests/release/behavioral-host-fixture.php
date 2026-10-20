@@ -49,7 +49,7 @@ $add_field = static function ( array &$form, $type, $label, array $extra = array
     }
     $field->id         = $next_id;
     $field->label      = $label;
-    $field->isRequired = true;
+    $field->isRequired = isset( $extra['isRequired'] ) ? (bool) $extra['isRequired'] : true;
     $form['fields'][]  = $field;
     return $next_id;
 };
@@ -62,19 +62,21 @@ $choice_id     = $add_field(
     'Behavioral Choice',
     array(
         'choices' => array(
-            array( 'text' => 'Synthetic Female', 'value' => 'source-value-f-91' ),
-            array( 'text' => 'Synthetic Male', 'value' => 'source-value-m-26' ),
+            array( 'text' => 'G5FemaleLQ56', 'value' => 'G5FemaleRawH26' ),
+            array( 'text' => 'G5MaleLabelF73', 'value' => 'G5MaleRawB84' ),
         ),
     )
 );
+$empty_phone_id = $add_field( $form, 'text', 'Behavioral Empty Phone A', array( 'isRequired' => false ) );
+$replacement_empty_phone_id = $add_field( $form, 'text', 'Behavioral Empty Phone B', array( 'isRequired' => false ) );
 $alternate_choice_id = $add_field(
     $form,
     'radio',
     'Behavioral Alternate Choice',
     array(
         'choices' => array(
-            array( 'text' => 'Synthetic Female', 'value' => 'source-value-f-91' ),
-            array( 'text' => 'Synthetic Male', 'value' => 'source-value-m-26' ),
+            array( 'text' => 'G5AlternateQ732', 'value' => 'G5FemaleRawH26' ),
+            array( 'text' => 'G5MaleLabelF73', 'value' => 'G5MaleRawB84' ),
         ),
     )
 );
@@ -88,7 +90,7 @@ $form = GFAPI::get_form( $form_id );
 if ( ! is_array( $form ) ) {
     throw new RuntimeException( 'Synthetic form disappeared after update.' );
 }
-foreach ( array( $first_name_id, $last_name_id, $choice_id, $alternate_choice_id ) as $field_id ) {
+foreach ( array( $first_name_id, $last_name_id, $choice_id, $alternate_choice_id, $empty_phone_id, $replacement_empty_phone_id ) as $field_id ) {
     $field = GFAPI::get_field( $form, $field_id );
     if ( ! is_object( $field ) ) {
         throw new RuntimeException( 'Host-assigned synthetic field could not be resolved: ' . $field_id );
@@ -141,12 +143,12 @@ if ( ! $step_id || is_wp_error( $step_id ) ) {
     throw new RuntimeException( 'Native Gravity Flow approval step could not be created.' );
 }
 
-$synthetic_first = 'Reachability Ada';
+$synthetic_first = 'G5FirstQa821';
 $entry_id = GFAPI::add_entry(
     array(
         'form_id' => $form_id,
         (string) $first_name_id => $synthetic_first,
-        (string) $last_name_id => 'Synthetic',
+        (string) $last_name_id => 'G5LastXw1934',
         (string) $choice_id => $raw_choice,
         (string) $alternate_choice_id => $raw_choice,
         'created_by' => (int) $admin->ID,
@@ -179,6 +181,16 @@ if ( ! $current || 'approval' !== $current->get_type() || (int) $current->get_id
     throw new RuntimeException( 'Entry did not enter the authentic native Flow approval step.' );
 }
 
+// The synthetic host Approval is now running, so its native Step API owns
+// its feed metadata. This is the same host setup seam used in WU18.
+$step_meta = $current->get_feed_meta();
+$step_meta['editable_fields'] = array();
+$step_meta['instructionsEnable'] = '1';
+$step_meta['instructionsValue'] = 'Synthetic behavioral review instructions.';
+$step_meta['note_mode'] = 'optional';
+$step_meta['revertEnable'] = '1';
+gravity_flow()->update_feed_meta( $current->get_id(), $step_meta );
+
 if ( null !== get_option( VisualPackageLifecycle::OPTION_NAME, null ) || null !== get_option( BindingSetLifecycle::OPTION_NAME, null ) ) {
     fwrite( STDERR, "Creating host test data unexpectedly mutated GPP lifecycle state.\n" );
     exit( 1 );
@@ -196,9 +208,16 @@ $manifest = array(
         'last_name' => array( 'id' => $last_name_id, 'label' => 'Behavioral Last Name', 'type' => 'text' ),
         'choice' => array( 'id' => $choice_id, 'label' => 'Behavioral Choice', 'type' => 'radio' ),
         'alternate_choice' => array( 'id' => $alternate_choice_id, 'label' => 'Behavioral Alternate Choice', 'type' => 'radio' ),
+        'empty_phone' => array( 'id' => $empty_phone_id, 'label' => 'Behavioral Empty Phone A', 'type' => 'text' ),
+        'replacement_empty_phone' => array( 'id' => $replacement_empty_phone_id, 'label' => 'Behavioral Empty Phone B', 'type' => 'text' ),
     ),
     'expected_first_name_value' => $synthetic_first,
-    'expected_last_name_value' => 'Synthetic',
+    'expected_last_name_value' => 'G5LastXw1934',
+    'expected_native_created_at' => (string) ( GFAPI::get_entry( (int) $entry_id )['date_created'] ?? '' ),
+    'expected_alternate_choice' => array(
+        'host_raw_value' => $raw_choice,
+        'host_display_value' => 'G5AlternateQ732',
+    ),
     'expected_choice' => array(
         'host_raw_value' => $raw_choice,
         'host_display_value' => $display_choice,
