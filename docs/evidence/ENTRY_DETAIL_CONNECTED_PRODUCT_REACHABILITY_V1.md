@@ -1,12 +1,22 @@
 # Goal 5 — Connected Entry Detail Production Reachability
 
-Status: **Connected CI acceptance added; exact-Head execution pending CI evidence.**
+Status: **PR #163 baseline Head c2f3073b919444838b2d66e9a4b26bed961eb252 verified; PRI-FND-001 successor CI and independent rereview require separate exact-Head evidence.**
+
+Baseline observed: [Repository CI run 39394371057](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371057) and [Release dry-run 39394371043](https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/39394371043). These runs predate the G5 witness hardening and **do not** qualify the repaired acceptance. Only fresh successor runs can establish that.
 
 ## Scope and governing boundaries
 
 This qualification extends the installed-ZIP release smoke established for connected native Print (#161). It does not redesign Entry Detail, change the approved vNext HTML, or grant Gravity Flow permission. The Owner's external GOAL_AUTHORITY was not materialized in this repository; the explicit Goal 5 task is the Owner constraint for this batch. Existing WU18 and WU02 runtime qualification remains independently valid for the host/runtime it actually exercised.
 
 Architecture: `docs/architecture/ENTRY_DETAIL_REVIEW_CORRECTION_TARGET_V1.md` and `docs/visual/ENTRY_DETAIL_VNEXT_AUTHORITY_MIGRATION_V1.md`.
+
+## PRI-FND-001 — bounded host-witness completeness
+
+The connected Entry Detail date claim now combines a separately fetched GFAPI `date_created` raw value, the **existing** GPP `BoundHostValueReader::readDisplay` date provider, and the actual browser's rendered `entry.created_at` text. No independent Jalali conversion or timezone assumption has been introduced. Stage changes cannot silently substitute a different host-source mapping: the independent validator compares stage-specific binding identity, semantic state and source refs with product-created immutable snapshots.
+
+`workflow.status` has native API truth through `Gravity_Flow_API::get_status()`. A **distinct, visible, host-owned, exact status marker** `[data-gravityflow-status]` must match that API value when actually present. The pinned native Approval action/status box alone does not prove that a directly comparable raw status is displayed; if no explicit comparable status marker is found, the exact **visible-status-equivalence claim remains NOT_PROVEN** rather than manufacturing a comparison against a GPP field. The gate continues to prove native status API truth, step and controls. This does not establish target-site or localized visible status parity.
+
+The denied subscriber is checked against six distinct, synthetic host personal sentinels: both names and each of two radio fields' **raw and displayed** values, independently read through GFAPI. The check scans full document text rather than a truncated body excerpt, challenges the surname-only detector and verifies the complete covered keyset in the independent acceptance validator. A new negative gate copies the authentic positive JSON evidence and mutates date, status, authorization, binding, controls, stage and routing claims; every corruption must fail the validator. No test-owned GPP lifecycle or permission-model replacement is introduced.
 
 ## Existing proof vs the missing connection
 
