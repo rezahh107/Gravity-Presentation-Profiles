@@ -103,6 +103,9 @@ jobs:
           test "$actual" = "$expected"
           mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
 
+      - name: Syntax-check bounded G-014 coexistence browser harness before lab boot
+        run: node --check tests/repro-evidence-lab/g014-persian-gravity-gpp-coexistence.mjs
+
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
@@ -569,7 +572,7 @@ jobs:
       - name: Qualify exact G014 PersianGravity with real GPP and licensed Gravity Flow
         if: ${{ always() && !cancelled() && steps.wu21_fixture_setup.outcome == 'success' }}
         env:
-          G014_PGR_SOURCE_SHA: 5928b20cee93ede9b239f1cd5b3041c608817ee4
+          G014_PGR_SOURCE_SHA: e5d88a50c4f65b903dc796a8f2d7f2ff685d0326
         shell: bash
         run: |
           set -euo pipefail
