@@ -8,7 +8,8 @@ const env=process.env, out=env.WU21_ARTIFACT_DIR, base=env.WU21_BASE_URL;
 const f=JSON.parse(fs.readFileSync(path.join(out,'ciq-browser-fixture.json'),'utf8'));
 const headless=JSON.parse(fs.readFileSync(path.join(out,'ciq-headless.json'),'utf8'));
 assert.equal(headless.gate_b,'PASS_HEADLESS_TESTED_SCOPE');
-const evidence={head:f.head,headless_gate:headless.gate_b,status:'RUNNING',checks:[],screenshots:[]};
+const metadataOnly=headless.field_scope==='METADATA_ONLY_PERSONAL_FIELDS_NOT_PROVEN';
+const evidence={head:f.head,headless_gate:headless.gate_b,field_scope:headless.field_scope,status:'RUNNING',checks:[],screenshots:[],not_proven:metadataOnly?['Personal field rendering, escaping and native final field-output projection are not qualified; all personal fields are omitted.']:[]};
 const check=(name,details={})=>evidence.checks.push({name,status:'PASS',...details});
 const save=()=>fs.writeFileSync(path.join(out,'ciq-browser.json'),JSON.stringify(evidence,null,2));
 function wp(code){const r=spawnSync('php',[env.WU21_WP_CLI,'--path='+env.WU21_WP_PATH,'eval',code],{env,encoding:'utf8',timeout:60000});assert.equal(r.status,0,r.stderr);return r.stdout.trim();}
@@ -33,14 +34,15 @@ try {
   const expected=headless.comparisons.officer_after_transition.candidate.map(x=>x.id).sort((a,b)=>a-b);
   assert.deepEqual(await ids(p),expected); assert.equal(expected.length,2);
   assert.equal(await p.locator('[data-ciq-field="2"]').count(),0);
-  assert.equal(await p.locator('[data-ciq-field="1"]').count(),2);
+  assert.equal(await p.locator('[data-ciq-field="1"]').count(),metadataOnly?0:2);
+  if(metadataOnly)assert.equal(await p.locator('[data-ciq-field]').count(),0);
   assert.ok(safe(await p.content()));
   assert.match(response.headers()['cache-control'],/private/);assert.match(response.headers()['cache-control'],/no-store/);
   assert.match(response.headers()['vary']||'',/cookie/i);
   assert.equal(await p.locator('.ciq-inbox').evaluate(x=>getComputedStyle(x).direction),'rtl');
   assert.equal(await p.locator('[data-js="gflow-inbox"]').count(),0);
   fs.writeFileSync(path.join(out,'custom-officer.html'),await response.text());
-  assert.equal(await p.locator('#ciq-unescaped').count(),0);check('stored_text_escaped_as_text');
+  assert.equal(await p.locator('#ciq-unescaped').count(),0);check(metadataOnly?'unqualified_personal_fields_omitted_everywhere':'stored_text_escaped_as_text');
   check('officer_exact_membership_and_field_absence',{ids:expected});check('private_no_store_cookie_variation');check('server_rendered_rtl_no_second_grid');
   for(const width of [1280,390]){
     await p.setViewportSize({width,height:900});

@@ -94,7 +94,17 @@ try {
     ciq_assert( strpos( wp_json_encode( $raw ), 'CIQ_WITHHELD_' ) !== false, 'Adversarial raw field witness absent' );
     $scanner = static function ( $value ) { return strpos( wp_json_encode( $value ), 'CIQ_WITHHELD_' ) === false; };
     ciq_assert( $scanner( $projected ) && ! $scanner( $raw ), 'Disclosure scanner failed positive or negative control' );
-    foreach ( $projected as $r ) { ciq_assert( ! isset( $r['fields']['2'] ) && isset( $r['fields']['1'] ), 'Step Display Fields not respected' ); }
+    $final_filter_active = (bool) has_filter( 'gform_field_content' );
+    $report['field_scope'] = $final_filter_active ? 'METADATA_ONLY_PERSONAL_FIELDS_NOT_PROVEN' : 'SIMPLE_TEXT_FIELDS';
+    foreach ( $projected as $r ) {
+        ciq_assert( ! isset( $r['fields']['2'] ), 'Withheld field disclosed' );
+        if ( $final_filter_active ) {
+            ciq_assert( empty( $r['fields'] ), 'Unqualified final output filter must omit every personal field' );
+        } else {
+            ciq_assert( isset( $r['fields']['1'] ), 'Qualified visible field missing' );
+        }
+    }
+    $report['field_projection_readiness'] = $final_filter_active ? 'FIELD_VISIBILITY_NOT_PROVEN__ALL_PERSONAL_FIELDS_OMITTED' : 'SIMPLE_TEXT_ONLY';
     $report['checks']['raw_api_is_not_a_field_authorization_boundary'] = 'DEMONSTRATED';
     $report['checks']['withheld_field_projection_and_same_scanner_raw_mutant'] = 'PASS';
     $deny_field = static function ( $allowed, $field ) { return (int) $field->id === 3 ? false : $allowed; };
@@ -106,7 +116,9 @@ try {
     $mask = static function ( $value, $field ) { return (int) $field->id === 3 ? 'CIQ_MASKED_SCHOOL' : $value; };
     add_filter( 'gform_entry_field_value', $mask, 10, 2 );
     $masked = ciq_project( ciq_entries() );
-    foreach ( $masked as $r ) { ciq_assert( $r['fields']['3'] === 'CIQ_MASKED_SCHOOL', 'Native value masking bypass' ); }
+    foreach ( $masked as $r ) {
+        ciq_assert( $final_filter_active ? empty( $r['fields'] ) : $r['fields']['3'] === 'CIQ_MASKED_SCHOOL', 'Native value masking bypass' );
+    }
     // The earlier raw-value projection would still disclose the original value.
     ciq_assert( $raw[0]['3'] === 'مدرسه آزمایشی', 'Raw-value negative witness absent' );
     $entry = GFAPI::get_entry( $entries[0] );
@@ -114,6 +126,7 @@ try {
     ciq_assert( strpos( $masked_html, 'CIQ_MASKED_SCHOOL' ) !== false && strpos( $masked_html, 'مدرسه آزمایشی' ) === false, 'Native masking witness failed' );
     remove_filter( 'gform_entry_field_value', $mask, 10 );
     $report['checks']['native_value_masking_and_raw_value_counterexample'] = 'PASS';
+    $report['candidate_masked_field_rendering'] = $final_filter_active ? 'NOT_EXECUTED__CONSERVATIVE_OMISSION' : 'PASS';
     $hide_content = static function () { return ''; };
     add_filter( 'gform_field_content', $hide_content );
     foreach ( ciq_project( ciq_entries() ) as $r ) { ciq_assert( empty( $r['fields'] ), 'Unqualified final HTML filter must omit fields' ); }

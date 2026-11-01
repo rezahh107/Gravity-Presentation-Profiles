@@ -86,3 +86,16 @@ output to escaped text. Native masking is exercised against real rendered Entry
 Detail, with the earlier raw read retained as an adversarial witness. Arbitrary
 final field-HTML filters conservatively omit fields; this is explicitly a limited
 spike policy, not a new authorization engine or production field API.
+
+### Material limitation found in actual runtime
+
+The active GPP/Gravity Forms environment has a final gform_field_content hook.
+The conservative candidate therefore omits **all personal field values**. The
+final spike display is metadata-only: task/entry identity, date and native link.
+This follows the Owner's explicit omit-unproven-fields rule. Exact task-set and
+unauthorized-disclosure predicates remain unchanged. Positive personal-field
+rendering is NOT_PROVEN, not a PASS. The native masking test and raw-value
+counterexample remain useful independent evidence; they do not prove custom
+field projection. Earlier personal-field screenshots/results on prior Heads must
+not be attributed to this final narrower candidate. No complex renderer observer,
+copied authorization engine or field-policy workaround is added to obtain fields.
