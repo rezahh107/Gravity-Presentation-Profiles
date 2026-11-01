@@ -50,9 +50,14 @@ $witnesses = array(
     array( '1' => 'نام <img src=x onerror="window.__cellq_xss=1"> امن', '2' => 'کاظمی ب‌پ', '4' => 'CQ_RAW_NID_C', '5' => '', '6' => 'school_code_A' ),
 );
 foreach ( $witnesses as $index => $values ) {
-    $id = GFAPI::add_entry( array_merge( array( 'form_id' => $form, 'created_by' => $prior['admin'],
-        '7' => 'CQ_ALT_NID_' . $index, '9' => 'CQ_SECRET_DO_NOT_EXPOSE_' . $index ), $values ) );
+    $record = array( 'form_id' => $form, 'created_by' => $prior['admin'],
+        '7' => 'CQ_ALT_NID_' . $index, '9' => 'CQ_SECRET_DO_NOT_EXPOSE_' . $index ) + $values;
+    $id = GFAPI::add_entry( $record );
     if ( is_wp_error( $id ) ) { throw new RuntimeException( 'Real entry insertion failed' ); }
+    $stored = GFAPI::get_entry( $id );
+    foreach ( array( 1, 2, 4, 5, 6, 7, 9 ) as $field_id ) {
+        if ( (string) ( $stored[ (string) $field_id ] ?? '' ) !== (string) ( $record[ $field_id ] ?? '' ) ) { throw new RuntimeException( 'Numeric field identity was changed during fixture insertion' ); }
+    }
     $api->process_workflow( $id ); $entries[] = (int) $id;
 }
 $page = wp_insert_post( array( 'post_title' => 'CQ Native Scoped Inbox', 'post_status' => 'publish', 'post_type' => 'page',
