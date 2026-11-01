@@ -43,7 +43,7 @@ try {
   const html=await p.content();
   assert.ok(!html.includes('CQ_SECRET_DO_NOT_EXPOSE_'));
   assert.equal(await p.locator('[data-ciq2-name]').count(),3);
-  assert.equal(await p.locator('[data-ciq2-name]').first().innerText(),'آرین & همکار کاظمی «الف»');
+  assert.equal(await p.locator('[data-ciq2-entry="'+fixture.entries[0]+'"] [data-ciq2-name]').innerText(),'آرین & همکار کاظمی «الف»');
   assert.equal(await p.locator('img[onerror]').count(),0);
   assert.equal(await p.evaluate(()=>window.__cellq_xss),undefined);
   mark('native_final_cell_values_rendered_as_escaped_text');
