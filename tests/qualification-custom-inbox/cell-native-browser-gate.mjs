@@ -31,10 +31,19 @@ try{
  await p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').first().waitFor();
  const expected=headless.scenarios.final_mask.candidate;const observed={};
  for(const row of expected){observed[row.id]={};for(const [name,cell] of Object.entries(row.cells)){
-  await p.locator('[data-js="gflow-inbox"]').evaluate((grid,column)=>window.gflow_config.grids[grid.dataset.gridId].grid_options.api.ensureColumnVisible(column),cell.column_id);
-  const loc=p.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${row.id}"] .ag-cell[col-id="${cell.column_id}"]`);
-  await loc.waitFor();
-  const text=await loc.locator('a[data-js="inbox-details-link"]').first().evaluate(a=>a.parentElement.querySelector(':scope > span').textContent);
+  let text;
+  for(const factor of [0,.25,.5,.75,1]){
+   await p.locator('[data-js="gflow-inbox"]').evaluate((grid,factor)=>{
+    const bar=grid.querySelector('.ag-body-horizontal-scroll-viewport')||grid.querySelector('.ag-center-cols-viewport');
+    if(bar)bar.scrollLeft=Math.round((bar.scrollWidth-bar.clientWidth)*factor);
+   },factor);
+   await p.waitForTimeout(100);
+   const loc=p.locator(`[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="${row.id}"] .ag-cell[col-id="${cell.column_id}"]`);
+   if(await loc.count()===1&&await loc.isVisible()){
+    text=await loc.locator('a[data-js="inbox-details-link"]').first().evaluate(a=>a.parentElement.querySelector(':scope > span').textContent);break;
+   }
+  }
+  assert.notEqual(text,undefined,`Native column not materialized: ${cell.column_id}`);
   assert.equal(text,cell.text,`Materialized native ${name} differs for ${row.id}`);observed[row.id][name]=text;
  }}
  assert.equal(await p.evaluate(()=>window.__cellq_xss??null),null);assert.equal(await p.locator('img[onerror]').count(),0);
