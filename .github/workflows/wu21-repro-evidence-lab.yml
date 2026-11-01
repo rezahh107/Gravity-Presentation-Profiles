@@ -566,6 +566,43 @@ jobs:
           node tests/repro-evidence-lab/inbox-mixed-readiness-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/inbox-mixed-readiness-browser.json"
 
+      - name: Qualify exact G014 PersianGravity with real GPP and licensed Gravity Flow
+        if: ${{ always() && !cancelled() && steps.wu21_fixture_setup.outcome == 'success' }}
+        env:
+          G014_PGR_SOURCE_SHA: 5928b20cee93ede9b239f1cd5b3041c608817ee4
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="/tmp/wu21-g014-persian-gravity-source"
+          git clone --quiet https://github.com/rezahh107/PersianGravity.git "$source_dir"
+          (cd "$source_dir" && git checkout --quiet --detach "$G014_PGR_SOURCE_SHA")
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "$G014_PGR_SOURCE_SHA"
+          (cd "$source_dir" && PGR_PACKAGE_SOURCE_SHA="$G014_PGR_SOURCE_SHA" bash tools/build-production-package.sh)
+          test "$(find "$source_dir/dist" -maxdepth 1 -type f -name 'persian-gravityforms-*.zip' | wc -l)" -eq 1
+          pgr_zip="$(find "$source_dir/dist" -maxdepth 1 -type f -name 'persian-gravityforms-*.zip')"
+          test -s "$pgr_zip"
+          test -s "$pgr_zip.sha256"
+          (cd "$source_dir/dist" && sha256sum --check "$(basename "$pgr_zip.sha256")")
+          php "$WU21_WP_CLI" plugin install "$pgr_zip" --activate --path="$WU21_WP_PATH"
+          G014_PGR_SOURCE_SHA="$G014_PGR_SOURCE_SHA" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $file = WP_PLUGIN_DIR . "/persian-gravityforms/release-manifest.json";
+            $m = is_readable($file) ? json_decode(file_get_contents($file), true) : null;
+            if (!is_array($m) || ($m["source_commit"] ?? null) !== getenv("G014_PGR_SOURCE_SHA")
+                || !is_plugin_active("persian-gravityforms/persian-gravityforms.php")) {
+              throw new RuntimeException("Exact G014 install/activation provenance mismatch");
+            }
+          '
+          node --check tests/repro-evidence-lab/g014-persian-gravity-gpp-coexistence.mjs
+          node tests/repro-evidence-lab/g014-persian-gravity-gpp-coexistence.mjs
+
+      - name: Publish isolated G014/GPP browser proof and blockers
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: g014-gpp-lab-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/wu21-artifacts/g014-coexistence/
+          if-no-files-found: warn
+          retention-days: 21
       - name: Publish Inbox visual diagnostic summary
         if: always()
         shell: bash
