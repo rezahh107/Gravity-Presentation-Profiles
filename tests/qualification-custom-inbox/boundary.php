@@ -53,13 +53,22 @@ function ciq_project( $entries ) {
         // Only the spike's mapped simple text fields on current assignee Approval
         // are qualified. No fallback for administrator, User Input, or unknown form.
         if ( (int) ( $fixture['form_id'] ?? 0 ) === (int) $entry['form_id']
-            && $step instanceof Gravity_Flow_Step_Approval && $step->is_user_assignee() ) {
+            && $step instanceof Gravity_Flow_Step_Approval && $step->is_user_assignee()
+            && ! has_filter( 'gform_field_content' ) ) {
             foreach ( array( 1, 2, 3, 4 ) as $id ) {
                 $field = GFFormsModel::get_field( $form, $id );
                 if ( ! $field || 'text' !== $field->type ) { continue; }
                 if ( Gravity_Flow_Common::is_display_field( $field, $step, $form, $entry )
                     && isset( $entry[ (string) $id ] ) && '' !== $entry[ (string) $id ] ) {
-                    $row['fields'][ (string) $id ] = (string) $entry[ (string) $id ];
+                    // Preserve native value masking as well as field visibility.
+                    // Final arbitrary HTML transformations have no qualified text
+                    // projection here; their presence omits fields above.
+                    $value = Gravity_Flow_Entry_Detail::get_display_value(
+                        RGFormsModel::get_lead_field_value( $entry, $field ), $field, $entry, $form
+                    );
+                    if ( is_string( $value ) && '' !== $value ) {
+                        $row['fields'][ (string) $id ] = html_entity_decode( wp_strip_all_tags( $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+                    }
                 }
             }
         }

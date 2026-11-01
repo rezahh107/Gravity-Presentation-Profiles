@@ -103,6 +103,22 @@ try {
     foreach ( $filtered as $r ) { ciq_assert( ! isset( $r['fields']['3'] ), 'Native visibility filter bypass' ); }
     remove_filter( 'gravityflow_workflow_detail_display_field', $deny_field, 10 );
     $report['checks']['native_field_visibility_filter'] = 'PASS';
+    $mask = static function ( $value, $field ) { return (int) $field->id === 3 ? 'CIQ_MASKED_SCHOOL' : $value; };
+    add_filter( 'gform_entry_field_value', $mask, 10, 2 );
+    $masked = ciq_project( ciq_entries() );
+    foreach ( $masked as $r ) { ciq_assert( $r['fields']['3'] === 'CIQ_MASKED_SCHOOL', 'Native value masking bypass' ); }
+    // The earlier raw-value projection would still disclose the original value.
+    ciq_assert( $raw[0]['3'] === 'مدرسه آزمایشی', 'Raw-value negative witness absent' );
+    $entry = GFAPI::get_entry( $entries[0] );
+    ob_start(); Gravity_Flow_Entry_Detail::entry_detail( GFAPI::get_form( $form ), $entry, $api->get_current_step( $entry ) ); $masked_html = ob_get_clean();
+    ciq_assert( strpos( $masked_html, 'CIQ_MASKED_SCHOOL' ) !== false && strpos( $masked_html, 'مدرسه آزمایشی' ) === false, 'Native masking witness failed' );
+    remove_filter( 'gform_entry_field_value', $mask, 10 );
+    $report['checks']['native_value_masking_and_raw_value_counterexample'] = 'PASS';
+    $hide_content = static function () { return ''; };
+    add_filter( 'gform_field_content', $hide_content );
+    foreach ( ciq_project( ciq_entries() ) as $r ) { ciq_assert( empty( $r['fields'] ), 'Unqualified final HTML filter must omit fields' ); }
+    remove_filter( 'gform_field_content', $hide_content );
+    $report['checks']['unqualified_final_field_html_filters_omit_fields'] = 'PASS';
     $deny_entry = static function () { return false; };
     add_filter( 'gravityflow_permission_granted_entry_detail', $deny_entry );
     ciq_assert( is_wp_error( ciq_project( ciq_entries() ) ), 'Native entry denial filter bypass' );

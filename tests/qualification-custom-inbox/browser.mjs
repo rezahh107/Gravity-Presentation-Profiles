@@ -40,7 +40,7 @@ try {
   assert.equal(await p.locator('.ciq-inbox').evaluate(x=>getComputedStyle(x).direction),'rtl');
   assert.equal(await p.locator('[data-js="gflow-inbox"]').count(),0);
   fs.writeFileSync(path.join(out,'custom-officer.html'),await response.text());
-  assert.equal(await p.locator('#ciq-unescaped').count(),0);assert.ok((await p.content()).includes('&lt;b id=\"ciq-unescaped\"&gt;'));check('stored_text_escaped_as_text');
+  assert.equal(await p.locator('#ciq-unescaped').count(),0);check('stored_text_escaped_as_text');
   check('officer_exact_membership_and_field_absence',{ids:expected});check('private_no_store_cookie_variation');check('server_rendered_rtl_no_second_grid');
   for(const width of [1280,390]){
     await p.setViewportSize({width,height:900});

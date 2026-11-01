@@ -18,6 +18,7 @@ Source is inspected locally; no vendor source is added to this experiment.
 | Native model | `includes/inbox/models/class-task.php:721`, `get_inbox_tasks($args)` | INTERNAL; parses native defaults and gravityflow_inbox_args, calls public query and projects columns/URLs. Native service provider:223–265 serializes this into Grid rowData. |
 | Entry access | `includes/pages/class-entry-detail.php:386`, static `is_permission_granted($entry,$form,$current_step)` | INTERNAL; creator, assignee or host full/status privileges; native caller subsequently applies gravityflow_permission_granted_entry_detail. Not inferred from a generic WordPress capability. |
 | Field visibility | `includes/class-common.php:455`, static `is_display_field($field,$current_step,$form,$entry,$is_product_field=false)` | INTERNAL helper; native Approval detail uses it after gform_pre_render, conditional visibility, step display policy and documented gravityflow_workflow_detail_display_field. Not a general standalone supported field API. |
+| Display-value masking | `includes/pages/class-entry-detail.php:1099`, static `get_display_value($value,$field,$entry,$form)` | INTERNAL; calls native field display and gform_entry_field_value, preserving value masking. A final gform_field_content transformation is not a qualified plain-text boundary: omit all candidate field values when that hook has callbacks. |
 | Native frontend | `class-gravity-flow.php:6165/6376`, shortcode / Inbox routing | DOCUMENTED_PUBLIC shortcode; logged-in frontend users need not have wp-admin gravityflow_inbox capability. Native wp-admin capability is a separate boundary. |
 
 Public API default page size is 150. Enumerate explicit offset/page_size and verify
@@ -77,3 +78,11 @@ Owner site acceptance, all Gravity Flow features, or universal compatibility.
 No exact-version production rejection rule follows from the fixture pin.
 Search/sort/live refresh, performance at scale, alternate caches, session races,
 theme/PersianGravity coexistence and wider field types remain unqualified.
+
+Final security self-review additionally qualifies native value masking. The first
+projection's direct raw text read would bypass gform_entry_field_value masking.
+The repaired projection calls the host's display-value helper and converts its
+output to escaped text. Native masking is exercised against real rendered Entry
+Detail, with the earlier raw read retained as an adversarial witness. Arbitrary
+final field-HTML filters conservatively omit fields; this is explicitly a limited
+spike policy, not a new authorization engine or production field API.
