@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {qualifyHistoricalBoundary} from './g014-historical-boundary-qualification.mjs';
 
 const e=process.env, required=['WU21_WP_CLI','WU21_WP_PATH','WU21_BASE_URL','WU21_ARTIFACT_DIR',
   'G014_PGR_SOURCE_SHA','GPP_WU21_REPOSITORY_SHA'];
@@ -254,6 +255,7 @@ try{
   const cookies=JSON.parse(php("$u=get_user_by('login','bootstrap_admin');$exp=time()+1800;"
     +"echo wp_json_encode([['name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$exp,'auth')],"
     +"['name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$exp,'logged_in')]]);"));
+  report.historicalBoundary=await qualifyHistoricalBoundary({browser,php,cookies,origin,fixture,dir,env:e});
   for(const locale of ['fa_IR','en_US'])for(const mode of ['off','on']){
     php("$u=get_user_by('login','bootstrap_admin');$s=get_option('pgr_settings',[]);"
       +"if(!is_array($s))throw new RuntimeException('Malformed PGR option');"
