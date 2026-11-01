@@ -102,9 +102,9 @@ async function exercise(page,item) {
     null,{timeout:12000});
   const negative=await ids(page);
   await search.press('ControlOrMeta+A');await search.press('Backspace');
-  await page.waitForFunction(()=>document.querySelectorAll(
-    '[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row').length>positive.length,
-    null,{timeout:12000});
+  await page.waitForFunction((positiveCount)=>document.querySelectorAll(
+    '[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row').length>positiveCount,
+    positive.length,{timeout:12000});
   const reset=await ids(page);
   item.filter={query:'WU21 Alpha Form',positive,negative,reset,
     detectsBrokenFiltering:positive.length>0&&positive.length<reset.length&&negative.length===0};
@@ -179,9 +179,9 @@ async function mobileBehavior(page,item) {
     null,{timeout:12000});
   const negative=await ids(page);
   await search.press('ControlOrMeta+A');await search.press('Backspace');
-  await page.waitForFunction(()=>document.querySelectorAll(
-    '[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row').length>positive.length,
-    null,{timeout:12000});
+  await page.waitForFunction((positiveCount)=>document.querySelectorAll(
+    '[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row').length>positiveCount,
+    positive.length,{timeout:12000});
   const reset=await ids(page);
   item.mobileFilter={positive,negative,reset};
   if(!positive.length||positive.length>=reset.length||negative.length)
