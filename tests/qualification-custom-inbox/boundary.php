@@ -4,26 +4,29 @@ if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 
 function ciq_entries( $scope = array() ) {
     if ( ! is_user_logged_in() ) { return new WP_Error( 'authentication_required' ); }
-    // Scope is server-owned. Never pass request parameters, identity, or filter_key.
+    // Server-owned identity and form scope. Never trust browser filter_key/user_id.
     $scope = array_intersect_key( $scope, array( 'form_id' => true ) );
     $entries = array();
     $expected = null;
-    for ( $offset = 0; $offset < 500; ++$offset ) {
+    $batch_size = 40;
+    $GLOBALS['ciq_query_paging'] = array();
+    for ( $offset = 0; $offset < 500; $offset += $batch_size ) {
         $args = $scope;
-        $args['paging'] = array( 'offset' => $offset, 'page_size' => 1 );
-        // This is the same argument extension point used by the native Task Model.
+        $args['paging'] = array( 'offset' => $offset, 'page_size' => $batch_size );
         $args = apply_filters( 'gravityflow_inbox_args', array_merge( Gravity_Flow_Inbox::get_defaults(), $args ) );
         $total = 0;
         $page = Gravity_Flow_API::get_inbox_entries( $args, $total );
-        if ( is_wp_error( $page ) || ! is_array( $page ) || count( $page ) > 1 ) {
+        $GLOBALS['ciq_query_paging'][] = array( 'offset' => $offset, 'page_size' => $batch_size );
+        if ( is_wp_error( $page ) || ! is_array( $page ) || count( $page ) > $batch_size ) {
             return new WP_Error( 'host_query_failed' );
         }
         if ( null === $expected ) { $expected = (int) $total; }
-        if ( (int) $total !== $expected || ( empty( $page ) && $offset < $expected ) ) {
+        if ( $expected < 0 || $expected > 500 || (int) $total !== $expected
+            || ( empty( $page ) && $offset < $expected ) ) {
             return new WP_Error( 'unstable_or_incomplete_task_set' );
         }
         foreach ( $page as $entry ) {
-            $id = (int) $entry['id'];
+            $id = (int) ( $entry['id'] ?? 0 );
             if ( $id < 1 || isset( $entries[ $id ] ) ) { return new WP_Error( 'invalid_identity' ); }
             $entries[ $id ] = $entry;
         }
@@ -32,7 +35,7 @@ function ciq_entries( $scope = array() ) {
     return new WP_Error( 'task_set_bound_exceeded' );
 }
 
-function ciq_project( $entries ) {
+function ciq_project( $entries, $skip_denied = false ) {
     if ( is_wp_error( $entries ) ) { return $entries; }
     require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
     $fixture = get_option( 'ciq_fixture', array() );
@@ -47,7 +50,15 @@ function ciq_project( $entries ) {
         $form = apply_filters( 'gform_pre_render_' . $form['id'], $form, false, null );
         $allowed = Gravity_Flow_Entry_Detail::is_permission_granted( $entry, $form, $step );
         $allowed = apply_filters( 'gravityflow_permission_granted_entry_detail', $allowed, $entry, $form, $step );
-        if ( ! $allowed ) { return new WP_Error( 'native_entry_access_denied' ); }
+        if ( ! $allowed ) {
+            if ( $skip_denied ) {
+                // A single rejected entry is omitted only after the top-level
+                // authenticated task query succeeded. Never leak its fields.
+                error_log( 'CIQ_PROTOTYPE_ROW_OMITTED: native entry permission denied' );
+                continue;
+            }
+            return new WP_Error( 'native_entry_access_denied' );
+        }
         $row = array( 'id' => (int) $entry['id'], 'form_id' => (int) $entry['form_id'],
             'step_id' => (int) $step->get_id(), 'fields' => array() );
         // Only the spike's mapped simple text fields on current assignee Approval
