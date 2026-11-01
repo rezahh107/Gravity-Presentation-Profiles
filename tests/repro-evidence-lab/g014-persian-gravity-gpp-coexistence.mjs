@@ -196,6 +196,9 @@ async function mobileBehavior(page,item) {
   },first,{timeout:12000});
   item.mobilePager={before:first,after:await ids(page)};
   await page.locator(prefix+'.ag-paging-button[ref="btPrevious"]').first().click();
+  // The preceding pager click can scroll the document below the native header.
+  // Bring a real header into view before performing the physical touch hit-test.
+  await page.locator(prefix+'.ag-header-cell[col-id]').first().scrollIntoViewIfNeeded();
   const target=await page.evaluate(()=>{
     const host=document.querySelector('[data-js="gflow-inbox"]');
     const opts=window.gflow_config?.grids?.[host?.dataset.gridId]?.grid_options;
