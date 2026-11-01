@@ -46,6 +46,32 @@ simple text fields on current-assignee Approval steps. User Input field semantic
 are NOT_PROVEN. Raw entry values remain server-side, never a client response.
 Any later UI must be constructed only after observed Gate B success.
 
+## Observed prerequisite and subsequent minimal sample
+
+Gate B passed on exact Head `937b5837902cfdabfb80eb6a7fd8c7d9b2cf4379`,
+Actions run https://github.com/rezahh107/Gravity-Presentation-Profiles/actions/runs/41330335679,
+artifact 13093225444, digest
+`8296cf539605245a7af731f1cda658c529cf7e1269d99f9815e15755ad994a0d`.
+Officer 3/3, viewer 0/0, administrator own 29/29, empty role receiver 0/0;
+after native transition officer 2/2 and role receiver 1/1. All comparisons also
+include form and step identity. Withheld field and native deny filters passed;
+raw API's unredacted data failed the same disclosure scanner as intended.
+These observations preceded construction of prototype-mu.php and browser.mjs.
+
+Two prior execution defects remain recorded: setup-php delivered 8.2.35 for a
+8.2.34 request, so the isolated workflow now pins the observed 8.2.35; and the
+first headless fixture created its extra form AFTER host global form enumeration,
+which made both native and candidate global results empty while form-scoped
+results contained all three tasks. Provision all fixtures before the host's
+request-local form inventory is populated; no private cache is rewritten and
+no task-set assertion is relaxed.
+
+The subsequent sample is server-rendered RTL, uses only the candidate projection,
+obtains native links from the native Task Model, has no task actions, no client
+data store/polling and no independent workflow state. Private/no-store headers
+are set on its one test page. The native Inbox remains a separate unchanged
+page. Browser evidence must be assessed separately from this earlier Gate B.
+
 Scope: version-specific synthetic compatibility, not production admission, target
 Owner site acceptance, all Gravity Flow features, or universal compatibility.
 No exact-version production rejection rule follows from the fixture pin.

@@ -68,7 +68,7 @@ ciq_assert( $step && $next && ! is_wp_error( $step ) && ! is_wp_error( $next ), 
 $entries = array();
 foreach ( array( 'الف', 'ب', 'پ' ) as $index => $label ) {
     $id = GFAPI::add_entry( array( 'form_id' => $form, 'created_by' => $admin,
-        '1' => 'دانش‌آموز آزمایشی ' . $label, '2' => 'CIQ_WITHHELD_' . $index,
+        '1' => 'دانش‌آموز آزمایشی ' . $label . ( 2 === $index ? ' <b id="ciq-unescaped">X</b>' : '' ), '2' => 'CIQ_WITHHELD_' . $index,
         '3' => 'مدرسه آزمایشی', '4' => 'پایه آزمایشی' ) );
     ciq_assert( ! is_wp_error( $id ), 'Cannot create entry' );
     $api->process_workflow( $id ); $entries[] = (int) $id;
@@ -127,6 +127,10 @@ try {
     ciq_assert( is_wp_error( ciq_entries() ), 'Unauthenticated candidate query allowed' );
     $report['checks']['native_transition_role_assignment_stale_access'] = 'PASS';
     $report['checks']['unauthenticated_denial'] = 'PASS';
+    wp_set_current_user( $viewer );
+    $attack = ciq_entries( array( 'filter_key' => 'workflow_user_id_' . $officer, 'user_id' => $officer, 'step_id' => $step, 'form_id' => $form ) );
+    ciq_assert( is_array( $attack ) && empty( $attack ), 'User-controlled query identity broadened task set' );
+    $report['checks']['query_identity_injection_denied'] = 'PASS';
     $report['gate_b'] = 'PASS_HEADLESS_TESTED_SCOPE';
     update_option( 'ciq_gate_b_passed', true, false );
     $save();

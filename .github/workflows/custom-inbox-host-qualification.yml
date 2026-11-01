@@ -258,6 +258,13 @@ jobs:
         done
         cat /tmp/wu21-wp-server.log >&2
         exit 1
+    - name: Install test-only second Inbox after successful headless gate
+      shell: bash
+      run: |
+        set -euo pipefail
+        cp tests/qualification-custom-inbox/prototype-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq-prototype.php"
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/setup-page.php
+        node tests/qualification-custom-inbox/browser.mjs
     - name: Upload isolated evidence even on failure
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
