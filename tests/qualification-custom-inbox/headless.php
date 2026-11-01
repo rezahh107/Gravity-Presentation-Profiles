@@ -2,7 +2,6 @@
 /** Gate B: real WU21 fixtures, native task model, public query, native field rules. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 require_once __DIR__ . '/boundary.php';
-require_once dirname( __DIR__ ) . '/repro-evidence-lab/inbox-mixed-readiness-fixture.php';
 require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
 
 function ciq_assert( $ok, $message ) {
@@ -78,6 +77,9 @@ $manifest = get_option( 'gpp_wu21_fixture_manifest' );
 update_option( 'ciq_native_url', $manifest['frontend_inbox_url'], false );
 update_option( 'ciq_fixture', array( 'form_id' => (int) $form, 'step_id' => (int) $step, 'next_step' => (int) $next,
     'entries' => $entries, 'officer' => (int) $officer, 'viewer' => (int) $viewer, 'admin' => (int) $admin, 'receiver' => (int) $receiver ), false );
+// Provision ALL forms before the first native global query: Flow caches its form
+// inventory per request. Never clear or rewrite that private host cache.
+(static function () { require dirname( __DIR__ ) . '/repro-evidence-lab/inbox-mixed-readiness-fixture.php'; })();
 $report = array( 'gate_a' => 'PASS_SOURCE_INSPECTED', 'gate_b' => 'RUNNING', 'comparisons' => array(), 'checks' => array() );
 $save = static function () use ( &$report ) { file_put_contents( getenv( 'WU21_ARTIFACT_DIR' ) . '/ciq-headless.json', wp_json_encode( $report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) ); };
 try {
