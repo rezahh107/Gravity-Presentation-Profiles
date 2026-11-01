@@ -1,4 +1,4 @@
-name: Independent Inbox Host Qualification
+name: Native Inbox Cell Parity Qualification
 'on':
   pull_request:
     branches:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   qualification:
-    name: Independent Inbox headless host qualification
+    name: Native cell projection and inherited security
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -276,6 +276,13 @@ jobs:
         cp tests/qualification-custom-inbox/prototype-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq-prototype.php"
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/setup-page.php
         node tests/qualification-custom-inbox/browser.mjs
+    - name: Create authentic cell fixture after inherited PR169 browser acceptance
+      shell: bash
+      run: |
+        set -euo pipefail
+        cp tests/qualification-custom-inbox/cell-controls-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/cellq-controls.php"
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cell-setup.php
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cell-headless.php | tee "$WU21_ARTIFACT_DIR/cellq-headless.log"
     - name: Upload isolated evidence even on failure
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
