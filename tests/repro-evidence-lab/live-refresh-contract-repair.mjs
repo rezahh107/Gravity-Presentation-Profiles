@@ -4,7 +4,10 @@ import { reduceQualificationState, runReducerFalsification } from './live-refres
 
 const EXPECTED_RUNTIME = {
   wordpress: '6.8.3',
-  php: '8.2.34',
+  // Requalified to the exact 8.2.35 runner explicitly provisioned by WU21.
+  // PHP patch 8.2.34 was not a behavior dependency for these browser contracts;
+  // every other exact licensed-runtime identity remains pinned and checked.
+  php: '8.2.35',
   gravity_forms: '3.1.1.1',
   gravity_flow: '3.1.0',
   gravity_flow_package_sha256: 'ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404',
