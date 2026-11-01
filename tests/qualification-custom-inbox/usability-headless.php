@@ -81,6 +81,9 @@ try {
     wp_set_current_user( (int) $f['viewer'] );
     $viewer = cellq_rows( $scope, true );
     $assert( is_array( $viewer ) && count( $viewer ) === 0, 'unassigned_viewer_no_tasks' );
+    // The browser prototype compares original native values on synthetic
+    // records; final-mask behavior was separately falsified by cell-headless.
+    update_option( 'cellq_mode', 'baseline', false );
     $report['status'] = 'PASS_BOUNDED_BATCH_AND_ROW_POLICY'; $save();
     echo "CIQ2_HEADLESS_PASS\n";
 } catch ( Throwable $error ) {
