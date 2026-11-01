@@ -1,5 +1,6 @@
 // Qualification only: authentic WU21, public native APIs, CSSOM A/B/A.
-// No shipped stylesheet, provider code, native storage or Grid options are edited.
+// No shipped stylesheet, provider code or native storage is edited.
+// Ephemeral pre-mount observers compose public callbacks as in the WU21 Candidate D helper.
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -7,6 +8,47 @@ import assert from 'node:assert/strict';
 const participants=['.ag-root-wrapper','.ag-header-viewport',
   '.ag-center-cols-viewport','.ag-body-horizontal-scroll-viewport'];
 const hostSelector='[data-js="gflow-inbox"]';
+// Reuse the Candidate D public callback-composition method, with no synthetic
+// prior return, locale override or sizing control. Only expose public params
+// supplied by the authentic host; preserve prior receiver/args/result/errors.
+const observerMu=String.raw`<?php
+if (!defined('ABSPATH')) { exit; }
+function g014_historical_attach_observer() {
+    global $wp_scripts;
+    if (!$wp_scripts instanceof WP_Scripts) { return; }
+    $js = <<<'JS'
+(function(){
+    if(!window.gflow_config || !gflow_config.grids)return;
+    const observed=window.__g014ObservedOptions=window.__g014ObservedOptions||new WeakSet();
+    const native=window.__g014Native=window.__g014Native||{};
+    for(const [id,grid] of Object.entries(gflow_config.grids)){
+        const o=grid.grid_options;
+        if(!o || observed.has(o))continue;
+        const names=['onColumnEverythingChanged','onGridSizeChanged'];
+        if(names.some(k=>o[k]!=null && typeof o[k]!=='function'))continue;
+        observed.add(o);
+        for(const name of names){
+            const prior=o[name];
+            o[name]=function(){
+                const p=arguments[0];
+                if(p && p.api && p.columnApi)native[id]={api:p.api,columnApi:p.columnApi};
+                return typeof prior==='function'?Reflect.apply(prior,this,arguments):undefined;
+            };
+        }
+    }
+})();
+JS;
+    foreach ($wp_scripts->registered as $handle => $script) {
+        if (is_string($script->src) && str_contains($script->src, '/gravityflow/') && wp_script_is($handle,'enqueued')) {
+            wp_add_inline_script($handle,$js,'before');
+        }
+    }
+}
+add_action('wp_print_footer_scripts','g014_historical_attach_observer',-2);
+add_action('admin_print_footer_scripts','g014_historical_attach_observer',-2);
+add_action('wp_print_scripts','g014_historical_attach_observer',-2);
+add_action('admin_print_scripts','g014_historical_attach_observer',-2);
+`;
 const sleepFrames=page=>page.evaluate(()=>new Promise(resolve=>
   requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 
@@ -14,7 +56,8 @@ async function ready(page){
   await page.waitForFunction(()=>{
     const h=document.querySelector('[data-js="gflow-inbox"]');
     const o=window.gflow_config?.grids?.[h?.dataset.gridId]?.grid_options;
-    return o?.api&&o?.columnApi&&o.api.getDisplayedRowCount()>0&&h.querySelector('.ag-row');
+    const n=window.__g014Native?.[h?.dataset.gridId];
+    return n?.api&&n?.columnApi&&n.api.getDisplayedRowCount()>0&&h.querySelector('.ag-row');
   },null,{timeout:30000});
   await page.waitForTimeout(700); // includes the admitted bounded grow settle window
 }
@@ -23,6 +66,7 @@ async function observe(page){
   return page.evaluate(({participants})=>{
     const h=document.querySelector('[data-js="gflow-inbox"]'),id=h?.dataset.gridId;
     const o=window.gflow_config?.grids?.[id]?.grid_options;
+    const n=window.__g014Native?.[id];
     const r=n=>{const b=n.getBoundingClientRect();return {left:b.left,right:b.right,width:b.width}};
     const row=h?.querySelector('.ag-center-cols-container > .ag-row');
     const cells=new Map([...row?.querySelectorAll('.ag-cell[col-id]')||[]].map(n=>[n.getAttribute('col-id'),n]));
@@ -32,8 +76,8 @@ async function observe(page){
       return {colId,header,body,leftDelta:header.left-body.left,widthDelta:header.width-body.width};
     });
     const bar=h?.querySelector('.ag-body-horizontal-scroll-viewport');
-    const state=o?.columnApi?.getColumnState();
-    const displayed=o?.columnApi?.getAllDisplayedColumns().map(c=>({id:c.getColId(),width:c.getActualWidth(),
+    const state=n?.columnApi?.getColumnState();
+    const displayed=n?.columnApi?.getAllDisplayedColumns().map(c=>({id:c.getColId(),width:c.getActualWidth(),
       min:c.getMinWidth(),left:c.getLeft(),pinned:c.getPinned(),flex:c.getFlex()}));
     const storage=Object.fromEntries(Object.keys(localStorage).sort().map(k=>[k,localStorage.getItem(k)]));
     return {gridId:id,enableRtl:o?.enableRtl??null,agRtl:!!h?.querySelector('.ag-rtl'),
@@ -49,8 +93,8 @@ async function observe(page){
       nativeScrollbarCount:h.querySelectorAll('.ag-body-horizontal-scroll').length,
       documentOverflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
       rowIds:[...h.querySelectorAll('.ag-center-cols-container > .ag-row')].map(n=>n.getAttribute('row-id')),
-      rowCount:o.api.getDisplayedRowCount(),page:o.api.paginationGetCurrentPage(),
-      pageSize:o.api.paginationGetPageSize(),storage,
+      rowCount:n.api.getDisplayedRowCount(),page:n.api.paginationGetCurrentPage(),
+      pageSize:n.api.paginationGetPageSize(),storage,
       provenance:Object.fromEntries(Object.entries(storage).filter(([k])=>k.startsWith('gpp:srwf-inbox-fit:')))};
   },{participants});
 }
@@ -194,7 +238,7 @@ async function nativeInteractions(page,item){
   await run('pagination',async()=>{
     // Public native API creates a genuine two-page condition for two real rows.
     const original=await page.evaluate(()=>{const h=document.querySelector('[data-js="gflow-inbox"]');
-      const a=window.gflow_config.grids[h.dataset.gridId].grid_options.api;
+      const a=window.__g014Native[h.dataset.gridId].api;
       const size=a.paginationGetPageSize();a.paginationSetPageSize(1);return size;});
     try{
       const first=(await observe(page)).rowIds;
@@ -204,7 +248,7 @@ async function nativeInteractions(page,item){
       await page.locator(hostSelector+' .ag-paging-button[ref="btPrevious"]').click();
       return {fixture:'Public paginationSetPageSize(1), original native size restored',first,next:next.rowIds};
     }finally{await page.evaluate(size=>{const h=document.querySelector('[data-js="gflow-inbox"]');
-      window.gflow_config.grids[h.dataset.gridId].grid_options.api.paginationSetPageSize(size);},original);}
+      window.__g014Native[h.dataset.gridId].api.paginationSetPageSize(size);},original);}
   });
   await run('keyboard',async()=>{
     const h=page.locator(hostSelector+' .ag-header-cell[col-id]').first();await h.focus();
@@ -220,8 +264,8 @@ async function fitSequence(page,mode){
     initial:await observe(page)};
   await page.evaluate(()=>{
     const h=document.querySelector('[data-js="gflow-inbox"]');
-    const o=window.gflow_config.grids[h.dataset.gridId].grid_options;
-    o.columnApi.applyColumnState({state:o.columnApi.getColumnState(),applyOrder:true});
+    const n=window.__g014Native[h.dataset.gridId];
+    n.columnApi.applyColumnState({state:n.columnApi.getColumnState(),applyOrder:true});
   });
   await page.waitForTimeout(200);proof.persistedWide=await observe(page);
   assert.ok(proof.persistedWide.storage[proof.persistedWide.gridId],'Native wider-state persistence fixture missing');
@@ -232,7 +276,7 @@ async function fitSequence(page,mode){
   proof.narrowReload=await observe(page);
   await page.evaluate(()=>{
     const h=document.querySelector('[data-js="gflow-inbox"]');
-    const a=window.gflow_config.grids[h.dataset.gridId].grid_options.api;
+    const a=window.__g014Native[h.dataset.gridId].api;
     window.__g014GrowEvents=[];
     a.addEventListener('columnResized',e=>window.__g014GrowEvents.push({source:e.source,finished:e.finished}));
   });
@@ -249,6 +293,10 @@ export async function qualifyHistoricalBoundary({browser,php,cookies,origin,fixt
     pgrHead:env.G014_PGR_SOURCE_SHA,scope:'QUALIFICATION_ONLY_CSSOM_NO_PRODUCT_WRITES',
     browserVersion:browser.version(),comparisons:[],fiveColumn:[],errors:[],status:'INCOMPLETE'};
   const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');
+  const observerPath=path.join(env.WU21_WP_PATH,'wp-content/mu-plugins/g014-historical-public-observer.php');
+  assert.ok(!fs.existsSync(observerPath),'Observer path already occupied; refusing overwrite');
+  fs.writeFileSync(observerPath,observerMu);
+  report.observationMethod='Existing WU21 public pre-mount callback composition, no private API';
   async function open(locale,mode,width,url){
     settings(php,locale,mode);
     const context=await browser.newContext({viewport:{width,height:900},isMobile:width<500,hasTouch:width<500});
@@ -347,7 +395,7 @@ export async function qualifyHistoricalBoundary({browser,php,cookies,origin,fixt
     report.status=report.comparisons.every(c=>c.status==='EXECUTED')&&report.fiveColumn.every(c=>c.status==='EXECUTED')?
       'EXPERIMENTS_EXECUTED_NOT_COMPATIBILITY_GREEN':'PARTIAL';
   }catch(error){report.fatal=String(error);report.status='BLOCKED'}
-  finally{save();}
+  finally{fs.rmSync(observerPath,{force:true});report.observerRemoved=!fs.existsSync(observerPath);save();}
   console.log('G014_HISTORICAL_BOUNDARY '+JSON.stringify({status:report.status,
     comparisons:report.comparisons.map(c=>({mode:c.mode,surface:c.surface,status:c.status})),
     fiveColumn:report.fiveColumn.map(c=>({mode:c.mode,width:c.width,status:c.status}))}));
