@@ -79,8 +79,8 @@ try {
   await p.goto(f.custom_url,{waitUntil:'networkidle'});const after=expected.filter(x=>x!==linkId);assert.deepEqual(await ids(p),after);check('custom_requery_removes_native_transitioned_task',{before:expected,after});
   await p.goto(link,{waitUntil:'networkidle'});assert.ok(!(await p.locator('body').innerText()).includes('دانش‌آموز آزمایشی'));assert.ok(safe(await p.content()));check('stale_officer_direct_entry_link_denied_after_transition');
   await p.goto(f.native_url,{waitUntil:'networkidle'});
-  await p.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor();
-  const nativeIds=(await p.locator('[data-js="gflow-inbox"] .ag-row[row-id]').evaluateAll(xs=>xs.map(x=>Number(x.getAttribute('row-id'))))).sort((a,b)=>a-b);
+  await p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').first().waitFor();
+  const nativeIds=(await p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').evaluateAll(xs=>xs.map(x=>Number(x.getAttribute('row-id'))))).sort((a,b)=>a-b);
   assert.deepEqual(nativeIds,after);check('original_native_grid_intact_exact_officer_membership_after_transition',{ids:nativeIds});
   await p.screenshot({path:path.join(out,'native-officer-after-transition.png'),fullPage:true});evidence.screenshots.push('native-officer-after-transition.png');
   const admin=await context(browser,f.admin),ap=await admin.newPage();await ap.goto(f.custom_url,{waitUntil:'networkidle'});
