@@ -25,6 +25,7 @@ const routes=[{name:'frontend',url:fixture.frontend_inbox_url},
   {name:'admin',url:origin+'/wp-admin/admin.php?page=gravityflow-inbox'}];
 const report={schema:'G014_GPP_AUTHENTIC_LAB_V2',pgrHead:e.G014_PGR_SOURCE_SHA,
   gppHead:e.GPP_WU21_REPOSITORY_SHA,fixtureEntries:fixture.base_entry_count,
+  packageSha256:e.G014_PGR_PACKAGE_SHA256||null,
   runtime:JSON.parse(fs.readFileSync(path.join(e.WU21_ARTIFACT_DIR,'runtime.json'),'utf8')),
   status:'INCOMPLETE',cases:[],differentials:[]};
 const write=()=>fs.writeFileSync(path.join(dir,'report.json'),JSON.stringify(report,null,2)+'\n');
@@ -195,12 +196,55 @@ async function mobileBehavior(page,item) {
   },first,{timeout:12000});
   item.mobilePager={before:first,after:await ids(page)};
   await page.locator(prefix+'.ag-paging-button[ref="btPrevious"]').first().click();
-  const header=page.locator(prefix+'.ag-header-cell[col-id]').first();
-  if(await header.isVisible()){
-    const box=await header.boundingBox();
-    await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
-    item.touchHeader={id:await header.getAttribute('col-id'),tapped:true};
-  }else item.touchHeader={status:'UNREACHABLE',reason:'native header not visible'};
+  const target=await page.evaluate(()=>{
+    const host=document.querySelector('[data-js="gflow-inbox"]');
+    const opts=window.gflow_config?.grids?.[host?.dataset.gridId]?.grid_options;
+    for(const h of host?.querySelectorAll('.ag-header-cell[col-id]')||[]){
+      const id=h.getAttribute('col-id'),r=h.getBoundingClientRect();
+      const def=opts?.columnDefs?.find(d=>(d.field||d.colId)===id);
+      if(def?.sortable===false||r.width<20||r.left<0||r.right>innerWidth||
+        r.top<0||r.bottom>innerHeight)continue;
+      const x=r.left+r.width/2,y=r.top+r.height/2;
+      if(document.elementFromPoint(x,y)?.closest('.ag-header-cell')===h)return {id,x,y};
+    }
+    return null;
+  });
+  if(!target)throw Error('No touch-hit-testable native sortable header at 390px');
+  const originalRows=await ids(page);
+  await page.touchscreen.tap(target.x,target.y);
+  await page.touchscreen.tap(target.x,target.y);
+  await page.waitForFunction(a=>{
+    const now=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container > .ag-row')]
+      .map(n=>Number(n.getAttribute('row-id')));
+    return now.length>0&&JSON.stringify(now)!==JSON.stringify(a);
+  },originalRows,{timeout:12000});
+  item.touchSort={header:target.id,before:originalRows,after:await ids(page)};
+  const focused=page.locator(prefix+'.ag-header-cell[col-id="'+target.id+'"]').first();
+  await focused.focus();await page.keyboard.press('ArrowRight');
+  item.mobileKeyboard=await page.evaluate(()=>({
+    inNativeHeader:!!document.activeElement?.closest('[data-js="gflow-inbox"] .ag-header-cell'),
+    focusedColumn:document.activeElement?.closest('.ag-header-cell')?.getAttribute('col-id')||null
+  }));
+  if(!item.mobileKeyboard.inNativeHeader)
+    throw Error('Native mobile keyboard header focus lost');
+}
+async function headerBodyAlignment(page){
+  return page.evaluate(()=>{
+    const host=document.querySelector('[data-js="gflow-inbox"]');
+    const headers=[...host?.querySelectorAll('.ag-header-cell[col-id]')||[]];
+    const row=host?.querySelector('.ag-center-cols-container > .ag-row');
+    const cells=[...row?.querySelectorAll('.ag-cell[col-id]')||[]];
+    const map=new Map(cells.map(n=>[n.getAttribute('col-id'),n]));
+    const pairs=headers.filter(h=>map.has(h.getAttribute('col-id'))).map(h=>{
+      const b=map.get(h.getAttribute('col-id')).getBoundingClientRect();
+      const a=h.getBoundingClientRect();
+      return {column:h.getAttribute('col-id'),
+        leftDelta:+(a.left-b.left).toFixed(2),
+        widthDelta:+(a.width-b.width).toFixed(2)};
+    });
+    return {pairs,maxLeftDelta:pairs.length?Math.max(...pairs.map(x=>Math.abs(x.leftDelta))):null,
+      maxWidthDelta:pairs.length?Math.max(...pairs.map(x=>Math.abs(x.widthDelta))):null};
+  });
 }
 let failed=false;
 try{
@@ -239,18 +283,31 @@ try{
         if(width===1280)await exercise(page,item);
         else await mobileBehavior(page,item);
         const bar=page.locator('[data-js="gflow-inbox"] .ag-body-horizontal-scroll-viewport');
-        if(await bar.count()){
-          item.scroll=await bar.first().evaluate(async n=>{
-            const initial=n.scrollLeft,range=n.scrollWidth-n.clientWidth;
-            n.scrollLeft=range;await new Promise(ok=>requestAnimationFrame(ok));const positive=n.scrollLeft;
-            n.scrollLeft=-range;await new Promise(ok=>requestAnimationFrame(ok));const negative=n.scrollLeft;
-            n.scrollLeft=initial;
-            return {initial,range,positive,negative,restored:n.scrollLeft};
-          });
-          if(item.scroll.range>20&&Math.max(Math.abs(item.scroll.positive-item.scroll.initial),
-            Math.abs(item.scroll.negative-item.scroll.initial))<10)
-            throw Error('Native horizontal scroll did not move');
+        if(!await bar.count())throw Error('Native horizontal scrollbar viewport is absent');
+        item.scroll={originAlignment:await headerBodyAlignment(page)};
+        const moved=await bar.first().evaluate(async n=>{
+          const initial=n.scrollLeft,range=n.scrollWidth-n.clientWidth;
+          n.scrollLeft=range;
+          await new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok)));
+          const positive=n.scrollLeft;
+          n.scrollLeft=-range;
+          await new Promise(ok=>requestAnimationFrame(()=>requestAnimationFrame(ok)));
+          const negative=n.scrollLeft;
+          return {initial,range,positive,negative,actual:n.scrollLeft};
+        });
+        item.scroll={...item.scroll,...moved,movedAlignment:await headerBodyAlignment(page)};
+        if(width===390&&item.scroll.range<=20)
+          throw Error('Mobile has no genuine native Grid horizontal overflow');
+        if(item.scroll.range>20&&Math.max(Math.abs(moved.positive-moved.initial),
+          Math.abs(moved.negative-moved.initial))<10)
+          throw Error('Native horizontal scroll did not move');
+        for(const key of ['originAlignment','movedAlignment']){
+          const a=item.scroll[key];
+          if(item.scroll.range>20&&(!a.pairs.length||a.maxLeftDelta>3||a.maxWidthDelta>3))
+            throw Error('Native Header/Body misalignment '+key+': '+JSON.stringify(a));
         }
+        await bar.first().evaluate(n=>{n.scrollLeft=0});
+        item.scroll.restored=await bar.first().evaluate(n=>n.scrollLeft);
         item.after=await snap(page);
         await page.screenshot({path:path.join(dir,locale+'-'+mode+'-'+width+'-'+route.name+'.jpg'),
           type:'jpeg',quality:75,fullPage:true});
@@ -274,7 +331,7 @@ try{
         }catch(err){item.domError=String(err)}
         try{await page.screenshot({path:path.join(dir,locale+'-'+mode+'-'+width+'-'+route.name+'.jpg'),
           type:'jpeg',quality:75,fullPage:true,timeout:12000});item.screenshot=true}
-        catch(err){item.screenshotError=String(err)}
+        catch(err){item.screenshotError=String(err);item.status='FAIL';failed=true}
         await context.close();write();
       }
     }

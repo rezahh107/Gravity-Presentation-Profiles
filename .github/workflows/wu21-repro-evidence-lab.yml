@@ -586,6 +586,8 @@ jobs:
           test -s "$pgr_zip"
           test -s "$pgr_zip.sha256"
           (cd "$source_dir/dist" && sha256sum --check "$(basename "$pgr_zip.sha256")")
+          export G014_PGR_PACKAGE_SHA256="$(sha256sum "$pgr_zip" | awk '{print $1}')"
+          test "${#G014_PGR_PACKAGE_SHA256}" -eq 64
           php "$WU21_WP_CLI" plugin install "$pgr_zip" --activate --path="$WU21_WP_PATH"
           G014_PGR_SOURCE_SHA="$G014_PGR_SOURCE_SHA" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
             $file = WP_PLUGIN_DIR . "/persian-gravityforms/release-manifest.json";
