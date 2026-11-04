@@ -68,13 +68,27 @@ async function load(page,url){
   return {http:r.status(),scriptedNavigationMs:Date.now()-st};
 }
 async function keyboardProbe(page,kind){
-  await page.keyboard.press('Tab');
-  const after=await page.evaluate(()=>{
-    const e=document.activeElement,s=e?getComputedStyle(e):null;
-    return {tag:e?.tagName,role:e?.getAttribute('role'),id:e?.id,aria:e?.getAttribute('aria-label'),
-      focused:e?.matches(':focus-visible'),outline:s?.outlineStyle,outlineWidth:s?.outlineWidth};
-  });
-  return {firstTab:after,focusVisible:after.focused&&after.outline!=='none'};
+  const result={tabsUsed:0,searchReached:false,detailLinkReached:false,focusVisibleSearch:null,focusVisibleDetail:null};
+  for(let i=1;i<=70;i++){
+    await page.keyboard.press('Tab');result.tabsUsed=i;
+    const v=await page.evaluate(()=>{
+      const e=document.activeElement,s=e?getComputedStyle(e):null;
+      return {tag:e?.tagName,id:e?.id,role:e?.getAttribute('role'),
+        visible:!!e?.matches(':focus-visible'),outline:s?.outlineStyle,
+        search:!!e?.matches('#ciq2-search,[data-js="gflow-inbox-search"]'),
+        detail:!!e?.matches('a[data-ciq2-detail],a[data-js="inbox-details-link"]')};
+    });
+    if(i===1)result.firstTab=v;
+    if(v.search&&!result.searchReached){
+      result.searchReached=true;result.searchTabIndex=i;result.focusVisibleSearch=v.visible&&v.outline!=='none';
+    }
+    if(v.detail&&!result.detailLinkReached){
+      result.detailLinkReached=true;result.detailTabIndex=i;result.focusVisibleDetail=v.visible&&v.outline!=='none';
+    }
+    if(result.searchReached&&result.detailLinkReached)break;
+  }
+  result.scope='Tab reachability and focus outline only; screen-reader/WCAG not qualified';
+  return result;
 }
 async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
   for(const kind of ['native','inbox2']){
@@ -95,6 +109,7 @@ async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
         await p.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor({state:'attached'});
         data.nativeGridPresent=true;
       }
+      data.targetOnInitialRenderedPage=data.initialTaskIds.includes(targetId);
       await snapshot(p,phase+'-'+kind+'-'+width);
       data.keyboard=await keyboardProbe(p,kind);
       // Reset to a truly identical starting point after the focus probe.
@@ -208,6 +223,21 @@ try{
       hostAction:'Gravity_Flow_API::send_to_step',noStaleAssignedTask:true,manualPageReload:true});
     await snapshot(p,'after-native-assignment-transition-inbox2-390');
   }finally{await c.close();}
+  const nativeContext=await auth(browser,large.officer,390),nativePage=await nativeContext.newPage();
+  try{
+    const response=await load(nativePage,large.native_url);
+    assert.equal(response.http,200);
+    const search=nativePage.locator('[data-js="gflow-inbox-search"]');
+    assert.equal(await search.count(),1);
+    await search.fill(large.target_name);await search.press('Enter');
+    await nativePage.waitForTimeout(800);
+    const stale=await nativePage.locator('.ag-row[row-id="'+target+'"]').count();
+    const count=wp("wp_set_current_user("+large.officer+");require_once WP_PLUGIN_DIR.'/gravity-presentation-profiles/tests/qualification-custom-inbox/cell-boundary.php';$r=cellq_rows(array('form_id'=>"+large.form_id+"),true);echo is_array($r)?count($r):'ERROR';");
+    assert.equal(count,'46');assert.equal(stale,0,'Native displayed stale task after host transition');
+    rec('multi47','native',390,'E_NATIVE_ASSIGNMENT_TRANSITION',{before:47,after:46,
+      staleRenderedRows:stale,hostAuthorizedRows:46,removedTask:target,serverAuthority:'Gravity Flow'});
+    await snapshot(nativePage,'after-native-assignment-transition-native-390');
+  }finally{await nativeContext.close();}
   report.checks.push('equal_synthetic_identities_and_officer_permissions');
   report.checks.push('independent_viewer_and_anonymous_denial');
   report.checks.push('native_host_transition_removes_assigned_inbox2_task');
@@ -215,7 +245,9 @@ try{
   save();console.log('CIQ2_COMPARATIVE_CAPTURED '+report.cases.length);
 }catch(e){report.status='FAIL';report.error=String(e.stack||e);save();throw e;}
 finally{
-  if(expanded){try{const msg=fixture('cleanup');report.cleanup=msg;}catch(e){report.cleanupError=String(e);report.status='FAIL_CLEANUP';save();}}
+  let cleanupError=null;
+  if(expanded){try{const msg=fixture('cleanup');report.cleanup=msg;}catch(e){cleanupError=e;report.cleanupError=String(e);report.status='FAIL_CLEANUP';}}
   if(browser)await browser.close();
   save();
+  if(cleanupError)throw cleanupError;
 }

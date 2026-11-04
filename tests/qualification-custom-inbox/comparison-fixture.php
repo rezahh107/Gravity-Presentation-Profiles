@@ -61,8 +61,8 @@ try {
         'original_ids' => array_map( 'intval', $f['entries'] ),
         'created_ids' => $created,
         'all_ids' => $ids,
-        'target_id' => (int) end( $created ),
-        'target_name' => 'مقایسه دانش‌آموز 43',
+        'target_id' => (int) $created[0],
+        'target_name' => 'مقایسه دانش‌آموز 0',
         'native_url' => $f['native_url'],
         'inbox2_url' => get_permalink( (int) get_option( 'ciq2_page_id' ) ),
     );

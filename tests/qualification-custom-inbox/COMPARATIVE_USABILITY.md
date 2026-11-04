@@ -10,6 +10,10 @@ authentic Gravity Flow workflow, and compares 47 assigned tasks. The temporary
 entries are removed even when the browser suite fails; the three-task baseline
 is preserved for inherited tests. Browsers are Chromium at 390 and 1280px.
 Each interface is loaded separately using the same synthetic Officer account.
+The oldest generated task is the 47-task lookup target, probing search beyond
+native first-page task order. Browser Tab progression is checked through actual
+search and Entry Detail links. The same native assignment change is checked on
+both interfaces; this is not a complete keyboard accessibility audit.
 
 Artifact: ciq2-comparative-journeys.json and compare-*.png screenshots
 are uploaded by the existing inbox2-usability-prototype workflow.
