@@ -32,8 +32,13 @@ wp eval-file tests/qualification-custom-inbox/usability-setup.php
 node tests/qualification-custom-inbox/usability-browser.mjs
 ```
 
-The original security-negative qualification workflow is **untouched** and
-its known failure is not called PASS. No runtime patches to Gravity Flow.
+PR #170's specific upstream forged-assignee AJAX regression was permanently
+retired from the active experimental branch by explicit Owner decision on
+2026-11-04. Its original FAILURE remains in PR #170 and its workflow logs;
+it was never a PASS. The separate cell-parity workflow retains actual native
+DOM and authorized manual AJAX checks. Inbox 2 does not request the native
+`inbox/changes` endpoint; the browser suite asserts this on its own page.
+No vendor runtime code is modified. See `UPSTREAM_AJAX_TEST_RETIREMENT.md`.
 
 ## Decision criteria and caveats
 

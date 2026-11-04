@@ -33,6 +33,9 @@ const browser=await chromium.launch({headless:true});
 try {
   const c=await context(browser,fixture.officer),p=await c.newPage();
   const errors=[];p.on('pageerror',e=>errors.push(String(e)));
+  const nativeChangeRequests=[];
+  const monitorNativeChanges=req=>{if(req.url().includes('/inbox/changes'))nativeChangeRequests.push(req.method());};
+  p.on('request',monitorNativeChanges);
   let response=await p.goto(fixture.custom_url,{waitUntil:'networkidle'});
   assert.equal(response.status(),200);
   assert.deepEqual(await allIds(p),[...fixture.entries].sort((a,b)=>a-b));
@@ -69,6 +72,9 @@ try {
   await search.fill('不存在');assert.deepEqual(await ids(p),[]);
   assert.equal(await p.locator('[data-ciq2-no-results]:visible').count(),1);mark('empty_search_result_message');
   await search.fill('');assert.equal((await ids(p)).length,3);
+  assert.deepEqual(nativeChangeRequests,[],'Inbox 2 used native inbox/changes during initial render or search');
+  p.off('request',monitorNativeChanges);
+  mark('inbox2_does_not_call_native_changes_endpoint');
 
   const first=p.locator('[data-ciq2-entry]').first();
   const href=await first.locator('[data-ciq2-detail]').getAttribute('href');
@@ -90,6 +96,7 @@ try {
 
   // Reuse real host workflow transition and then click the real GET refresh.
   wp(`wp_set_current_user(${fixture.admin});$e=GFAPI::get_entry(${linkedId});$a=new Gravity_Flow_API($e['form_id']);$a->send_to_step($e,${fixture.next_step});echo 'native-transition';`);
+  p.on('request',monitorNativeChanges);
   await p.goto(fixture.custom_url,{waitUntil:'networkidle'});
   const expected=fixture.entries.filter(id=>id!==linkedId).sort((a,b)=>a-b);
   assert.deepEqual(await allIds(p),expected);
@@ -97,6 +104,8 @@ try {
   await p.locator('[data-ciq2-refresh]').click();await p.waitForLoadState('networkidle');
   assert.equal(new URL(p.url()).pathname,new URL(beforeUrl).pathname);
   assert.deepEqual(await allIds(p),expected);
+  assert.deepEqual(nativeChangeRequests,[],'Inbox 2 used native inbox/changes on refresh');
+  p.off('request',monitorNativeChanges);
   mark('real_native_transition_and_manual_server_reload_removes_task');
 
   // The scoped native Inbox continues to own AG Grid; never replaced.

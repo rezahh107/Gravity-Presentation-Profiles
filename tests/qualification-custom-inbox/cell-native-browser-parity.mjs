@@ -10,21 +10,21 @@ const f=JSON.parse(fs.readFileSync(path.join(out,'cellq-fixture.json'),'utf8'));
 const headless=JSON.parse(fs.readFileSync(path.join(out,'cellq-headless.json'),'utf8'));
 assert.equal(headless.status,'PASS_HEADLESS_CELL_GATE');
 const report={head:env.GPP_WU21_REPOSITORY_SHA,status:'RUNNING',live_refresh:'NOT_QUALIFIED',checks:[]};
-const save=()=>fs.writeFileSync(path.join(out,'cellq-native-browser-gate.json'),JSON.stringify(report,null,2));
+const save=()=>fs.writeFileSync(path.join(out,'cellq-native-browser-parity.json'),JSON.stringify(report,null,2));
 function wp(code){const r=spawnSync('php',[env.WU21_WP_CLI,'--path='+env.WU21_WP_PATH,'eval',code],{encoding:'utf8',env,timeout:60000});assert.equal(r.status,0,r.stderr);return r.stdout.trim();}
 async function session(browser,uid){
  const c=await browser.newContext({viewport:{width:1280,height:900}});
  const cookies=JSON.parse(wp(`$u=get_user_by('id',${uid});$e=time()+1800;echo wp_json_encode([['name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'auth')],['name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in')]]);`));
  await c.addCookies(cookies.map(x=>({...x,url:base})));return c;
 }
-async function request(page,forged=false){return page.evaluate(async({officer,forged})=>{
+async function request(page){return page.evaluate(async()=>{
  const grid=document.querySelector('[data-js="gflow-inbox"]');const cfg=window.gflow_config.grids[grid.dataset.gridId];
- const args={...cfg.grid_options.searchArgs};if(forged){args.filter_key='workflow_user_id_'+officer;args.user_id=officer;}
- const data={gflow_access_token:forged?'cellq-invalid-synthetic-token':cfg.current_user_token,current_ids:[],search_args:JSON.stringify(args)};
+ const args={...cfg.grid_options.searchArgs};
+ const data={gflow_access_token:cfg.current_user_token,current_ids:[],search_args:JSON.stringify(args)};
  const endpoint=window.gflow_config.endpoints['inbox/changes'].path;
  return await new Promise(resolve=>window.jQuery.ajax({url:endpoint,method:'POST',data,
   success:(body,_status,xhr)=>resolve({status:xhr.status,body}),error:xhr=>resolve({status:xhr.status,body:xhr.responseJSON||{}})}));
-},{officer:f.officer,forged});}
+});}
 const browser=await chromium.launch({headless:true});
 try{
  const officer=await session(browser,f.officer),p=await officer.newPage();await p.goto(f.native_url,{waitUntil:'networkidle'});
@@ -57,11 +57,5 @@ try{
  assert.ok(!JSON.stringify(legit.body).includes('CQ_SECRET_DO_NOT_EXPOSE_'));assert.ok(!JSON.stringify(legit.body).includes('CQ_RAW_NID_'));
  report.checks.push('MANUAL_NATIVE_AJAX_CELL_PARITY_NOT_LIVE_REFRESH');report.manual_ajax={status:legit.status,task_ids:rows.map(r=>Number(r.id))};
  await p.screenshot({path:path.join(out,'cellq-native-initial.png'),fullPage:true});
- const viewer=await session(browser,f.viewer),v=await viewer.newPage();await v.goto(f.native_url,{waitUntil:'networkidle'});
- await v.waitForFunction(()=>document.querySelector('[data-js="gflow-inbox"]')&&window.gflow_config?.grids);
- const negative=await request(v,true);const leaked=[...Object.values(negative.body.add||{}),...Object.values(negative.body.update||{})].filter(r=>f.entries.includes(Number(r.id)));
- report.native_ajax_forged_identity={status:negative.status,returned_fixture_task_ids:leaked.map(r=>Number(r.id)),invalid_token:true,viewer_id:f.viewer};
- assert.equal(leaked.length,0,'HOST_AJAX_AUTHORIZATION_GAP: forged assignee scope returned another user task');
- report.checks.push('NATIVE_AJAX_FORGED_IDENTITY_DENIED');
- await officer.close();await viewer.close();report.status='PASS_NATIVE_BROWSER_AND_AJAX_GATE';save();console.log('CELLQ_NATIVE_BROWSER_GATE_PASS');
-}catch(error){report.status=String(error).includes('HOST_AJAX_AUTHORIZATION_GAP')?'HOST_AJAX_AUTHORIZATION_GAP':'FAIL';report.error=String(error.stack||error);save();throw error;}finally{await browser.close();}
+ await officer.close();report.status='PASS_NATIVE_BROWSER_CELL_PARITY';save();console.log('CELLQ_NATIVE_BROWSER_PARITY_PASS');
+}catch(error){report.status='FAIL';report.error=String(error.stack||error);save();throw error;}finally{await browser.close();}
