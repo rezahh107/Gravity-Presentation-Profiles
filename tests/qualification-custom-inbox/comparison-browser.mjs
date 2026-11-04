@@ -112,7 +112,7 @@ async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
           shownWithoutHorizontalScroll:!g.documentOverflow,
           displayedNationalIdIsSyntheticOnly:true};
         const link=found.locator('[data-ciq2-detail]');
-        const href=await link.getAttribute('href');data.detail={hrefTarget:Number(new URL(href).searchParams.get('lid'))};
+        const href=await link.getAttribute('href');data.detail={hrefTarget:Number(new URL(href,base).searchParams.get('lid'))};
         assert.equal(data.detail.hrefTarget,targetId);
         data.interactionCount++; await link.click();await p.waitForLoadState('networkidle');
         data.detail.opened=await p.locator('.gravityflow_workflow_detail').count()===1;
@@ -139,7 +139,7 @@ async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
           const nativeLink=nativeRow.locator('a[data-js="inbox-details-link"]').first();
           if(await nativeLink.count()){
             const href=await nativeLink.getAttribute('href');
-            data.detail={hrefTarget:Number(new URL(href).searchParams.get('lid'))};
+            data.detail={hrefTarget:Number(new URL(href,base).searchParams.get('lid'))};
             assert.equal(data.detail.hrefTarget,targetId);
             data.interactionCount++;
             try{await nativeLink.click({timeout:5000}); await p.waitForLoadState('networkidle',{timeout:15000});
