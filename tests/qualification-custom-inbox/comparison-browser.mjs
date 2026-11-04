@@ -139,17 +139,39 @@ async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
         });
         data.search={task:targetName,candidates:searchInfo,success:false,method:'native search not yet selected',requiredPagination:null};
         const search=p.locator('input[type="search"],input[placeholder*="Search"],input[placeholder*="جست"],input[aria-label*="Search"]');
+        const rows=p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]');
         if(await search.count()){
-          const input=search.first();const st=Date.now();
+          const input=search.first(),st=Date.now();
+          // Reuse the repo's tested native Search event, not Enter or a fixed 700ms delay.
           await input.fill(targetName);data.interactionCount++;
-          await input.press('Enter');data.interactionCount++;
-          await p.waitForTimeout(700);
-          const target=p.locator('.ag-row[row-id="'+targetId+'"]');
-          data.search={...data.search,method:'native visible search input + Enter',
-            success:await target.count()>0,elapsedMs:Date.now()-st,
-            observedVisibleIds:await p.locator('.ag-row[row-id]').evaluateAll(xs=>xs.map(x=>Number(x.getAttribute('row-id'))))};
-        } else data.phaseNotes.push('Native search field not identified; search and click remain NOT_PROVEN');
-        let nativeRow=p.locator('.ag-row[row-id="'+targetId+'"]');
+          await input.dispatchEvent('keyup');
+          let filtered=false;
+          try {
+            await p.waitForFunction(id=>{
+              const rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')];
+              return rows.length===1&&Number(rows[0].getAttribute('row-id'))===id;
+            },targetId,{timeout:6000});
+            filtered=true;
+          }catch(e){data.phaseNotes.push('Native quick-search did not reduce to the unique target within 6s');}
+          const ids=await rows.evaluateAll(xs=>xs.map(x=>Number(x.getAttribute('row-id'))));
+          data.search={...data.search,method:'native keyup quick-search with exact filtered row oracle',
+            success:filtered,elapsedMs:Date.now()-st,observedRenderedIds:ids,
+            requiredPagination:filtered?false:null};
+          if(!filtered){
+            await input.fill('');await input.dispatchEvent('keyup');data.interactionCount++;
+            await p.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length>0,null,{timeout:15000});
+            let clicks=0;
+            while(!(await p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+targetId+'"]').count())&&clicks<3){
+              const next=p.locator('[data-js="gflow-inbox"] [ref="btNext"]');
+              if(await next.count()!==1||!(await next.isEnabled()))break;
+              const before=await p.locator('[data-js="gflow-inbox"] [ref="lbCurrent"]').innerText();
+              await next.click();clicks++;data.interactionCount++;data.scrollActions++;
+              await p.waitForFunction(previous=>document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim()!==previous,before.trim(),{timeout:15000});
+            }
+            data.search.manualPageFallback={pageNextClicks:clicks,found:await p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+targetId+'"]').count()>0};
+          }
+        } else data.phaseNotes.push('Native Search field not found; no positive search claim');
+        let nativeRow=p.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+targetId+'"]');
         if(await nativeRow.count()){
           const nativeLink=nativeRow.locator('a[data-js="inbox-details-link"]').first();
           if(await nativeLink.count()){
@@ -229,9 +251,9 @@ try{
     assert.equal(response.http,200);
     const search=nativePage.locator('[data-js="gflow-inbox-search"]');
     assert.equal(await search.count(),1);
-    await search.fill(large.target_name);await search.press('Enter');
-    await nativePage.waitForTimeout(800);
-    const stale=await nativePage.locator('.ag-row[row-id="'+target+'"]').count();
+    await search.fill(large.target_name);await search.dispatchEvent('keyup');
+    await nativePage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===0,null,{timeout:15000});
+    const stale=await nativePage.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+target+'"]').count();
     const count=wp("wp_set_current_user("+large.officer+");require_once WP_PLUGIN_DIR.'/gravity-presentation-profiles/tests/qualification-custom-inbox/cell-boundary.php';$r=cellq_rows(array('form_id'=>"+large.form_id+"),true);echo is_array($r)?count($r):'ERROR';");
     assert.equal(count,'46');assert.equal(stale,0,'Native displayed stale task after host transition');
     rec('multi47','native',390,'E_NATIVE_ASSIGNMENT_TRANSITION',{before:47,after:46,
