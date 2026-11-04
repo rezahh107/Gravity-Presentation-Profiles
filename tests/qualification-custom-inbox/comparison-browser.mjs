@@ -249,15 +249,28 @@ try{
   try{
     const response=await load(nativePage,large.native_url);
     assert.equal(response.http,200);
-    const search=nativePage.locator('[data-js="gflow-inbox-search"]');
-    assert.equal(await search.count(),1);
-    await search.fill(large.target_name);await search.dispatchEvent('keyup');
-    await nativePage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===0,null,{timeout:15000});
-    const stale=await nativePage.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+target+'"]').count();
     const count=wp("wp_set_current_user("+large.officer+");require_once WP_PLUGIN_DIR.'/gravity-presentation-profiles/tests/qualification-custom-inbox/cell-boundary.php';$r=cellq_rows(array('form_id'=>"+large.form_id+"),true);echo is_array($r)?count($r):'ERROR';");
-    assert.equal(count,'46');assert.equal(stale,0,'Native displayed stale task after host transition');
+    assert.equal(count,'46','Authentic host query did not remove the transferred task');
+    // Native quick search is scoped to the currently loaded page in this fixture.
+    // Inspect all native pages rather than falsely requiring one search to return zero.
+    const observed=new Set(),pageSizes=[];
+    for(let i=0;i<5;i++){
+      const ids=await nativePage.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').evaluateAll(
+        xs=>xs.map(x=>Number(x.getAttribute('row-id'))));
+      assert.ok(ids.length>0,'Native page unexpectedly empty during assignment enumeration');
+      pageSizes.push(ids.length);
+      for(const id of ids){assert.ok(!observed.has(id),'Duplicate native task across pages');observed.add(id);}
+      const next=nativePage.locator('[data-js="gflow-inbox"] [ref="btNext"]');
+      if(await next.count()!==1||!(await next.isEnabled()))break;
+      const previous=(await nativePage.locator('[data-js="gflow-inbox"] [ref="lbCurrent"]').innerText()).trim();
+      await next.click();
+      await nativePage.waitForFunction(value=>document.querySelector('[data-js="gflow-inbox"] [ref="lbCurrent"]')?.textContent?.trim()!==value,previous,{timeout:15000});
+    }
+    assert.equal(observed.size,46,'Native page-by-page task enumeration not complete after transition');
+    assert.ok(!observed.has(target),'Native still exposes transferred task');
     rec('multi47','native',390,'E_NATIVE_ASSIGNMENT_TRANSITION',{before:47,after:46,
-      staleRenderedRows:stale,hostAuthorizedRows:46,removedTask:target,serverAuthority:'Gravity Flow'});
+      staleRenderedRows:0,hostAuthorizedRows:46,removedTask:target,
+      nativePageSizes:pageSizes,allNativePagesEnumerated:true,serverAuthority:'Gravity Flow'});
     await snapshot(nativePage,'after-native-assignment-transition-native-390');
   }finally{await nativeContext.close();}
   report.checks.push('equal_synthetic_identities_and_officer_permissions');
