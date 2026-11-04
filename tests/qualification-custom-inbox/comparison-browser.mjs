@@ -92,7 +92,7 @@ async function runPhase(browser,phase,width,urls,targetId,targetName,expected){
         assert.ok(!((await p.content()).includes('CQ_SECRET_DO_NOT_EXPOSE_')),'Hidden synthetic field in Inbox2');
       } else {
         assert.equal(arrival.http,200);
-        await p.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor();
+        await p.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor({state:'attached'});
         data.nativeGridPresent=true;
       }
       await snapshot(p,phase+'-'+kind+'-'+width);
