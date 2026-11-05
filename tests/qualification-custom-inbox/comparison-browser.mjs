@@ -229,6 +229,12 @@ try{
   report.workload={original:baseline.entries.length,syntheticAdded:large.created_ids.length,total:large.all_ids.length,
     source:'real GFAPI synthetic insertion followed by authentic Gravity Flow process_workflow'};
   assert.equal(large.all_ids.length,47);
+  // Disposable bounded UX comparison: only native host presentation, no extra renderer.
+  const nativeMobileAB=spawnSync('node',['tests/qualification-custom-inbox/native-mobile-ux-ab.mjs'],
+    {env,encoding:'utf8',timeout:120000});
+  if(nativeMobileAB.stdout)console.log(nativeMobileAB.stdout.trim());
+  if(nativeMobileAB.status!==0)throw new Error('Native mobile A/B failed: '+nativeMobileAB.stderr);
+  report.nativeMobileAB='native-mobile-ux-ab.json';
   // New independent, real-browser native Global Search probe while all 47 authentic tasks exist.
   // Test-only: no changes to host code, task membership, or production behavior.
   const nativeProbe=spawnSync('node',['tests/qualification-custom-inbox/native-search-qualification.mjs'],
