@@ -32,7 +32,7 @@ try {
         $id = GFAPI::add_entry( array(
             'form_id' => (int) $f['form_id'],
             'created_by' => (int) $f['admin'],
-            '1' => 'مقایسه دانش‌آموز ' . $i,
+            '1' => ( 0 === $i ? 'داوطلب سیمرغ۷۳یگانه' : 'مقایسه دانش‌آموز ' . $i ),
             '2' => 'آزمایشی',
             '4' => 'COMPARE-SYNTH-' . $i,
             '5' => 'grade_code_10',
@@ -62,7 +62,7 @@ try {
         'created_ids' => $created,
         'all_ids' => $ids,
         'target_id' => (int) $created[0],
-        'target_name' => 'مقایسه دانش‌آموز 0',
+        'target_name' => 'سیمرغ۷۳یگانه',
         'native_url' => $f['native_url'],
         'inbox2_url' => get_permalink( (int) get_option( 'ciq2_page_id' ) ),
     );
