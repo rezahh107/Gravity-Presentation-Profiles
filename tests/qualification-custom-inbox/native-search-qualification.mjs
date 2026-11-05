@@ -212,6 +212,41 @@ async function casePage(browser,width){
     }catch(e){attempt.error=String(e).slice(0,500);}
     record.attempts.push(attempt);save();
   }
+  // Independent control: reproduce the previous fill()+keyup route with an unambiguous
+  // synthetic value, then validate nonmatch and clear. This is deliberately kept
+  // separate from genuine keyboard/Enter evidence.
+  const controlPage=await context.newPage();
+  try{
+    const controlResponse=await controlPage.goto(manifest.native_url,{waitUntil:'networkidle',timeout:40000});
+    assert.equal(controlResponse.status(),200);
+    await controlPage.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor({state:'attached'});
+    const quick=controlPage.locator('[data-js="gflow-inbox-search"]');
+    assert.equal(await quick.count(),1);
+    const ids=()=>controlPage.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')
+       .evaluateAll(nodes=>nodes.map(n=>Number(n.getAttribute('row-id'))));
+    await quick.fill(manifest.target_name);
+    await quick.dispatchEvent('keyup');
+    await controlPage.waitForFunction(target=>{
+      const rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')];
+      return rows.length===1&&Number(rows[0].getAttribute('row-id'))===target;
+    },manifest.target_id,{timeout:10000});
+    const uniqueResult=await ids();
+    assert.deepEqual(uniqueResult,[manifest.target_id],'Distinct native Quick Filter control must find off-page target');
+    await quick.fill('NO_MATCH_SYNTHETIC_927347');
+    await quick.dispatchEvent('keyup');
+    await controlPage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===0,null,{timeout:10000});
+    const nonmatchResult=await ids();
+    await quick.fill('');
+    await quick.dispatchEvent('keyup');
+    await controlPage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===20,null,{timeout:10000});
+    const resetResult=await ids();
+    assert.ok(resetResult.every(id=>oracle.includes(id)),'Reset shows unauthorized task');
+    assert.ok(!resetResult.includes(manifest.target_id),'Initial page did not restore after reset');
+    record.quickFilterControl={method:'unique fill()+synthetic keyup',uniqueResult,nonmatchResult,
+      resetCount:resetResult.length,pager:(await inspect(controlPage)).pager,
+      scope:'cross-page matching, negative control, reset, authentic officer permissions'};
+    await snapshot(controlPage,'keyup-control-'+width);
+  }finally{await controlPage.close();}
   report.cases.push(record);
   save();
   assert.ok(record.attempts.some(a=>a.targetFoundWithoutPagination&&a.directNativeDetailAvailable&&a.onlyAuthorizedIds),
