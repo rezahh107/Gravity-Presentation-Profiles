@@ -200,11 +200,11 @@ async function casePage(browser,width){
       const searchIndex=decisiveEvents.findIndex(e=>e.type==='search');
       const enterKeyupIndex=decisiveEvents.findIndex(e=>e.type==='keyup'&&e.key==='Enter');
       attempt.enterEventOrder=decisiveEvents.map(e=>e.type==='keyup'?'keyup:Enter':'search');
-      if(searchIndex>=0 && enterKeyupIndex>=0){
-        attempt.enterExpectedToFind=searchIndex<enterKeyupIndex;
-        assert.equal(attempt.targetFoundWithoutPagination,attempt.enterExpectedToFind,
-          'Native search/keyup event ordering does not explain Enter outcome');
-      }
+      assert.ok(searchIndex>=0 && enterKeyupIndex>=0,
+        'Enter must produce both native search and keyup events in Chromium fixture');
+      attempt.enterExpectedToFind=searchIndex<enterKeyupIndex;
+      assert.equal(attempt.targetFoundWithoutPagination,attempt.enterExpectedToFind,
+        'Native search/keyup event ordering does not explain Enter outcome');
       if(!attempt.targetFoundWithoutPagination){
         // Discriminator: same input with the prior fill()+keyup technique, no navigation.
         await field.fill(manifest.target_name);
