@@ -229,6 +229,13 @@ try{
   report.workload={original:baseline.entries.length,syntheticAdded:large.created_ids.length,total:large.all_ids.length,
     source:'real GFAPI synthetic insertion followed by authentic Gravity Flow process_workflow'};
   assert.equal(large.all_ids.length,47);
+  // New independent, real-browser native Global Search probe while all 47 authentic tasks exist.
+  // Test-only: no changes to host code, task membership, or production behavior.
+  const nativeProbe=spawnSync('node',['tests/qualification-custom-inbox/native-search-qualification.mjs'],
+    {env,encoding:'utf8',timeout:180000});
+  if(nativeProbe.stdout)console.log(nativeProbe.stdout.trim());
+  if(nativeProbe.status!==0)throw new Error('Native cross-page qualification failed: '+nativeProbe.stderr);
+  report.nativeCrossPageEvidence='native-cross-page-search.json';
   for(const width of [390,1280]){
     await runPhase(browser,'multi47',width,{native:large.native_url,inbox2:large.inbox2_url},
       large.target_id,large.target_name,large.all_ids);
