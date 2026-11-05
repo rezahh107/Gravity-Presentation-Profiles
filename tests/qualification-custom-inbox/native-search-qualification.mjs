@@ -195,6 +195,16 @@ async function casePage(browser,width){
         attempt.directNativeDetailAvailable=true;
       }
       attempt.eventTrace=await page.evaluate(()=>window.__ciqEventTrace||[]);
+      const decisiveEvents=attempt.eventTrace.filter(e=>e.from==='body' &&
+        (e.type==='search'||(e.type==='keyup'&&e.key==='Enter')));
+      const searchIndex=decisiveEvents.findIndex(e=>e.type==='search');
+      const enterKeyupIndex=decisiveEvents.findIndex(e=>e.type==='keyup'&&e.key==='Enter');
+      attempt.enterEventOrder=decisiveEvents.map(e=>e.type==='keyup'?'keyup:Enter':'search');
+      if(searchIndex>=0 && enterKeyupIndex>=0){
+        attempt.enterExpectedToFind=searchIndex<enterKeyupIndex;
+        assert.equal(attempt.targetFoundWithoutPagination,attempt.enterExpectedToFind,
+          'Native search/keyup event ordering does not explain Enter outcome');
+      }
       if(!attempt.targetFoundWithoutPagination){
         // Discriminator: same input with the prior fill()+keyup technique, no navigation.
         await field.fill(manifest.target_name);
@@ -232,6 +242,9 @@ async function casePage(browser,width){
     },manifest.target_id,{timeout:10000});
     const uniqueResult=await ids();
     assert.deepEqual(uniqueResult,[manifest.target_id],'Distinct native Quick Filter control must find off-page target');
+    const nativeDetail=controlPage.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+manifest.target_id+'"] a[data-js="inbox-details-link"]').first();
+    const nativeDetailHref=await nativeDetail.getAttribute('href');
+    assert.equal(new URL(nativeDetailHref,base).searchParams.get('lid'),String(manifest.target_id));
     await quick.fill('NO_MATCH_SYNTHETIC_927347');
     await quick.dispatchEvent('keyup');
     await controlPage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===0,null,{timeout:10000});
@@ -242,15 +255,40 @@ async function casePage(browser,width){
     const resetResult=await ids();
     assert.ok(resetResult.every(id=>oracle.includes(id)),'Reset shows unauthorized task');
     assert.ok(!resetResult.includes(manifest.target_id),'Initial page did not restore after reset');
+    // A native 'search' event clears the grid; a keyup reapplies the text.
+    // Exercise both orders against the actual loaded Flow/AG Grid handlers.
+    await quick.fill(manifest.target_name);
+    await quick.dispatchEvent('search');
+    await quick.dispatchEvent('keyup');
+    await controlPage.waitForFunction(target=>{
+      const rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')];
+      return rows.length===1&&Number(rows[0].getAttribute('row-id'))===target;
+    },manifest.target_id,{timeout:10000});
+    const searchThenKeyup=await ids();
+    await quick.dispatchEvent('search');
+    await controlPage.waitForFunction(()=>document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length===20,null,{timeout:10000});
+    const keyupThenSearch=await ids();
+    await quick.dispatchEvent('keyup');
+    await controlPage.waitForFunction(target=>{
+      const rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')];
+      return rows.length===1&&Number(rows[0].getAttribute('row-id'))===target;
+    },manifest.target_id,{timeout:10000});
+    assert.deepEqual(await ids(),[manifest.target_id]);
     record.quickFilterControl={method:'unique fill()+synthetic keyup',uniqueResult,nonmatchResult,
-      resetCount:resetResult.length,pager:(await inspect(controlPage)).pager,
-      scope:'cross-page matching, negative control, reset, authentic officer permissions'};
+      resetCount:resetResult.length,pager:(await inspect(controlPage)).pager,nativeDetailHref,
+      searchThenKeyup,keyUpThenSearchResult:keyupThenSearch,
+      scope:'cross-page matching, negative control, reset, both event orders, authentic officer permissions'};
     await snapshot(controlPage,'keyup-control-'+width);
   }finally{await controlPage.close();}
   report.cases.push(record);
   save();
-  assert.ok(record.attempts.some(a=>a.targetFoundWithoutPagination&&a.directNativeDetailAvailable&&a.onlyAuthorizedIds),
-    'Genuine native Global Search failed unique cross-page target at viewport '+width);
+  assert.ok(record.attempts.length>0 && record.attempts.every(a=>!a.error&&a.inputMatchesUniqueTarget&&a.onlyAuthorizedIds),
+    'Native keyboard/input or event-order witness failed at viewport '+width);
+  assert.deepEqual(record.quickFilterControl.uniqueResult,[manifest.target_id]);
+  assert.deepEqual(record.quickFilterControl.nonmatchResult,[]);
+  assert.equal(record.quickFilterControl.resetCount,20);
+  assert.deepEqual(record.quickFilterControl.searchThenKeyup,[manifest.target_id]);
+  assert.equal(record.quickFilterControl.keyUpThenSearchResult.length,20);
   await context.close();
   save();
 }
