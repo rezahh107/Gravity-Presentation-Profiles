@@ -152,6 +152,21 @@ async function casePage(browser,width){
     const attempt={control:candidate,eventSequence:[],networkStart:network.length};
     if(!(await field.isVisible())){attempt.error='NOT_VISIBLE';record.attempts.push(attempt);continue;}
     try{
+      // Passive event trace; does not intercept, alter, or reimplement native listeners.
+      await page.evaluate(()=>{
+        window.__ciqEventTrace=[];
+        const input=document.querySelector('[data-js="gflow-inbox-search"]');
+        for(const type of ['keydown','keyup','input','search']){
+          input.addEventListener(type,e=>window.__ciqEventTrace.push({
+            from:'input',type:e.type,key:e.key||null,trusted:e.isTrusted,value:input.value.slice(0,55)
+          }),true);
+          document.body.addEventListener(type,e=>{
+            if(e.target===input)window.__ciqEventTrace.push({
+              from:'body',type:e.type,key:e.key||null,trusted:e.isTrusted,value:input.value.slice(0,55)
+            });
+          });
+        }
+      });
       await field.fill('');
       await field.pressSequentially(manifest.target_name,{delay:25});
       attempt.eventSequence.push('focus, real keyboard pressSequentially -> input/keydown/keyup');
@@ -178,6 +193,17 @@ async function casePage(browser,width){
         attempt.detailHref=await link.getAttribute('href');
         assert.equal(new URL(attempt.detailHref,base).searchParams.get('lid'),String(manifest.target_id));
         attempt.directNativeDetailAvailable=true;
+      }
+      attempt.eventTrace=await page.evaluate(()=>window.__ciqEventTrace||[]);
+      if(!attempt.targetFoundWithoutPagination){
+        // Discriminator: same input with the prior fill()+keyup technique, no navigation.
+        await field.fill(manifest.target_name);
+        await field.dispatchEvent('keyup');
+        await page.waitForTimeout(1500);
+        attempt.afterSyntheticKeyup=await inspect(page);
+        attempt.syntheticKeyupRecovered=attempt.afterSyntheticKeyup.rows.includes(manifest.target_id);
+        attempt.eventTraceAfterSynthetic=await page.evaluate(()=>window.__ciqEventTrace||[]);
+        await snapshot(page,'synthetic-retry-'+width+'-'+i);
       }
       attempt.network=network.slice(attempt.networkStart);
       const seen=[...attempt.afterTyping.rows,...attempt.afterEnter?.rows??[]];
