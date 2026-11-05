@@ -76,7 +76,7 @@ async function inspect(page){
     const rows=[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')]
       .map(x=>Number(x.getAttribute('row-id')));
     const all=[...document.querySelectorAll('input')];
-    const inputs=all.map((e,i)=>({i,type:e.type,id:e.id,name:e.name,placeholder:e.placeholder,
+    const inputs=all.map((e,i)=>({i,type:e.type,id:e.id,name:e.name,value:e.value,placeholder:e.placeholder,
       aria:e.getAttribute('aria-label'),dataJs:e.getAttribute('data-js'),
       insideNative:!!box?.contains(e),outer:e.outerHTML.slice(0,350)}));
     const buttons=[...box?.querySelectorAll('button,[role=button]')??[]]
@@ -166,6 +166,9 @@ async function casePage(browser,width){
         attempt.afterEnter=await inspect(page);
         await snapshot(page,'enter-'+width+'-'+i);
       }
+      attempt.inputValue=await field.inputValue();
+      attempt.inputMatchesUniqueTarget=attempt.inputValue===manifest.target_name;
+      assert.ok(attempt.inputMatchesUniqueTarget, 'Typed native search value differs from synthetic target');
       attempt.targetFoundWithoutPagination=attempt.targetFoundAfterTyping||
         !!attempt.afterEnter?.rows.includes(manifest.target_id);
       if(attempt.targetFoundWithoutPagination){
@@ -184,6 +187,9 @@ async function casePage(browser,width){
     record.attempts.push(attempt);save();
   }
   report.cases.push(record);
+  save();
+  assert.ok(record.attempts.some(a=>a.targetFoundWithoutPagination&&a.directNativeDetailAvailable&&a.onlyAuthorizedIds),
+    'Genuine native Global Search failed unique cross-page target at viewport '+width);
   await context.close();
   save();
 }
