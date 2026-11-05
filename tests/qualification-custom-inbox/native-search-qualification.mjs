@@ -112,7 +112,7 @@ async function casePage(browser,width){
   });
   const arrival=await page.goto(manifest.native_url,{waitUntil:'networkidle',timeout:40000});
   assert.equal(arrival.status(),200);
-  await page.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor();
+  await page.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor({state:'attached'});
   let initial=await inspect(page);
   assert.ok(!initial.rows.includes(manifest.target_id),'target must be off native first page');
   assert.ok(initial.pager.nextEnabled,'fixture does not reach multiple native pages');
@@ -137,7 +137,7 @@ async function casePage(browser,width){
   for(let i=0;i<max;i++){
     if(i>0){
       await page.goto(manifest.native_url,{waitUntil:'networkidle',timeout:40000});
-      await page.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor();
+      await page.locator('[data-js="gflow-inbox"] .ag-row[row-id]').first().waitFor({state:'attached'});
       if(toggled)await page.locator('[data-js="gflow-inbox"] button,[data-js="gflow-inbox"] [role=button]').nth(toggled.button.i).click();
     }
     const candidate=inputs[i];
