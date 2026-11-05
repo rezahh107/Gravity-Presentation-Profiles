@@ -55,7 +55,7 @@ scanSource(root);
 const vendor=path.join(root,'assets/js/dist/vendor-theme.min.js');
 if(fs.existsSync(vendor)){
   const js=fs.readFileSync(vendor,'utf8');
-  const matches=[...js.matchAll(/(?:AG Grid|agGrid|VERSION|version)[^\\n]{0,100}?(\\d{1,2}\\.\\d{1,2}\\.\\d{1,3})/g)].slice(0,12);
+  const matches=[...js.matchAll(/(?:AG Grid|agGrid|VERSION|version)[^\n]{0,100}?(\d{1,2}\.\d{1,2}\.\d{1,3})/g)].slice(0,12);
   report.agGridVersionCandidates=matches.map(x=>({term:x[0].slice(0,160),version:x[1]}));
   report.agGridVendor={file:'assets/js/dist/vendor-theme.min.js',sha256:crypto.createHash('sha256').update(js).digest('hex'),firstChars:js.slice(0,180)};
 }
