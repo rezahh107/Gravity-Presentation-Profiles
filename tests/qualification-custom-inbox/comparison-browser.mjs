@@ -236,6 +236,23 @@ try{
   if(nativeProbe.stdout)console.log(nativeProbe.stdout.trim());
   if(nativeProbe.status!==0)throw new Error('Native cross-page qualification failed: '+nativeProbe.stderr);
   report.nativeCrossPageEvidence='native-cross-page-search.json';
+  const nativeEvidence=JSON.parse(fs.readFileSync(path.join(out,report.nativeCrossPageEvidence),'utf8'));
+  const traceFile=path.join(out,'native-search-server-trace.ndjson');
+  const nativeTrace=fs.existsSync(traceFile)?fs.readFileSync(traceFile,'utf8').trim().split('\n').filter(Boolean).map(x=>JSON.parse(x)):[];
+  const searchSummary={head:nativeEvidence.head,packageSHA256:nativeEvidence.packageSHA256,
+    status:nativeEvidence.status,authorized:nativeEvidence.authorized,
+    sourceHits:nativeEvidence.sourceHits.filter(x=>/quickFilter|gflow-inbox-search|search_criteria|rowModelType/i.test(x.term)).slice(0,18),
+    hookEvents:nativeTrace.reduce((a,x)=>(a[x.event]=(a[x.event]||0)+1,a),{}),
+    hookSamples:nativeTrace.filter(x=>/search_criteria|inbox_paging|rest_route/.test(x.event)).slice(-6),
+    cases:nativeEvidence.cases.map(x=>({width:x.width,initialRows:x.initial.rows,
+      initialInputs:x.initial.inputs,buttons:x.initial.buttons,pager:x.initial.pager,
+      scripts:x.initial.scripts,searchCandidates:x.searchCandidates,toggled:x.toggled?.button,
+      attempts:x.attempts.map(a=>({control:a.control,error:a.error,eventSequence:a.eventSequence,
+        afterTyping:a.afterTyping?{rows:a.afterTyping.rows,pager:a.afterTyping.pager}:null,
+        afterEnter:a.afterEnter?{rows:a.afterEnter.rows,pager:a.afterEnter.pager}:null,
+        targetFoundWithoutPagination:a.targetFoundWithoutPagination,
+        onlyAuthorizedIds:a.onlyAuthorizedIds,network:a.network}))}))};
+  console.log('NATIVE_SEARCH_EVIDENCE_JSON '+JSON.stringify(searchSummary));
   for(const width of [390,1280]){
     await runPhase(browser,'multi47',width,{native:large.native_url,inbox2:large.inbox2_url},
       large.target_id,large.target_name,large.all_ids);
