@@ -108,6 +108,12 @@ try{
     screenshots:[snapA,snapScroll]});save();
 
   // B is Gravity Flow's own already-existing fullscreen button, not custom fullscreen.
+  // Return to the native starting edge before comparing fullscreen with baseline.
+  await page.locator('[data-js="gflow-inbox"]').evaluate(root=>{
+    const bar=root.querySelector('.ag-body-horizontal-scroll-viewport')||root.querySelector('.ag-center-cols-viewport');
+    if(bar){bar.scrollLeft=0;bar.dispatchEvent(new Event('scroll',{bubbles:true}));}
+  });
+  await page.waitForTimeout(150);
   const nativeFull=page.locator('[data-js="gflow-inbox"] [data-js="inbox-fullscreeen"]');
   assert.equal(await nativeFull.count(),1,'Native fullscreen button missing');
   await nativeFull.click();
@@ -116,11 +122,27 @@ try{
   const snapB=await shot(page,'native-fullscreen-390');
   result.variants.push({name:'B_native_fullscreen',metrics:fullscreen,
     fullscreenButton:'inbox-fullscreeen',screenshot:snapB});save();
-  // Restore using the same native control only if it is still available.
-  if(await nativeFull.count() && await nativeFull.isVisible()) {
-    await nativeFull.click();
-    await page.waitForTimeout(250);
+  // Check a real pointer exit, but keep an obstructed native button as a measured UX
+  // observation rather than bypassing the hit target with click({force:true}).
+  const exitHit=await nativeFull.evaluate(btn=>{
+    const b=btn.getBoundingClientRect();
+    const x=Math.round(b.left+b.width/2),y=Math.round(b.top+b.height/2);
+    const winner=document.elementFromPoint(x,y);
+    return {button:{x,y,width:b.width,height:b.height},
+      hittable:winner===btn||btn.contains(winner),
+      topmost:{tag:winner?.tagName,id:winner?.id,cls:winner?.className?.toString().slice(0,100)}};
+  });
+  result.variants[result.variants.length-1].nativeExitHit=exitHit;
+  try{
+    await nativeFull.click({timeout:1800});
+    result.variants[result.variants.length-1].exitClick='CLICKED';
+  }catch(err){
+    result.variants[result.variants.length-1].exitClick='BLOCKED';
+    result.variants[result.variants.length-1].exitError=String(err).slice(0,350);
   }
+  save();
+  // Disposable clean reload, rather than force-clicking an inaccessible control.
+  await page.reload({waitUntil:'networkidle'});
 
   // C: host-level gutter CSS only, never changes a native row, column, or Grid API.
   await page.reload({waitUntil:'networkidle'});
