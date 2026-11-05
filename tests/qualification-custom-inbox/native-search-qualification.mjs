@@ -52,6 +52,13 @@ function scanSource(dir){
   }
 }
 scanSource(root);
+const vendor=path.join(root,'assets/js/dist/vendor-theme.min.js');
+if(fs.existsSync(vendor)){
+  const js=fs.readFileSync(vendor,'utf8');
+  const matches=[...js.matchAll(/(?:AG Grid|agGrid|VERSION|version)[^\\n]{0,100}?(\\d{1,2}\\.\\d{1,2}\\.\\d{1,3})/g)].slice(0,12);
+  report.agGridVersionCandidates=matches.map(x=>({term:x[0].slice(0,160),version:x[1]}));
+  report.agGridVendor={file:'assets/js/dist/vendor-theme.min.js',sha256:crypto.createHash('sha256').update(js).digest('hex'),firstChars:js.slice(0,180)};
+}
 report.sourceScan={sourceRoot:'extracted SHA-verified Gravity Flow 3.1.0',
   sourceHitCount:report.sourceHits.length};
 function auth(){
@@ -161,6 +168,14 @@ async function casePage(browser,width){
       }
       attempt.targetFoundWithoutPagination=attempt.targetFoundAfterTyping||
         !!attempt.afterEnter?.rows.includes(manifest.target_id);
+      if(attempt.targetFoundWithoutPagination){
+        const resultRows=attempt.afterTyping.rows.includes(manifest.target_id)?attempt.afterTyping.rows:attempt.afterEnter.rows;
+        assert.deepEqual(resultRows,[manifest.target_id], 'Unique off-page task was not the only native search result');
+        const link=page.locator('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id="'+manifest.target_id+'"] a[data-js="inbox-details-link"]').first();
+        attempt.detailHref=await link.getAttribute('href');
+        assert.equal(new URL(attempt.detailHref,base).searchParams.get('lid'),String(manifest.target_id));
+        attempt.directNativeDetailAvailable=true;
+      }
       attempt.network=network.slice(attempt.networkStart);
       const seen=[...attempt.afterTyping.rows,...attempt.afterEnter?.rows??[]];
       attempt.onlyAuthorizedIds=seen.every(id=>oracle.includes(id));
