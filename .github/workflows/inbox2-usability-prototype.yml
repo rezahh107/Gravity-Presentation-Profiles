@@ -314,6 +314,33 @@ jobs:
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/operational-headless.php | tee "$WU21_ARTIFACT_DIR/ciq2-operational-headless.log"
         node --check tests/qualification-custom-inbox/operational-browser.mjs
         node tests/qualification-custom-inbox/operational-browser.mjs
+    - name: Falsify Native Enter acceptance despite successful synthetic keyup
+      shell: bash
+      run: |
+        set -euo pipefail
+        node --check tests/qualification-custom-inbox/native-501-search-qualification.mjs
+        set +e
+        WU21_NATIVE_501_FALSIFY_ENTER=1 node tests/qualification-custom-inbox/native-501-search-qualification.mjs >"$WU21_ARTIFACT_DIR/native-501-falsification.log" 2>&1
+        rc=$?
+        set -e
+        if [ "$rc" -eq 0 ]; then
+          echo 'FALSIFICATION_FAILURE: suppressed Enter unexpectedly passed'
+          exit 1
+        fi
+        node - <<'NODE'
+        const assert = require('node:assert/strict');
+        const fs = require('node:fs');
+        const path = require('node:path');
+        const r = JSON.parse(fs.readFileSync(path.join(process.env.WU21_ARTIFACT_DIR, 'native-501-search-qualification.json')));
+        assert.equal(r.falsificationMode, true);
+        assert.equal(r.status, 'FAIL_OR_NOT_PROVEN_REQUIRES_TRIAGE');
+        assert.match(r.error, /positive_enter_1280: browser Enter keyup absent/);
+        assert.deepEqual(r.cases[0].falsification.afterSyntheticKeyup, [r.target]);
+        assert.notDeepEqual(r.cases[0].falsification.afterBlockedEnter, [r.target]);
+        assert.equal(r.cases[0].falsification.gateRejectedBeforeSynthetic, true);
+        console.log('NATIVE_501_ENTER_FALSIFICATION_PASS');
+        NODE
+        cp "$WU21_ARTIFACT_DIR/native-501-search-qualification.json" "$WU21_ARTIFACT_DIR/native-501-falsification.json"
     - name: Qualify authentic Native Inbox across 501 synthetic tasks
       shell: bash
       run: |

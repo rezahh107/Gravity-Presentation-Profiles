@@ -28,10 +28,21 @@ const expectedSha = 'ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cb
 const packageSha = crypto.createHash('sha256').update(fs.readFileSync(env.WU21_FLOW_ZIP)).digest('hex');
 assert.equal(packageSha, expectedSha, 'The pinned Gravity Flow package differs');
 
+// User-oriented acceptance must be decided from the browser Enter outcome,
+// never from a later synthetic DOM event. Reused in the fault-injection run.
+function assertGenuineEnter(phase, ids, expected, value, query, events) {
+  assert.equal(value, query, phase + ': input value');
+  assert.ok(Array.isArray(events) && events.some(event =>
+    event.type === 'keyup' && event.key === 'Enter' && event.trusted === true),
+  phase + ': browser Enter keyup absent');
+  assert.deepEqual(ids, expected, phase + ': expected Native result IDs');
+}
+
 const report = {
   head: env.GPP_WU21_REPOSITORY_SHA,
   packageSHA256: packageSha,
   status: 'RUNNING',
+  falsificationMode: env.WU21_NATIVE_501_FALSIFY_ENTER === '1',
   scope: 'ephemeral WU21 / synthetic tasks / Native Gravity Flow 3.1.0',
   target, targetName, cases: [], checks: [],
   limits: [
@@ -207,6 +218,7 @@ try {
     assert.ok(!initial.renderedIds.includes(target), 'Target must be beyond the first 20 rows');
     const outcome = {width, loadMs, initial, initialRequests: relevantRequests.slice(),
       initialResponses: relevantResponses.slice(), jsErrors};
+    report.cases.push(outcome); // Keep partial witness if the required Enter gate fails.
 
     const input = page.locator('[data-js="gflow-inbox-search"]');
     assert.equal(await input.count(), 1, 'Expected one real Native Search field');
@@ -226,11 +238,47 @@ try {
     await page.waitForTimeout(700);
     outcome.afterTyping = await visibleIds(page);
     outcome.typingFoundTarget = outcome.afterTyping.length === 1 && outcome.afterTyping[0] === target;
+    // Used only by the disposable WU21 expected-failure invocation. Intercept
+    // genuine Enter events at window capture, leaving untrusted keyup intact.
+    if (report.falsificationMode) await page.evaluate(() => {
+      const field = document.querySelector('[data-js="gflow-inbox-search"]');
+      const block = event => {
+        if (event.target !== field || !event.isTrusted) return;
+        if ((event.type === 'keyup' || event.type === 'keydown') && event.key !== 'Enter') return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+      for (const type of ['keydown', 'keyup', 'search'])
+        window.addEventListener(type, block, true);
+    });
     await input.press('Enter');
     await page.waitForTimeout(700);
     outcome.afterEnter = await visibleIds(page);
     outcome.enterFoundTarget = outcome.afterEnter.length === 1 && outcome.afterEnter[0] === target;
-    assert.equal(await input.inputValue(), targetName);
+    outcome.enterEventTrace = await page.evaluate(() => [...window.__native501EventTrace]);
+    outcome.enterValue = await input.inputValue();
+    save();
+    let enterError;
+    try {
+      // Mandatory acceptance gate, executed BEFORE every synthetic keyup.
+      assertGenuineEnter('positive_enter_' + width, outcome.afterEnter, [target],
+        outcome.enterValue, targetName, outcome.enterEventTrace);
+    } catch (error) {
+      if (!report.falsificationMode) throw error;
+      enterError = error;
+    }
+    if (report.falsificationMode) {
+      assert.ok(enterError, 'Fault injection failed: genuine Enter unexpectedly qualified');
+      assert.notDeepEqual(outcome.afterEnter, [target], 'Fault injection did not block Native search');
+      await input.dispatchEvent('keyup'); // Diagnostic deliberately succeeds after a failed gate.
+      await waitIds(page, [target]);
+      outcome.falsification = {gateRejectedBeforeSynthetic: true,
+        afterBlockedEnter: outcome.afterEnter,
+        afterSyntheticKeyup: await visibleIds(page)};
+      save();
+      throw enterError; // Full qualification MUST fail even though synthetic keyup worked.
+    }
+    report.checks.push('genuine_enter_target_' + width);
     const quickStart = Date.now();
     await input.dispatchEvent('keyup'); // Explicit diagnostic control, not claimed to be human typing.
     await waitIds(page, [target]);
@@ -243,23 +291,49 @@ try {
     assert.equal(new URL(href, base).searchParams.get('lid'), String(target));
     await link.click();
     await page.waitForLoadState('domcontentloaded');
-    outcome.detailUrlPath = new URL(page.url()).pathname;
+    const actualDetail = new URL(page.url());
+    outcome.detailUrlPath = actualDetail.pathname;
+    outcome.detailActualTaskId = actualDetail.searchParams.get('lid');
+    assert.equal(outcome.detailActualTaskId, String(target),
+      'Actual Entry Detail navigation did not reach the target task');
+    outcome.detailTargetNameVisible = (await page.locator('body').innerText()).includes(targetName);
+    outcome.detailContentQualification = outcome.detailTargetNameVisible
+      ? 'TARGET_NAME_VISIBLE' : 'NOT_PROVEN_BY_NATIVE_DETAIL_CONTENT';
     await page.goBack({waitUntil: 'domcontentloaded', timeout: 60000});
     const afterBack = page.locator('[data-js="gflow-inbox-search"]');
     await afterBack.waitFor({state: 'attached'});
     outcome.queryAfterBack = await afterBack.inputValue();
 
-    await afterBack.fill('NO_MATCH_SYNTHETIC_NATIVE_501_92841');
-    await afterBack.dispatchEvent('keyup');
+    // Browser Back can create a new document. Capture supported native events
+    // there too; synthetic keyup is not an admissible negative/reset fallback.
+    await page.evaluate(() => {
+      window.__native501PostBackEvents = [];
+      const field = document.querySelector('[data-js="gflow-inbox-search"]');
+      for (const type of ['keyup', 'search']) field.addEventListener(type, event => {
+        window.__native501PostBackEvents.push({type: event.type,
+          key: event.key || null, trusted: event.isTrusted});
+      }, true);
+    });
+    const negativeQuery = 'NO_MATCH_SYNTHETIC_NATIVE_501_92841';
+    await afterBack.fill(negativeQuery);
+    await afterBack.press('Enter');
     await waitIds(page, []);
     outcome.negativeMatches = await visibleIds(page);
+    outcome.negativeEnterEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
+    assertGenuineEnter('negative_enter_' + width, outcome.negativeMatches, [],
+      await afterBack.inputValue(), negativeQuery, outcome.negativeEnterEvents);
+    report.checks.push('genuine_negative_search_' + width);
+
+    await page.evaluate(() => { window.__native501PostBackEvents = []; });
     await afterBack.fill('');
-    await afterBack.dispatchEvent('keyup');
-    await page.waitForFunction(() => document.querySelectorAll(
-      '[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]').length === 20,
-    null, {timeout: 20000});
-    outcome.resetCount = (await visibleIds(page)).length;
-    assert.equal(outcome.resetCount, 20);
+    await afterBack.press('Enter');
+    await waitIds(page, initial.renderedIds);
+    outcome.resetIds = await visibleIds(page);
+    outcome.resetCount = outcome.resetIds.length;
+    outcome.resetEnterEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
+    assertGenuineEnter('reset_enter_' + width, outcome.resetIds, initial.renderedIds,
+      await afterBack.inputValue(), '', outcome.resetEnterEvents);
+    report.checks.push('genuine_reset_search_' + width);
     const navigation = await page.evaluate(() => {
       const entry = performance.getEntriesByType('navigation').at(-1);
       return entry ? {durationMs: entry.duration, transferSize: entry.transferSize,
@@ -269,7 +343,6 @@ try {
     outcome.browserHeap = await page.evaluate(() =>
       performance.memory?.usedJSHeapSize ?? null);
     await page.screenshot({path: path.join(out, 'native-501-' + width + '.png'), fullPage: false});
-    report.cases.push(outcome);
     report.checks.push('native_501_exact_grid_cross_page_persian_and_entry_detail_' + width);
     save();
     await ctx.close();
