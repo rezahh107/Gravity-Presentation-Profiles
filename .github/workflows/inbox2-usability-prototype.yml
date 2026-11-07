@@ -13,7 +13,7 @@ jobs:
   qualification:
     name: Inbox 2 mobile RTL and batch query qualification
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     services:
       database:
         image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
@@ -306,6 +306,13 @@ jobs:
       run: |
         set -euo pipefail
         node tests/qualification-custom-inbox/usability-browser.mjs
+    - name: Qualify 500/501 native task membership and operational Live Refresh
+      shell: bash
+      run: |
+        set -euo pipefail
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/operational-headless.php | tee "$WU21_ARTIFACT_DIR/ciq2-operational-headless.log"
+        node --check tests/qualification-custom-inbox/operational-browser.mjs
+        node tests/qualification-custom-inbox/operational-browser.mjs
     - name: Upload isolated evidence even on failure
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
