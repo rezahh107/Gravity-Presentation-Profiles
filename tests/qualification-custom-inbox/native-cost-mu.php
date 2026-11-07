@@ -14,6 +14,9 @@ register_shutdown_function( static function () use ( $ciq_cost_started ) {
         $kind = 'inbox2_delta';
     } elseif ( '/wp-admin/admin.php' === $path && 'gravityflow-inbox' === ( $_GET['page'] ?? '' ) ) {
         $kind = 'native_initial';
+    } elseif ( function_exists( 'get_option' ) && is_array( $fixture = get_option( 'cellq_fixture', array() ) )
+        && $path === parse_url( (string) ( $fixture['native_url'] ?? '' ), PHP_URL_PATH ) ) {
+        $kind = 'native_initial';
     } elseif ( function_exists( 'is_page' ) && is_page( (int) get_option( 'ciq2_page_id' ) ) ) {
         $kind = 'inbox2_initial';
     }
