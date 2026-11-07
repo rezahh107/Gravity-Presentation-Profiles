@@ -213,6 +213,7 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
         controller = new AbortController();
         busy = true;
         root.dataset.ciq2State = 'syncing';
+        status.textContent = 'در حال بررسی مجدد فهرست؛ داده‌های قبلی هنوز تأیید مجدد نشده‌اند.';
         const watchdog = setTimeout(() => {
           if (serial !== generation) return;
           // A fetch that never settles must not block every later polling cycle.
