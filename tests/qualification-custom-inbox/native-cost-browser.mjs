@@ -32,6 +32,18 @@ function wp(code){
   assert.equal(r.status,0,r.stderr||r.stdout);return r.stdout.trim();
 }
 const jsonWP=code=>JSON.parse(wp(code));
+let independentIds=[];
+function nativeInternalSnapshot(){
+  const root=document.querySelector('[data-js="gflow-inbox"]');
+  const data=window.gflow_config?.grids?.[root?.dataset.gridId]?.grid_options?.rowData;
+  return {hasRowData:Array.isArray(data),ids:Array.isArray(data)?data.map(x=>Number(x.id)):[],
+    renderedCount:root?.querySelectorAll('.ag-center-cols-container .ag-row[row-id]').length??null};
+}
+function normalizedIdentity(snapshot){
+  const actual=[...snapshot.ids].sort((a,b)=>a-b),expected=[...independentIds].sort((a,b)=>a-b);
+  return {hasRowData:snapshot.hasRowData,rowCount:actual.length,renderedCount:snapshot.renderedCount,
+    unique:new Set(actual).size===actual.length,equals_independent_host_ids:JSON.stringify(actual)===JSON.stringify(expected)};
+}
 function readServer(){
   if(!fs.existsSync(serverLog))return [];
   return fs.readFileSync(serverLog,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s));
@@ -98,6 +110,10 @@ async function capture(browser,kind,url,ms){
       const obj=JSON.parse(b.toString('utf8'));
       if(kind==='native'){
         ops=Object.fromEntries(['add','remove','update'].map(k=>[k,Array.isArray(obj[k])?obj[k].length:null]));
+        ops.wire_types=Object.fromEntries(['add','remove','update'].map(k=>
+          [k,Array.isArray(obj[k])?'array':obj[k]===null?'null':typeof obj[k]]));
+        ops.object_counts=Object.fromEntries(['add','remove','update'].map(k=>
+          [k,obj[k]&&typeof obj[k]==='object'?Object.keys(obj[k]).length:null]));
       }else ops={count:obj.data?.count??null,success:obj.success??null};
     }catch(e){ops={parse_failed:true}}
     transactions.push({status:res.status(),browser_elapsed_ms:Date.now()-(starts.get(res.request())??Date.now()),
@@ -119,7 +135,8 @@ async function capture(browser,kind,url,ms){
       Object.values(window.gflow_config?.grids||{}).map(x=>({
         fetch_enabled:x.fetch_enabled,fetch_interval:x.fetch_interval
       }))):null;
-    const view={initial_ms:initialMs,visible_dom_rows:await page.locator(
+    const initialInternal=kind==='native'?normalizedIdentity(await page.evaluate(nativeInternalSnapshot)):null;
+    const view={initial_ms:initialMs,internal_task_id_integrity:initialInternal,visible_dom_rows:await page.locator(
       kind==='native'?'[data-js="gflow-inbox"] .ag-row[row-id]':'[data-ciq2-entry]').count(),
       native_config:nativeConfig};
     const min=kind==='native'?2:3;
@@ -127,7 +144,8 @@ async function capture(browser,kind,url,ms){
     const elapsed=Date.now()-start;
     const logs=readServer().slice(before);
     const endpoint=kind==='native'?'native_delta':'inbox2_delta';
-    const result={kind,view,window_ms:elapsed,transactions,initial_server:summary(logs,kind+'_initial'),
+    const postInternal=kind==='native'?normalizedIdentity(await page.evaluate(nativeInternalSnapshot)):null;
+    const result={kind,view,post_refresh_task_id_integrity:postInternal,window_ms:elapsed,transactions,initial_server:summary(logs,kind+'_initial'),
       refresh_server:summary(logs,endpoint),page_errors:errors};
     assert.ok(result.refresh_server.request_count>=min,
       kind+' browser polls have no matching real PHP request measurements');
@@ -142,7 +160,10 @@ try{
   if(workload===2000)removeExactSyntheticOverflow();
   const s=scope();
   assert.equal(s.count,workload,'actual authorized task count differs from benchmark');
-  report.scope={authorized_host_task_count:s.count,operator: 'synthetic_officer',same_scope_for_both:true};
+  report.scope={authorized_host_task_count:s.count,operator:'synthetic_officer',same_scope_for_both:true};
+  independentIds=jsonWP('$f=get_option("cellq_fixture");wp_set_current_user((int)$f["officer"]);$ids=[];for($o=0;$o<'+workload+';$o+=40){$rows=cellq_model()->get_inbox_tasks(cellq_args(["form_id"=>(int)$f["form_id"]],$o,40));foreach($rows as $row)$ids[]=(int)$row["id"];}echo wp_json_encode($ids);');
+  assert.equal(independentIds.length,workload,'native Task Model oracle cardinality');
+  assert.equal(new Set(independentIds).size,workload,'native Task Model oracle uniqueness');
   browser=await chromium.launch({headless:true});
   const native=await capture(browser,'native',s.native_url,150000);
   const inbox2=await capture(browser,'inbox2',s.inbox2_url,150000);
@@ -153,8 +174,10 @@ try{
     inbox2_refresh_requests:inbox2.refresh_server.request_count,
     note:'Different natural intervals; compare per-request and actual window separately, not unadjusted totals.'
   };
-  report.status='PASS_MEASURED_BOTH_AUTHENTIC_UI_PATHS';save();
+  report.status=native.page_errors.length?'COST_MEASURED_NATIVE_BROWSER_ERROR_OBSERVED':
+    'PASS_MEASURED_BOTH_AUTHENTIC_UI_PATHS';save();
   console.log('CIQ2_NATIVE_COST_PASS '+JSON.stringify({workload,comparison:report.comparison,
+    native_row_integrity:native.post_refresh_task_id_integrity,native_errors:native.page_errors.length,
     native_median_request_ms:native.refresh_server.records.map(x=>x.server_elapsed_ms),
     inbox2_request_ms:inbox2.refresh_server.records.map(x=>x.server_elapsed_ms)}));
 }catch(e){
