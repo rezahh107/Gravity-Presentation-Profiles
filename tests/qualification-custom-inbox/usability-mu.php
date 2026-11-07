@@ -171,6 +171,7 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
       const pageLabel = root.querySelector('[data-ciq2-page]');
       const pager = root.querySelector('[data-ciq2-pager]');
       const pageSize = 20;
+      const requestDeadlineMs = 30000; // Bounded synthetic host read; not an atomic snapshot.
       let page = 1, generation = 0, busy = false, controller = null;
       const normalize = s => String(s).replace(/[۰-۹٠-٩]/g, d => {
         const cp = d.charCodeAt(0);
@@ -211,6 +212,17 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
         const serial = ++generation;
         controller = new AbortController();
         busy = true;
+        root.dataset.ciq2State = 'syncing';
+        const watchdog = setTimeout(() => {
+          if (serial !== generation) return;
+          // A fetch that never settles must not block every later polling cycle.
+          ++generation;
+          const pending = controller;
+          controller = null;
+          busy = false;
+          pending.abort();
+          stale(503);
+        }, requestDeadlineMs);
         try {
           const response = await fetch(root.dataset.ciq2Ajax, {
             method: 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -236,6 +248,7 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
           if (serial !== generation || error.name === 'AbortError') return;
           stale(error.status || 503);
         } finally {
+          clearTimeout(watchdog);
           if (serial === generation) { busy = false; controller = null; }
         }
       }
@@ -243,7 +256,7 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
       previous.addEventListener('click', () => { if (page > 1) { page--; draw(); } });
       next.addEventListener('click', () => { page++; draw(); });
       root.querySelector('form').addEventListener('submit', event => { event.preventDefault(); refresh(true); });
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
       draw();
       setInterval(() => { if (!document.hidden) refresh(); }, 10000);
     })();
