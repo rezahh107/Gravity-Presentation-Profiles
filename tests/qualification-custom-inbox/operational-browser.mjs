@@ -132,6 +132,35 @@ try{
   assert.equal((await all(page)).length,501);
   await page.unroute('**/wp-admin/admin-ajax.php');
   pass('delayed_old_authorized_response_cannot_overwrite_newer_host_view');
+  // A hung authorized read must not indefinitely suppress polling or claim current data.
+  // This deliberately blocks network delivery after a real host response is available.
+  let releaseHung, caughtHung, heldCount=0;
+  const held=new Promise(resolve=>{releaseHung=resolve;});
+  const capturedHung=new Promise(resolve=>{caughtHung=resolve;});
+  await page.route('**/wp-admin/admin-ajax.php',async route=>{
+    if(heldCount++===0){
+      try {
+        const real=await route.fetch();
+        caughtHung(real.ok());
+        await held;
+        await route.fulfill({response:real});
+      } catch (_) { caughtHung(false); }
+    } else await route.continue();
+  });
+  await page.locator('[data-ciq2-refresh]').click();
+  assert.equal(await capturedHung,true,'Hung-response probe failed to reach authentic authorized host');
+  try {
+    await page.locator('[data-ciq2-state="stale"]').waitFor({timeout:35000});
+    assert.deepEqual(await all(page),[],'Timed-out response retained sensitive task rows');
+    pass('hung_response_transitions_to_stale_and_clears_private_rows');
+  } finally {
+    releaseHung();
+    await page.unroute('**/wp-admin/admin-ajax.php');
+  }
+  await page.locator('[data-ciq2-refresh]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
+    document.querySelectorAll('[data-ciq2-entry]').length===501,null,{timeout:90000});
+  pass('hung_response_manual_retry_recovers_authorized_membership');
   const viewer=await browser.newContext();await viewer.addCookies(cookies(f.viewer));
   const vp=await viewer.newPage();await vp.goto(f.url,{waitUntil:'domcontentloaded'});
   const viewerIds=await all(vp);
