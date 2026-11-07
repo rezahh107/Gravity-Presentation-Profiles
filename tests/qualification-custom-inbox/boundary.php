@@ -9,8 +9,11 @@ function ciq_entries( $scope = array() ) {
     $entries = array();
     $expected = null;
     $batch_size = 40;
+    // Explicit operational safety bound, not a hidden 500-task truncation.
+    // A larger authorized Inbox fails closed rather than claiming a complete list.
+    $max_tasks = 2000;
     $GLOBALS['ciq_query_paging'] = array();
-    for ( $offset = 0; $offset < 500; $offset += $batch_size ) {
+    for ( $offset = 0; $offset < $max_tasks; $offset += $batch_size ) {
         $args = $scope;
         $args['paging'] = array( 'offset' => $offset, 'page_size' => $batch_size );
         $args = apply_filters( 'gravityflow_inbox_args', array_merge( Gravity_Flow_Inbox::get_defaults(), $args ) );
@@ -21,7 +24,7 @@ function ciq_entries( $scope = array() ) {
             return new WP_Error( 'host_query_failed' );
         }
         if ( null === $expected ) { $expected = (int) $total; }
-        if ( $expected < 0 || $expected > 500 || (int) $total !== $expected
+        if ( $expected < 0 || $expected > $max_tasks || (int) $total !== $expected
             || ( empty( $page ) && $offset < $expected ) ) {
             return new WP_Error( 'unstable_or_incomplete_task_set' );
         }
