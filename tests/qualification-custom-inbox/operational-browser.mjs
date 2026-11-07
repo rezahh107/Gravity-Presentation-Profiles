@@ -79,7 +79,8 @@ try{
   await page.locator('[data-ciq2-state="stale"]').waitFor({timeout:30000});
   assert.deepEqual(await all(page),[]);
   await ctx.addCookies(cookies(f.officer));
-  await page.locator('[data-ciq2-refresh]').click();
+  // A new authenticated session needs a newly minted user/session-bound nonce.
+  await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]')&&document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
   pass('expired_session_clears_rows_and_reauthentication_recovers');
   const viewer=await browser.newContext();await viewer.addCookies(cookies(f.viewer));
