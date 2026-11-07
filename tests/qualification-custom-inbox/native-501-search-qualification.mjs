@@ -30,11 +30,11 @@ assert.equal(packageSha, expectedSha, 'The pinned Gravity Flow package differs')
 
 // User-oriented acceptance must be decided from the browser Enter outcome,
 // never from a later synthetic DOM event. Reused in the fault-injection run.
-function assertGenuineEnter(phase, ids, expected, value, query, events) {
+function assertGenuineKeyup(phase, ids, expected, value, query, events, key) {
   assert.equal(value, query, phase + ': input value');
   assert.ok(Array.isArray(events) && events.some(event =>
-    event.type === 'keyup' && event.key === 'Enter' && event.trusted === true),
-  phase + ': browser Enter keyup absent');
+    event.type === 'keyup' && event.key === key && event.trusted === true),
+  phase + ': browser ' + key + ' keyup absent');
   assert.deepEqual(ids, expected, phase + ': expected Native result IDs');
 }
 
@@ -261,8 +261,8 @@ try {
     let enterError;
     try {
       // Mandatory acceptance gate, executed BEFORE every synthetic keyup.
-      assertGenuineEnter('positive_enter_' + width, outcome.afterEnter, [target],
-        outcome.enterValue, targetName, outcome.enterEventTrace);
+      assertGenuineKeyup('positive_enter_' + width, outcome.afterEnter, [target],
+        outcome.enterValue, targetName, outcome.enterEventTrace, 'Enter');
     } catch (error) {
       if (!report.falsificationMode) throw error;
       enterError = error;
@@ -315,24 +315,26 @@ try {
       }, true);
     });
     const negativeQuery = 'NO_MATCH_SYNTHETIC_NATIVE_501_92841';
-    await afterBack.fill(negativeQuery);
-    await afterBack.press('Enter');
-    await waitIds(page, []);
+    await afterBack.fill('');
+    await afterBack.pressSequentially(negativeQuery, {delay: 15});
+    await page.waitForTimeout(700);
     outcome.negativeMatches = await visibleIds(page);
-    outcome.negativeEnterEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
-    assertGenuineEnter('negative_enter_' + width, outcome.negativeMatches, [],
-      await afterBack.inputValue(), negativeQuery, outcome.negativeEnterEvents);
+    outcome.negativeKeyboardEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
+    save();
+    assertGenuineKeyup('negative_typing_' + width, outcome.negativeMatches, [],
+      await afterBack.inputValue(), negativeQuery, outcome.negativeKeyboardEvents, '1');
     report.checks.push('genuine_negative_search_' + width);
 
     await page.evaluate(() => { window.__native501PostBackEvents = []; });
-    await afterBack.fill('');
-    await afterBack.press('Enter');
-    await waitIds(page, initial.renderedIds);
+    await afterBack.press('ControlOrMeta+A');
+    await afterBack.press('Backspace');
+    await page.waitForTimeout(700);
     outcome.resetIds = await visibleIds(page);
     outcome.resetCount = outcome.resetIds.length;
-    outcome.resetEnterEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
-    assertGenuineEnter('reset_enter_' + width, outcome.resetIds, initial.renderedIds,
-      await afterBack.inputValue(), '', outcome.resetEnterEvents);
+    outcome.resetKeyboardEvents = await page.evaluate(() => [...window.__native501PostBackEvents]);
+    save();
+    assertGenuineKeyup('reset_backspace_' + width, outcome.resetIds, initial.renderedIds,
+      await afterBack.inputValue(), '', outcome.resetKeyboardEvents, 'Backspace');
     report.checks.push('genuine_reset_search_' + width);
     const navigation = await page.evaluate(() => {
       const entry = performance.getEntriesByType('navigation').at(-1);
