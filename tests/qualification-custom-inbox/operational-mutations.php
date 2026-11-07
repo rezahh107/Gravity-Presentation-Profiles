@@ -30,13 +30,18 @@ try {
         $done = $flow->process_workflow( (int) $extra );
         $ok( ! is_wp_error( $done ), 'mutation_entry_workflow_' . $kind );
         wp_set_current_user( (int) $f['officer'] );
+        // The boundary test records its public API pages in this request-local global.
         $public_first_page_calls = 0;
         $injected = false;
         $mutate = static function ( $args ) use ( &$public_first_page_calls, &$injected, $kind, $extra, $f, $flow ) {
-            if ( array_key_exists( 'detail_base_url', $args ) ) { return $args; } // Native projection is a separate host read.
             $paging = $args['paging'] ?? array();
             $offset = (int) ( $paging['offset'] ?? -1 );
-            if ( 0 === $offset ) { ++$public_first_page_calls; }
+            // Only the public paging function clears this ledger before its first page.
+            // The native Task Model may also apply the same host filter, so an
+            // unqualified offset=0 counter would misidentify the scan boundary.
+            if ( 0 === $offset && empty( $GLOBALS['ciq_query_paging'] ) ) {
+                ++$public_first_page_calls;
+            }
             $should_change = ( 'during_offset_pagination' === $kind && 40 === $offset )
                 || ( 'between_complete_scans' === $kind && 0 === $offset && 2 === $public_first_page_calls );
             if ( $should_change && ! $injected ) {
@@ -58,7 +63,7 @@ try {
         } finally {
             remove_filter( 'gravityflow_inbox_args', $mutate, 999 );
         }
-        $ok( $injected, 'mutation_was_not_injected_' . $kind );
+        $ok( $injected, 'mutation_was_not_injected_' . $kind . '_public_scans_' . $public_first_page_calls );
         $ok( is_wp_error( $unstable ), 'unstable_scan_silently_accepted_' . $kind );
         $report['scenarios'][ $kind ] = array(
             'rejected' => $unstable->get_error_code(), 'public_first_page_calls' => $public_first_page_calls,
