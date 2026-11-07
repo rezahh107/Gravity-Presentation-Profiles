@@ -9,11 +9,15 @@ The Owner-authorized production architecture remains Native-First.
   ID, and combined school/grade. No raw Entry field display fallback.
 - The Officer receives the same form-scoped authorized tasks as the public host
   Inbox query; native Detail is the only navigation/action destination.
-- Server-rendered RTL cards, 390px name visibility, keyboard focus, client-side
-  search of **already-rendered** name/national-ID, and a full GET refresh.
-- Public entry and internal native task projection are queried in pages of 40;
-  limits remain 500 tasks per request. No live refresh, server search or
-  production caching contract.
+- Server-rendered RTL cards, 390px name visibility, keyboard focus, full-list
+  client-side search by name/national ID, 20-task operator pages, automatic
+  polling and manually retried AJAX with non-JS GET fallback.
+- Public entry and internal native task projection are queried in pages of 40.
+  A strict 2000-task safety bound replaces the historical 500-task limit;
+  over-bound requests fail closed, not silently truncate.
+- Automatic polling uses a separate authenticated test-only WordPress AJAX
+  route and reconciles two full host-authorized reads per update. This is not
+  an atomic snapshot, and does not qualify production caching or latency.
 - A single Entry Detail guard denial omits that entry (with generic server log)
   in this **prototype only**. Query/identity failures reject the entire list.
   The strict PR169/PR170 path remains unchanged by default.
@@ -48,8 +52,8 @@ No vendor runtime code is modified. See `UPSTREAM_AJAX_TEST_RETIREMENT.md`.
 - Query paging: 3-task and 47-task synthetic scenario; record total DB query
   count and duration. Two 40-row page calls are expected for 47 tasks. Do not
   claim N+1 database queries eliminated without benchmark evidence.
-- Search: only over currently rendered tasks; it does not prove native
-  Search/Sort/Pagination equivalence or faster human completion time.
+- Search: over the complete last verified authorized task list; it does not
+  prove native Search/Sort/Pagination equivalence or faster human completion time.
   Real operator comparative usability remains `NOT_PROVEN`.
 - Data mapping currently uses the **internal** GPP
   `InboxTableHeaderPresentation::initialGeometryContract()`, and row rendering

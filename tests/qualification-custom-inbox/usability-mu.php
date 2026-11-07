@@ -41,7 +41,9 @@ function ciq2_snapshot_rows( $scope ) {
     if ( is_wp_error( $first ) ) { return $first; }
     $second = $read();
     if ( is_wp_error( $second ) ) { return $second; }
-    if ( wp_json_encode( $first ) !== wp_json_encode( $second ) ) {
+    $first_json = wp_json_encode( $first );
+    $second_json = wp_json_encode( $second );
+    if ( ! is_string( $first_json ) || ! is_string( $second_json ) || $first_json !== $second_json ) {
         return new WP_Error( 'ciq2_concurrent_task_set_change' );
     }
     return $second;
