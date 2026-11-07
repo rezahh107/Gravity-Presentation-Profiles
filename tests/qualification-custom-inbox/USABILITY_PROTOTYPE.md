@@ -69,3 +69,24 @@ No vendor runtime code is modified. See `UPSTREAM_AJAX_TEST_RETIREMENT.md`.
 checkout/runtime identities and previous inherited evidence in a GitHub
 Actions artifact. Check workflow results rather than treating these instructions
 as execution proof.
+
+
+## Experimental operational task-list contract
+
+- Host retains workflow, authorization, assignment and Entry Detail ownership.
+- Native/public authorized tasks are collected in batches of 40, up to an
+  explicit 2000-task bound. Larger lists fail closed, never silently truncate.
+- Two complete native-authorized reads are reconciled before display. Offset
+  paging is not atomic; any detected difference rejects the response. A
+  mutation immediately after the second read remains a known race.
+- RTL operator pages display 20 tasks in date/ID order. Search covers the
+  complete verified list. Invalidated page numbers clamp automatically.
+- The experimental authenticated + nonce-checked WordPress AJAX read polls
+  every 10 seconds; no native inbox/changes requests. Aborted/outdated
+  responses cannot overwrite the newer view. Errors and expired permissions
+  clear old rows and retain search/page state for a retry.
+- The isolated workflow runs an exact 500/501-task independent native identity
+  oracle plus browser tests of paging, search, native Flow transitions, error
+  clearing and recovery. Passing these requires observed CI evidence.
+- Host throughput at 2000 tasks, true atomic concurrent mutation, mobile
+  visual polish and real operator acceptance remain NOT_PROVEN.
