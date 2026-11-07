@@ -149,6 +149,8 @@ try{
   });
   await page.locator('[data-ciq2-refresh]').click();
   assert.equal(await capturedHung,true,'Hung-response probe failed to reach authentic authorized host');
+  assert.match(await page.locator('[data-ciq2-status]').innerText(),/در حال بررسی مجدد فهرست/,
+    'Pending synchronization must be visibly distinguished from a verified Inbox');
   try {
     await page.locator('[data-ciq2-state="stale"]').waitFor({timeout:35000});
     assert.deepEqual(await all(page),[],'Timed-out response retained sensitive task rows');
