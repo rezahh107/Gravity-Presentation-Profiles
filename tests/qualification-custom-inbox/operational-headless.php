@@ -73,7 +73,7 @@ try {
     wp_set_current_user( (int) $f['viewer'] );
     $viewer = ciq2_snapshot_rows( $scope );
     $ok( is_array( $viewer ) && count( $viewer ) === 0, 'viewer_sees_zero_other_users_at_501' );
-    $fixture = array( 'head' => getenv( 'GPP_WU21_REPOSITORY_SHA' ), 'url' => $f['custom_url'],
+    $fixture = array( 'head' => getenv( 'GPP_WU21_REPOSITORY_SHA' ), 'url' => get_permalink( (int) get_option( 'ciq2_page_id' ) ),
         'form_id' => (int) $f['form_id'], 'officer' => (int) $f['officer'],
         'viewer' => (int) $f['viewer'], 'admin' => (int) $f['admin'],
         'next_step' => (int) $f['next_step'], 'ids' => $ids, 'synthetic' => $temporary );
