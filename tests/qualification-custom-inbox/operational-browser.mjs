@@ -165,6 +165,41 @@ try{
   const vp=await viewer.newPage();await vp.goto(f.url,{waitUntil:'domcontentloaded'});
   const viewerIds=await all(vp);
   assert.ok(viewerIds.every(id=>!f.ids.includes(id)||id===reassigned),'Viewer saw a task assigned only to officer');
+  // A caller cannot widen server-owned form, user, assignee, or filter scope.
+  const nativeViewerIds=JSON.parse(wp("wp_set_current_user("+f.viewer+");$scope=['form_id'=>"+f.form_id+"]; $rows=cellq_model()->get_inbox_tasks(cellq_args($scope,0,40));echo wp_json_encode(array_map('intval',array_column($rows,'id')));"));
+  assert.deepEqual([...viewerIds].sort((a,b)=>a-b),[...nativeViewerIds].sort((a,b)=>a-b));
+  const forged=await vp.evaluate(async ({officer,formId})=>{
+    const root=document.querySelector('[data-ciq2-root]');
+    const response=await fetch(root.dataset.ciq2Ajax,{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:new URLSearchParams({action:'ciq2_read',nonce:root.dataset.ciq2Nonce,
+        user_id:String(officer),assignee:String(officer),filter_key:'workflow_user_id_'+officer,
+        form_id:String(formId)})
+    });
+    const value=await response.json();
+    const parsed=new DOMParser().parseFromString(value.data?.html||'','text/html');
+    return {status:response.status,success:value.success,count:value.data?.count,
+      ids:[...parsed.querySelectorAll('[data-ciq2-entry]')].map(x=>Number(x.dataset.ciq2Entry))};
+  },{officer:f.officer,formId:f.form_id});
+  assert.equal(forged.status,200);
+  assert.equal(forged.success,true);
+  assert.equal(forged.count,nativeViewerIds.length);
+  assert.deepEqual([...forged.ids].sort((a,b)=>a-b),[...nativeViewerIds].sort((a,b)=>a-b));
+  const invalidNonce=await vp.evaluate(async ()=>{
+    const root=document.querySelector('[data-ciq2-root]');
+    const response=await fetch(root.dataset.ciq2Ajax,{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:new URLSearchParams({action:'ciq2_read',nonce:'invalid-caller-nonce'})
+    });
+    const value=await response.json();
+    return {status:response.status,success:value.success,leak:JSON.stringify(value).includes('data-ciq2-entry')};
+  });
+  assert.equal(invalidNonce.status,403);
+  assert.equal(invalidNonce.success,false);
+  assert.equal(invalidNonce.leak,false);
+  pass('forged_scope_rejected_by_actual_host_membership_and_invalid_nonce_is_403');
   assert.equal(nativeChanges,0);
   pass('viewer_isolation_and_no_native_changes_endpoint');
   await viewer.close();await ctx.close();
