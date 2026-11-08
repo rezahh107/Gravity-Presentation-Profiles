@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/gpp-fourstate-native-inbox.yml"
       - "tests/qualification-g014-gpp-fourstate/**"
+      - "tests/fixtures/wu21-packages/**"
       - "src/SRWF/GravityFlow/InboxAxisIntervention.php"
       - "src/SRWF/GravityFlow/InboxPresentationAdapter.php"
       - "src/GravityForms/AddOn.php"
@@ -174,18 +175,19 @@ jobs:
           php "$WU008_WP_CLI" theme activate g014-runtime --path="$WU008_WP_PATH"
           test "$(php "$WU008_WP_CLI" option get stylesheet --path="$WU008_WP_PATH")" = 'g014-runtime'
 
-      - name: Download and independently verify exact licensed vendor ZIPs
+      - name: Verify and install exact repository-tracked licensed packages
         shell: bash
         run: |
           set -euo pipefail
-          download() { curl -L --fail --retry 4 --retry-all-errors --connect-timeout 20 --max-time 180 -o "$2" "https://drive.usercontent.google.com/download?id=${1}&export=download&confirm=t"; }
-          download "$WU008_GF_FILE_ID" "$WU008_PACKAGE_DIR/$WU008_GF_FILE"
-          download "$WU008_FLOW_FILE_ID" "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE"
-          # The signed Flow identity is supplied exclusively by the canonical WU008 package authority.
-          .g014-subject/tests/real-integration/verify-package.sh 'Gravity Forms' "$WU008_GF_FILE_ID" "$WU008_PACKAGE_DIR/$WU008_GF_FILE" "$WU008_GF_FILE" "$WU008_GF_SIZE" "$WU008_GF_SHA256" 'gravityforms/gravityforms.php' "$WU008_GF_VERSION" /tmp/g014-vendor-verification.jsonl
-          .g014-subject/tests/real-integration/verify-package.sh 'Gravity Flow' "$WU008_FLOW_FILE_ID" "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE" "$WU008_FLOW_FILE" "$WU008_FLOW_SIZE" "$WU008_FLOW_SHA256" "$WU008_FLOW_MAIN_FILE" "$WU008_FLOW_VERSION" /tmp/g014-vendor-verification.jsonl
-          test "$(wc -l < /tmp/g014-vendor-verification.jsonl)" = 2
-          echo 'VENDOR_ZIPS_AUTHENTICATED=PASS'
+          fixture_root="$GITHUB_WORKSPACE/tests/fixtures/wu21-packages"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU008_PACKAGE_DIR/$WU008_GF_FILE"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE"
+          test "$(stat -c '%s' "$WU008_PACKAGE_DIR/$WU008_GF_FILE")" = "$WU008_GF_SIZE"
+          test "$(stat -c '%s' "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE")" = "$WU008_FLOW_SIZE"
+          echo "$WU008_GF_SHA256  $WU008_PACKAGE_DIR/$WU008_GF_FILE" | sha256sum -c -
+          echo "$WU008_FLOW_SHA256  $WU008_PACKAGE_DIR/$WU008_FLOW_FILE" | sha256sum -c -
+          echo 'VENDOR_ZIPS_AUTHENTICATED=PASS source=repository_fixture'
 
       - name: Install real vendor packages, exact PersianGravity, exact GPP
         shell: bash
@@ -252,6 +254,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gpp-fourstate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: /tmp/g014-evidence/on-gpp/
+          path: /tmp/g014-evidence/fourstate/
           if-no-files-found: ignore
           retention-days: 14
