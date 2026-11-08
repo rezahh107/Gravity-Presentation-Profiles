@@ -243,6 +243,12 @@ async function caseRun(browser,axis,mode,dbfile){
       record.resize_action=await resize(page);
       record.after_resize=await snapshot(page);
     }
+    if(mode==='override-restore-input'){
+      // Applies only on the NEXT navigation. Prior initial Grid and storage
+      // are unmodified; intervention happens at the authentic native API call.
+      await page.addInitScript({content:'window.__g014ForceStoredOrder=true;'});
+      record.control_qualification='INTERVENTION_ARMED';
+    }
     record.before_reload=await snapshot(page);
     await page.reload({waitUntil:'domcontentloaded'});await settled(page,expectedGridMode);
     record.reloaded=await snapshot(page);
@@ -256,6 +262,10 @@ async function caseRun(browser,axis,mode,dbfile){
     record.same_grid_id=record.initial.grid_id===record.reloaded.grid_id;
     record.same_column_defs=JSON.stringify(record.initial.column_defs)===JSON.stringify(record.reloaded.column_defs);
     record.correct_after_reload=record.reloaded.physical_rtl.join(',')===expected.join(',');
+    if(mode==='override-restore-input'){
+      const reached=(record.reloaded.api_source_calls||[]).some(x=>x.name==='applyColumnState'&&x.test_override_used===true);
+      record.control_qualification=reached?'INPUT_ONLY_INTERVENTION_OBSERVED':'NOT_PROVEN';
+    }
     record.status='OBSERVED';
   }catch(e){record.error=String(e.message||e).slice(0,550);}
   finally{await ctx.close();}
@@ -275,7 +285,7 @@ async function main(){
     }
     // Additional qualified-source discriminators do not reclassify the original
     // ten-case result. A failed UI drag remains NOT_PROVEN, not product FAIL.
-    for(const mode of ['legacy-like','incomplete-state','manual-reorder']){
+    for(const mode of ['legacy-like','incomplete-state','manual-reorder','override-restore-input']){
       report.variant_controls.push(await caseRun(browser,'on',mode,'/tmp/g014-lifecycle-on.sql'));
     }
     await setSettings(browser,'on',false);
