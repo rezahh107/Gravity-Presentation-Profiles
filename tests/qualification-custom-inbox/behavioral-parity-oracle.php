@@ -40,7 +40,7 @@ try {
     $require( is_array( $f ) && ! empty( $f['form_id'] ) &&
         count( $f['entries'] ?? array() ) === 3 &&
         ! empty( $f['officer'] ) && ! empty( $f['viewer'] ) &&
-        ! empty( $f['head'] ) === false, 'parity_fixture_unavailable' );
+        ! empty( $f['admin'] ), 'parity_fixture_unavailable' );
     // CI writes the Head to the browser fixture, not to cellq_fixture.
     $require( is_file( $dir . '/ciq2-browser-fixture.json' ), 'parity_browser_fixture_missing' );
     $browser_fixture = json_decode( file_get_contents( $dir . '/ciq2-browser-fixture.json' ), true );
@@ -126,6 +126,12 @@ try {
     }
     $require( count( $report['roles']['viewer']['ids'] ) === 0,
         'parity_unassigned_viewer_has_tasks' );
+    // Independent fixture script contract: 3 initial, 1 authentic move,
+    // then a real Officer Approve and second move. Never let zero==zero
+    // comparison give a false GREEN when setup silently omitted tasks.
+    $expected_counts = array( 'initial' => 3, 'after-usability' => 2, 'after-native' => 0 );
+    $require( count( $report['roles']['officer']['ids'] ) === $expected_counts[ $phase ],
+        'parity_unexpected_authorized_officer_task_count' );
 
     $ordered = $report['roles']['officer']['ids'];
     usort( $ordered, static function ( $a, $b ) use ( $facts ) {
