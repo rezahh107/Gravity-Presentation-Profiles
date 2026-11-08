@@ -60,9 +60,26 @@ async function saveGpp(page,mode){
   if(after.requested!==mode||after.effective!==mode||await select.inputValue()!==mode)
     fail('GPP native Settings UI save did not persist after reload: '+JSON.stringify(after),'ENVIRONMENT');
   if(status().requested!==pgrBefore)fail('GPP switch accidentally changed PGR option','ENVIRONMENT');
-  return {saved:after.requested,effective:after.effective,pgr_unchanged:pgrBefore,
-    warning:await page.locator('[data-gpp-inbox-axis-compatibility]').first().getAttribute('data-gpp-inbox-axis-compatibility')};
+  const expectedProblem=mode==='on'?'native_admin_mobile_scroll':'ltr_grid_without_axis';
+  const warning=await inspectGppWarning(page,'known_failure',expectedProblem);
+  return {saved:after.requested,effective:after.effective,pgr_unchanged:pgrBefore,warning};
 }
+
+async function inspectGppWarning(page,expectedStatus,expectedProblem){
+  const settingsUrl=`${origin}/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles`;
+  const rsp=await page.goto(settingsUrl,{waitUntil:'domcontentloaded'});
+  if(!rsp?.ok())fail('Cannot load real GPP Settings warnings','ENVIRONMENT');
+  const notice=page.locator('[data-gpp-inbox-axis-compatibility]').first();
+  if(await notice.count()!==1)fail('GPP compatibility panel not rendered');
+  const statusValue=await notice.getAttribute('data-gpp-inbox-axis-compatibility');
+  const problem=await notice.getAttribute('data-gpp-inbox-axis-problem');
+  if(statusValue!==expectedStatus||problem!==expectedProblem)
+    fail('Persistent GPP compatibility notice stale/misclassified: '+JSON.stringify({statusValue,problem,expectedStatus,expectedProblem}));
+  if(await notice.locator('details summary').count()!==1 || await notice.locator('[role="img"][aria-label]').count()!==1)
+    fail('GPP warning lost accessible expandable explanation or schematic alternative text');
+  return {status:statusValue,problem,details:true};
+}
+
 function locales(site,user){
   if(!['fa_IR','en_US'].includes(site)||!['fa_IR','en_US'].includes(user))fail('Unadmitted locale','ENVIRONMENT');
   // WU008 uses absent WPLANG for the default en_US locale; updating to en_US is not reliable.
@@ -417,6 +434,15 @@ async function run(){
   const browser=await chromium.launch({headless:true});report.browser=browser.version();
   try{
     await nativeControlWithoutGpp(browser);
+    // No anonymous user may inspect or change the native GFAddOn settings.
+    const anonymous=await browser.newContext();
+    try{
+      const page=await anonymous.newPage();
+      await page.goto(`${origin}/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles`,{waitUntil:'domcontentloaded'});
+      if(!page.url().includes('wp-login.php')||await page.locator('select[name="_gform_setting_inbox_axis_ltr"]').count())
+        fail('Anonymous visitor reached administrative GPP settings');
+      report.controls.push({id:'gpp-anonymous-settings-denied',status:'PASS'});
+    }finally{await anonymous.close();}
     const baseline=axisStatus();
     if(baseline.effective!=='on')fail('Migrated GPP missing-setting default does not preserve ON','ENVIRONMENT');
     report.controls.push({id:'legacy-missing-setting-default-on',status:'PASS',effective:baseline.effective,requested:baseline.requested});
@@ -426,6 +452,17 @@ async function run(){
       await login(settingsPage);
       const saveResult=await saveGpp(settingsPage,axisMode);
       report.controls.push({id:'gpp-switch-'+axisMode,status:'PASS',save:saveResult});
+      // A missing nonce cannot alter the independent GPP setting.
+      if(axisMode==='on'){
+        await settingsPage.goto(`${origin}/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles`,{waitUntil:'domcontentloaded'});
+        const nonce=settingsPage.locator('#gform-settings input[name="gform_settings_save_nonce"]');
+        if(await nonce.count()!==1)fail('GFAddOn save nonce missing from authentic settings form','ENVIRONMENT');
+        await settingsPage.locator('select[name="_gform_setting_inbox_axis_ltr"]').selectOption('off');
+        await nonce.evaluate(el=>el.remove());
+        await Promise.all([settingsPage.waitForNavigation({waitUntil:'domcontentloaded'}),settingsPage.locator('#gform-settings button[type="submit"], #gform-settings input[type="submit"]').last().click()]);
+        if(axisStatus().effective!=='on')fail('GFAddOn accepted GPP axis change with missing nonce');
+        report.controls.push({id:'gpp-invalid-nonce-rejected',status:'PASS'});
+      }
       await adminContext.close();
     for(const site of ['fa_IR','en_US'])for(const user of ['fa_IR','en_US']){
       locales(site,user);
@@ -436,7 +473,18 @@ async function run(){
       for(const [index,mode] of ['off','on','off'].entries()){
         const transition=`${identity}-${index}-${mode}`;
         const saved=await save(page,mode);
-        report.controls.push({id:`save-${transition}`,status:'PASS',saved});
+        report.controls.push({id:`gpp-${axisMode}-save-${transition}`,status:'PASS',saved});
+        if(site==='fa_IR'&&user==='fa_IR'&&index===1){
+          const problem=axisMode==='on'?'rtl_with_ltr_axis':'rtl_column_order_without_axis';
+          const warning=await inspectGppWarning(page,axisMode==='on'?'incompatible':'known_failure',problem);
+          report.controls.push({id:`gpp-${axisMode}-pgr-on-warning`,status:'PASS',warning});
+          if(status().requested!=='on')fail('GPP Settings observation changed PGR switch','ENVIRONMENT');
+        }
+        if(site==='fa_IR'&&user==='fa_IR'&&index===2){
+          const problem=axisMode==='on'?'native_admin_mobile_scroll':'ltr_grid_without_axis';
+          const warning=await inspectGppWarning(page,'known_failure',problem);
+          report.controls.push({id:`gpp-${axisMode}-pgr-off-warning`,status:'PASS',warning});
+        }
         for(const width of [1280,390]){
           await page.setViewportSize({width,height:width===1280?900:844});
           for(const surface of ['admin','frontend']){
