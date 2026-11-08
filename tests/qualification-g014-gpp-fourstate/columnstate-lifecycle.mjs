@@ -77,7 +77,7 @@ async function setSettings(browser,axis,pgrOn=true){
     await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),submit.click()]);
   } finally {await ctx.close();}
   const facts=JSON.parse(wp('eval',"echo wp_json_encode(array('pgr'=>pgr_gravity_flow_inbox_rtl_status()['requested'],'gpp'=>gpp_gravity_flow_inbox_axis_status()['effective']));"));
-  if(facts.pgr!=='on'||facts.gpp!==axis)throw Error('ENVIRONMENT: settings readback mismatch');
+  if(facts.pgr!==(pgrOn?'on':'off')||facts.gpp!==axis)throw Error('ENVIRONMENT: settings readback mismatch');
 }
 async function settled(page){
   await page.waitForFunction(()=>{
