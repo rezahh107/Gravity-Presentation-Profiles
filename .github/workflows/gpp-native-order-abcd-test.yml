@@ -228,6 +228,13 @@ jobs:
           npx playwright install --with-deps chromium
           node -e 'if(require("playwright/package.json").version!=="1.55.0")process.exit(1)'
 
+      - name: Inventory pinned licensed native Column State source (paths and symbols only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
+          node tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
+          test -s "$G014_OUTPUT_DIR/licensed-source-locations.json"
       - name: Start isolated HTTP server
         shell: bash
         run: |
