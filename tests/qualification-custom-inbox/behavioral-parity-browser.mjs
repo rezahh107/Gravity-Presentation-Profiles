@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {instrumentNativeInbox, nativeObservation} from './native-readiness.mjs';
 
 // Read-only observations on the real, isolated, pinned WU21 WordPress host.
 // Expected IDs and FIFO originate in behavioral-parity-oracle.php, never Inbox 2.
@@ -47,22 +48,6 @@ async function open(ctx, url) {
   assert.equal(response.status(), 200, 'unexpected_http_status_at_' + url.split('/').at(-1));
   return page;
 }
-async function nativeObservation(page, expectedCount) {
-  const selector = '[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]';
-  if (expectedCount) {
-    await page.locator('[data-js="gflow-inbox"]').waitFor({state: 'attached'});
-    await page.waitForFunction(({selector, expectedCount}) =>
-      document.querySelectorAll(selector).length === expectedCount,
-      {selector, expectedCount}, {timeout: 30000});
-  }
-  const rows = await page.locator(selector).evaluateAll(nodes => nodes.map(node => {
-    const id = Number(node.getAttribute('row-id'));
-    const link = node.querySelector('a[data-js="inbox-details-link"]');
-    return {id, href: link?.getAttribute('href') || null};
-  }));
-  assertIds(rows.map(r => r.id), 'native');
-  return rows;
-}
 async function inbox2Observation(page) {
   const root = page.locator('[data-ciq2-root]');
   await root.waitFor({state: 'attached'});
@@ -106,8 +91,14 @@ try {
       // is never used as a full oracle: the fixture must fit one native page.
       const expected = oracle.roles[actor].ids;
       assert.ok(expected.length <= 3, 'PARITY_UNEXPECTED_UNBOUNDED_NATIVE_PAGE');
-      const np = await open(ctx, f.native_url);
-      const nativeRows = await nativeObservation(np, expected.length);
+      // Instrument before any Native scripts execute, regardless of task count.
+      const np = await ctx.newPage();
+      const nativeState = await instrumentNativeInbox(np);
+      const nativeResponse = await np.goto(f.native_url,
+        {waitUntil: 'commit', timeout: 60000});
+      assert.equal(nativeResponse.status(), 200, 'PARITY_NATIVE_HTTP_STATUS');
+      const nativeRows = await nativeObservation(np, expected, nativeState);
+      pass('PARITY_NATIVE_INITIAL_DATA_APPLIED_' + phase + '_' + actor);
       await np.close();
       const ip = await open(ctx, f.custom_url);
       const inboxRows = await inbox2Observation(ip);
