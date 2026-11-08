@@ -45,21 +45,59 @@ try {
   report.before = before;
   pass('ordered_authorized_host_queue_matches_rendered_cards');
 
-  const target = before[0];
-  const link = page.locator('[data-ciq2-entry="' + target + '"] [data-ciq2-detail]');
+  const firstTask = before[0];
+  const link = page.locator('[data-ciq2-entry="' + firstTask + '"] [data-ciq2-detail]');
   const nativeHref = await link.getAttribute('href');
-  assert.equal(Number(new URL(nativeHref, env.WU21_BASE_URL).searchParams.get('lid')), target);
+  assert.equal(Number(new URL(nativeHref, env.WU21_BASE_URL).searchParams.get('lid')), firstTask);
   await link.click();
   await page.locator('.gravityflow_workflow_detail').waitFor();
   report.native_detail_controls = await page.locator('.gravityflow_workflow_detail input, .gravityflow_workflow_detail button, .gravityflow_workflow_detail select').evaluateAll(elements =>
     elements.map(e => ({tag: e.tagName, type: e.type || '', name: e.name || '', value: String(e.value || '').slice(0, 80),
       text: String(e.textContent || '').trim().slice(0, 80)})).slice(0, 35));
-  await page.goBack({waitUntil: 'domcontentloaded'});
-  assert.equal(new URL(page.url()).pathname, new URL(f.custom_url).pathname);
-  pass('genuine_native_detail_open_and_user_browser_back');
+  const approve = page.locator('.gravityflow_workflow_detail button[type="submit"][value="approved"]');
+  assert.equal(await approve.count(), 1, 'Native Gravity Flow Approval button was not present');
+  const nativePosts = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && request.url().startsWith(env.WU21_BASE_URL)) nativePosts.push(request.url());
+  });
+  await approve.click(); // Genuine operator click: keep native validation and Result flow.
+  await page.waitForLoadState('networkidle');
+  const afterNativeApproval = oracle();
+  report.native_approval = {
+    clicked: true, method: 'native_form_submit', post_count: nativePosts.length,
+    operator_task_ids_after: afterNativeApproval,
+    result_url: page.url(),
+    result_text_excerpt: (await page.locator('body').innerText()).slice(0, 400),
+    return_links: await page.locator('a[href]').evaluateAll(a => a.map(x =>
+      ({text: (x.textContent || '').trim().slice(0, 65), href: x.getAttribute('href')}))
+      .filter(x => /inbox|back|return|بازگشت|برگشت/i.test(x.text)).slice(0, 10)),
+  };
+  save();
+  assert.ok(nativePosts.length >= 1, 'Approval click did not submit a native POST');
+  assert.ok(!afterNativeApproval.includes(firstTask), 'Officer still has an actionable task after approving it');
+  pass('genuine_officer_native_approval_changes_authoritative_pending_task_set');
 
-  // Native workflow mutation isolates the return safety check. This does NOT
-  // claim a browser-operated Approval; a separate real UI step proof is needed.
+  // User-initiated browser Back from the native Result/Detail page. The native
+  // Result remains visible before this action; no automatic next-task jump.
+  let returned = false;
+  for (let i = 0; i < 3 && !returned; i++) {
+    const response = await page.goBack({waitUntil: 'domcontentloaded'});
+    if (!response) break;
+    returned = new URL(page.url()).pathname === new URL(f.custom_url).pathname;
+  }
+  assert.equal(returned, true, 'Native Result browser Back did not reach the originating Inbox 2');
+  await page.waitForFunction(expected => {
+    const r = document.querySelector('[data-ciq2-root]');
+    return r?.dataset.ciq2State === 'current' &&
+      JSON.stringify([...document.querySelectorAll('[data-ciq2-entry]')].map(x => Number(x.dataset.ciq2Entry))) === JSON.stringify(expected);
+  }, afterNativeApproval, {timeout: 90000});
+  assert.deepEqual(await ids(page), afterNativeApproval);
+  pass('genuine_native_approval_and_browser_back_revalidated_next_queue_task');
+
+  // Separate BFCache regression discriminator using a real host transition,
+  // not a second browser approval. No new task/authorization engine is created.
+  const target = afterNativeApproval[0];
+  assert.ok(Number.isSafeInteger(target) && target > 0);
   const moved = wp('wp_set_current_user(' + f.admin + ');$e=GFAPI::get_entry(' + target + ');' +
     '$a=new Gravity_Flow_API(' + f.form_id + ');$r=$a->send_to_step($e,' + f.next_step + ');' +
     'if(is_wp_error($r)||false===$r)throw new RuntimeException("transition_failed");echo "native-step";');
