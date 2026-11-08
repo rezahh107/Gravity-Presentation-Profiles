@@ -65,16 +65,38 @@
         if(typeof prior!=='function')continue;
         try {
           obj[name]=function(...args){
-            if(output.source_calls.length<output.max_source_calls &&
-               name!=='getColumnState'){
-              const arg=args[0];
-              const stateInput=Array.isArray(arg?.state)?arg.state.slice(0,12):null;
-              const ids=stateInput?.map(x=>safeId(x?.colId))??null;
+            const arg=args[0];
+            const stateInput=Array.isArray(arg?.state)?arg.state.slice(0,12):null;
+            const ids=stateInput?.map(x=>safeId(x?.colId))??null;
+            let effectiveArgs=args,overrideUsed=false,effectiveIds=ids;
+            // Falsification only: on an explicitly opt-in disposable browser
+            // reload, replace the native malformed restore ORDER input with
+            // the exact persisted native state. Do not touch its stored record,
+            // other Grid calls, vendor assets or production source.
+            if(name==='applyColumnState'&&window.__g014ForceStoredOrder===true&&
+               arg?.applyOrder===true&&Array.isArray(arg?.state)){
+              try {
+                const saved=JSON.parse(window.localStorage.getItem(gridId)||'null');
+                const allowed=new Set(['1','3','6','date_created','id']);
+                const savedIds=Array.isArray(saved)?saved.map(x=>String(x?.colId)):[];
+                const inputIds=arg.state.map(x=>String(x?.colId));
+                if(savedIds.length===5&&inputIds.length===5&&
+                   new Set(savedIds).size===5&&new Set(inputIds).size===5&&
+                   savedIds.every(id=>allowed.has(id))&&inputIds.every(id=>allowed.has(id))&&
+                   savedIds.every(id=>inputIds.includes(id))){
+                  effectiveArgs=[{...arg,state:saved.map(x=>({...x}))},...args.slice(1)];
+                  effectiveIds=savedIds;
+                  overrideUsed=true;
+                }
+              }catch{ /* Invalid input is not repaired by this test. */ }
+            }
+            if(output.source_calls.length<output.max_source_calls&&name!=='getColumnState'){
               output.source_calls.push({ms:Math.round(performance.now()),name,
                 namespace,apply_order:typeof arg?.applyOrder==='boolean'?arg.applyOrder:null,
-                input_ids:ids,from_stack:safeStack()});
+                input_ids:ids,effective_ids:effectiveIds,
+                test_override_used:overrideUsed,from_stack:safeStack()});
             }
-            return Reflect.apply(prior,this,args);
+            return Reflect.apply(prior,this,effectiveArgs);
           };
           output.source_hooks.push({namespace,name,installed:obj[name]!==prior});
         }catch{
