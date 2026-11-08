@@ -141,6 +141,7 @@ async function snapshot(page){
       column_defs:(opt?.columnDefs||[]).map(d=>({id:id(d.colId||d.field),width:Number.isFinite(d.width)?d.width:null,pinned:d.pinned||null})),
       physical_rtl:cols.map(c=>c.id).reverse(),widths:cols.map(c=>({id:c.id,width:c.w})),
       probe_installed:probe?.installed||0,callback_names:probe?.callbacks||[],
+      api_source_hooks:probe?.source_hooks||[],api_source_calls:probe?.source_calls||[],
       preconstruction_defs:probe?.column_defs||null,events:probe?.samples||[],
       storage_hook:window.__g014StorageHooks||null,storage_events:window.__g014StorageEvents||[],
       storage};
