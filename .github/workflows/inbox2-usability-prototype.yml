@@ -387,6 +387,7 @@ jobs:
         set -euo pipefail
         php -l tests/qualification-custom-inbox/behavioral-parity-oracle.php
         node --check tests/qualification-custom-inbox/behavioral-parity-browser.mjs
+        node --check tests/qualification-custom-inbox/native-readiness.mjs
         CIQ2_PARITY_PHASE=initial php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
         CIQ2_PARITY_PHASE=initial node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
         # Deliberate observation mutation: the same real browser views and
@@ -410,6 +411,28 @@ jobs:
           mutant.officer.compared_inbox2_ids.length!==mutant.officer.inbox2_ids.length-1)
           process.exit(1);
         console.log('CIQ2_PARITY_INTENTIONAL_RED_CONFIRMED');
+        NODE
+    - name: Reject incomplete Native loads in repaired comparator (real-browser negative controls)
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        node --check tests/qualification-custom-inbox/behavioral-parity-readiness-negative.mjs
+        CIQ2_PARITY_PHASE=initial node tests/qualification-custom-inbox/behavioral-parity-readiness-negative.mjs
+        node - <<'NODE'
+        const fs=require('fs');
+        const p=process.env.WU21_ARTIFACT_DIR+'/ciq2-parity-native-readiness-negative.json';
+        const r=JSON.parse(fs.readFileSync(p,'utf8'));
+        if(r.status!=='PASS'||r.head!==process.env.GPP_WU21_REPOSITORY_SHA ||
+           !Array.isArray(r.scenarios)||r.scenarios.length!==4)process.exit(1);
+        for(const kind of ['blocked','delayed','failed','withheld']){
+          const s=r.scenarios.find(x=>x.scenario===kind);
+          if(!s || s.status!=='PASS'||s.mutant_false_green!==true||
+             !s.guard_failure?.startsWith('PARITY_NATIVE_READINESS_NOT_PROVEN_') ||
+             ((kind==='delayed'||kind==='withheld')&&s.after_release!=='PASS_COMPLETED_EMPTY'))
+            process.exit(1);
+        }
+        console.log('CIQ2_REPAIRED_NATIVE_READINESS_FALSIFICATION_CONFIRMED');
         NODE
     - name: Run retained Inbox 2 browser authorization and transition tests
       if: matrix.scenario != 'negative-baseline'
