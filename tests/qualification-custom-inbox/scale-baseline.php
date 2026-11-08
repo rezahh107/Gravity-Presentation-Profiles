@@ -45,10 +45,16 @@ try {
         $step_ids[] = (int) $step->get_id();
     }
     sort( $step_ids, SORT_NUMERIC );
-    $expected_step_ids = array( (int) $f['step_id'], (int) $f['next_step'] );
-    sort( $expected_step_ids, SORT_NUMERIC );
+    // Native setup can create additional form-scoped Steps. Compare to the
+    // FULL inventory captured by this scenario at setup, not an invented
+    // two-step assumption.
+    $expected_step_ids = get_option( 'ciq2_scenario_initial_step_ids', null );
     $report['workflow_step_ids'] = $step_ids;
-    if ( $step_ids !== $expected_step_ids ) {
+    $report['initial_workflow_step_ids'] = $expected_step_ids;
+    if ( ! is_array( $expected_step_ids ) ||
+        ! in_array( (int) $f['step_id'], $expected_step_ids, true ) ||
+        ! in_array( (int) $f['next_step'], $expected_step_ids, true ) ||
+        $step_ids !== $expected_step_ids ) {
         throw new RuntimeException( 'scale_step_inventory_not_fresh' );
     }
 
