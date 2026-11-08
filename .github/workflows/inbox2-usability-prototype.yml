@@ -317,6 +317,12 @@ jobs:
         set -euo pipefail
         node --check tests/qualification-custom-inbox/queue-return-browser.mjs
         node tests/qualification-custom-inbox/queue-return-browser.mjs
+    - name: Discriminate entry-age from late actionable-step FIFO semantics
+      shell: bash
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/fifo-timing-counterexample.php
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/fifo-timing-counterexample.php
     - name: Qualify 500/501 native task membership and operational Live Refresh
       if: github.base_ref != 'experiment/inbox2-usability-prototype'
       shell: bash
