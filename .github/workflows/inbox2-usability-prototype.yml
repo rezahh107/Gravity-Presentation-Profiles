@@ -5,6 +5,7 @@ name: Inbox 2 Usability Prototype — Isolated Runtime
     - main
     - experiment/inbox2-usability-prototype
     - test/inbox2-queue-return-20261108
+    - test/wu21-native-readiness-repair-20261108
     paths:
     - tests/qualification-custom-inbox/**
     - .github/workflows/inbox2-usability-prototype.yml
