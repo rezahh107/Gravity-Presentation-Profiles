@@ -31,11 +31,23 @@
     for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);
     return {hint:safe,hash:(h>>>0).toString(16)};
   };
+  const nativeIds=(action,key,value)=>{
+    if(action!=='getItem'||typeof value!=='string'||!String(key).includes('inbox_shortcode')||value.length>10000)
+      return null;
+    try {
+      const parsed=JSON.parse(value);
+      const allowed=new Set(['id','1','3','6','date_created','date_created_human_readable']);
+      if(!Array.isArray(parsed)||parsed.length>12)return null;
+      const ids=parsed.map(x=>String(x?.colId));
+      return ids.every(id=>allowed.has(id))?ids:null;
+    } catch {return null;}
+  };
   const note=(action,key,value)=>{
     if(window.__g014StorageEvents.length>=250)return;
     window.__g014StorageEvents.push({
       seq:++counter,ms:Math.round(performance.now()),action,
       key:safeKey(key),value_length:typeof value==='string'?value.length:null,
+      native_read_ids:nativeIds(action,key,value),
       stack:(String(key).includes('inbox_shortcode')||String(key).startsWith('gpp:srwf-inbox-fit:'))
         ?window.__g014SafeStack(new Error().stack):[]
     });
