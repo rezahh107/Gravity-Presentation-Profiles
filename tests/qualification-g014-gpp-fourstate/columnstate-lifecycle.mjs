@@ -107,8 +107,36 @@ async function snapshot(page){
           key_shape:k.replace(/[0-9]/g,'#').slice(0,110),value_length:v.length});
       }
     }
+    // Extract ONLY native column IDs, order and numeric widths. Never export
+    // raw localStorage content, row data, user details, or arbitrary fields.
+    const nativeKey=h?.dataset.gridId||'';
+    const nativeRaw=nativeKey?localStorage.getItem(nativeKey):null;
+    const savedNative={present:typeof nativeRaw==='string',bytes:nativeRaw?.length||0,shape:'unknown',column_arrays:[]};
+    if(nativeRaw)try{
+      const parsed=JSON.parse(nativeRaw);
+      savedNative.shape=Array.isArray(parsed)?'array':parsed&&typeof parsed==='object'?'object':typeof parsed;
+      const allowed=new Set(['id','1','3','6','date_created','date_created_human_readable']);
+      const scan=(node,location,depth)=>{
+        if(depth>6||savedNative.column_arrays.length>=8||node===null)return;
+        if(Array.isArray(node)){
+          if(node.length>=4&&node.every(x=>typeof x==='string'&&allowed.has(x))){
+            savedNative.column_arrays.push({location,ids:node.map(String),widths:null});
+          }
+          const columnLike=node.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&
+            ['colId','field','id'].some(k=>allowed.has(String(x[k]))));
+          if(columnLike.length>=4){
+            savedNative.column_arrays.push({location,ids:columnLike.map(x=>String(x.colId??x.field??x.id)),
+              widths:columnLike.map(x=>Number.isFinite(x.width)?x.width:null)});
+          }
+          for(let i=0;i<Math.min(node.length,15);i++)scan(node[i],location+'[]',depth+1);
+        }else if(typeof node==='object'){
+          for(const [k,v] of Object.entries(node).slice(0,30))scan(v,location+'.'+k.replace(/[^a-zA-Z_]/g,'_').slice(0,35),depth+1);
+        }
+      };
+      scan(parsed,'root',0);
+    }catch{savedNative.shape='unparseable';}
     const probe=window.__g014ColumnLifecycle||null;
-    return {grid_id:String(h?.dataset.gridId||'').slice(0,110),
+    return {grid_id:String(h?.dataset.gridId||'').slice(0,110),native_saved_state:savedNative,
       enableRtl:opt?.enableRtl??null,ag_mode:h?.querySelector('.ag-root-wrapper')?.classList.contains('ag-rtl')?'ag-rtl':'OTHER',
       column_defs:(opt?.columnDefs||[]).map(d=>({id:id(d.colId||d.field),width:Number.isFinite(d.width)?d.width:null,pinned:d.pinned||null})),
       physical_rtl:cols.map(c=>c.id).reverse(),widths:cols.map(c=>({id:c.id,width:c.w})),
