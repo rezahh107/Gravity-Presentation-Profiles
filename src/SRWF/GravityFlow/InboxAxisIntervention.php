@@ -17,7 +17,7 @@ final class InboxAxisIntervention {
     public static function status() {
         $requested = 'unknown';
 
-        if ( class_exists( 'GravityPresentationProfiles\\GravityForms\\AddOn', false ) ) {
+        if ( class_exists( 'GFAddOn', false ) && class_exists( 'GravityPresentationProfiles\\GravityForms\\AddOn' ) ) {
             $addon = AddOn::get_instance();
             if ( is_object( $addon ) && is_callable( array( $addon, 'get_plugin_setting' ) ) ) {
                 try {
