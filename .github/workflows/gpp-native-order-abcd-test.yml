@@ -249,6 +249,39 @@ jobs:
           set -euo pipefail
           node --check tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
           node tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
+      - name: Install test-only pre-construction Column State observation hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-lifecycle.mjs
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-preload.js
+          cp tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-pregrid.js"
+          cat > "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-observer.php" <<'PHP'
+          <?php
+          /* Disposable test-only observation, no native Grid state mutation. */
+          add_action( 'wp_print_footer_scripts', static function () {
+              if ( ! defined( 'Gravity_Flow::THEME_JS' ) || ! function_exists( 'wp_script_is' ) ) {
+                  return;
+              }
+              $handle = \Gravity_Flow::THEME_JS;
+              if ( ! wp_script_is( $handle, 'enqueued' ) ) {
+                  return;
+              }
+              $file = __DIR__ . '/g014-columnstate-pregrid.js';
+              if ( ! is_readable( $file ) ) {
+                  return;
+              }
+              wp_add_inline_script( $handle, file_get_contents( $file ), 'before' );
+          }, 5 );
+          PHP
+          php -l "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-observer.php"
+          cmp tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-pregrid.js"
+      - name: Probe native Column State restore and width lifecycle (test-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/qualification-g014-gpp-fourstate/columnstate-lifecycle.mjs
       - name: Upload only synthetic observations (NO database or licensed vendors)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
