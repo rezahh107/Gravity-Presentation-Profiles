@@ -231,12 +231,13 @@ jobs:
           echo 'WordPress server failed' >&2; exit 1
 
       - name: Execute true four-state browser matrix (product assertions fail closed)
+        id: fourstate_browser
         shell: bash
         run: |
           set -euo pipefail
           node tests/qualification-g014-gpp-fourstate/fourstate-browser.mjs
       - name: Validate four-state evidence coverage independently
-        if: always()
+        if: ${{ always() && steps.fourstate_browser.outcome != 'skipped' }}
         shell: bash
         run: |
           set -euo pipefail
