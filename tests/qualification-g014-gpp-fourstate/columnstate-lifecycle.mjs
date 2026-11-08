@@ -79,14 +79,14 @@ async function setSettings(browser,axis,pgrOn=true){
   const facts=JSON.parse(wp('eval',"echo wp_json_encode(array('pgr'=>pgr_gravity_flow_inbox_rtl_status()['requested'],'gpp'=>gpp_gravity_flow_inbox_axis_status()['effective']));"));
   if(facts.pgr!==(pgrOn?'on':'off')||facts.gpp!==axis)throw Error('ENVIRONMENT: settings readback mismatch');
 }
-async function settled(page){
-  await page.waitForFunction(()=>{
+async function settled(page,mode='ag-rtl'){
+  await page.waitForFunction(mode=>{
     const h=document.querySelector('[data-js="gflow-inbox"]');
     const r=h?.querySelector('.ag-root-wrapper'),cfg=window.gflow_config?.grids?.[h?.dataset.gridId]?.grid_options;
     const loader=h?.closest('.gflow-inbox')?.querySelector('[data-js="gflow-inbox-loader"]');
-    return !!(r&&r.classList.contains('ag-rtl')&&cfg&&Array.isArray(cfg.rowData)&&cfg.rowData.length>=20&&
+    return !!(r&&r.classList.contains(mode)&&cfg&&Array.isArray(cfg.rowData)&&cfg.rowData.length>=20&&
       h.querySelector('.ag-center-cols-container .ag-row')&&!loader);
-  },null,{timeout:32000});
+  },mode,{timeout:32000});
   await page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
 }
 async function snapshot(page){
@@ -169,18 +169,19 @@ async function caseRun(browser,axis,mode,dbfile){
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
   await ctx.addInitScript({content:preload});
   const page=await ctx.newPage();
-  const record={axis,mode,status:'NOT_PROVEN'};
+  const record={axis,mode,status:'NOT_PROVEN',control_qualification:'NOT_PROVEN'};
+  const expectedGridMode=mode==='pgr-off'?'ag-ltr':'ag-rtl';
   try {
     await login(page);
     const rsp=await page.goto(fixture.frontend_url,{waitUntil:'domcontentloaded'});
     if(!rsp?.ok())throw Error('ENVIRONMENT: frontend unavailable');
-    await settled(page);
+    await settled(page,expectedGridMode);
     record.initial=await snapshot(page);
     record.php_initial=filterTrace();
-    if(record.initial.ag_mode!=='ag-rtl'||record.initial.enableRtl!==true||
+    if(record.initial.ag_mode!==expectedGridMode||(mode!=='pgr-off'&&record.initial.enableRtl!==true)||
       record.initial.probe_installed<1||!record.initial.storage_hook?.installed)
       throw Error('ENVIRONMENT: early tracing or native mode missing');
-    if(record.initial.physical_rtl.join(',')!==expected.join(','))throw Error('QUALIFICATION: D initial order mismatch');
+    if(mode!=='pgr-off'&&record.initial.physical_rtl.join(',')!==expected.join(','))throw Error('QUALIFICATION: D initial order mismatch');
     await page.screenshot({path:path.join(out,'lifecycle-'+axis+'-'+mode+'-before.jpg'),type:'jpeg',quality:55,fullPage:false});
     if(mode==='clear-browser-storage'){
       record.pre_clear=await snapshot(page);
@@ -203,7 +204,7 @@ async function caseRun(browser,axis,mode,dbfile){
       record.after_resize=await snapshot(page);
     }
     record.before_reload=await snapshot(page);
-    await page.reload({waitUntil:'domcontentloaded'});await settled(page);
+    await page.reload({waitUntil:'domcontentloaded'});await settled(page,expectedGridMode);
     record.reloaded=await snapshot(page);
     record.php_reloaded=filterTrace();
     await page.screenshot({path:path.join(out,'lifecycle-'+axis+'-'+mode+'-reloaded.jpg'),type:'jpeg',quality:55,fullPage:false});
