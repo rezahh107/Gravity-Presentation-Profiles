@@ -18,7 +18,7 @@ if(digest!=='ed5f01faf46b588fc0f67ae091dca4138e66fbc3eebd8da5ce673f58bba5ec3d')
  throw Error('EXACT_LICENSED_JS_SHA_MISMATCH');
 const ast=parse(data,{ecmaVersion:'latest',sourceType:'script',allowHashBang:true});
 const methods=new Set(['applyColumnState','getColumnState','sizeColumnsToFit','getItem','setItem','concat','filter','sort','slice','splice','unshift','push','shift','map','reverse','find','findIndex','indexOf','includes','reduce','keys','values','assign']);
-const names=new Set(['applyColumnState','getColumnState','sizeColumnsToFit','getItem','setItem','colId','columnState','state','applyOrder','id']);
+const names=new Set(['applyColumnState','getColumnState','sizeColumnsToFit','getItem','setItem','colId','columnState','state','applyOrder','id','sort','map','filter','unshift','splice','concat','indexOf','findIndex','includes','get','keys','values','length','order','index','field','pinned','width','column','some','every','push','reverse']);
 const callsites=[];
 const functionTypes=new Set(['FunctionExpression','ArrowFunctionExpression','FunctionDeclaration']);
 const own=(n,k)=>n&&Object.prototype.hasOwnProperty.call(n,k);
@@ -41,6 +41,13 @@ const safeName=n=>names.has(n)?n:'LOCAL';
 function summary(n,depth=0){
  if(!n||depth>7)return {node:'LIMIT'};
  switch(n.type){
+ case 'BlockStatement':return {node:'Block',statements:n.body.slice(0,18).map(x=>summary(x,depth+1))};
+ case 'ReturnStatement':return {node:'Return',value:summary(n.argument,depth+1)};
+ case 'ExpressionStatement':return {node:'Expr',value:summary(n.expression,depth+1)};
+ case 'IfStatement':return {node:'If',test:summary(n.test,depth+1),then:summary(n.consequent,depth+1),else:summary(n.alternate,depth+1)};
+ case 'VariableDeclaration':return {node:'Declaration',declarators:n.declarations.slice(0,8).map(x=>summary(x,depth+1))};
+ case 'VariableDeclarator':return {node:'Binding',value:summary(n.init,depth+1)};
+ case 'FunctionExpression':case 'ArrowFunctionExpression':return {node:'Function',body:summary(n.body,depth+1)};
  case 'Identifier':return {node:'Identifier',symbol:safeName(n.name)};
  case 'Literal':return {node:'Literal',literal:n.value===true||n.value===false?n.value:n.value==='id'?'id':'REDACTED'};
  case 'ObjectExpression':return {node:'Object',properties:n.properties.slice(0,20).map(p=>({key:safeName(key(p.key)),value:summary(p.value,depth+1)}))};
@@ -78,6 +85,16 @@ for(const {call,parents} of callsites){
     initStates.push({line:1,assignment:summary(n.right)});
   });
  }
+ const sortSemantics=[];
+ const idAncestry=[];
+ traverse(fnRoot,(n,parents)=>{
+  if(n.type==='CallExpression'&&n.callee?.type==='MemberExpression'&&key(n.callee.property)==='sort')
+   sortSemantics.push({at:n.start,receiver:summary(n.callee.object,0),comparator:summary(n.arguments[0],0)});
+  if(n.type==='Literal'&&n.value==='id'){
+   const relevant=parents.slice(-10).map(x=>x.type);
+   idAncestry.push({at:n.start,ancestor_types:relevant});
+  }
+ });
  const methodCounts={},literalCounts={id:0},operations=[];
  traverse(fnRoot,n=>{
   if(n.type==='CallExpression'&&n.callee?.type==='MemberExpression'){
@@ -91,7 +108,7 @@ for(const {call,parents} of callsites){
   function_at:fn.start, function_end:fn.end,
   argument_shape:arg, state_initializations:initStates.slice(0,8),
   apply_order_shape:summary(applyOrder),method_counts:methodCounts,literal_counts:literalCounts,
-  structural_operations:operations});
+  structural_operations:operations,sort_semantics:sortSemantics,id_ancestry:idAncestry});
 }
 if(report.callsite_count<1||!report.call_sites.some(x=>Math.abs(x.at-16259)<30))
  throw Error('EXACT_NATIVE_RESTORE_CALL_NOT_DETECTED');
