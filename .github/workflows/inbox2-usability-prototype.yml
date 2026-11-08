@@ -12,7 +12,11 @@ permissions:
   contents: read
 jobs:
   qualification:
-    name: Inbox 2 mobile RTL and batch query qualification
+    name: Inbox 2 isolated scenario — ${{ matrix.scenario }}
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [return-fifo, scale, negative-baseline]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     services:
@@ -26,6 +30,7 @@ jobs:
         options: --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-wu21-root --silent" --health-interval=5s
           --health-timeout=5s --health-retries=20
     env:
+      CIQ2_SCENARIO: ${{ matrix.scenario }}
       WU21_WP_PATH: /tmp/wu21-wordpress
       WU21_ARTIFACT_DIR: /tmp/wu21-artifacts
       WU21_PACKAGE_DIR: /tmp/wu21-packages
@@ -84,6 +89,7 @@ jobs:
         mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
 
         printf "%s\n" "$actual" > "$WU21_ARTIFACT_DIR/checkout-head.txt"
+        printf "%s\n" "$CIQ2_SCENARIO" > "$WU21_ARTIFACT_DIR/scenario.txt"
     - name: Set up exact PHP runtime
       uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
       with:
@@ -299,7 +305,54 @@ jobs:
         set -euo pipefail
         cp tests/qualification-custom-inbox/usability-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-usability.php"
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/usability-setup.php
+    - name: Prove scenario-owned WordPress database
+      shell: bash
+      run: |
+        set -euo pipefail
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+        $scenario = getenv("CIQ2_SCENARIO");
+        if (!in_array($scenario, array("return-fifo","scale","negative-baseline"), true)) {
+            throw new RuntimeException("invalid_ci_scenario");
+        }
+        $marker = getenv("GITHUB_RUN_ID").":".getenv("GITHUB_RUN_ATTEMPT").":".
+            $scenario.":".getenv("GPP_WU21_REPOSITORY_SHA");
+        update_option("ciq2_scenario_isolation_marker",$marker,false);
+        if (get_option("ciq2_scenario_isolation_marker") !== $marker) {
+            throw new RuntimeException("database_marker_round_trip_failed");
+        }
+        $f = get_option("cellq_fixture");
+        if (!is_array($f) || empty($f["form_id"])) {
+            throw new RuntimeException("scenario_form_missing");
+        }
+        file_put_contents(getenv("WU21_ARTIFACT_DIR")."/scenario-identity.json",
+            wp_json_encode(array("head"=>getenv("GPP_WU21_REPOSITORY_SHA"),
+                "scenario"=>$scenario, "marker"=>$marker,
+                "runner"=>getenv("RUNNER_NAME"),"form_id"=>(int)$f["form_id"]),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        '
+    - name: Reject intentionally invalid scale baseline in disposable negative-control DB
+      if: matrix.scenario == 'negative-baseline'
+      shell: bash
+      run: |
+        set -euo pipefail
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval "update_option('cellq_mode','deny_entry',false);"
+        set +e
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-baseline.php >"$WU21_ARTIFACT_DIR/ciq2-negative-baseline.log" 2>&1
+        result=$?
+        set -e
+        test "$result" -ne 0
+        grep -Fq 'scale_baseline_invalid' "$WU21_ARTIFACT_DIR/ciq2-negative-baseline.log"
+        php -r '
+        $r=json_decode(file_get_contents(getenv("WU21_ARTIFACT_DIR").
+          "/ciq2-scale-baseline-negative-baseline.json"),true);
+        if (!is_array($r) || ($r["status"]??null)!=="FAIL" ||
+            ($r["error"]??null)!=="scale_baseline_invalid" ||
+            ($r["count"]??null)!==0) {exit(1);}
+        echo "CIQ2_INVALID_SCALE_BASELINE_REJECTED\n";
+        '
+        test ! -e "$WU21_ARTIFACT_DIR/ciq2-operational-fixture.json"
     - name: Compare native Inbox and Inbox 2 on same synthetic three- and 47-task workloads
+      if: matrix.scenario != 'negative-baseline'
       shell: bash
       run: |
         set -euo pipefail
@@ -307,24 +360,55 @@ jobs:
         php -l tests/qualification-custom-inbox/comparison-fixture.php
         node tests/qualification-custom-inbox/comparison-browser.mjs
     - name: Run retained Inbox 2 browser authorization and transition tests
+      if: matrix.scenario != 'negative-baseline'
       shell: bash
       run: |
         set -euo pipefail
         node tests/qualification-custom-inbox/usability-browser.mjs
     - name: Qualify queue return and BFCache lifecycle with authentic small host fixture
+      if: matrix.scenario == 'return-fifo'
       shell: bash
       run: |
         set -euo pipefail
         node --check tests/qualification-custom-inbox/queue-return-browser.mjs
         node tests/qualification-custom-inbox/queue-return-browser.mjs
     - name: Discriminate entry-age from late actionable-step FIFO semantics
+      if: matrix.scenario == 'return-fifo'
       shell: bash
       run: |
         set -euo pipefail
         php -l tests/qualification-custom-inbox/fifo-timing-counterexample.php
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/fifo-timing-counterexample.php
+    - name: Verify final FIFO inventory and entry teardown
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        php -r '
+        $r=json_decode(file_get_contents(getenv("WU21_ARTIFACT_DIR").
+          "/ciq2-fifo-counterexample.json"),true);
+        if (!is_array($r) ||
+            ($r["status"]??null)!=="PASS_COUNTEREXAMPLE_WITH_VERIFIED_ENTRY_TEARDOWN" ||
+            ($r["cleanup_verified"]??null)!==true ||
+            ($r["cleanup_entries_verified"]??null)!==true ||
+            !isset($r["step_inventory_before"],$r["step_inventory_after_addition"],
+              $r["step_inventory_after_teardown"]) ||
+            !in_array($r["workflow_teardown"]??null,
+              array("ORIGINAL_STEP_INVENTORY_RESTORED",
+                    "RESIDUAL_STEP_DISPOSE_WITH_SCENARIO"),true)) {exit(1);}
+        echo "CIQ2_FIFO_TEARDOWN_EXPLICIT_AND_VERIFIED\n";
+        '
+        # Nothing may consume this database after FIFO; the runner and its
+        # MariaDB service are disposed of as this matrix job finishes.
+    - name: Verify fresh independent scale baseline before 500-task creation
+      if: matrix.scenario == 'scale'
+      shell: bash
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/scale-baseline.php
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-baseline.php
     - name: Qualify 500/501 native task membership and operational Live Refresh
-      if: github.base_ref != 'experiment/inbox2-usability-prototype'
+      if: matrix.scenario == 'scale'
       shell: bash
       run: |
         set -euo pipefail
@@ -332,14 +416,14 @@ jobs:
         node --check tests/qualification-custom-inbox/operational-browser.mjs
         node tests/qualification-custom-inbox/operational-browser.mjs
     - name: Reject real native membership mutations during and between scans
-      if: github.base_ref != 'experiment/inbox2-usability-prototype'
+      if: matrix.scenario == 'scale'
       shell: bash
       run: |
         set -euo pipefail
         php -l tests/qualification-custom-inbox/operational-mutations.php
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/operational-mutations.php | tee "$WU21_ARTIFACT_DIR/ciq2-operational-mutations.log"
     - name: Measure legitimate native and Inbox 2 HTTP polling at 501 tasks
-      if: github.base_ref != 'experiment/inbox2-usability-prototype'
+      if: matrix.scenario == 'scale'
       shell: bash
       timeout-minutes: 8
       run: |
@@ -349,7 +433,7 @@ jobs:
         cp tests/qualification-custom-inbox/native-cost-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
         node tests/qualification-custom-inbox/native-cost-browser.mjs 501
     - name: Measure authentic 2000-task boundary and 2001 fail-closed behavior
-      if: github.base_ref != 'experiment/inbox2-usability-prototype'
+      if: matrix.scenario == 'scale'
       shell: bash
       timeout-minutes: 12
       run: |
@@ -357,7 +441,7 @@ jobs:
         php -l tests/qualification-custom-inbox/operational-scale.php
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/operational-scale.php | tee "$WU21_ARTIFACT_DIR/ciq2-operational-scale.log"
     - name: Measure legitimate native and Inbox 2 HTTP polling at 2000 tasks
-      if: github.base_ref != 'experiment/inbox2-usability-prototype'
+      if: matrix.scenario == 'scale'
       shell: bash
       timeout-minutes: 9
       run: |
@@ -367,8 +451,21 @@ jobs:
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: independent-inbox-host-${{ github.run_id }}
+        name: independent-inbox-host-${{ github.run_id }}-${{ matrix.scenario }}
         path: |-
           /tmp/wu21-artifacts/
           /tmp/wu21-wp-server.log
         if-no-files-found: error
+
+  required-qualification:
+    # Keep the original required-check name and enforce all three matrix jobs.
+    name: Inbox 2 mobile RTL and batch query qualification
+    needs: qualification
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Reject failed or skipped independent qualification groups
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "${{ needs.qualification.result }}" = "success"
