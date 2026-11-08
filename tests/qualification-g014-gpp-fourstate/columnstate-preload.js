@@ -15,7 +15,7 @@
       const url=match[2], marker='/wp-content/plugins/',at=url.indexOf(marker);
       if(at<0)continue;
       const res=url.slice(at+marker.length).split('?')[0];
-      if(!/^(gravityflow|gravity-presentation-profiles|persian-gravityforms)\/.test(res))continue;
+      if(!['gravityflow/','gravity-presentation-profiles/','persian-gravityforms/'].some(prefix=>res.startsWith(prefix)))continue;
       result.push({file:res.slice(0,155),fn:String(match[1]||'anonymous').replace(/[^a-zA-Z0-9_$.-]/g,'_').slice(0,72),
         line:Number(match[3]),col:Number(match[4])});
       if(result.length>=8)break;
