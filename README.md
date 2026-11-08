@@ -151,6 +151,10 @@ Do not merge or publish unless explicitly authorized.
 
 ## Current evidence boundary
 
+### Inbox 1 native RTL / G-014 historical qualification
+
+Before pursuing Inbox 1 `ag-rtl` column-order repair, read the [historical native restore reconciliation and reprioritized goals](docs/evidence/INBOX_G014_RTL_RESTORE_HISTORICAL_RECONCILIATION_2026_11_08.md) alongside [current Owner overrides](docs/design/GPP_INBOX_VISUAL_DESIGN_V2_CURRENT_OWNER_OVERRIDES.md). Historical [PR #112](https://github.com/rezahh107/Gravity-Presentation-Profiles/pull/112) already proved Gravity Flow 3.1.0's `id`-first restore and rejected the then-available supported repair seams; merged [PR #118](https://github.com/rezahh107/Gravity-Presentation-Profiles/pull/118) selected a host-aligned five-column solution for **`ag-ltr`**, not for G-014 native `ag-rtl`. Test-only [PR #176](https://github.com/rezahh107/Gravity-Presentation-Profiles/pull/176) strengthens the new-mode evidence but has **not** qualified a new production seam. Do not bypass the Owner policy decision or equate CI capture success with full RTL acceptance.
+
 Repository CI and pinned authentic/reproducible WordPress, Gravity Forms, and Gravity Flow workflows provide strong evidence for exercised scenarios, including SRWF Registration, native Inbox, Entry Detail, Print, lifecycle/binding behavior, Diagnostics, Manual Inbox Refresh, and the fixed authoring-prompt/import boundary.
 
 These lanes do not prove target-production equivalence. Target installation IDs, plugin/license configuration, theme/cache/CDN/server behavior, remaining Registration production-specific evidence, and physical-printer equivalence remain separate `NOT_PROVEN` claims until exercised in those environments.
