@@ -65,10 +65,16 @@ async function scenario(browser,fixture,viewer,kind){
       assert.equal((await nav).status(),200,kind+'_PAGE_HTTP');
     }else if(kind==='failed'){
       await page.route(bundle,async route=>{
-        result.intercept_count++;await route.abort('failed');
+        result.intercept_count++;intercepted.resolve();
+        await route.abort('failed');
       });
       assert.equal((await page.goto(fixture.native_url,
-        {waitUntil:'domcontentloaded',timeout:60000})).status(),200,kind+'_PAGE_HTTP');
+        {waitUntil:'commit',timeout:60000})).status(),200,kind+'_PAGE_HTTP');
+      // A successful document navigation is not proof that the native script
+      // was requested; explicitly observe the intercepted failed delivery.
+      await Promise.race([intercepted.promise,new Promise((_,reject)=>setTimeout(
+        ()=>reject(Error('NATIVE_FAILED_SCRIPT_NOT_INTERCEPTED')),12000))]);
+      await page.waitForLoadState('domcontentloaded',{timeout:20000});
     }else if(kind==='withheld'){
       assert.equal((await page.goto(fixture.native_url,
         {waitUntil:'domcontentloaded',timeout:60000})).status(),200,kind+'_PAGE_HTTP');
