@@ -122,12 +122,31 @@ $html = ob_get_clean();
 gpp_assert_true( false !== strpos( $html, 'data-gpp-inbox-axis-compatibility="incompatible"' ), 'Persistent GPP incompatibility warning missing.' );
 gpp_assert_true( false !== strpos( $html, '<details>' ) && false !== strpos( $html, 'role="img"' ) && false !== strpos( $html, 'aria-label=' ), 'Accessible details and diagram text missing.' );
 
+// Once the authentic four-state lab demonstrated other scoped failures, do
+// not misreport those concrete combinations as UNKNOWN or as CSS-only causes.
 $GLOBALS['gpp_axis_setting'] = 'off';
-gpp_assert_same( 'unknown', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'GPP OFF must not inherit the ON/ON incompatible label.' );
+$off_on = InboxAxisIntervention::compatibilityFacts();
+gpp_assert_same( 'known_failure', $off_on['compatibility'], 'PGR ON + GPP OFF must show observed five-column failure.' );
+gpp_assert_same( 'rtl_column_order_without_axis', $off_on['problem'], 'GPP OFF must keep column-order failure separate from axis CSS.' );
+ob_start();
+$addon->settings_gpp_inbox_axis_compatibility( null );
+$after_off = ob_get_clean();
+gpp_assert_true( false !== strpos( $after_off, 'data-gpp-inbox-axis-problem="rtl_column_order_without_axis"' ), 'Warning must update after turning GPP OFF.' );
+$GLOBALS['gpp_axis_pgr']['requested'] = 'off';
+$off_off = InboxAxisIntervention::compatibilityFacts();
+gpp_assert_same( 'known_failure', $off_off['compatibility'], 'Both OFF must warn about demonstrated fa_IR frontend 390 scroll.' );
+gpp_assert_same( 'ltr_grid_without_axis', $off_off['problem'], 'Both OFF warning must not claim a RTL Grid.' );
 $GLOBALS['gpp_axis_setting'] = 'on';
+gpp_assert_same( 'native_admin_mobile_scroll', InboxAxisIntervention::compatibilityFacts()['problem'], 'PGR OFF + GPP ON must only report observed native fa_IR Admin mobile issue.' );
+$GLOBALS['gpp_axis_pgr']['request_rtl'] = false;
+gpp_assert_same( 'unknown', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'Unverified en_US Admin user + PGR OFF + GPP ON should remain unknown.' );
+$GLOBALS['gpp_axis_pgr']['requested'] = 'on';
 $GLOBALS['gpp_axis_locale'] = 'en_US';
-gpp_assert_same( 'unknown', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'Non-Persian site must not be classified as proven affected.' );
+gpp_assert_same( 'unknown', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'English site and English Admin request lack confirmed failure.' );
+$GLOBALS['gpp_axis_pgr']['request_rtl'] = true;
+gpp_assert_same( 'native_admin_mobile_touch', InboxAxisIntervention::compatibilityFacts()['problem'], 'Mixed en_US site / fa_IR Admin mobile touch failure must remain scoped.' );
 $GLOBALS['gpp_axis_locale'] = 'fa_IR';
+gpp_assert_same( 'incompatible', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'Both ON frontend fa_IR must still trigger the primary conflict.' );
 $GLOBALS['gpp_axis_pgr']['host'] = 'unsupported';
 gpp_assert_same( 'unknown', InboxAxisIntervention::compatibilityFacts()['compatibility'], 'Wrong Flow host is not proven affected.' );
 $GLOBALS['gpp_axis_pgr'] = array( 'api_version'=>99, 'capability'=>'supported', 'requested'=>'on', 'host'=>'admitted' );
