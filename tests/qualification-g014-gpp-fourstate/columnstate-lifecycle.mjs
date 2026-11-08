@@ -156,6 +156,19 @@ async function caseRun(browser,axis,mode,dbfile){
     if(mode==='clear-browser-storage'){
       record.pre_clear=await snapshot(page);
       await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()});
+    } else if(mode==='clear-native-only'||mode==='clear-gpp-only'){
+      record.pre_clear=await snapshot(page);
+      record.storage_ablation=await page.evaluate(mode=>{
+        const gridId=document.querySelector('[data-js="gflow-inbox"]')?.dataset.gridId;
+        if(!gridId)throw Error('No authentic Grid identity for storage ablation');
+        const keys=Array.from({length:localStorage.length},(_,i)=>localStorage.key(i));
+        const matches=keys.filter(key=>mode==='clear-native-only'
+          ? key===gridId
+          : key.startsWith('gpp:srwf-inbox-fit:')&&key.endsWith(':'+gridId));
+        if(matches.length!==1)throw Error('Expected exactly one scoped storage key, got '+matches.length);
+        localStorage.removeItem(matches[0]);
+        return {scope:mode,removed:1,remaining:localStorage.length};
+      },mode);
     } else if(mode==='manual-resize'){
       record.resize_action=await resize(page);
       record.after_resize=await snapshot(page);
@@ -186,12 +199,12 @@ async function main(){
       await setSettings(browser,axis);
       const dbfile='/tmp/g014-lifecycle-'+axis+'.sql';
       wp('db','export',dbfile,'--add-drop-table');
-      for(const mode of ['natural','clear-browser-storage','manual-resize']){
+      for(const mode of ['natural','clear-browser-storage','clear-native-only','clear-gpp-only','manual-resize']){
         report.cases.push(await caseRun(browser,axis,mode,dbfile));
       }
     }
     const good=report.cases.filter(c=>c.status==='OBSERVED'&&c.same_grid_id);
-    report.result=good.length===6?'EVIDENCE_CAPTURED':'NOT_PROVEN';
+    report.result=good.length===10?'EVIDENCE_CAPTURED':'NOT_PROVEN';
     report.causal_root='NOT_PROVEN_PENDING_INDEPENDENT_ASSESSMENT';
   }finally {
     fs.writeFileSync(classPath,original);
