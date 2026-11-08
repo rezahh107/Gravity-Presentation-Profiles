@@ -13,6 +13,11 @@ function wp(source){
   const r=spawnSync('php',[env.WU21_WP_CLI,'--path='+env.WU21_WP_PATH,'eval',source],{env,encoding:'utf8',timeout:120000});
   assert.equal(r.status,0,r.stderr||r.stdout);return r.stdout.trim();
 }
+// Same-class mutation qualification: a synthetic viewer reassignment adds
+// a real Gravity Flow Step. Its residue is explicitly tracked within scale.
+function nativeStepIds(){
+  return JSON.parse(wp("wp_set_current_user("+f.admin+");$steps=(new Gravity_Flow_API("+f.form_id+"))->get_steps();if(!is_array($steps))throw new RuntimeException('steps_unavailable');$ids=[];foreach($steps as $s){$ids[]=(int)$s->get_id();}sort($ids,SORT_NUMERIC);echo wp_json_encode($ids);"));
+}
 function cookies(uid){
   const code="$u=get_user_by('id',"+uid+");$e=time()+3600;echo wp_json_encode([['name'=>AUTH_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'auth')],['name'=>LOGGED_IN_COOKIE,'value'=>wp_generate_auth_cookie($u->ID,$e,'logged_in')]]);";
   return JSON.parse(wp(code)).map(x=>({...x,url:base}));
@@ -65,8 +70,18 @@ try{
   for(let i=1;i<26;i++)await page.locator('[data-ciq2-next]').click();
   assert.match(await page.locator('[data-ciq2-page]').innerText(),/۲۶|26/);
   const reassigned=f.synthetic[1];
+  const stepsBefore=nativeStepIds();
   const step=Number(wp("wp_set_current_user("+f.admin+");$a=new Gravity_Flow_API("+f.form_id+");$s=$a->add_step(['step_name'=>'CIQ2 synthetic reassignment','step_type'=>'approval','type'=>'select','assignees'=>['user_id|"+f.viewer+"'],'assignee_policy'=>'all']);if(!$s||is_wp_error($s))throw new RuntimeException('step_failed');$e=GFAPI::get_entry("+reassigned+");$ok=$a->send_to_step($e,(int)$s);if(false===$ok||is_wp_error($ok))throw new RuntimeException('reassign_failed');echo $s;"));
   assert.ok(step>0);
+  const stepsAfter=nativeStepIds();
+  assert.deepEqual(stepsAfter,[...stepsBefore,step].sort((a,b)=>a-b),
+    'Unexpected workflow-step mutation during synthetic viewer reassignment');
+  report.step_inventory={
+    before:stepsBefore,after:stepsAfter,added_viewer_step_id:step,
+    teardown:'DISCARD_AFTER_SCALE_SCENARIO_ONLY'
+  };
+  save();
+  pass('viewer_step_residual_explicitly_inventoried_and_isolated_in_scale_chain');
   await page.waitForFunction(id=>!document.querySelector('[data-ciq2-entry="'+id+'"]'),reassigned,{timeout:90000});
   assert.equal((await all(page)).length,500);
   assert.match(await page.locator('[data-ciq2-page]').innerText(),/۲۵|25/);
