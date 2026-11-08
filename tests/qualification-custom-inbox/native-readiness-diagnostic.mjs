@@ -82,7 +82,9 @@ function installTrace(){
       Object.defineProperty(options,'__wu21ReadinessPatched',{value:true,enumerable:false});
       for(const [name,label] of [
         ['onGridReady','gridReady'],['onFirstDataRendered','firstDataRendered'],
-        ['onModelUpdated','modelUpdated'],['onRowDataUpdated','rowDataUpdated']
+        ['onModelUpdated','modelUpdated'],['onRowDataUpdated','rowDataUpdated'],
+        ['onGridSizeChanged','gridSizeChanged'],['onDisplayedColumnsChanged','displayedColumnsChanged'],
+        ['onPaginationChanged','paginationChanged']
       ]){
         const original=options[name];
         options[name]=function(event){
@@ -127,17 +129,33 @@ async function snapshot(page){
   return page.evaluate(()=>{
     const t=window.__wu21NativeTrace;
     const root=document.querySelector('[data-js="gflow-inbox"]');
-    const api=t?.api;
+    const grid=window.gflow_config?.grids?.[root?.dataset.gridId];
+    const options=grid?.grid_options;
+    const fromOptions=options?.api;
+    const fromGrid=grid?.api;
+    const api=t?.api||fromOptions||fromGrid;
     const ids=[];
     if(api && typeof api.forEachNodeAfterFilterAndSort==='function')
       api.forEachNodeAfterFilterAndSort(n=>{
         const id=Number(n?.data?.id);
         if(Number.isSafeInteger(id)&&id>0)ids.push(id);
       });
+    const noRows=root?.querySelector('.ag-overlay-no-rows-center');
+    const loading=root?.querySelector('.ag-overlay-loading-center');
+    const visible=node=>!!node && !!(node.offsetWidth||node.offsetHeight||node.getClientRects().length);
+    const rowConfig=options?.rowData;
     return {
       trace_installed:!!t,callbacks_wrapped:t?.patched||0,events:(t?.events||[]).slice(),
       api_count:api&&typeof api.getDisplayedRowCount==='function'?api.getDisplayedRowCount():null,
       api_ids:ids,
+      api_locations:{event_callback:!!t?.api,options:!!fromOptions,grid:!!fromGrid},
+      api_method_names:api?['getDisplayedRowCount','forEachNodeAfterFilterAndSort',
+        'isDestroyed','getModel','getRowNode'].filter(k=>typeof api[k]==='function'):[],
+      config:{grid_id:root?.dataset.gridId||null,has_grid:!!grid,has_options:!!options,
+        initial_row_data_count:Array.isArray(rowConfig)?rowConfig.length:null,
+        option_keys:Object.keys(options||{}).filter(k=>/api|ready|data|row|model|loading/i.test(k)).slice(0,20)},
+      overlays:{no_rows_present:!!noRows,no_rows_visible:visible(noRows),
+        loading_present:!!loading,loading_visible:visible(loading)},
       dom_ids:[...document.querySelectorAll('[data-js="gflow-inbox"] .ag-center-cols-container .ag-row[row-id]')]
         .map(n=>Number(n.getAttribute('row-id'))),
       native_container_present:!!root,grid_wrapper_present:!!root?.querySelector('.ag-root-wrapper')
