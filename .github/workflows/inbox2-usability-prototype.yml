@@ -325,10 +325,29 @@ jobs:
         if (!is_array($f) || empty($f["form_id"])) {
             throw new RuntimeException("scenario_form_missing");
         }
+        $steps = (new Gravity_Flow_API((int)$f["form_id"]))->get_steps();
+        if (!is_array($steps) || count($steps) < 2) {
+            throw new RuntimeException("initial_host_steps_unreadable");
+        }
+        $step_ids = array();
+        foreach ($steps as $step) {
+            $step_ids[] = (int)$step->get_id();
+        }
+        sort($step_ids, SORT_NUMERIC);
+        $required = array((int)$f["step_id"], (int)$f["next_step"]);
+        if (count($step_ids) !== count(array_unique($step_ids)) ||
+            array_diff($required, $step_ids)) {
+            throw new RuntimeException("initial_native_step_identity_invalid");
+        }
+        update_option("ciq2_scenario_initial_step_ids", $step_ids, false);
+        if (get_option("ciq2_scenario_initial_step_ids") !== $step_ids) {
+            throw new RuntimeException("initial_native_step_snapshot_missing");
+        }
         file_put_contents(getenv("WU21_ARTIFACT_DIR")."/scenario-identity.json",
             wp_json_encode(array("head"=>getenv("GPP_WU21_REPOSITORY_SHA"),
                 "scenario"=>$scenario, "marker"=>$marker,
-                "runner"=>getenv("RUNNER_NAME"),"form_id"=>(int)$f["form_id"]),
+                "runner"=>getenv("RUNNER_NAME"),"form_id"=>(int)$f["form_id"],
+                "initial_step_ids"=>$step_ids),
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         '
     - name: Reject intentionally invalid scale baseline in disposable negative-control DB
