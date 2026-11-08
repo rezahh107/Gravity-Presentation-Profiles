@@ -224,7 +224,7 @@ jobs:
       - name: Install browser tooling
         run: |
           set -euo pipefail
-          npm install --no-save --package-lock=false playwright@1.55.0
+          npm install --no-save --package-lock=false playwright@1.55.0 acorn@8.15.0
           npx playwright install --with-deps chromium
           node -e 'if(require("playwright/package.json").version!=="1.55.0")process.exit(1)'
 
@@ -235,6 +235,14 @@ jobs:
           node --check tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
           node tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
           test -s "$G014_OUTPUT_DIR/licensed-source-locations.json"
+      - name: Examine exact native restore array construction (AST metadata only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/restore-ast-probe.mjs
+          node tests/qualification-g014-gpp-fourstate/restore-ast-probe.mjs
+          test -s "$G014_OUTPUT_DIR/licensed-restore-ast.json"
+
       - name: Start isolated HTTP server
         shell: bash
         run: |
