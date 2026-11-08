@@ -54,10 +54,10 @@ function cookies(uid){
     '["name"=>LOGGED_IN_COOKIE,"value"=>wp_generate_auth_cookie($u->ID,$e,"logged_in")]]);';
   return JSON.parse(wp(q)).map(x=>({...x,url:base}));
 }
-function installTrace(){
+function installTrace(instrumentOptions={}){
   // Runs before document scripts. This only observes actual Grid option callbacks.
   // It does not call an AG Grid lifecycle callback itself, nor supply row data.
-  const events=[], state={api:null,events,patched:0};
+  const events=[], state={api:null,events,patched:0,controlled_data_hold:!!instrumentOptions.delayInitialData};
   Object.defineProperty(window,'__wu21NativeTrace',{value:state,configurable:true});
   let config;
   const record=(name,api,gridId)=>{
@@ -80,6 +80,26 @@ function installTrace(){
       const options=grid?.grid_options;
       if(!options || options.__wu21ReadinessPatched)continue;
       Object.defineProperty(options,'__wu21ReadinessPatched',{value:true,enumerable:false});
+      if(state.controlled_data_hold){
+        // Negative control ONLY: native vendor source stays unchanged.
+        // Delay the exact host-provided rows until the Grid API exists.
+        let nativeRows=options.rowData;
+        Object.defineProperty(options,'rowData',{
+          configurable:true,enumerable:true,
+          get(){return state.controlled_data_hold?undefined:nativeRows;},
+          set(value){nativeRows=value;}
+        });
+        state.releaseInitialRows=()=>{
+          const api=state.api;
+          if(!api)throw Error('NATIVE_DELAYED_DATA_GRID_API_MISSING');
+          state.controlled_data_hold=false;
+          if(typeof api.setGridOption==='function')api.setGridOption('rowData',nativeRows);
+          else if(typeof api.setRowData==='function')api.setRowData(nativeRows);
+          else throw Error('NATIVE_DELAYED_DATA_PUBLIC_APPLY_API_MISSING');
+          record('controlled_original_data_released',api,gridId);
+        };
+        record('controlled_original_data_withheld',null,gridId);
+      }
       for(const [name,label] of [
         ['onGridReady','gridReady'],['onFirstDataRendered','firstDataRendered'],
         ['onModelUpdated','modelUpdated'],['onRowDataUpdated','rowDataUpdated'],
@@ -109,16 +129,27 @@ const bundlePattern=/\/gravityflow\/assets\/js\/dist\/common-inbox\.[^/?]+\.js(?
 const sorted=a=>[...a].sort((x,y)=>x-y);
 function snapshotPredicate(snapshot,expected){
   const events=snapshot.events||[];
-  if(!events.some(e=>e.name==='gridReady'))
-    throw Error('NATIVE_GRID_READY_NOT_OBSERVED');
-  const applied=events.filter(e=>e.name==='rowDataUpdated'||e.name==='firstDataRendered');
-  if(!applied.length)throw Error('NATIVE_INITIAL_DATA_APPLICATION_NOT_OBSERVED');
+  // The pinned empty-grid run emits paginationChanged and gridSizeChanged,
+  // but NOT firstDataRendered. This composite remains a candidate, subjected
+  // to withheld-initial-data and failed-boot negative controls below.
+  if(!events.some(e=>e.name==='paginationChanged') ||
+     !events.some(e=>e.name==='gridSizeChanged'))
+    throw Error('NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED');
   if(snapshot.api_count===null)
     throw Error('NATIVE_ROW_MODEL_NOT_AVAILABLE');
+  if(snapshot.config?.initial_row_data_count!==expected.length)
+    throw Error('NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE');
   assert.deepEqual(sorted(snapshot.api_ids),sorted(expected),'NATIVE_ROW_MODEL_MEMBERSHIP_MISMATCH');
   assert.equal(snapshot.api_count,expected.length,'NATIVE_ROW_MODEL_COUNT_MISMATCH');
-  assert.ok(applied.some(e=>e.displayed_count===expected.length),
-    'NATIVE_APPLIED_EVENT_COUNT_MISMATCH');
+  if(expected.length){
+    assert.ok(events.some(e=>e.name==='firstDataRendered'&&e.displayed_count===expected.length),
+      'NATIVE_NONEMPTY_DATA_RENDER_COMPLETION_MISSING');
+  }else{
+    assert.equal(snapshot.overlays?.no_rows_visible,true,
+      'NATIVE_EMPTY_MODEL_OVERLAY_NOT_VISIBLE');
+    assert.equal(snapshot.overlays?.loading_visible,false,
+      'NATIVE_EMPTY_MODEL_STILL_LOADING');
+  }
   return true;
 }
 function unguardedEmpty(snapshot){
@@ -150,7 +181,7 @@ async function snapshot(page){
       api_ids:ids,
       api_locations:{event_callback:!!t?.api,options:!!fromOptions,grid:!!fromGrid},
       api_method_names:api?['getDisplayedRowCount','forEachNodeAfterFilterAndSort',
-        'isDestroyed','getModel','getRowNode'].filter(k=>typeof api[k]==='function'):[],
+        'isDestroyed','getModel','getRowNode','setGridOption','setRowData'].filter(k=>typeof api[k]==='function'):[],
       config:{grid_id:root?.dataset.gridId||null,has_grid:!!grid,has_options:!!options,
         initial_row_data_count:Array.isArray(rowConfig)?rowConfig.length:null,
         option_keys:Object.keys(options||{}).filter(k=>/api|ready|data|row|model|loading/i.test(k)).slice(0,20)},
@@ -162,11 +193,11 @@ async function snapshot(page){
     };
   });
 }
-async function makePage(browser,uid){
+async function makePage(browser,uid,delayInitialData=false){
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
   await ctx.addCookies(cookies(uid));
   const page=await ctx.newPage(),errors=[],network=[];
-  await page.addInitScript(installTrace);
+  await page.addInitScript(installTrace,{delayInitialData});
   page.on('pageerror',e=>errors.push(e.name||'Error'));
   page.on('requestfailed',req=>{
     if(req.url().includes('/gravityflow/'))network.push({type:'failed',path:new URL(req.url()).pathname});
@@ -188,8 +219,8 @@ async function settled(browser,actor,f,oracle){
     try{
       await page.waitForFunction(()=>{
         const e=window.__wu21NativeTrace?.events||[];
-        return e.some(x=>x.name==='rowDataUpdated'||x.name==='firstDataRendered') &&
-          e.some(x=>x.name==='gridReady');
+        return e.some(x=>x.name==='paginationChanged') &&
+          e.some(x=>x.name==='gridSizeChanged');
       },null,{timeout:17000});
     }catch(e){result.wait_error='NATIVE_INITIAL_DATA_CALLBACK_TIMEOUT';}
     result.snapshot=await snapshot(page);
@@ -202,14 +233,33 @@ async function settled(browser,actor,f,oracle){
   return result;
 }
 async function negative(browser,f,kind){
-  const {ctx,page,errors,network}=await makePage(browser,f.viewer);
+  const {ctx,page,errors,network}=await makePage(browser,f.viewer,kind==='withheld-data');
   const result={scenario:kind,expected_count:0,status:'NOT_PROVEN'};
   let matched=0,release=()=>{};
   try {
     let intercepted;
     const seen=new Promise(resolve=>{intercepted=resolve;});
     const held=new Promise(resolve=>{release=resolve;});
-    if(kind==='blocked'||kind==='delayed'){
+    if(kind==='withheld-data'){
+      const response=await page.goto(f.native_url,{waitUntil:'domcontentloaded',timeout:60000});
+      assert.equal(response.status(),200,'NATIVE_WITHHELD_DATA_PAGE_HTTP');
+      await page.waitForFunction(()=>{
+        const ev=window.__wu21NativeTrace?.events||[];
+        return ev.some(x=>x.name==='paginationChanged') &&
+          ev.some(x=>x.name==='gridSizeChanged');
+      },null,{timeout:17000});
+      result.before_release=await snapshot(page);
+      assert.equal(unguardedEmpty(result.before_release),true,
+        'NATIVE_WITHHELD_DATA_FALSE_EMPTY_NOT_REPRODUCED');
+      assert.throws(()=>snapshotPredicate(result.before_release,[]),
+        /NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE|NATIVE_EMPTY_MODEL_OVERLAY_NOT_VISIBLE|NATIVE_ROW_MODEL_NOT_AVAILABLE/,
+        'NATIVE_WITHHELD_DATA_GUARD_DID_NOT_REJECT');
+      result.failed_invariant='NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE_or_empty_model_unfinished';
+      await page.evaluate(()=>window.__wu21NativeTrace.releaseInitialRows());
+      result.after_release=await snapshot(page);
+      snapshotPredicate(result.after_release,[]);
+      result.resumed_success=true;
+    }else if(kind==='blocked'||kind==='delayed'){
       await page.route(bundlePattern,async route=>{
         matched++;intercepted();await held;await route.continue();
       });
@@ -221,7 +271,7 @@ async function negative(browser,f,kind){
       assert.equal(unguardedEmpty(result.before_release),true,
         'NATIVE_NEGATIVE_DID_NOT_REPRODUCE_FALSE_EMPTY');
       assert.throws(()=>snapshotPredicate(result.before_release,[]),
-        /NATIVE_GRID_READY_NOT_OBSERVED|NATIVE_INITIAL_DATA_APPLICATION_NOT_OBSERVED/,
+        /NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED|NATIVE_ROW_MODEL_NOT_AVAILABLE|NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE/,
         'NATIVE_NEGATIVE_GUARD_DID_NOT_REJECT');
       result.failed_invariant='NATIVE_GRID_READY_NOT_OBSERVED_or_Native_data_not_applied';
       if(kind==='delayed'){
@@ -229,8 +279,8 @@ async function negative(browser,f,kind){
         await page.waitForLoadState('domcontentloaded',{timeout:60000});
         await page.waitForFunction(()=>{
           const ev=window.__wu21NativeTrace?.events||[];
-          return ev.some(x=>x.name==='rowDataUpdated'||x.name==='firstDataRendered') &&
-            ev.some(x=>x.name==='gridReady');
+          return ev.some(x=>x.name==='paginationChanged') &&
+            ev.some(x=>x.name==='gridSizeChanged');
         },null,{timeout:17000});
         result.after_release=await snapshot(page);
         snapshotPredicate(result.after_release,[]);
@@ -243,11 +293,12 @@ async function negative(browser,f,kind){
       assert.equal(unguardedEmpty(result.after_failure),true,
         'NATIVE_FAILED_LOAD_NOT_FALSE_EMPTY');
       assert.throws(()=>snapshotPredicate(result.after_failure,[]),
-        /NATIVE_GRID_READY_NOT_OBSERVED|NATIVE_INITIAL_DATA_APPLICATION_NOT_OBSERVED/,
+        /NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED|NATIVE_ROW_MODEL_NOT_AVAILABLE|NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE/,
         'NATIVE_FAILED_LOAD_GUARD_DID_NOT_REJECT');
       result.failed_invariant='NATIVE_GRID_READY_NOT_OBSERVED_or_Native_data_not_applied';
     }
-    assert.ok(matched>0,'NATIVE_TEST_INTERCEPTION_NOT_EXERCISED');
+    if(kind!=='withheld-data')
+      assert.ok(matched>0,'NATIVE_TEST_INTERCEPTION_NOT_EXERCISED');
     result.intercept_count=matched;
     result.browser_errors=errors;result.network=network.slice(-8);
     result.status='PASS';
@@ -271,7 +322,7 @@ try{
   const initial=await settled(browser,'officer',f,oracle);
   if(phase==='initial'){
     await settled(browser,'viewer',f,oracle);
-    for(const kind of ['blocked','delayed','failed']){
+    for(const kind of ['blocked','delayed','failed','withheld-data']){
       await negative(browser,f,kind);
     }
   }else if(phase==='after-native'){
