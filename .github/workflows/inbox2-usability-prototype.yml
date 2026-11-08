@@ -529,7 +529,7 @@ jobs:
             throw Error('NATIVE_READINESS_DIAGNOSTIC_NOT_PROVEN_'+phase);
           if(phase==='initial'){
             const labels=report.scenarios.map(s=>s.scenario);
-            for(const label of ['initial-officer','initial-viewer','blocked','delayed','failed'])
+            for(const label of ['initial-officer','initial-viewer','blocked','delayed','failed','withheld-data'])
               if(!labels.includes(label))throw Error('NATIVE_READINESS_SCENARIO_MISSING_'+label);
           }
           console.log('CIQ2_NATIVE_READINESS_DIAGNOSTIC_WITNESSES_PASS '+phase);
