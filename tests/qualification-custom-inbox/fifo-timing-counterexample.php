@@ -13,6 +13,9 @@ if ( empty( $f['form_id'] ) || empty( $f['officer'] ) || empty( $f['admin'] )
     throw new RuntimeException( 'Synthetic Gravity Flow fixture unavailable' );
 }
 $created = array();
+$late_step = null;
+$steps_before = null;
+$steps_after_addition = null;
 $report = array(
     'head' => getenv( 'GPP_WU21_REPOSITORY_SHA' ),
     'status' => 'RUNNING',
@@ -34,7 +37,39 @@ $ordered = static function () use ( $scope ) {
     if ( is_wp_error( $rows ) ) { throw new RuntimeException( $rows->get_error_code() ); }
     return $rows;
 };
+// Read the complete authoritative form-step inventory. Recreate API to avoid
+// trusting previously loaded step objects after a definition mutation.
+$inventory = static function () use ( $f ) {
+    $api = new Gravity_Flow_API( (int) $f['form_id'] );
+    $steps = $api->get_steps();
+    if ( ! is_array( $steps ) ) {
+        throw new RuntimeException( 'step_inventory_not_readable' );
+    }
+    $rows = array();
+    foreach ( $steps as $step ) {
+        if ( ! is_object( $step ) || ! method_exists( $step, 'get_id' ) ) {
+            throw new RuntimeException( 'step_inventory_invalid_object' );
+        }
+        $id = (int) $step->get_id();
+        if ( $id < 1 || isset( $rows[ $id ] ) ) {
+            throw new RuntimeException( 'step_inventory_duplicate_or_invalid_id' );
+        }
+        $rows[ $id ] = array( 'id' => $id, 'class' => get_class( $step ) );
+    }
+    ksort( $rows, SORT_NUMERIC );
+    return array_values( $rows );
+};
+$step_ids = static function ( $inventory ) {
+    return array_map( 'intval', array_column( $inventory, 'id' ) );
+};
+
 try {
+    wp_set_current_user( (int) $f['admin'] );
+    $steps_before = $inventory();
+    $report['step_inventory_before'] = $steps_before;
+    $ok( in_array( (int) $f['step_id'], $step_ids( $steps_before ), true )
+        && in_array( (int) $f['next_step'], $step_ids( $steps_before ), true ),
+        'initial_complete_workflow_inventory_has_native_fixture_steps' );
     wp_set_current_user( (int) $f['officer'] );
     $baseline = $ordered();
     $baseline_ids = array_map( 'intval', array_column( $baseline, 'id' ) );
@@ -98,6 +133,12 @@ try {
     ) );
     $ok( ! is_wp_error( $late_step ) && (int) $late_step > 0,
         'distinct_late_officer_step_exists' );
+    $steps_after_addition = $inventory();
+    $report['step_inventory_after_addition'] = $steps_after_addition;
+    $difference = array_values( array_diff( $step_ids( $steps_after_addition ), $step_ids( $steps_before ) ) );
+    $ok( $difference === array( (int) $late_step ) &&
+        count( $steps_after_addition ) === count( $steps_before ) + 1,
+        'new_step_is_the_only_workflow_definition_change' );
     $r = $flow->send_to_step( GFAPI::get_entry( $older ), (int) $late_step );
     $ok( ! is_wp_error( $r ) && false !== $r,
         'older_entry_new_actionable_step_arrives_after_newer_task' );
@@ -143,12 +184,60 @@ try {
     throw $e;
 } finally {
     wp_set_current_user( (int) $f['admin'] );
+    $cleanup_verified = true;
+    $report['entry_teardown'] = array();
     foreach ( $created as $id ) {
         $res = GFAPI::delete_entry( $id );
-        if ( is_wp_error( $res ) ) {
-            $report['cleanup_error'][] = array( 'synthetic_id' => $id, 'reason' => $res->get_error_code() );
-        }
+        // A successful API return is insufficient: verify actual GF Entry absence.
+        $readback = GFAPI::get_entry( $id );
+        $deleted = true === $res;
+        $absent = is_wp_error( $readback ) && 'not_found' === $readback->get_error_code();
+        $report['entry_teardown'][] = array(
+            'id' => (int) $id, 'delete_returned_true' => $deleted,
+            'readback_absent' => $absent,
+            'readback_error' => is_wp_error( $readback ) ? $readback->get_error_code() : null,
+        );
+        $cleanup_verified = $cleanup_verified && $deleted && $absent;
     }
     $report['cleanup_synthetic_entries_attempted'] = count( $created );
+    $report['cleanup_entries_verified'] = $cleanup_verified;
+    try {
+        $after = $inventory();
+        $report['step_inventory_after_teardown'] = $after;
+        if ( null !== $steps_before && null !== $steps_after_addition ) {
+            $after_ids = $step_ids( $after );
+            $original_ids = $step_ids( $steps_before );
+            $added_ids = $step_ids( $steps_after_addition );
+            if ( $after_ids === $original_ids ) {
+                $report['workflow_teardown'] = 'ORIGINAL_STEP_INVENTORY_RESTORED';
+            } elseif ( $after_ids === $added_ids && in_array( (int) $late_step, $after_ids, true ) ) {
+                // Explicit non-restoration. GitHub Actions must destroy this
+                // scenario's private DB and runner before any other test group.
+                $report['workflow_teardown'] = 'RESIDUAL_STEP_DISPOSE_WITH_SCENARIO';
+                $report['residual_step_id'] = (int) $late_step;
+            } else {
+                throw new RuntimeException( 'unexpected_workflow_step_inventory_after_teardown' );
+            }
+        } else {
+            $report['workflow_teardown'] = 'INCOMPLETE_STEP_INVENTORY_DISPOSAL_REQUIRED';
+        }
+    } catch ( Throwable $inventory_error ) {
+        $report['workflow_teardown'] = 'UNVERIFIED_DISPOSAL_REQUIRED';
+        $report['inventory_error'] = $inventory_error->getMessage();
+        $cleanup_verified = false;
+    }
+    $report['cleanup_verified'] = $cleanup_verified &&
+        in_array( $report['workflow_teardown'], array(
+            'ORIGINAL_STEP_INVENTORY_RESTORED',
+            'RESIDUAL_STEP_DISPOSE_WITH_SCENARIO',
+        ), true );
+    if ( ! $report['cleanup_verified'] ) {
+        $report['status'] = 'FAIL_UNVERIFIED_TEARDOWN';
+    } elseif ( 'PASS_SEMANTIC_COUNTEREXAMPLE' === $report['status'] ) {
+        $report['status'] = 'PASS_COUNTEREXAMPLE_WITH_VERIFIED_ENTRY_TEARDOWN';
+    }
     $save();
+    if ( ! $report['cleanup_verified'] ) {
+        throw new RuntimeException( 'fixture_teardown_unverified' );
+    }
 }
