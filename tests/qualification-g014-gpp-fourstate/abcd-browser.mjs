@@ -60,11 +60,26 @@ function command(executable,args,timeout=30000){
   return (p.stdout||'').trim();
 }
 const wp=(...args)=>command('php',[process.env.WU008_WP_CLI,'--path='+process.env.WU008_WP_PATH,...args],120000);
-function setSettings(axis,pgr){
+async function setSettings(browser,axis,pgr){
   wp('option','update','WPLANG','fa_IR');
   wp('eval',"$u=get_user_by('login','bootstrap_admin');if(!$u)throw new RuntimeException('Synthetic admin absent');update_user_meta($u->ID,'locale','fa_IR');");
   wp('eval',"$s=get_option('pgr_settings',array());if(!is_array($s))$s=array();$s['gravity_flow_inbox_rtl']="+(pgr?'1':'0')+";update_option('pgr_settings',$s);");
-  wp('eval',"$a=\\GravityPresentationProfiles\\GravityForms\\AddOn::get_instance();$a->update_plugin_setting('inbox_axis_ltr','"+axis+"');");
+  // GFAddOn owns this setting: use its tested native Settings UI, not an
+  // assumed PHP setter (update_plugin_setting is not a supported method).
+  const context=await browser.newContext({viewport:{width:1280,height:900}});
+  try {
+    const page=await context.newPage();
+    await login(page);
+    const settingsUrl=baseURL+'/wp-admin/admin.php?page=gf_settings&subview=gravity-presentation-profiles';
+    const response=await page.goto(settingsUrl,{waitUntil:'domcontentloaded'});
+    if(!response?.ok())throw Error('ENVIRONMENT: authentic GPP Settings unavailable');
+    const select=page.locator('select[name="_gform_setting_inbox_axis_ltr"]');
+    if(await select.count()!==1)throw Error('ENVIRONMENT: GPP native axis control unavailable');
+    await select.selectOption(axis);
+    const submit=page.locator('#gform-settings button[type="submit"], #gform-settings input[type="submit"]').last();
+    if(await submit.count()!==1)throw Error('ENVIRONMENT: native GPP Settings submit unavailable');
+    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),submit.click()]);
+  }finally{await context.close();}
   const facts=JSON.parse(wp('eval',"echo wp_json_encode(array('site'=>get_locale(),'pgr'=>pgr_gravity_flow_inbox_rtl_status(),'gpp'=>gpp_gravity_flow_inbox_axis_status()));"));
   if (facts.site!=='fa_IR'||facts.pgr.requested!==(pgr?'on':'off')||facts.gpp.effective!==axis)
     throw Error('ENVIRONMENT: settings verification failed');
@@ -192,7 +207,7 @@ async function run(){
   report.browser=browser.version();
   try{
     for(const axis of ['on','off']){
-      setSettings(axis,true);
+      await setSettings(browser,axis,true);
       const file=path.join('/tmp','g014-abcd-'+axis+'.sql');
       wp('db','export',file,'--add-drop-table');
       const digest=hash(fs.readFileSync(file));
@@ -200,7 +215,7 @@ async function run(){
         const result=await one(browser,axis,variant,true,digest);
         report.cases.push(result);
       }
-      setSettings(axis,false);
+      await setSettings(browser,axis,false);
       wp('db','export',file,'--add-drop-table');
       const control=await one(browser,axis,'A',false,hash(fs.readFileSync(file)));
       report.control.push(control);
