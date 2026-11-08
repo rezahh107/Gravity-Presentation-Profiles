@@ -25,7 +25,11 @@ const oracle = () => JSON.parse(wp(
   'echo wp_json_encode(array_map("intval",array_column($r,"id")));'
 ));
 const ids = p => p.locator('[data-ciq2-entry]').evaluateAll(nodes => nodes.map(n => Number(n.dataset.ciq2Entry)));
-const browser = await chromium.launch({headless: true});
+// Playwright 1.55.0 disables Chromium BFCache by default. Remove only the
+// test-browser override; the WordPress private/no-store/auth guards remain.
+const browser = await chromium.launch({
+  headless: true, ignoreDefaultArgs: ['--disable-back-forward-cache']
+});
 try {
   const ctx = await browser.newContext({viewport: {width: 390, height: 850}});
   const cookies = JSON.parse(wp(
@@ -35,6 +39,15 @@ try {
   ));
   await ctx.addCookies(cookies.map(c => ({...c, url: env.WU21_BASE_URL})));
   const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  const notRestoredByChromium = [];
+  cdp.on('Page.backForwardCacheNotUsed', event => {
+    for (const reason of event.notRestoredExplanations || []) {
+      notRestoredByChromium.push({reason: String(reason.reason),
+        type: String(reason.type)});
+    }
+  });
+  await cdp.send('Page.enable');
   // Installed before document creation. Only browser-emitted lifecycle events
   // count as BFCache evidence; the synthetic regression further below is separate.
   await page.addInitScript(() => {
@@ -105,15 +118,15 @@ try {
   assert.ok(!afterNativeApproval.includes(firstTask), 'Officer still has an actionable task after approving it');
   pass('genuine_officer_native_approval_changes_authoritative_pending_task_set');
 
-  // User-initiated browser Back from the native Result/Detail page. The native
-  // Result remains visible before this action; no automatic next-task jump.
-  let returned = false;
-  for (let i = 0; i < 3 && !returned; i++) {
-    const response = await page.goBack({waitUntil: 'domcontentloaded'});
-    returned = new URL(page.url()).pathname === new URL(f.custom_url).pathname;
-    if (!response && !returned) break;
-  }
-  assert.equal(returned, true, 'Native Result browser Back did not reach the originating Inbox 2');
+  // Chromium's own history navigation, not a dispatched PageTransitionEvent.
+  // Playwright 1.55 page.goBack() awaits network navigation and can desync on
+  // BFCache (which resumes a document without a network-level navigation).
+  const browserHistory = await cdp.send('Page.getNavigationHistory');
+  const origin = browserHistory.entries.slice(0, browserHistory.currentIndex)
+    .reverse().find(entry => new URL(entry.url).pathname ===
+      new URL(f.custom_url).pathname);
+  assert.ok(origin, 'Authentic browser history lacks the originating Inbox 2');
+  await cdp.send('Page.navigateToHistoryEntry', {entryId: origin.id});
   // A fresh document has one natural pageshow. A preserved document must have
   // the initial pageshow and a second, persisted pageshow on genuine restoration.
   await page.waitForFunction(beforeDocumentId => {
@@ -140,6 +153,7 @@ try {
     pageshow_persisted: restoredShow.persisted,
     navigation_type: naturalHistory.navigationType,
     not_restored_reasons: naturalHistory.notRestoredReasons,
+    chromium_not_restored_explanations: notRestoredByChromium,
     lifecycle: naturalHistory.events,
     fresh_read_requests_before_detail: readsBeforeDetail
   };
