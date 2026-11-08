@@ -6,7 +6,9 @@
  */
 (() => {
   'use strict';
-  const output = window.__g014ColumnLifecycle = {schema:1, installed:0, samples:[], max:240};
+  const output = window.__g014ColumnLifecycle = {schema:2, installed:0, samples:[], max:240,
+    source_hooks:[], source_calls:[], max_source_calls:60};
+  const safeStack = () => typeof window.__g014SafeStack === 'function' ? window.__g014SafeStack(new Error().stack) : [];
   const admitted = new Set(['id','1','3','6','date_created','date_created_human_readable']);
   const safeId = x => admitted.has(String(x)) ? String(x) : 'OTHER';
   const safeSource = x => typeof x === 'string' ? x.slice(0,56).replace(/[^a-zA-Z0-9_-]/g,'_') : null;
@@ -51,6 +53,35 @@
     record(gridId,'pre-construction','columnDefs',null);
     const activeCallbacks=new Map();
     const observed=new WeakSet();
+    const wrapped=new WeakMap();
+    const attemptWrap=(obj,namespace)=>{
+      if(!obj||typeof obj!=='object')return;
+      if(wrapped.has(obj))return;
+      wrapped.set(obj,true);
+      for(const name of (namespace==='columnApi'
+        ? ['applyColumnState','moveColumn','moveColumns','setColumnState','getColumnState']
+        : ['sizeColumnsToFit','applyColumnState'])){
+        const prior=obj[name];
+        if(typeof prior!=='function')continue;
+        try {
+          obj[name]=function(...args){
+            if(output.source_calls.length<output.max_source_calls &&
+               name!=='getColumnState'){
+              const arg=args[0];
+              const stateInput=Array.isArray(arg?.state)?arg.state.slice(0,12):null;
+              const ids=stateInput?.map(x=>safeId(x?.colId))??null;
+              output.source_calls.push({ms:Math.round(performance.now()),name,
+                namespace,apply_order:typeof arg?.applyOrder==='boolean'?arg.applyOrder:null,
+                input_ids:ids,from_stack:safeStack()});
+            }
+            return Reflect.apply(prior,this,args);
+          };
+          output.source_hooks.push({namespace,name,installed:obj[name]!==prior});
+        }catch{
+          output.source_hooks.push({namespace,name,installed:false});
+        }
+      }
+    };
     const attach=(event)=>{
       const api=event?.api;
       if(!api||typeof api.addEventListener!=='function'||observed.has(api))return;
@@ -66,6 +97,12 @@
       options[name]=function(...args){
         const event=args[0];
         record(gridId,'callback-before',name,event);
+        // Install test-only wrappers at the genuine gridInitializing event,
+        // before Native host code has a chance to restore saved state.
+        if(event?.source==='gridInitializing'){
+          attemptWrap(event.columnApi,'columnApi');
+          attemptWrap(event.api,'gridApi');
+        }
         let result;
         try {
           if(typeof prior==='function')result=Reflect.apply(prior,this,args);
