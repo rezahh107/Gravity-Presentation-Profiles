@@ -61,7 +61,7 @@ async function login(page){
   await page.locator('#user_pass').fill(process.env.WU008_ADMIN_PASSWORD);
   await Promise.all([page.waitForURL(u=>!u.pathname.includes('wp-login.php'),{timeout:20000}),page.locator('#wp-submit').click()]);
 }
-async function setSettings(browser,axis){
+async function setSettings(browser,axis,pgrOn=true){
   wp('option','update','WPLANG','fa_IR');
   wp('eval',"$u=get_user_by('login','bootstrap_admin');update_user_meta($u->ID,'locale','fa_IR');");
   wp('eval',"$s=get_option('pgr_settings',array());if(!is_array($s))$s=array();$s['gravity_flow_inbox_rtl']=1;update_option('pgr_settings',$s);");
