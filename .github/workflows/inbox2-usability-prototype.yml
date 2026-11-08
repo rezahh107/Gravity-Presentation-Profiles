@@ -106,7 +106,11 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+        if ! curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar; then
+          # Transport-only fallback to the official WP-CLI builds repository.
+          # The unchanged pinned SHA-256 gate below rejects a different build.
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+        fi
         echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
         php "$WU21_WP_CLI" --info
         mkdir -p "$WU21_WP_PATH"
