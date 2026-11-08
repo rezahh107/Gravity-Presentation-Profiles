@@ -67,7 +67,7 @@ final class InboxAxisIntervention {
      */
     public static function compatibilityFacts() {
         $axis = self::status();
-        $pgr = array( 'capability' => 'unavailable', 'requested' => 'unknown', 'host' => 'unknown' );
+        $pgr = array( 'capability' => 'unavailable', 'requested' => 'unknown', 'host' => 'unknown', 'request_rtl' => null );
         if ( function_exists( 'pgr_gravity_flow_inbox_rtl_status' ) ) {
             try {
                 $candidate = pgr_gravity_flow_inbox_rtl_status();
@@ -79,6 +79,7 @@ final class InboxAxisIntervention {
                         'capability' => 'supported',
                         'requested' => $candidate['requested'],
                         'host' => $candidate['host'],
+                        'request_rtl' => is_bool( $candidate['request_rtl'] ?? null ) ? $candidate['request_rtl'] : null,
                     );
                 } else {
                     $pgr['capability'] = 'unsupported';
@@ -89,21 +90,40 @@ final class InboxAxisIntervention {
         }
 
         $site_locale = function_exists( 'get_locale' ) ? get_locale() : null;
-        $affected = 'on' === $axis['effective']
-            && 'supported' === $pgr['capability']
-            && 'on' === $pgr['requested']
-            && 'admitted' === $pgr['host']
-            && 'fa_IR' === $site_locale;
+        $admitted = 'supported' === $pgr['capability'] && 'admitted' === $pgr['host'];
+        $frontend_fa = 'fa_IR' === $site_locale;
+        $admin_fa = true === $pgr['request_rtl'];
+        $problem = 'none';
+
+        // Historical, version-scoped real browser evidence from the exact
+        // GPP d0c6e21 × PGR #114 × Flow 3.1.0 four-state laboratory. The
+        // site/admin language scopes differ; PHP does not observe Grid mode.
+        if ( $admitted ) {
+            if ( 'on' === $pgr['requested'] && $frontend_fa ) {
+                $problem = 'on' === $axis['effective'] ? 'rtl_with_ltr_axis' : 'rtl_column_order_without_axis';
+            } elseif ( 'off' === $pgr['requested'] && $frontend_fa && 'off' === $axis['effective'] ) {
+                $problem = 'ltr_grid_without_axis';
+            } elseif ( $admin_fa && 'off' === $pgr['requested'] ) {
+                $problem = 'native_admin_mobile_scroll';
+            } elseif ( $admin_fa && 'on' === $pgr['requested'] ) {
+                $problem = 'native_admin_mobile_touch';
+            }
+        }
 
         return array(
             'axis' => $axis,
             'pgr' => $pgr,
             'site_locale' => is_string( $site_locale ) ? $site_locale : 'unknown',
             'grid_mode' => 'not_observed',
-            // This verdict is scoped to native Inbox 1 fa_IR Frontend and
-            // exact historical pinned identities; no broader compatibility claim.
-            'compatibility' => $affected ? 'incompatible' : 'unknown',
-            'evidence' => $affected ? 'PGR_PR114@311c2f5d_GPP_MAIN@a159e22c_FLOW_3.1.0_FRONTEND_FA_IR' : 'none_for_this_combination',
+            'problem' => $problem,
+            // 'incompatible' is only the historically demonstrated two-ON
+            // CSS/RTL conflict. Other proven failures receive a separate
+            // classification, not an invented shared root cause.
+            'compatibility' => 'rtl_with_ltr_axis' === $problem
+                ? 'incompatible' : ( 'none' === $problem ? 'unknown' : 'known_failure' ),
+            'evidence' => 'none' === $problem
+                ? 'none_for_this_combination'
+                : 'G014_FOURSTATE_RUN_42467871825__PGR_311c2f5d__GPP_d0c6e21__FLOW_3.1.0__GF_3.1.1.1__WP_6.8.3__CHROMIUM_140.0.7339.16',
         );
     }
 }
