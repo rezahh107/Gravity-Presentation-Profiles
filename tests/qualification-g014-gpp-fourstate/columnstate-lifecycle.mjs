@@ -35,7 +35,7 @@ const preload=fs.readFileSync('tests/qualification-g014-gpp-fourstate/columnstat
 const report={schema:'g014-columnstate-lifecycle-test-only-v1',subject:SUBJECT,
   gpp_reference:GPP,harness:process.env.HARNESS_SHA,original_class_sha256:originalHash,
   environment:{wp:'6.8.3',gf:'3.1.1.1',flow:'3.1.0',viewport:1280,site:'fa_IR'},
-  cases:[],result:'NOT_PROVEN',source_restored:false,started:new Date().toISOString(),
+  cases:[],variant_controls:[],result:'NOT_PROVEN',source_restored:false,started:new Date().toISOString(),
   limitations:['No vendor or production changes','API events may not expose private restore methods',
     'No generalization to pre-existing unknown populated saved state or other hosts']};
 const reportPath=path.join(out,'columnstate-report.json');
