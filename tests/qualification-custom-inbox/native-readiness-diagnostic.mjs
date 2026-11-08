@@ -152,6 +152,15 @@ function snapshotPredicate(snapshot,expected){
   }
   return true;
 }
+function rejectedInvariant(snapshot,expected,allowed,label){
+  let failure;
+  try{snapshotPredicate(snapshot,expected)}
+  catch(error){failure=error}
+  assert.ok(failure,label+'_DID_NOT_REJECT');
+  const actual=String(failure.message||failure).split('\n')[0];
+  assert.ok(allowed.includes(actual),label+'_WRONG_FAILED_INVARIANT '+actual);
+  return actual;
+}
 function unguardedEmpty(snapshot){
   // Precisely the original zero-state shortcut: absent rendered rows count as empty.
   return snapshot.dom_ids.length===0;
@@ -251,10 +260,9 @@ async function negative(browser,f,kind){
       result.before_release=await snapshot(page);
       assert.equal(unguardedEmpty(result.before_release),true,
         'NATIVE_WITHHELD_DATA_FALSE_EMPTY_NOT_REPRODUCED');
-      assert.throws(()=>snapshotPredicate(result.before_release,[]),
-        /NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE|NATIVE_EMPTY_MODEL_OVERLAY_NOT_VISIBLE|NATIVE_ROW_MODEL_NOT_AVAILABLE/,
-        'NATIVE_WITHHELD_DATA_GUARD_DID_NOT_REJECT');
-      result.failed_invariant='NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE_or_empty_model_unfinished';
+      result.failed_invariant=rejectedInvariant(result.before_release,[],
+        ['NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE','NATIVE_EMPTY_MODEL_OVERLAY_NOT_VISIBLE',
+         'NATIVE_ROW_MODEL_NOT_AVAILABLE'], 'NATIVE_WITHHELD_DATA_GUARD');
       await page.evaluate(()=>window.__wu21NativeTrace.releaseInitialRows());
       result.after_release=await snapshot(page);
       snapshotPredicate(result.after_release,[]);
@@ -270,10 +278,9 @@ async function negative(browser,f,kind){
       result.before_release=await snapshot(page);
       assert.equal(unguardedEmpty(result.before_release),true,
         'NATIVE_NEGATIVE_DID_NOT_REPRODUCE_FALSE_EMPTY');
-      assert.throws(()=>snapshotPredicate(result.before_release,[]),
-        /NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED|NATIVE_ROW_MODEL_NOT_AVAILABLE|NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE/,
-        'NATIVE_NEGATIVE_GUARD_DID_NOT_REJECT');
-      result.failed_invariant='NATIVE_GRID_READY_NOT_OBSERVED_or_Native_data_not_applied';
+      result.failed_invariant=rejectedInvariant(result.before_release,[],
+        ['NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED','NATIVE_ROW_MODEL_NOT_AVAILABLE',
+         'NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE'],'NATIVE_NEGATIVE_GUARD');
       if(kind==='delayed'){
         release();
         await page.waitForLoadState('domcontentloaded',{timeout:60000});
@@ -292,10 +299,9 @@ async function negative(browser,f,kind){
       result.after_failure=await snapshot(page);
       assert.equal(unguardedEmpty(result.after_failure),true,
         'NATIVE_FAILED_LOAD_NOT_FALSE_EMPTY');
-      assert.throws(()=>snapshotPredicate(result.after_failure,[]),
-        /NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED|NATIVE_ROW_MODEL_NOT_AVAILABLE|NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE/,
-        'NATIVE_FAILED_LOAD_GUARD_DID_NOT_REJECT');
-      result.failed_invariant='NATIVE_GRID_READY_NOT_OBSERVED_or_Native_data_not_applied';
+      result.failed_invariant=rejectedInvariant(result.after_failure,[],
+        ['NATIVE_MODEL_RENDER_LIFECYCLE_NOT_OBSERVED','NATIVE_ROW_MODEL_NOT_AVAILABLE',
+         'NATIVE_INITIAL_ROW_DATA_NOT_AVAILABLE'],'NATIVE_FAILED_LOAD_GUARD');
     }
     if(kind!=='withheld-data')
       assert.ok(matched>0,'NATIVE_TEST_INTERCEPTION_NOT_EXERCISED');
