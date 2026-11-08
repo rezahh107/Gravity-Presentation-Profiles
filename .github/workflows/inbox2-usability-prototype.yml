@@ -32,6 +32,7 @@ jobs:
           --health-timeout=5s --health-retries=20
     env:
       CIQ2_SCENARIO: ${{ matrix.scenario }}
+      CIQ2_PARITY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
       WU21_WP_PATH: /tmp/wu21-wordpress
       WU21_ARTIFACT_DIR: /tmp/wu21-artifacts
       WU21_PACKAGE_DIR: /tmp/wu21-packages
@@ -379,12 +380,50 @@ jobs:
         node --check tests/qualification-custom-inbox/comparison-browser.mjs
         php -l tests/qualification-custom-inbox/comparison-fixture.php
         node tests/qualification-custom-inbox/comparison-browser.mjs
+    - name: Three-way parity against independent authentic host oracle (small fixture)
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/behavioral-parity-oracle.php
+        node --check tests/qualification-custom-inbox/behavioral-parity-browser.mjs
+        CIQ2_PARITY_PHASE=initial php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
+        CIQ2_PARITY_PHASE=initial node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
+        # Deliberate observation mutation: the same real browser views and
+        # independent oracle are read, but a synthetic candidate ID is removed
+        # only from the comparator input. The exact mandatory invariant MUST RED.
+        set +e
+        CIQ2_PARITY_PHASE=initial CIQ2_PARITY_MUTATION=drop-first \
+          node tests/qualification-custom-inbox/behavioral-parity-browser.mjs \
+          >"$WU21_ARTIFACT_DIR/ciq2-parity-negative.log" 2>&1
+        negative_exit=$?
+        set -e
+        test "$negative_exit" -ne 0
+        node - <<'NODE'
+        const fs=require('fs'),p=process.env.WU21_ARTIFACT_DIR+'/';
+        const valid=JSON.parse(fs.readFileSync(p+'ciq2-parity-browser-initial.json'));
+        const mutant=JSON.parse(fs.readFileSync(p+'ciq2-parity-browser-initial-mutated.json'));
+        if(valid.status!=='PASS_THREE_WAY_PARITY' ||
+          mutant.status!=='FAIL' ||
+          !mutant.error?.includes('PARITY_INBOX2_ID_SET_MISMATCH_officer') ||
+          !mutant.officer?.inbox2_ids?.length ||
+          mutant.officer.compared_inbox2_ids.length!==mutant.officer.inbox2_ids.length-1)
+          process.exit(1);
+        console.log('CIQ2_PARITY_INTENTIONAL_RED_CONFIRMED');
+        NODE
     - name: Run retained Inbox 2 browser authorization and transition tests
       if: matrix.scenario != 'negative-baseline'
       shell: bash
       run: |
         set -euo pipefail
         node tests/qualification-custom-inbox/usability-browser.mjs
+    - name: Requalify three-way parity after real native workflow transition
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        CIQ2_PARITY_PHASE=after-usability php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
+        CIQ2_PARITY_PHASE=after-usability node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
     - name: Qualify queue return and BFCache lifecycle with authentic small host fixture
       if: matrix.scenario == 'return-fifo'
       shell: bash
@@ -392,6 +431,13 @@ jobs:
         set -euo pipefail
         node --check tests/qualification-custom-inbox/queue-return-browser.mjs
         node tests/qualification-custom-inbox/queue-return-browser.mjs
+    - name: Requalify three-way empty queue after authentic native approval and move
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        CIQ2_PARITY_PHASE=after-native php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
+        CIQ2_PARITY_PHASE=after-native node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
     - name: Discriminate entry-age from late actionable-step FIFO semantics
       if: matrix.scenario == 'return-fifo'
       shell: bash
