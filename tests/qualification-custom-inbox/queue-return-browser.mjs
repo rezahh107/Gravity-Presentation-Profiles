@@ -35,6 +35,32 @@ try {
   ));
   await ctx.addCookies(cookies.map(c => ({...c, url: env.WU21_BASE_URL})));
   const page = await ctx.newPage();
+  // Installed before document creation. Only browser-emitted lifecycle events
+  // count as BFCache evidence; the synthetic regression further below is separate.
+  await page.addInitScript(() => {
+    const trace = {documentId: String(performance.timeOrigin) + ':' + String(Math.random()),
+      events: []};
+    Object.defineProperty(window, '__ciq2NaturalHistory', {value: trace});
+    for (const name of ['pagehide', 'pageshow']) {
+      window.addEventListener(name, event => {
+        const root = document.querySelector('[data-ciq2-root]');
+        trace.events.push({
+          name, persisted: event.persisted === true,
+          state: root?.dataset.ciq2State ?? null,
+          cards: [...document.querySelectorAll('[data-ciq2-entry]')]
+            .map(node => Number(node.dataset.ciq2Entry)),
+          links: document.querySelectorAll('[data-ciq2-detail]').length
+        });
+      });
+    }
+  });
+  const authorizedReads = [];
+  page.on('request', request => {
+    if (request.method() !== 'POST' ||
+        !request.url().endsWith('/wp-admin/admin-ajax.php')) return;
+    if (new URLSearchParams(request.postData() || '').get('action') === 'ciq2_read')
+      authorizedReads.push('ciq2_read');
+  });
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   const response = await page.goto(f.custom_url, {waitUntil: 'networkidle'});
@@ -43,9 +69,11 @@ try {
   assert.ok(before.length >= 2, 'Synthetic Officer queue should contain two tasks');
   assert.deepEqual(await ids(page), before, 'Server-rendered order differs from host-backed ordered rows');
   report.before = before;
+  const initialDocumentId = await page.evaluate(() => window.__ciq2NaturalHistory.documentId);
   pass('ordered_authorized_host_queue_matches_rendered_cards');
 
   const firstTask = before[0];
+  const readsBeforeDetail = authorizedReads.length;
   const link = page.locator('[data-ciq2-entry="' + firstTask + '"] [data-ciq2-detail]');
   const nativeHref = await link.getAttribute('href');
   assert.equal(Number(new URL(nativeHref, env.WU21_BASE_URL).searchParams.get('lid')), firstTask);
@@ -82,16 +110,69 @@ try {
   let returned = false;
   for (let i = 0; i < 3 && !returned; i++) {
     const response = await page.goBack({waitUntil: 'domcontentloaded'});
-    if (!response) break;
     returned = new URL(page.url()).pathname === new URL(f.custom_url).pathname;
+    if (!response && !returned) break;
   }
   assert.equal(returned, true, 'Native Result browser Back did not reach the originating Inbox 2');
+  // A fresh document has one natural pageshow. A preserved document must have
+  // the initial pageshow and a second, persisted pageshow on genuine restoration.
+  await page.waitForFunction(beforeDocumentId => {
+    const trace = window.__ciq2NaturalHistory;
+    if (!trace) return false;
+    const shows = trace.events.filter(event => event.name === 'pageshow');
+    return trace.documentId === beforeDocumentId ? shows.length >= 2 : shows.length >= 1;
+  }, initialDocumentId, {timeout: 15000});
+  const naturalHistory = await page.evaluate(() => {
+    const trace = window.__ciq2NaturalHistory;
+    const nav = performance.getEntriesByType('navigation')[0];
+    return {
+      documentId: trace.documentId, events: trace.events,
+      navigationType: nav?.type ?? null,
+      notRestoredReasons: nav?.notRestoredReasons?.reasons?.map(x => x.reason) ?? null
+    };
+  });
+  const restoredShow = naturalHistory.events.filter(event => event.name === 'pageshow').at(-1);
+  const genuineBFCache = restoredShow.persisted === true;
+  report.authentic_bfcache = {
+    status: genuineBFCache ? 'OBSERVED' : 'NOT_PROVEN',
+    browser: browser.version(),
+    same_document: naturalHistory.documentId === initialDocumentId,
+    pageshow_persisted: restoredShow.persisted,
+    navigation_type: naturalHistory.navigationType,
+    not_restored_reasons: naturalHistory.notRestoredReasons,
+    lifecycle: naturalHistory.events,
+    fresh_read_requests_before_detail: readsBeforeDetail
+  };
+  save();
+  if (genuineBFCache) {
+    assert.equal(report.authentic_bfcache.same_document, true,
+      'Genuine persisted pageshow did not preserve document identity');
+    assert.ok(naturalHistory.events.some(event => event.name === 'pagehide'),
+      'Persisted return has no preceding natural pagehide');
+    assert.equal(restoredShow.cards.length, 0,
+      'Authentically restored BFCache presented pre-validation cards');
+    assert.equal(restoredShow.links, 0,
+      'Authentically restored BFCache presented stale Detail links');
+    assert.notEqual(restoredShow.state, 'current',
+      'Authentically restored BFCache incorrectly declared stale content current');
+    pass('authentic_bfcache_immediate_stale_cards_and_links_absent');
+  } else {
+    pass('normal_history_back_observed_bfcache_not_proven');
+  }
   await page.waitForFunction(expected => {
     const r = document.querySelector('[data-ciq2-root]');
     return r?.dataset.ciq2State === 'current' &&
       JSON.stringify([...document.querySelectorAll('[data-ciq2-entry]')].map(x => Number(x.dataset.ciq2Entry))) === JSON.stringify(expected);
   }, afterNativeApproval, {timeout: 90000});
   assert.deepEqual(await ids(page), afterNativeApproval);
+  report.authentic_bfcache.returned_ids_after_authoritative_refresh = await ids(page);
+  report.authentic_bfcache.authorized_read_requests_after_return = authorizedReads.length;
+  if (genuineBFCache) {
+    assert.ok(authorizedReads.length > readsBeforeDetail,
+      'Authentic BFCache restoration did not request fresh authorized host tasks');
+    pass('authentic_bfcache_fresh_host_read_and_fifo_membership');
+  }
+  save();
   pass('genuine_native_approval_and_browser_back_revalidated_next_queue_task');
 
   // Separate BFCache regression discriminator using a real host transition,
@@ -145,7 +226,7 @@ try {
   assert.deepEqual(errors, []);
   report.status = 'PASS_RETURN_LIFECYCLE_SYNTHETIC';
   save();
-  console.log('CIQ2_QUEUE_RETURN_PASS ' + report.checks.length);
+  console.log('CIQ2_QUEUE_RETURN_PASS ' + report.checks.length + ' GENUINE_BFCACHE_' + report.authentic_bfcache.status);
   await ctx.close();
 } catch (error) {
   report.status = 'FAIL'; report.error = String(error.stack || error); save(); throw error;
