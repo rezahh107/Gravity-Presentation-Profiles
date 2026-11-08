@@ -123,7 +123,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 4 -o "$WU008_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          # Exact official 2.12.0 bytes at an immutable WP-CLI builds commit.
+          # Same SHA-256 as the WU008 release asset, but avoids sporadic GitHub
+          # release-download HTTP 504. Never relax the original digest check.
+          curl -L --fail --retry 4 --retry-all-errors -o "$WU008_WP_CLI" \
+            https://raw.githubusercontent.com/wp-cli/builds/ad68e4ad3b29c3d3bdb361e5ed9b37e709123a9b/phar/wp-cli.phar
           echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU008_WP_CLI" | sha256sum -c -
           php "$WU008_WP_CLI" core download --path="$WU008_WP_PATH" --version=6.8.3 --force --skip-content
           php "$WU008_WP_CLI" config create --path="$WU008_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=g014-synthetic-root --dbhost=127.0.0.1:3306 --skip-check
