@@ -447,6 +447,10 @@ async function run(){
     if(baseline.effective!=='on')fail('Migrated GPP missing-setting default does not preserve ON','ENVIRONMENT');
     report.controls.push({id:'legacy-missing-setting-default-on',status:'PASS',effective:baseline.effective,requested:baseline.requested});
     for(const axisMode of ['on','off']){
+      // The previous axis's last mixed-locale scenario ends in en_US/en_US.
+      // Reestablish and verify the admitted Persian site/admin request before
+      // checking a Persian-specific persistent GPP Settings warning.
+      locales('fa_IR','fa_IR');
       const adminContext=await browser.newContext({viewport:{width:1280,height:900}});
       const settingsPage=await adminContext.newPage();
       await login(settingsPage);
