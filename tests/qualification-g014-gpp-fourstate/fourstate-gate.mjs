@@ -36,15 +36,34 @@ for(const axis of ['on','off'])
        cases.push({id,status:x.status,reason:String(x.reason||'').slice(0,260)});
      }
 const controls=new Map(r.controls.map(x=>[x.id,x]));
+demand(controls.size===r.controls.length,'control identifiers must be unique (no hidden repeated saves)');
 demand(controls.get('legacy-missing-setting-default-on')?.status==='PASS','legacy ON default not verified');
 demand(controls.get('gpp-switch-on')?.status==='PASS'&&controls.get('gpp-switch-off')?.status==='PASS','independent native GF settings saves not proven');
 demand(controls.get('native-on-with-gpp-absent')?.status==='PASS','positive native RTL control not proven');
+demand(controls.get('gpp-anonymous-settings-denied')?.status==='PASS','unauthorized settings access not denied');
+demand(controls.get('gpp-invalid-nonce-rejected')?.status==='PASS','GPP Settings native nonce boundary unverified');
+for(const axis of ['on','off']){
+  demand(controls.get(`gpp-${axis}-pgr-on-warning`)?.status==='PASS','PGR ON persistent GPP warning unverified: '+axis);
+  demand(controls.get(`gpp-${axis}-pgr-off-warning`)?.status==='PASS','PGR OFF restored GPP warning unverified: '+axis);
+  for(const site of ['fa_IR','en_US'])
+    for(const user of ['fa_IR','en_US'])
+      for(const [index,mode] of ['off','on','off'].entries()){
+        const id=`gpp-${axis}-save-${site}-${user}-${index}-${mode}`;
+        const saved=controls.get(id);
+        demand(saved?.status==='PASS'&&saved.saved?.after?.requested===mode&&saved.saved?.confirmed_after_reload===(mode==='on'),
+          'Missing authentic PGR Settings save or reload proof: '+id);
+      }
+}
 const counts=Object.fromEntries(['PASS','FAIL','NOT_PROVEN'].map(status=>[status,cases.filter(x=>x.status===status).length]));
 const output={schema:'gpp-fourstate-coverage-v1',subject,gpp,harness:r.harness,
   browser:r.browser,data_class:'SYNTHETIC_NON_PII',
   coverage:'96 actual browser cases + two GPP Settings UI saves + 24 PGR Settings UI saves',
   verdict:r.status==='PASS'?'PASS':'FAIL',
-  controls:controls.size,counts,by_axis:Object.fromEntries(['on','off'].map(axis=>[axis,{
+  controls:controls.size,counts,
+  by_combination:Object.fromEntries(['on','off'].flatMap(axis=>['on','off'].map(pgrMode=>[
+    `gpp_${axis}__pgr_${pgrMode}`,Object.fromEntries(['PASS','FAIL','NOT_PROVEN'].map(status=>[status,
+      r.scenarios.filter(x=>x.gpp_axis===axis&&x.mode===pgrMode&&x.status===status).length]))]))),
+  by_axis:Object.fromEntries(['on','off'].map(axis=>[axis,{
     pass:r.scenarios.filter(x=>x.gpp_axis===axis&&x.status==='PASS').length,
     fail:r.scenarios.filter(x=>x.gpp_axis===axis&&x.status==='FAIL').length,
     not_proven:r.scenarios.filter(x=>x.gpp_axis===axis&&x.status==='NOT_PROVEN').length
