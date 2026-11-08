@@ -257,7 +257,31 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
       previous.addEventListener('click', () => { if (page > 1) { page--; draw(); } });
       next.addEventListener('click', () => { page++; draw(); });
       root.querySelector('form').addEventListener('submit', event => { event.preventDefault(); refresh(true); });
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
+      // Never revive a cached, previously authorized queue after Detail or tab
+      // re-entry. Invalidate synchronously; only a fresh host read may repopulate.
+      function invalidateForReentry() {
+        ++generation;
+        if (controller) controller.abort();
+        controller = null;
+        busy = false;
+        stale(503);
+      }
+      window.addEventListener('pagehide', invalidateForReentry);
+      window.addEventListener('pageshow', event => {
+        if (!event.persisted) return; // New navigation is rendered by a fresh PHP read.
+        input.value = ''; // Queue-first: avoid hiding the next case behind old search.
+        page = 1;
+        invalidateForReentry();
+        refresh(true);
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          invalidateForReentry();
+        } else {
+          invalidateForReentry();
+          refresh(true);
+        }
+      });
       draw();
       setInterval(() => { if (!document.hidden) refresh(); }, 10000);
     })();
