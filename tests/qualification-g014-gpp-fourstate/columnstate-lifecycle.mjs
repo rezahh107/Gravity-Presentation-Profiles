@@ -137,7 +137,7 @@ async function snapshot(page){
     }catch{savedNative.shape='unparseable';}
     const probe=window.__g014ColumnLifecycle||null;
     return {grid_id:String(h?.dataset.gridId||'').slice(0,110),native_saved_state:savedNative,
-      enableRtl:opt?.enableRtl??null,ag_mode:h?.querySelector('.ag-root-wrapper')?.classList.contains('ag-rtl')?'ag-rtl':'OTHER',
+      enableRtl:opt?.enableRtl??null,ag_mode:h?.querySelector('.ag-root-wrapper')?.classList.contains('ag-rtl')?'ag-rtl':h?.querySelector('.ag-root-wrapper')?.classList.contains('ag-ltr')?'ag-ltr':'OTHER',
       column_defs:(opt?.columnDefs||[]).map(d=>({id:id(d.colId||d.field),width:Number.isFinite(d.width)?d.width:null,pinned:d.pinned||null})),
       physical_rtl:cols.map(c=>c.id).reverse(),widths:cols.map(c=>({id:c.id,width:c.w})),
       probe_installed:probe?.installed||0,callback_names:probe?.callbacks||[],
