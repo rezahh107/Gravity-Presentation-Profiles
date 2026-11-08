@@ -411,6 +411,21 @@ jobs:
           process.exit(1);
         console.log('CIQ2_PARITY_INTENTIONAL_RED_CONFIRMED');
         NODE
+    - name: Observe authentic Native readiness lifecycle — initial
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        node --check tests/qualification-custom-inbox/native-readiness-diagnostic.mjs
+        # Collect all independent phases even when readiness is not yet proven.
+        # The mandatory final gate rejects every nonzero or NOT_PROVEN result.
+        set +e
+        CIQ2_PARITY_PHASE=initial node tests/qualification-custom-inbox/native-readiness-diagnostic.mjs >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-initial.log" 2>&1
+        diagnostic_exit=$?
+        set -e
+        printf '%s\n' "$diagnostic_exit" >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-initial.exit"
+        test -s "$WU21_ARTIFACT_DIR/ciq2-native-readiness-initial.json"
+        tail -n 8 "$WU21_ARTIFACT_DIR/ciq2-native-readiness-initial.log"
     - name: Run retained Inbox 2 browser authorization and transition tests
       if: matrix.scenario != 'negative-baseline'
       shell: bash
@@ -424,6 +439,21 @@ jobs:
         set -euo pipefail
         CIQ2_PARITY_PHASE=after-usability php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
         CIQ2_PARITY_PHASE=after-usability node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
+    - name: Observe authentic Native readiness lifecycle — after-usability
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        node --check tests/qualification-custom-inbox/native-readiness-diagnostic.mjs
+        # Collect all independent phases even when readiness is not yet proven.
+        # The mandatory final gate rejects every nonzero or NOT_PROVEN result.
+        set +e
+        CIQ2_PARITY_PHASE=after-usability node tests/qualification-custom-inbox/native-readiness-diagnostic.mjs >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-usability.log" 2>&1
+        diagnostic_exit=$?
+        set -e
+        printf '%s\n' "$diagnostic_exit" >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-usability.exit"
+        test -s "$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-usability.json"
+        tail -n 8 "$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-usability.log"
     - name: Qualify queue return and BFCache lifecycle with authentic small host fixture
       if: matrix.scenario == 'return-fifo'
       shell: bash
@@ -438,6 +468,21 @@ jobs:
         set -euo pipefail
         CIQ2_PARITY_PHASE=after-native php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/behavioral-parity-oracle.php
         CIQ2_PARITY_PHASE=after-native node tests/qualification-custom-inbox/behavioral-parity-browser.mjs
+    - name: Observe authentic Native readiness lifecycle — after-native
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        node --check tests/qualification-custom-inbox/native-readiness-diagnostic.mjs
+        # Collect all independent phases even when readiness is not yet proven.
+        # The mandatory final gate rejects every nonzero or NOT_PROVEN result.
+        set +e
+        CIQ2_PARITY_PHASE=after-native node tests/qualification-custom-inbox/native-readiness-diagnostic.mjs >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-native.log" 2>&1
+        diagnostic_exit=$?
+        set -e
+        printf '%s\n' "$diagnostic_exit" >"$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-native.exit"
+        test -s "$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-native.json"
+        tail -n 8 "$WU21_ARTIFACT_DIR/ciq2-native-readiness-after-native.log"
     - name: Discriminate entry-age from late actionable-step FIFO semantics
       if: matrix.scenario == 'return-fifo'
       shell: bash
@@ -466,6 +511,30 @@ jobs:
         '
         # Nothing may consume this database after FIFO; the runner and its
         # MariaDB service are disposed of as this matrix job finishes.
+    - name: Require complete and falsifiable Native readiness diagnostic evidence
+      if: matrix.scenario == 'return-fifo'
+      shell: bash
+      run: |
+        set -euo pipefail
+        node - <<'NODE'
+        const fs=require('fs'),dir=process.env.WU21_ARTIFACT_DIR;
+        for(const phase of ['initial','after-usability','after-native']){
+          const name=dir+'/ciq2-native-readiness-'+phase;
+          const exit=fs.readFileSync(name+'.exit','utf8').trim();
+          const report=JSON.parse(fs.readFileSync(name+'.json','utf8'));
+          if(exit!=='0' || report.status!=='PASS' ||
+             !Array.isArray(report.scenarios) ||
+             !report.scenarios.length ||
+             report.scenarios.some(s=>s.status!=='PASS'))
+            throw Error('NATIVE_READINESS_DIAGNOSTIC_NOT_PROVEN_'+phase);
+          if(phase==='initial'){
+            const labels=report.scenarios.map(s=>s.scenario);
+            for(const label of ['initial-officer','initial-viewer','blocked','delayed','failed'])
+              if(!labels.includes(label))throw Error('NATIVE_READINESS_SCENARIO_MISSING_'+label);
+          }
+          console.log('CIQ2_NATIVE_READINESS_DIAGNOSTIC_WITNESSES_PASS '+phase);
+        }
+        NODE
     - name: Verify fresh independent scale baseline before 500-task creation
       if: matrix.scenario == 'scale'
       shell: bash
