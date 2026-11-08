@@ -64,7 +64,7 @@ async function login(page){
 async function setSettings(browser,axis,pgrOn=true){
   wp('option','update','WPLANG','fa_IR');
   wp('eval',"$u=get_user_by('login','bootstrap_admin');update_user_meta($u->ID,'locale','fa_IR');");
-  wp('eval',"$s=get_option('pgr_settings',array());if(!is_array($s))$s=array();$s['gravity_flow_inbox_rtl']=1;update_option('pgr_settings',$s);");
+  wp('eval',"$s=get_option('pgr_settings',array());if(!is_array($s))$s=array();$s['gravity_flow_inbox_rtl']="+(pgrOn?'1':'0')+";update_option('pgr_settings',$s);");
   const ctx=await browser.newContext();
   try {
     const page=await ctx.newPage();await login(page);
