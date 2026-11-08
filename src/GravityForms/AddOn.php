@@ -14,6 +14,7 @@ use GravityPresentationProfiles\Core\PresentationResolver;
 use GravityPresentationProfiles\ProfileCatalog;
 use GravityPresentationProfiles\SRWF\GravityFlow\OperationsBindingManagementPolicy;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierValueResolver;
+use GravityPresentationProfiles\SRWF\GravityFlow\InboxAxisIntervention;
 
 final class AddOn extends \GFAddOn {
     private static $_instance = null;
@@ -112,6 +113,24 @@ final class AddOn extends \GFAddOn {
                 'description' => esc_html__( 'Adopt the shipped SRWF Inbox presentation for one existing operations binding context. This action reuses the active EnvironmentBindingSet, verifies the admitted host sources, preserves Print, and never changes Gravity Flow assignment or authorization.', 'gravity-presentation-profiles' ),
                 'fields'      => array(
                     array(
+                        'name'                => InboxAxisIntervention::SETTING,
+                        'label'               => esc_html__( 'Native Inbox 1 physical LTR-axis correction', 'gravity-presentation-profiles' ),
+                        'description'         => esc_html__( 'Independent of PersianGravity native enableRtl. ON preserves the shipped four-node LTR direction correction. OFF removes only those GPP declarations. Neither setting changes column order or saved Grid state.', 'gravity-presentation-profiles' ),
+                        'type'                => 'select',
+                        'default_value'       => 'on',
+                        'choices'             => array(
+                            array( 'label' => esc_html__( 'ON — preserve original physical LTR-axis correction (existing-site default)', 'gravity-presentation-profiles' ), 'value' => 'on' ),
+                            array( 'label' => esc_html__( 'OFF — leave Grid direction to native Gravity Flow', 'gravity-presentation-profiles' ), 'value' => 'off' ),
+                        ),
+                        'validation_callback' => array( $this, 'validate_inbox_axis_setting' ),
+                    ),
+                    array(
+                        'name'      => 'inbox_axis_compatibility',
+                        'label'     => esc_html__( 'Native Inbox 1 RTL compatibility', 'gravity-presentation-profiles' ),
+                        'type'      => 'gpp_inbox_axis_compatibility',
+                        'callback'  => array( $this, 'settings_gpp_inbox_axis_compatibility' ),
+                    ),
+                    array(
                         'name'                => 'inbox_setup_action',
                         'label'               => esc_html__( 'Initialize / Adopt Inbox presentation', 'gravity-presentation-profiles' ),
                         'description'         => esc_html__( 'Choose the exact existing operations form, then save settings. Required mappings are never guessed or auto-repaired. Re-running this action refreshes only legitimate source-bound readiness evidence and is idempotent when nothing changed.', 'gravity-presentation-profiles' ),
@@ -190,6 +209,64 @@ final class AddOn extends \GFAddOn {
                 ),
             ),
         );
+    }
+
+    /**
+     * Gravity Forms owns the real settings capability, nonce, and persistence.
+     * Reject tampered values; never read or write PersianGravity settings.
+     */
+    public function validate_inbox_axis_setting( $field, $value ) {
+        if ( ! in_array( $value, array( 'on', 'off' ), true ) ) {
+            $this->setSettingsFieldError( $field, __( 'Choose ON or OFF for the GPP physical-axis correction.', 'gravity-presentation-profiles' ) );
+        }
+    }
+
+    /** Persistent, non-mutating compatibility facts on the native GF settings page. */
+    public function settings_gpp_inbox_axis_compatibility( $field ) {
+        unset( $field );
+
+        // The GFAddOn settings renderer already protects this page. A second
+        // narrow check prevents accidental presentation by a direct caller.
+        if ( ! class_exists( '\\GFCommon' ) || ! \GFCommon::current_user_can_any( 'gravityforms_edit_settings' ) ) {
+            return;
+        }
+
+        $facts = InboxAxisIntervention::compatibilityFacts();
+        $pgr = $facts['pgr'];
+        $axis = $facts['axis'];
+        $warning = 'incompatible' === $facts['compatibility'];
+
+        echo '<div data-gpp-inbox-axis-compatibility="' . esc_attr( $facts['compatibility'] ) . '" role="status">';
+        if ( $warning ) {
+            echo '<div class="notice notice-warning inline"><p><strong>';
+            echo esc_html__( 'هشدار ناسازگاری RTL برای Inbox 1', 'gravity-presentation-profiles' );
+            echo '</strong></p><p>';
+            echo esc_html__( 'در آزمون واقعی Gravity Flow 3.1.0، ترکیب PersianGravity ON و تصحیح محور LTR در GPP ON، ترتیب پنج ستون Frontend فارسی را معکوس کرد. چهار قانون direction: ltr !important در GPP با موتور واقعی ag-rtl می‌توانند تداخل داشته باشند.', 'gravity-presentation-profiles' );
+            echo '</p><p>';
+            echo esc_html__( 'می‌توانید هر کلید را در تنظیمات افزونهٔ خودش تغییر دهید. خاموش‌کردن یکی از آن‌ها رفع سایر مشکلات مستقلِ ترتیب ستون‌ها، اسکرول یا بازیابی چیدمان ذخیره‌شده را تضمین نمی‌کند.', 'gravity-presentation-profiles' );
+            echo '</p></div>';
+        } else {
+            echo '<p><strong>' . esc_html__( 'سازگاری این ترکیب هنوز تأیید نشده است (UNKNOWN).', 'gravity-presentation-profiles' ) . '</strong></p>';
+        }
+
+        echo '<p data-gpp-inbox-axis-switch="' . esc_attr( $axis['requested'] ) . '">';
+        echo esc_html__( 'GPP — دخالت در محور فیزیکی جدول:', 'gravity-presentation-profiles' ) . ' <strong>' . esc_html( strtoupper( $axis['requested'] ) ) . '</strong>؛ ';
+        echo esc_html__( 'PersianGravity — درخواست RTL بومی:', 'gravity-presentation-profiles' ) . ' <strong>' . esc_html( strtoupper( $pgr['requested'] ) ) . '</strong>؛ ';
+        echo esc_html__( 'وضعیت واقعی موتور Grid:', 'gravity-presentation-profiles' ) . ' <strong>UNKNOWN</strong>.';
+        echo '</p>';
+        if ( 'supported' !== $pgr['capability'] ) {
+            echo '<p><small>' . esc_html__( 'رابط وضعیت معتبر PersianGravity در این درخواست در دسترس نیست؛ دربارهٔ پشتیبانی یا حالت افزونهٔ دیگر نمی‌توان نتیجه گرفت.', 'gravity-presentation-profiles' ) . '</small></p>';
+        } elseif ( 'admitted' !== $pgr['host'] ) {
+            echo '<p><small>' . esc_html__( 'هویت نسخهٔ Gravity Flow برای وضعیت RTL این درخواست تأیید نشده است.', 'gravity-presentation-profiles' ) . '</small></p>';
+        }
+        echo '<details><summary>' . esc_html__( 'جزئیات فنی و روش بررسی', 'gravity-presentation-profiles' ) . '</summary>';
+        echo '<p>' . esc_html__( 'این دو کلید مستقل‌اند: PersianGravity تنها enableRtl را برای Gridهای واجد شرایط پیشنهاد می‌کند؛ GPP فقط چهار قاعدهٔ CSS محور LTR را روشن/خاموش می‌کند. وضعیت ag-ltr/ag-rtl باید پس از ساخت واقعی Grid در مرورگر سنجیده شود.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<figure><figcaption>' . esc_html__( 'شمای توضیحی، نه تصویر آزمون واقعی', 'gravity-presentation-profiles' ) . '</figcaption>';
+        echo '<div role="img" aria-label="' . esc_attr__( 'Mode A: GPP LTR-axis ON, native ag-ltr and Persian five-column reading order; Mode B: genuine native ag-rtl and GPP LTR-axis ON can reverse the five-column visual order.', 'gravity-presentation-profiles' ) . '">';
+        echo '<p><strong>Mode A — ag-ltr:</strong> ' . esc_html__( 'نام دانش‌آموز ← کد ملی ← مدرسه و پایه ← تاریخ ثبت ← عملیات', 'gravity-presentation-profiles' ) . '</p>';
+        echo '<p><strong>Mode B — ag-rtl + GPP ON:</strong> ' . esc_html__( 'عملیات ← تاریخ ثبت ← مدرسه و پایه ← کد ملی ← نام دانش‌آموز (شکست تأییدشده در Frontend fa_IR)', 'gravity-presentation-profiles' ) . '</p></div></figure>';
+        echo '<p>' . esc_html__( 'برای تشخیص باید زبان مؤثر درخواست، کلاس واقعی ag-rtl/ag-ltr، ترتیب پنج ستون، اسکرول و وضعیت ذخیره‌شده پس از Reload را در WordPress/Gravity Flow واقعی بررسی کنید. تغییر هیچ‌یک از کلیدها State ذخیره‌شده را پاک نمی‌کند.', 'gravity-presentation-profiles' ) . '</p>';
+        echo '</details></div>';
     }
 
     public function init_admin() {

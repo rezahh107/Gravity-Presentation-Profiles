@@ -5,6 +5,9 @@ require_once __DIR__ . '/../helpers.php';
 $repo_root = dirname( __DIR__, 2 );
 $shared_css = file_get_contents( $repo_root . '/assets/css/srwf-gravity-flow-inbox.css' );
 $native_css = file_get_contents( $repo_root . '/assets/css/srwf-gravity-flow-inbox-native.css' );
+require_once $repo_root . '/src/Autoloader.php';
+\GravityPresentationProfiles\Autoloader::register();
+$physical_axis_css = \GravityPresentationProfiles\SRWF\GravityFlow\InboxAxisIntervention::css();
 
 gpp_assert_true( false !== $shared_css, 'Shared Inbox CSS could not be read.' );
 gpp_assert_true( false !== $native_css, 'Native Inbox CSS could not be read.' );
@@ -1129,8 +1132,8 @@ $physical_axis_selectors = array(
 );
 foreach ( $physical_axis_selectors as $physical_axis_selector ) {
     gpp_assert_true(
-        false !== strpos( $shared_css, $physical_axis_selector ),
-        'Owner-authorized Inbox physical-axis selector is missing: ' . $physical_axis_selector
+        false !== strpos( $physical_axis_css, $physical_axis_selector ),
+        'Owner-authorized conditional Inbox physical-axis selector is missing: ' . $physical_axis_selector
     );
     gpp_assert_same(
         array(),
@@ -1145,9 +1148,13 @@ gpp_assert_true(
 
 $paint_errors = array_merge(
     gpp_inbox_native_paint_contract_errors( $shared_css ),
-    gpp_inbox_native_paint_contract_errors( $native_css )
+    gpp_inbox_native_paint_contract_errors( $native_css ),
+    gpp_inbox_native_paint_contract_errors( $physical_axis_css )
 );
 gpp_assert_same( array(), $paint_errors, 'Current production Inbox CSS violates the positive native paint contract: ' . implode( ' | ', $paint_errors ) );
+
+gpp_assert_true( false === strpos( $shared_css, 'direction: ltr !important;' ), 'Axis overrides must not be embedded in the always-on presentation CSS.' );
+gpp_assert_same( 1, substr_count( $physical_axis_css, 'direction: ltr !important;' ), 'Conditional correction must carry one four-selector LTR rule.' );
 
 $historical_errors = gpp_inbox_historical_regression_errors( $shared_css, $native_css );
 gpp_assert_same( array(), $historical_errors, 'Current production Inbox CSS violates an existing historical regression guard: ' . implode( ' | ', $historical_errors ) );

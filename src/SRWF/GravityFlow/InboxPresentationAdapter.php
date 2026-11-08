@@ -28,6 +28,7 @@ final class InboxPresentationAdapter {
     private static $model = null;
     private static $surface_reached = false;
     private static $preference_css = '';
+    private static $axis_css_added = false;
 
     public static function register() {
         if ( ! function_exists( 'add_filter' ) || ! function_exists( 'add_action' ) ) {
@@ -50,6 +51,7 @@ final class InboxPresentationAdapter {
         self::$model = null;
         self::$surface_reached = false;
         self::$preference_css = '';
+        self::$axis_css_added = false;
         RuntimeDiagnostics::resetSurface( self::SURFACE );
     }
 
@@ -162,6 +164,14 @@ final class InboxPresentationAdapter {
             $presentation_dependencies,
             self::assetVersion( $plugin_root . '/' . $presentation_path )
         );
+        // Exactly the shipped four bounded LTR-axis rules when GPP ON.
+        // OFF emits NONE of them; the host owns its Grid direction.
+        if ( ! self::$axis_css_added && InboxAxisIntervention::enabled() && function_exists( 'wp_add_inline_style' ) ) {
+            if ( wp_add_inline_style( self::STYLE_HANDLE, InboxAxisIntervention::css() ) ) {
+                self::$axis_css_added = true;
+            }
+        }
+
         wp_enqueue_style(
             self::NATIVE_STYLE_HANDLE,
             plugins_url( $native_path, GPP_PLUGIN_FILE ),
