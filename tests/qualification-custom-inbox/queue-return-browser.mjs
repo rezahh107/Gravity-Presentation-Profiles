@@ -4,9 +4,9 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
 
-// Isolated, synthetic-only return lifecycle discriminator. The native operation
-// in this probe is performed through the authentic Gravity Flow API, not by
-// pretending that the officer clicked a native approval button.
+// Isolated, synthetic-only return lifecycle discriminator. First, the Officer
+// really clicks the native Gravity Flow Approval button and returns voluntarily.
+// A separate host API transition then probes the BFCache recovery boundary.
 const env = process.env;
 const root = env.WU21_ARTIFACT_DIR;
 const f = JSON.parse(fs.readFileSync(path.join(root, 'ciq2-browser-fixture.json'), 'utf8'));
