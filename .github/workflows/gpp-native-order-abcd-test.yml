@@ -1,0 +1,307 @@
+name: GPP G014 Native Inbox Order AB-CD Causal Test (TEST ONLY)
+
+on:
+  pull_request:
+    branches: [feat/gpp-inbox-axis-switch-fourstate-20261108]
+    paths:
+      - ".github/workflows/gpp-native-order-abcd-test.yml"
+      - "tests/qualification-g014-gpp-fourstate/**"
+      - "tests/fixtures/wu21-packages/**"
+      - "src/SRWF/GravityFlow/InboxAxisIntervention.php"
+      - "src/SRWF/GravityFlow/InboxPresentationAdapter.php"
+      - "src/GravityForms/AddOn.php"
+      - "assets/css/srwf-gravity-flow-inbox.css"
+      - "gravity-presentation-profiles.php"
+
+permissions:
+  contents: read
+
+jobs:
+  gpp-fourstate-native-inbox:
+    if: ${{ github.repository == 'rezahh107/Gravity-Presentation-Profiles' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'test/g014-native-inbox-order-abcd-20261108' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: g014-synthetic-root
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pg014-synthetic-root --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      SUBJECT_SHA: 237e8006fae00be586d90a5b76666ceef7a025ca
+      GPP_SHA: ${{ github.event.pull_request.head.sha }}
+      WU008_WP_PATH: /tmp/g014-wordpress
+      WU008_WP_CLI: /tmp/g014-wp-cli.phar
+      WU008_BASE_URL: http://127.0.0.1:8080
+      WU008_PACKAGE_DIR: /tmp/g014-packages
+      WU008_ARTIFACT_DIR: /tmp/g014-evidence
+      WU21_ARTIFACT_DIR: /tmp/g014-evidence
+      G014_OUTPUT_DIR: /tmp/g014-evidence/fourstate
+      WU008_GF_FILE_ID: 1mnCxBZVDL5qBALXh9CvxEMwIwg-YASCy
+      WU008_GF_FILE: gravityforms-3.1.1.1-source-package.zip
+      WU008_GF_SIZE: '5300290'
+      WU008_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU008_GF_VERSION: 3.1.1.1
+
+    steps:
+      - name: Checkout qualification harness ONLY
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Check harness boundary and exact immutable subject
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.repository }}" = "rezahh107/Gravity-Presentation-Profiles"
+          case "$GITHUB_REF" in refs/pull/*/merge) ;; *) echo 'Owner-only qualification branch required' >&2; exit 1;; esac
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
+          test -f tests/qualification-g014-gpp-fourstate/fourstate-fixture.php
+          test -f tests/qualification-g014-gpp-fourstate/fourstate-gate.mjs
+          printf 'HARNESS_SHA=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          mkdir -p "$WU008_WP_PATH" "$WU008_PACKAGE_DIR" "$G014_OUTPUT_DIR"
+          admin_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$admin_password"
+          printf 'WU008_ADMIN_PASSWORD=%s\n' "$admin_password" >> "$GITHUB_ENV"
+          node --check tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
+          node --check tests/qualification-g014-gpp-fourstate/fourstate-gate.mjs
+          php -l tests/qualification-g014-gpp-fourstate/fourstate-fixture.php
+
+      - name: Checkout tested PersianGravity SHA (not harness SHA)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: rezahh107/PersianGravity
+          ref: 237e8006fae00be586d90a5b76666ceef7a025ca
+          path: .g014-subject
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Checkout pinned GPP SHA without modifications
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: rezahh107/Gravity-Presentation-Profiles
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .gpp-reference
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify both checkouts and immutable source files
+        run: |
+          set -euo pipefail
+          test "$(git -C .g014-subject rev-parse HEAD)" = "$SUBJECT_SHA"
+          test "$(git -C .gpp-reference rev-parse HEAD)" = "$GPP_SHA"
+          git -C .g014-subject diff --quiet HEAD --
+          git -C .gpp-reference diff --quiet HEAD --
+          test -f .g014-subject/includes/pgr-gravity-flow-inbox-rtl-status.php
+          grep -q 'Version: 0.0.0-dev' .gpp-reference/gravity-presentation-profiles.php
+
+      - name: Set up PHP 8.2 + WP-CLI
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+      - name: Load WU008 canonical licensed Gravity Flow package authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          php .g014-subject/tools/compatibility/gravityflow-package.php env WU008_FLOW >> "$GITHUB_ENV"
+      - name: Build exact-subject installable PersianGravity
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd .g014-subject && PGR_PACKAGE_SOURCE_SHA="$SUBJECT_SHA" bash tools/build-production-package.sh)
+          test -f .g014-subject/dist/persian-gravityforms-4.10.0.zip
+          echo "$SUBJECT_SHA" > "$G014_OUTPUT_DIR/subject.sha"
+          echo "$GPP_SHA" > "$G014_OUTPUT_DIR/gpp.sha"
+          echo "$HARNESS_SHA" > "$G014_OUTPUT_DIR/harness.sha"
+
+      - name: Install WordPress 6.8.3 in disposable MariaDB
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exact official 2.12.0 bytes at an immutable WP-CLI builds commit.
+          # Same SHA-256 as the WU008 release asset, but avoids sporadic GitHub
+          # release-download HTTP 504. Never relax the original digest check.
+          curl -L --fail --retry 4 --retry-all-errors -o "$WU008_WP_CLI" \
+            https://raw.githubusercontent.com/wp-cli/builds/ad68e4ad3b29c3d3bdb361e5ed9b37e709123a9b/phar/wp-cli.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU008_WP_CLI" | sha256sum -c -
+          php "$WU008_WP_CLI" core download --path="$WU008_WP_PATH" --version=6.8.3 --force --skip-content
+          php "$WU008_WP_CLI" config create --path="$WU008_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=g014-synthetic-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU008_WP_CLI" core install --path="$WU008_WP_PATH" --url="$WU008_BASE_URL" --title='G014 Synthetic Qualification' --admin_user=bootstrap_admin --admin_password="$WU008_ADMIN_PASSWORD" --admin_email='bootstrap@example.invalid' --skip-email
+          # WP-CLI core install may inherit a temporary path prefix; bind both
+          # canonical WordPress URLs to the real ephemeral HTTP origin.
+          php "$WU008_WP_CLI" option update home "$WU008_BASE_URL" --path="$WU008_WP_PATH"
+          php "$WU008_WP_CLI" option update siteurl "$WU008_BASE_URL" --path="$WU008_WP_PATH"
+          test "$(php "$WU008_WP_CLI" option get home --path="$WU008_WP_PATH")" = "$WU008_BASE_URL"
+          test "$(php "$WU008_WP_CLI" option get siteurl --path="$WU008_WP_PATH")" = "$WU008_BASE_URL"
+          php "$WU008_WP_CLI" --path="$WU008_WP_PATH" eval '
+            $expected = getenv("WU008_BASE_URL");
+            if (home_url() !== $expected || site_url() !== $expected ||
+                !str_starts_with(admin_url("admin.php?page=gravityflow-inbox"), $expected."/wp-admin/") ||
+                !str_starts_with(wp_login_url(), $expected."/wp-login.php")) {
+              throw new RuntimeException("Disposable WordPress URL authority unexpectedly includes an install-path prefix");
+            }
+          '
+          php "$WU008_WP_CLI" user create wu21_viewer viewer@example.invalid --path="$WU008_WP_PATH" --role=subscriber --user_pass="$(openssl rand -hex 20)"
+          php "$WU008_WP_CLI" language core install fa_IR --activate --path="$WU008_WP_PATH"
+          php "$WU008_WP_CLI" rewrite structure '/%postname%/' --path="$WU008_WP_PATH"
+          test "$(php "$WU008_WP_CLI" core version --path="$WU008_WP_PATH")" = '6.8.3'
+
+      - name: Install real minimal WU008 frontend theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          theme="$WU008_WP_PATH/wp-content/themes/g014-runtime"
+          mkdir -p "$theme"
+          cat > "$theme/style.css" <<'CSS'
+          /*
+          Theme Name: G014 Runtime
+          Version: 1.0.0
+          */
+          CSS
+          cat > "$theme/index.php" <<'PHP'
+          <?php
+          ?><!doctype html>
+          <html <?php language_attributes(); ?>>
+          <head><meta charset="<?php bloginfo( 'charset' ); ?>"><meta name="viewport" content="width=device-width, initial-scale=1"><?php wp_head(); ?></head>
+          <body <?php body_class(); ?>><main><?php while ( have_posts() ) : the_post(); the_content(); endwhile; ?></main><?php wp_footer(); ?></body>
+          </html>
+          PHP
+          php "$WU008_WP_CLI" theme activate g014-runtime --path="$WU008_WP_PATH"
+          test "$(php "$WU008_WP_CLI" option get stylesheet --path="$WU008_WP_PATH")" = 'g014-runtime'
+
+      - name: Verify and install exact repository-tracked licensed packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="$GITHUB_WORKSPACE/tests/fixtures/wu21-packages"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU008_PACKAGE_DIR/$WU008_GF_FILE"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE"
+          test "$(stat -c '%s' "$WU008_PACKAGE_DIR/$WU008_GF_FILE")" = "$WU008_GF_SIZE"
+          test "$(stat -c '%s' "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE")" = "$WU008_FLOW_SIZE"
+          echo "$WU008_GF_SHA256  $WU008_PACKAGE_DIR/$WU008_GF_FILE" | sha256sum -c -
+          echo "$WU008_FLOW_SHA256  $WU008_PACKAGE_DIR/$WU008_FLOW_FILE" | sha256sum -c -
+          echo 'VENDOR_ZIPS_AUTHENTICATED=PASS source=repository_fixture'
+
+      - name: Install real vendor packages, exact PersianGravity, exact GPP
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugins="$WU008_WP_PATH/wp-content/plugins"
+          mkdir -p "$plugins"
+          unzip -q "$WU008_PACKAGE_DIR/$WU008_GF_FILE" -d "$plugins"
+          unzip -q "$WU008_PACKAGE_DIR/$WU008_FLOW_FILE" -d "$plugins"
+          unzip -q .g014-subject/dist/persian-gravityforms-4.10.0.zip -d "$plugins"
+          mkdir -p "$plugins/gravity-presentation-profiles"
+          rsync -a --exclude='.git' --exclude='.github' .gpp-reference/ "$plugins/gravity-presentation-profiles/"
+          cmp .gpp-reference/gravity-presentation-profiles.php "$plugins/gravity-presentation-profiles/gravity-presentation-profiles.php"
+          test "$(php -r '$x=json_decode(file_get_contents($argv[1]),true);echo $x["source_commit"]??"";' "$plugins/persian-gravityforms/release-manifest.json")" = "$SUBJECT_SHA"
+          mkdir -p "$WU008_WP_PATH/wp-content/mu-plugins"
+          cp .gpp-reference/tests/repro-evidence-lab/wu21-lab-plugin.php "$WU008_WP_PATH/wp-content/mu-plugins/g014-read-only-polling-diagnostics.php"
+          php "$WU008_WP_CLI" plugin activate gravityforms gravityflow persian-gravityforms gravity-presentation-profiles --path="$WU008_WP_PATH"
+          test "$(php "$WU008_WP_CLI" plugin get gravityflow --field=version --path="$WU008_WP_PATH")" = '3.1.0'
+          test "$(php "$WU008_WP_CLI" plugin get gravity-presentation-profiles --field=version --path="$WU008_WP_PATH")" = '0.0.0-dev'
+          php "$WU008_WP_CLI" --path="$WU008_WP_PATH" eval 'if (!function_exists("pgr_gravity_flow_inbox_rtl_status")||"supported"!==pgr_gravity_flow_inbox_rtl_status()["capability"]) throw new RuntimeException("Exact PGR API unavailable");'
+
+      - name: Create real synthetic workflow and GPP product-binding fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU008_WP_CLI" --path="$WU008_WP_PATH" eval-file .gpp-reference/tests/repro-evidence-lab/setup-fixtures.php
+          php "$WU008_WP_CLI" --path="$WU008_WP_PATH" eval-file tests/qualification-g014-gpp-fourstate/fourstate-fixture.php
+          test -s "$G014_OUTPUT_DIR/fixture.json"
+
+      - name: Set up exact Playwright 1.55.0 and Chromium
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+      - name: Install browser tooling
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false playwright@1.55.0 acorn@8.15.0
+          npx playwright install --with-deps chromium
+          node -e 'if(require("playwright/package.json").version!=="1.55.0")process.exit(1)'
+
+      - name: Inventory pinned licensed native Column State source (paths and symbols only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
+          node tests/qualification-g014-gpp-fourstate/licensed-source-locations.mjs
+          test -s "$G014_OUTPUT_DIR/licensed-source-locations.json"
+      - name: Examine exact native restore array construction (AST metadata only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/restore-ast-probe.mjs
+          node tests/qualification-g014-gpp-fourstate/restore-ast-probe.mjs
+          test -s "$G014_OUTPUT_DIR/licensed-restore-ast.json"
+
+      - name: Start isolated HTTP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU008_WP_CLI" server --path="$WU008_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/g014-wordpress-server.log 2>&1 &
+          for i in $(seq 1 40); do if curl -fsS "$WU008_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi; sleep 1; done
+          echo 'WordPress server failed' >&2; exit 1
+
+      - name: Assert unchanged GPP production filter source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object .gpp-reference/src/SRWF/GravityFlow/InboxTableHeaderPresentation.php)" = 4d88ede0ad55d95ba3f27044b13ed79a8ecb3fc4
+          cmp .gpp-reference/src/SRWF/GravityFlow/InboxTableHeaderPresentation.php "$WU008_WP_PATH/wp-content/plugins/gravity-presentation-profiles/src/SRWF/GravityFlow/InboxTableHeaderPresentation.php"
+          php -r 'if ((bool)ini_get("opcache.enable_cli")) exit(1);'
+      - name: Execute disposable four-variant native Grid experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
+          node tests/qualification-g014-gpp-fourstate/abcd-browser.mjs
+      - name: Install test-only pre-construction Column State observation hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-lifecycle.mjs
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js
+          node --check tests/qualification-g014-gpp-fourstate/columnstate-preload.js
+          cp tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-pregrid.js"
+          cat > "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-observer.php" <<'PHP'
+          <?php
+          /* Disposable test-only observation, no native Grid state mutation. */
+          add_action( 'wp_print_footer_scripts', static function () {
+              if ( ! defined( 'Gravity_Flow::THEME_JS' ) || ! function_exists( 'wp_script_is' ) ) {
+                  return;
+              }
+              $handle = \Gravity_Flow::THEME_JS;
+              if ( ! wp_script_is( $handle, 'enqueued' ) ) {
+                  return;
+              }
+              $file = __DIR__ . '/g014-columnstate-pregrid.js';
+              if ( ! is_readable( $file ) ) {
+                  return;
+              }
+              wp_add_inline_script( $handle, file_get_contents( $file ), 'before' );
+          }, 5 );
+          PHP
+          php -l "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-observer.php"
+          cmp tests/qualification-g014-gpp-fourstate/columnstate-pregrid.js "$WU008_WP_PATH/wp-content/mu-plugins/g014-columnstate-pregrid.js"
+      - name: Probe native Column State restore and width lifecycle (test-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/qualification-g014-gpp-fourstate/columnstate-lifecycle.mjs
+      - name: Upload only synthetic observations (NO database or licensed vendors)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gpp-native-order-abcd-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/g014-evidence/fourstate/
+          if-no-files-found: ignore
+          retention-days: 14
