@@ -4,6 +4,7 @@ name: Inbox 2 Usability Prototype — Isolated Runtime
     branches:
     - main
     - experiment/inbox2-usability-prototype
+    - test/inbox2-queue-return-20261108
     paths:
     - tests/qualification-custom-inbox/**
     - .github/workflows/inbox2-usability-prototype.yml
