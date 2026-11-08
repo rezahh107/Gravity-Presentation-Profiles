@@ -28,7 +28,8 @@ const ids = p => p.locator('[data-ciq2-entry]').evaluateAll(nodes => nodes.map(n
 // Playwright 1.55.0 disables Chromium BFCache by default. Remove only the
 // test-browser override; the WordPress private/no-store/auth guards remain.
 const browser = await chromium.launch({
-  headless: true, ignoreDefaultArgs: ['--disable-back-forward-cache']
+  headless: true, channel: 'chromium',
+  ignoreDefaultArgs: ['--disable-back-forward-cache']
 });
 try {
   const ctx = await browser.newContext({viewport: {width: 390, height: 850}});
