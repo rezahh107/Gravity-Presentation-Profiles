@@ -273,6 +273,18 @@ async function main(){
         report.cases.push(await caseRun(browser,axis,mode,dbfile));
       }
     }
+    // Additional qualified-source discriminators do not reclassify the original
+    // ten-case result. A failed UI drag remains NOT_PROVEN, not product FAIL.
+    for(const mode of ['legacy-like','incomplete-state','manual-reorder']){
+      report.variant_controls.push(await caseRun(browser,'on',mode,'/tmp/g014-lifecycle-on.sql'));
+    }
+    await setSettings(browser,'on',false);
+    const ltrDB='/tmp/g014-lifecycle-pgr-off.sql';
+    wp('db','export',ltrDB,'--add-drop-table');
+    report.variant_controls.push(await caseRun(browser,'on','pgr-off',ltrDB));
+    report.controls_observed=report.variant_controls.filter(c=>c.status==='OBSERVED').length;
+    report.source_calls_observed=report.cases.concat(report.variant_controls)
+      .reduce((n,c)=>n+(c.reloaded?.api_source_calls?.length||0),0);
     const good=report.cases.filter(c=>c.status==='OBSERVED'&&c.same_grid_id);
     report.result=good.length===10?'EVIDENCE_CAPTURED':'NOT_PROVEN';
     report.causal_root='NOT_PROVEN_PENDING_INDEPENDENT_ASSESSMENT';
