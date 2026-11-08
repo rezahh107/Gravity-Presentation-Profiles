@@ -199,6 +199,46 @@ async function caseRun(browser,axis,mode,dbfile){
         localStorage.removeItem(matches[0]);
         return {scope:mode,removed:1,remaining:localStorage.length};
       },mode);
+    } else if(mode==='legacy-like'||mode==='incomplete-state'){
+      record.before_edit=await snapshot(page);
+      record.synthetic_state_change=await page.evaluate(mode=>{
+        const h=document.querySelector('[data-js="gflow-inbox"]');
+        const key=h?.dataset.gridId;
+        if(!key)throw Error('Authentic native Grid ID unavailable');
+        const original=JSON.parse(localStorage.getItem(key)||'null');
+        if(!Array.isArray(original)||original.length!==5||
+           new Set(original.map(s=>String(s.colId))).size!==5)
+          throw Error('Native saved column state not in expected five-item shape');
+        let changed;
+        if(mode==='legacy-like'){
+          const legacy=['id','date_created','6','3','1'];
+          changed=legacy.map(id=>original.find(s=>String(s.colId)===id));
+          if(changed.some(x=>!x))throw Error('Legacy-like column identity incomplete');
+        } else {
+          changed=original.filter(s=>String(s.colId)!=='6');
+          if(changed.length!==4)throw Error('Incomplete-state control did not remove one identity');
+        }
+        localStorage.setItem(key,JSON.stringify(changed));
+        return {label:mode,synthetic:true,
+          ids_before:original.map(s=>String(s.colId)),
+          ids_after:changed.map(s=>String(s.colId))};
+      },mode);
+      record.control_qualification='SYNTHETIC_STATE_APPLIED';
+    } else if(mode==='manual-reorder'){
+      record.before_manual=await snapshot(page);
+      const source=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="6"] .ag-header-cell-label').first();
+      const target=page.locator('[data-js="gflow-inbox"] .ag-header-cell[col-id="1"] .ag-header-cell-label').first();
+      if(await source.count()===1&&await target.count()===1){
+        try {
+          await source.dragTo(target,{force:true,timeout:12000});
+          await page.waitForTimeout(450);
+          record.after_manual=await snapshot(page);
+          const uiMoved=record.after_manual.events.some(e=>e.event==='columnMoved'&&e.source==='uiColumnDragged');
+          const changedOrder=record.after_manual.physical_rtl.join(',')!==record.before_manual.physical_rtl.join(',');
+          record.manual_observed={uiMoved,changedOrder};
+          record.control_qualification=uiMoved&&changedOrder?'MANUAL_REORDER_OBSERVED':'NOT_PROVEN';
+        }catch(e){record.manual_error=String(e.message||e).slice(0,180);}
+      }
     } else if(mode==='manual-resize'){
       record.resize_action=await resize(page);
       record.after_resize=await snapshot(page);
