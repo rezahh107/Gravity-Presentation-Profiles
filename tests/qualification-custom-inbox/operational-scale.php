@@ -17,6 +17,32 @@ try {
     wp_set_current_user( (int) $f['officer'] );
     $baseline = ciq2_snapshot_rows( $scope );
     $ok( is_array( $baseline ) && count( $baseline ) === 501, 'after_browser_501_authorized_tasks' );
+    // Explicitly admit the single native step added by operational-browser.mjs
+    // within this SAME scale chain. Never silently inherit unknown step changes.
+    $browser_evidence = getenv( 'WU21_ARTIFACT_DIR' ) . '/ciq2-operational-browser.json';
+    if ( ! is_file( $browser_evidence ) ) {
+        throw new RuntimeException( 'scale_previous_step_inventory_missing' );
+    }
+    $prior = json_decode( file_get_contents( $browser_evidence ), true );
+    $previous_steps = $prior['step_inventory'] ?? null;
+    $ok( ( $prior['status'] ?? null ) === 'PASS_OPERATIONAL_BROWSER'
+        && is_array( $previous_steps )
+        && ( $previous_steps['teardown'] ?? null ) === 'DISCARD_AFTER_SCALE_SCENARIO_ONLY',
+        'scale_browser_step_mutation_record_verified' );
+    $known_ids = array_map( 'intval', $previous_steps['after'] );
+    $native_steps = ( new Gravity_Flow_API( (int) $f['form_id'] ) )->get_steps();
+    $ok( is_array( $native_steps ), 'scale_current_workflow_inventory_available' );
+    $actual_steps = array();
+    foreach ( $native_steps as $step ) {
+        $actual_steps[] = (int) $step->get_id();
+    }
+    sort( $actual_steps, SORT_NUMERIC );
+    $ok( $actual_steps === $known_ids &&
+        count( $actual_steps ) === count( array_unique( $actual_steps ) ),
+        'scale_expected_browser_step_inventory_matches_native_host' );
+    $report['step_inventory_pre_2000'] = $actual_steps;
+    $report['known_scale_viewer_step'] = (int) $previous_steps['added_viewer_step_id'];
+
     $needed = 2000 - count( $baseline );
     $flow = new Gravity_Flow_API( (int) $f['form_id'] );
     wp_set_current_user( (int) $f['admin'] );
