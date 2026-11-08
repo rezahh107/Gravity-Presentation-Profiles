@@ -110,6 +110,12 @@ try {
             $require( is_object( $step ) && method_exists( $step, 'get_id' ) &&
                 (int) $step->get_id() === $facts[ $id ]['current_step_id'],
                 'parity_host_current_step_changed' );
+            if ( 'officer' === $actor ) {
+                $require( $step instanceof Gravity_Flow_Step_Approval &&
+                    $step->is_user_assignee() &&
+                    (int) $step->get_id() === (int) $f['step_id'],
+                    'parity_public_feed_contains_non_officer_actionable_step' );
+            }
             $prepared = apply_filters( 'gform_pre_render', $form, false, null );
             $prepared = apply_filters( 'gform_pre_render_' . $form_id, $prepared, false, null );
             $permitted = Gravity_Flow_Entry_Detail::is_permission_granted( $entry, $prepared, $step );
