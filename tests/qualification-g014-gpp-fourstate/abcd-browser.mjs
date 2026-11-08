@@ -32,8 +32,8 @@ const target = '$visible = $id_column + array_reverse( $visible, true );';
 if (original.split(target).length !== 2) throw Error('Expected one exact reversible source seam');
 const tracingReturn = '        return $visible;';
 if (original.split(tracingReturn).length !== 2) throw Error('Expected one return seam');
-const traceSnippet = "        if ( getenv( 'G014_OUTPUT_DIR' ) ) {\n" +
-  "            @file_put_contents( getenv( 'G014_OUTPUT_DIR' ) . '/abcd-filter.jsonl', wp_json_encode( array( 'before' => array_keys( $columns ), 'after' => array_keys( $visible ) ) ) . PHP_EOL, FILE_APPEND );\n" +
+const traceSnippet = variant => "        if ( getenv( 'G014_OUTPUT_DIR' ) ) {\n" +
+  "            @file_put_contents( getenv( 'G014_OUTPUT_DIR' ) . '/abcd-filter.jsonl', wp_json_encode( array( 'variant' => '" + variant + "', 'before' => array_keys( $columns ), 'after' => array_keys( $visible ) ) ) . PHP_EOL, FILE_APPEND );\n" +
   "        }\n";
 const variants = {
   A: {reverse:true, idLast:false, code:target},
@@ -86,7 +86,7 @@ async function setSettings(browser,axis,pgr){
 }
 function installVariant(v){
   const item=variants[v];
-  let content=original.replace(target,item.code).replace(tracingReturn,traceSnippet+tracingReturn);
+  let content=original.replace(target,item.code).replace(tracingReturn,traceSnippet(v)+tracingReturn);
   if(content===original)throw Error('No variation installed');
   fs.writeFileSync(classPath,content,'utf8');
   command('php',['-l',classPath]);
@@ -169,6 +169,9 @@ async function one(browser,axis,variant,pgr,snapshotSha){
   if(verified.pgr!==(pgr?'on':'off')||verified.gpp!==axis)throw Error('ENVIRONMENT: restored DB does not match expected settings');
   const modification=installVariant(variant);
   const tracePath=path.join(out,'abcd-filter.jsonl');if(fs.existsSync(tracePath))fs.unlinkSync(tracePath);
+  // Allow an HTTP PHP opcode cache with timestamp revalidation to see the
+  // replaced disposable file; actual callback identity is asserted below.
+  await new Promise(resolve=>setTimeout(resolve,2600));
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
   const page=await ctx.newPage();
   const result={label,axis,variant,pgr,persisted_db_snapshot_sha256:snapshotSha,source:modification,qualification:'NOT_PROVEN'};
@@ -181,6 +184,16 @@ async function one(browser,axis,variant,pgr,snapshotSha){
     await settled(page);
     result.initial=await page.evaluate(observe);
     result.callback_trace=trace();
+    const expectedAfter={
+      A:['id','date_created','6','3','1','date_created_human_readable'],
+      B:['id','1','3','6','date_created','date_created_human_readable'],
+      C:['date_created','6','3','1','id','date_created_human_readable'],
+      D:['1','3','6','date_created','id','date_created_human_readable']
+    }[variant];
+    const traceMatches=t=>t.variant===variant && JSON.stringify(t.after.map(String))===JSON.stringify(expectedAfter);
+    if (!result.callback_trace.length || !result.callback_trace.every(traceMatches))
+      throw Error('ENVIRONMENT: experimental PHP callback identity/input-output mismatch for '+variant);
+    result.callback_variant_verified=true;
     const expectedMode=pgr?'ag-rtl':'ag-ltr';
     if(result.initial.mode!==expectedMode || (pgr&&result.initial.enableRtl!==true) || result.initial.row_count<20)
       throw Error('ENVIRONMENT: authentic Grid identity or RTL state not established');
@@ -192,6 +205,10 @@ async function one(browser,axis,variant,pgr,snapshotSha){
     result.image=img;
     await page.reload({waitUntil:'domcontentloaded'});await settled(page);
     result.after_clean_reload=await page.evaluate(observe);
+    result.callback_trace_after_reload=trace();
+    if (!result.callback_trace_after_reload.length || !result.callback_trace_after_reload.every(traceMatches))
+      throw Error('ENVIRONMENT: PHP callback drift across reload in variant '+variant);
+    result.reload_variant_verified=true;
     result.resize_probe=await resizeProbe(page);
   }catch(e){
     result.failure=String(e.message||e).slice(0,480);
@@ -221,7 +238,7 @@ async function run(){
       report.control.push(control);
     }
     if(report.cases.length!==8 || report.control.length!==2)throw Error('ENVIRONMENT: incomplete experiment cardinality');
-    const runnable=report.cases.filter(x=>x.initial&&x.callback_trace?.length);
+    const runnable=report.cases.filter(x=>x.initial&&x.callback_variant_verified&&x.reload_variant_verified&&['PASS_ORDER','FAIL_ORDER'].includes(x.qualification));
     report.result=runnable.length===8?'EVIDENCE_CAPTURED':'NOT_PROVEN';
     report.causal_root='NOT_PROVEN_PENDING_INDEPENDENT_ASSESSMENT';
   }finally{
