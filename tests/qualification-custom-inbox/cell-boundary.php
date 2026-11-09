@@ -6,6 +6,12 @@ require_once __DIR__ . '/boundary.php';
 function cellq_model() {
     return gravity_flow()->container()->get( \Gravity_Flow\Gravity_Flow\Inbox\Inbox_Service_Provider::TASK_MODEL );
 }
+/** Task Model shape is private and must be explicitly checked. */
+function cellq_model_compatible( $model ) {
+    return $model instanceof \Gravity_Flow\Gravity_Flow\Inbox\Models\Task
+        && is_callable( array( $model, 'get_inbox_tasks' ) )
+        && is_callable( array( $model, 'get_table_header_defs' ) );
+}
 /** Internal Task Model: only the exact pinned Gravity Flow host is admitted. */
 function cellq_host_model() {
     if ( ! defined( 'GRAVITY_FLOW_VERSION' ) || '3.1.0' !== GRAVITY_FLOW_VERSION
@@ -18,9 +24,7 @@ function cellq_host_model() {
     } catch ( Throwable $error ) {
         return new WP_Error( 'ciq2_native_task_service_unavailable' );
     }
-    if ( ! $model instanceof \Gravity_Flow\Gravity_Flow\Inbox\Models\Task
-        || ! is_callable( array( $model, 'get_inbox_tasks' ) )
-        || ! is_callable( array( $model, 'get_table_header_defs' ) ) ) {
+    if ( ! cellq_model_compatible( $model ) ) {
         return new WP_Error( 'ciq2_native_task_contract_changed' );
     }
     return $model;
