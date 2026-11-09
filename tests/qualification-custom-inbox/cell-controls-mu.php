@@ -46,6 +46,12 @@ add_action( 'wp_loaded', static function () {
         return $content;
     }, 30, 5 );
     add_filter( 'gravityflow_permission_granted_entry_detail', static function ( $allowed, $entry ) {
-        return cellq_target( $entry['form_id'] ) && 'deny_entry' === get_option( 'cellq_mode' ) ? false : $allowed;
+        if ( ! cellq_target( $entry['form_id'] ) ) { return $allowed; }
+        $mode = get_option( 'cellq_mode' );
+        if ( 'deny_entry' === $mode ) { return false; } // Retained legacy PR169/170 negative fixture.
+        if ( 'deny_one_entry' === $mode && (int) $entry['id'] === (int) get_option( 'cellq_s4_denied_id', 0 ) ) {
+            return false; // S4: one Native-listed task, Detail-denied only.
+        }
+        return $allowed;
     }, 20, 2 );
 } );
