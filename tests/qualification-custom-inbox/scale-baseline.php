@@ -2,7 +2,8 @@
 /**
  * Synthetic-only scale precondition. Runs BEFORE any 500-task creation.
  * Never repairs a bad fixture. The negative-control CI job deliberately
- * denies entry permission and must receive a non-zero exit from this gate.
+ * makes a final Native-list display cell non-scalar and must receive a
+ * non-zero exit from this gate.
  */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 $f = get_option( 'cellq_fixture', array() );
@@ -61,6 +62,8 @@ try {
     wp_set_current_user( (int) $f['officer'] );
     $rows = ciq2_snapshot_rows( array( 'form_id' => (int) $f['form_id'] ) );
     if ( is_wp_error( $rows ) || ! is_array( $rows ) ) {
+        // Record the precise fail-closed Native-list value or contract reason.
+        $report['snapshot_error'] = is_wp_error( $rows ) ? $rows->get_error_code() : gettype( $rows );
         throw new RuntimeException( 'scale_baseline_unreadable' );
     }
     $ids = array_map( 'intval', array_column( $rows, 'id' ) );

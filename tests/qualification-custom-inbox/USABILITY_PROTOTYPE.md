@@ -12,15 +12,31 @@ The Owner-authorized production architecture remains Native-First.
 - Server-rendered RTL cards, 390px name visibility, keyboard focus, full-list
   client-side search by name/national ID, 20-task operator pages, automatic
   polling and manually retried AJAX with non-JS GET fallback.
-- Public entry and internal native task projection are queried in pages of 40.
+- The Inbox 2 snapshot queries public entry membership and the internal native
+  task projection with one bounded call each (page size = bound + 1); the
+  historical PR169/PR170 parity helpers keep their 40-row pages.
   A strict 2000-task safety bound replaces the historical 500-task limit;
   over-bound requests fail closed, not silently truncate.
 - Automatic polling uses a separate authenticated test-only WordPress AJAX
-  route and reconciles two full host-authorized reads per update. This is not
-  an atomic snapshot, and does not qualify production caching or latency.
-- A single Entry Detail guard denial omits that entry (with generic server log)
-  in this **prototype only**. Query/identity failures reject the entire list.
-  The strict PR169/PR170 path remains unchanged by default.
+  route; each update is one complete host-authorized read whose two source
+  statements are cross-checked by task identity, with at most one bounded retry
+  for a detected concurrent change. This is not an atomic snapshot, and does not
+  qualify production caching or latency.
+- Task selection (Owner decision): exactly the native Gravity Flow Inbox
+  membership for the same user and scope, reconciled across the public query
+  and the native Task Model. No Inbox 2-only eligibility rule (step type,
+  active flag or per-task assignee re-read). Native Gravity Flow remains the
+  authority for Detail access and every task action.
+- Native Inbox list membership and Entry Detail authorization are separate
+  host decisions. A task selected by the authenticated Native Inbox remains an
+  Inbox 2 card even when the native Entry Detail route denies that task's
+  Detail access; opening the native route must still enforce that denial and
+  prevent actions. The Inbox 2 list read does not call the Detail permission
+  filter or omit such a native-selected task on that basis. Invalid task
+  identity, unqualified required card values/bindings, timestamp or native
+  Detail URL, and source-set disagreement still fail closed rather than
+  silently dropping rows. The legacy PR169/PR170 helpers retain their separate
+  Detail-permission and actionability checks by default.
 
 ## Authentic execution
 
@@ -56,9 +72,11 @@ No vendor runtime code is modified. See `UPSTREAM_AJAX_TEST_RETIREMENT.md`.
   prove native Search/Sort/Pagination equivalence or faster human completion time.
   Real operator comparative usability remains `NOT_PROVEN`.
 - Data mapping currently uses the **internal** GPP
-  `InboxTableHeaderPresentation::initialGeometryContract()`, and row rendering
-  uses **internal** Gravity Flow Task Model and Entry Detail guards.
-  These are experimental dependencies, not qualified production integration.
+  `InboxTableHeaderPresentation::initialGeometryContract()`, and Inbox 2
+  card values are read from the **internal** Gravity Flow Task Model. The
+  card-list path does not apply Entry Detail guards; native Detail continues
+  to enforce its own permissions and actions when opened. These internal
+  dependencies are experimental, not qualified production integration.
   Decide a small versioned mapping/read seam versus independent form mapping
   only after usability evidence. Do not invent parallel persistent bindings.
 - National-ID output follows the synthetic **native Inbox**. Displaying it raw
@@ -78,15 +96,23 @@ as execution proof.
 ## Experimental operational task-list contract
 
 - Host retains workflow, authorization, assignment and Entry Detail ownership.
-- Native/public authorized tasks are collected in batches of 40, up to an
-  explicit 2000-task bound. Larger lists fail closed, never silently truncate.
-- Two complete native-authorized reads are reconciled before display. Offset
-  paging is not atomic; any detected difference rejects the response. A
-  mutation immediately after the second read remains a known race.
+- Native/public authorized tasks are collected with one bounded call per
+  source, up to an explicit 2000-task bound. Larger lists fail closed
+  (`task_set_bound_exceeded`); a host paging filter that shrinks the page fails
+  closed (`host_page_size_reduced`), never silently truncates.
+- Public membership and the native Task Model are compared by exact task
+  identity. A difference (a change between the two statements) rejects that
+  attempt; one bounded retry re-runs every authorization check, and a second
+  difference fails closed. A mutation immediately after the read remains a
+  known race. Nothing is cached between attempts or requests.
+- An empty public membership is never accepted on its own: the native Task
+  Model is always read at least once and must also be empty; otherwise the
+  attempt is rejected (`native_cell_task_set_changed`) like any other
+  cross-source difference.
 - RTL operator pages display 20 tasks in date/ID order. Search covers the
   complete verified list. Invalidated page numbers clamp automatically.
 - The experimental authenticated + nonce-checked WordPress AJAX read polls
-  every 10 seconds; no native inbox/changes requests. Aborted/outdated
+  every 30 seconds; no native inbox/changes requests. Aborted/outdated
   responses cannot overwrite the newer view. Errors and expired permissions
   clear old rows and retain search/page state for a retry.
 - The isolated workflow runs an exact 500/501-task independent native identity
@@ -94,3 +120,37 @@ as execution proof.
   clearing and recovery. Passing these requires observed CI evidence.
 - Host throughput at 2000 tasks, true atomic concurrent mutation, mobile
   visual polish and real operator acceptance remain NOT_PROVEN.
+
+## PR #179 — Owner-approved 30-second automatic polling
+
+The isolated Inbox 2 timer is **30,000 ms** (previously 10,000 ms),
+approximately matching the observed Native Gravity Flow Inbox
+`fetch_interval=30` seconds. The separate `requestDeadlineMs=30000` is a
+per-request timeout, **not** the automatic refresh interval. Manual refresh,
+native Detail return, BFCache restore and tab re-entry still trigger immediate
+server revalidation; automatic polling is skipped while the tab is hidden.
+
+### Historical 10-second measurements and normalized server cost
+
+Historical baseline: PR #179 Head `e12465c5266feacecf00464ba4d7ac7a67fc1834`,
+WU21 run `42664450354` (2026-11-09), authentic Chromium and disposable
+WordPress 6.8.3 / Gravity Flow 3.1.0. Values below are *measured* average DB
+queries per successful refresh request, followed by arithmetic projections
+for one continuously active tab (excluding manual/return-triggered reads).
+They are not new-Head measurements or a production capacity benchmark.
+
+| Tasks | Historical Inbox 2 queries/request | Old 10s Inbox 2 queries/min (6/min) | New 30s Inbox 2 queries/min (2/min; projected) | Native 30s queries/min (historical) |
+| ---: | ---: | ---: | ---: | ---: |
+| 300 | 95 | 570 | 190 | 178 |
+| 501 | 95 | 570 | 190 | 178 |
+| 2000 | 95 | 570 | 190 | 245 |
+
+Reducing scheduled requests from six to two per minute is a **66.7% reduction**
+in automatic polling frequency and projected polling DB-query demand per active
+tab, if per-request cost stays comparable. The new-Head real-browser cost
+harness must observe the first request no earlier than 28 seconds and two
+consecutive intervals in a 28–45 second scheduler-jitter window; it also
+reports measured queries/request and normalized estimated queries/minute.
+This does not measure concurrent production throughput or extra manual/return
+reads. The historical 2000-task Native browser measurement recorded two JS
+errors, not repaired by the polling correction.

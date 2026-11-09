@@ -79,7 +79,7 @@ try {
     $rows = ciq2_snapshot_rows( $scope );
     $report['measurements']['2000_snapshot_ms'] = round( 1000 * ( microtime( true ) - $start_read ), 1 );
     $report['measurements']['2000_snapshot_db_queries'] = get_num_queries() - $before_queries;
-    $ok( is_array( $rows ), 'two_scan_2000_snapshot_accepted' );
+    $ok( is_array( $rows ), 'single_read_2000_snapshot_accepted' );
     $candidate_ids = array_map( 'intval', array_column( $rows, 'id' ) );
     $ok( count( $candidate_ids ) === 2000 && count( array_unique( $candidate_ids ) ) === 2000, 'candidate_2000_unique' );
     $actual = $candidate_ids; $expected = array_map( 'intval', array_keys( $native_ids ) );
@@ -112,7 +112,8 @@ try {
     $first = Gravity_Flow_API::get_inbox_entries( $args, $total );
     $ok( is_array( $first ) && (int) $total === 2001, 'independent_host_total_2001' );
     $rejected = ciq2_snapshot_rows( $scope );
-    $ok( is_wp_error( $rejected ), 'over_bound_fails_closed_without_partial_rows' );
+    $ok( is_wp_error( $rejected ) && 'task_set_bound_exceeded' === $rejected->get_error_code(),
+        'over_bound_fails_closed_without_partial_rows' );
     $report['measurements']['peak_memory_after_overflow_bytes'] = memory_get_peak_usage( true );
     $report['status'] = 'PASS_2000_2001_BOUNDARY_AND_COST'; $save();
     echo 'CIQ2_SCALE_PASS ' . wp_json_encode( $report['measurements'] ) . "\n";

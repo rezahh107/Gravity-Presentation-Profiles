@@ -106,16 +106,89 @@ try{
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]')&&document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
   pass('expired_session_clears_rows_and_reauthentication_recovers');
 
-  // A currently authorized host task must disappear when the authentic
-  // Entry Detail permission hook revokes access, without a stale data leak.
-  wp("update_option('cellq_mode','deny_entry',false);");
-  await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
-    document.querySelectorAll('[data-ciq2-entry]').length===0,null,{timeout:90000});
-  assert.deepEqual(await all(page),[]);
-  wp("update_option('cellq_mode','baseline',false);");
+  // S4: Deny Native Entry Detail for exactly ONE task while it remains in the
+  // authenticated Native Inbox list. The card/list must retain the same 500
+  // native-selected IDs; the genuine Detail page must still refuse entry/actions.
+  const s4Before=await all(page);
+  assert.equal(s4Before.length,500);
+  const s4Denied=s4Before[0],s4Allowed=s4Before[1];
+  wp("update_option('cellq_s4_denied_id',"+s4Denied+",false);update_option('cellq_mode','deny_one_entry',false);");
+  try {
+    await page.locator('[data-ciq2-refresh]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
+      document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
+    assert.deepEqual(await all(page),s4Before,'S4 Detail denial modified Inbox 2 task membership');
+    const nativeS4=JSON.parse(wp("wp_set_current_user("+f.officer+");$scope=['form_id'=>"+f.form_id+"];"+
+      "$rows=cellq_model()->get_inbox_tasks(cellq_args($scope,0,2001));"+
+      "echo wp_json_encode(array_map('intval',array_column($rows,'id')));"));
+    assert.deepEqual([...nativeS4].sort((a,b)=>a-b),[...s4Before].sort((a,b)=>a-b),
+      'S4 Inbox 2 membership diverges from authentic Native Task Model');
+    // Independently inspect the actual Native Inbox 1 page's initial rowData,
+    // rather than relying only on our adapter's PHP Task Model comparison.
+    const nativeUrl=wp("echo esc_url_raw(get_option('cellq_fixture')['native_url']);");
+    const nativePage=await ctx.newPage();
+    try {
+      await nativePage.goto(nativeUrl,{waitUntil:'networkidle'});
+      await nativePage.waitForFunction(()=>{
+        const grid=document.querySelector('[data-js="gflow-inbox"]');
+        const rows=grid&&window.gflow_config?.grids?.[grid.dataset.gridId]?.grid_options?.rowData;
+        return Array.isArray(rows)&&rows.length===500;
+      },null,{timeout:90000});
+      const nativeUi=await nativePage.evaluate(targetIds=>{
+        const grid=document.querySelector('[data-js="gflow-inbox"]');
+        const rows=window.gflow_config.grids[grid.dataset.gridId].grid_options.rowData;
+        const text=value=>new DOMParser().parseFromString(
+          '<span id="s4">'+String(value)+'</span>','text/html'
+        ).getElementById('s4').textContent;
+        return {
+          ids:rows.map(r=>Number(r.id)),
+          cells:rows.filter(r=>targetIds.includes(Number(r.id))).map(r=>({
+            id:Number(r.id),name:text(r['1']),nid:text(r['4']),schoolGrade:text(r['6'])
+          })),
+          hiddenFieldAbsent:!JSON.stringify(rows).includes('CQ_SECRET_DO_NOT_EXPOSE_'),
+          rawNationalIdAbsent:!JSON.stringify(rows).includes('CQ_RAW_NID_')
+        };
+      },[s4Denied,s4Allowed]);
+      assert.deepEqual([...nativeUi.ids].sort((a,b)=>a-b),[...s4Before].sort((a,b)=>a-b),
+        'S4 actual Native Inbox page membership differs');
+      assert.equal(nativeUi.hiddenFieldAbsent,true,'Native list unexpectedly contains hidden field fixture');
+      assert.equal(nativeUi.rawNationalIdAbsent,true,'Native final mask did not protect the real list');
+      for(const nativeCell of nativeUi.cells){
+        const card=page.locator('[data-ciq2-entry="'+nativeCell.id+'"]');
+        assert.equal(await card.locator('[data-ciq2-name]').innerText(),nativeCell.name);
+        assert.equal(await card.locator('[data-ciq2-national-id]').innerText(),nativeCell.nid);
+        assert.equal(await card.locator('[data-ciq2-school-grade]').innerText(),nativeCell.schoolGrade);
+        assert.equal(nativeCell.nid,'CQ_FINAL_MASKED');
+      }
+      assert.equal(nativeUi.cells.length,2,'S4 Native list comparison missed a control task');
+    } finally { await nativePage.close(); }
+
+    const deniedHref=await page.locator('[data-ciq2-entry="'+s4Denied+'"] [data-ciq2-detail]').getAttribute('href');
+    const allowedHref=await page.locator('[data-ciq2-entry="'+s4Allowed+'"] [data-ciq2-detail]').getAttribute('href');
+    assert.ok(deniedHref&&allowedHref);
+    const detailDenied=await ctx.newPage();
+    const detailAllowed=await ctx.newPage();
+    try {
+      const deniedResponse=await detailDenied.goto(deniedHref,{waitUntil:'domcontentloaded'});
+      assert.equal(deniedResponse.status(),200);
+      const deniedText=await detailDenied.locator('.gravityflow_workflow_detail').innerText();
+      assert.match(deniedText,/You don't have permission to view this entry\./);
+      assert.equal(await detailDenied.locator('.gravityflow_workflow_detail form').count(),0,
+        'Native Detail rendered an actionable form after permission denial');
+      const allowedResponse=await detailAllowed.goto(allowedHref,{waitUntil:'domcontentloaded'});
+      assert.equal(allowedResponse.status(),200);
+      const allowedText=await detailAllowed.locator('.gravityflow_workflow_detail').innerText();
+      assert.doesNotMatch(allowedText,/You don't have permission to view this entry\./);
+    } finally {
+      await detailDenied.close();await detailAllowed.close();
+    }
+    pass('s4_native_list_and_inbox2_cards_preserved_while_one_native_detail_is_denied');
+  } finally {
+    wp("update_option('cellq_mode','baseline',false);delete_option('cellq_s4_denied_id');");
+  }
+  await page.locator('[data-ciq2-refresh]').click();
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
     document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
-  pass('host_entry_permission_revocation_and_restore_requalify_every_poll');
 
   // Intercept two REAL host-backed reads, delay delivery of the first, create
   // a new native Flow task, and deliver the newer read before the older one.
