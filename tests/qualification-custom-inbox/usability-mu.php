@@ -27,9 +27,8 @@ function ciq2_snapshot_rows( $scope ) {
         $rows = cellq_rows( $scope, true );
         if ( is_wp_error( $rows ) ) { return $rows; }
         foreach ( $rows as $row ) {
-            if ( empty( $row['id'] ) || empty( $row['native_url'] ) ) {
-                return new WP_Error( 'ciq2_invalid_task_identity' );
-            }
+            $admission = cellq_admitted_card( $row );
+            if ( is_wp_error( $admission ) ) { return $admission; }
         }
         usort( $rows, static function ( $a, $b ) {
             $date = strcmp( (string) $a['date_created'], (string) $b['date_created'] );
@@ -91,8 +90,8 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
         return '<section class="ciq2" dir="rtl" role="alert">دریافت پرونده‌ها ممکن نیست. صفحه را دوباره بارگذاری کنید.</section>';
     }
     foreach ( $rows as $row ) {
-        if ( empty( $row['native_url'] ) || empty( $row['id'] ) ) {
-            return '<section class="ciq2" dir="rtl" role="alert">لینک پرونده معتبر نیست. صفحه را دوباره بارگذاری کنید.</section>';
+        if ( is_wp_error( cellq_admitted_card( $row ) ) ) {
+            return '<section class="ciq2" dir="rtl" role="alert">اطلاعات ضروری پرونده یا لینک آن معتبر نیست. صفحه را دوباره بارگذاری کنید.</section>';
         }
     }
     $url = get_permalink( (int) get_option( 'ciq2_page_id' ) );
