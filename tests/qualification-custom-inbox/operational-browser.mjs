@@ -106,17 +106,49 @@ try{
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]')&&document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
   pass('expired_session_clears_rows_and_reauthentication_recovers');
 
-  // When the authentic Entry Detail permission hook revokes disclosure for
-  // native-selected tasks, Inbox 2 must neither show their data nor silently
-  // drop them (task-selection parity): the list is cleared as unverifiable.
-  wp("update_option('cellq_mode','deny_entry',false);");
-  await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="stale"]') &&
-    document.querySelectorAll('[data-ciq2-entry]').length===0,null,{timeout:90000});
-  assert.deepEqual(await all(page),[]);
-  wp("update_option('cellq_mode','baseline',false);");
+  // S4: Deny Native Entry Detail for exactly ONE task while it remains in the
+  // authenticated Native Inbox list. The card/list must retain the same 500
+  // native-selected IDs; the genuine Detail page must still refuse entry/actions.
+  const s4Before=await all(page);
+  assert.equal(s4Before.length,500);
+  const s4Denied=s4Before[0],s4Allowed=s4Before[1];
+  wp("update_option('cellq_s4_denied_id',"+s4Denied+",false);update_option('cellq_mode','deny_one_entry',false);");
+  try {
+    await page.locator('[data-ciq2-refresh]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
+      document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
+    assert.deepEqual(await all(page),s4Before,'S4 Detail denial modified Inbox 2 task membership');
+    const nativeS4=JSON.parse(wp("wp_set_current_user("+f.officer+");$scope=['form_id'=>"+f.form_id+"];"+
+      "$rows=cellq_model()->get_inbox_tasks(cellq_args($scope,0,2001));"+
+      "echo wp_json_encode(array_map('intval',array_column($rows,'id')));"));
+    assert.deepEqual([...nativeS4].sort((a,b)=>a-b),[...s4Before].sort((a,b)=>a-b),
+      'S4 Inbox 2 membership diverges from authentic Native Task Model');
+    const deniedHref=await page.locator('[data-ciq2-entry="'+s4Denied+'"] [data-ciq2-detail]').getAttribute('href');
+    const allowedHref=await page.locator('[data-ciq2-entry="'+s4Allowed+'"] [data-ciq2-detail]').getAttribute('href');
+    assert.ok(deniedHref&&allowedHref);
+    const detailDenied=await ctx.newPage();
+    const detailAllowed=await ctx.newPage();
+    try {
+      const deniedResponse=await detailDenied.goto(deniedHref,{waitUntil:'domcontentloaded'});
+      assert.equal(deniedResponse.status(),200);
+      const deniedText=await detailDenied.locator('.gravityflow_workflow_detail').innerText();
+      assert.match(deniedText,/You don't have permission to view this entry\./);
+      assert.equal(await detailDenied.locator('.gravityflow_workflow_detail form').count(),0,
+        'Native Detail rendered an actionable form after permission denial');
+      const allowedResponse=await detailAllowed.goto(allowedHref,{waitUntil:'domcontentloaded'});
+      assert.equal(allowedResponse.status(),200);
+      const allowedText=await detailAllowed.locator('.gravityflow_workflow_detail').innerText();
+      assert.doesNotMatch(allowedText,/You don't have permission to view this entry\./);
+    } finally {
+      await detailDenied.close();await detailAllowed.close();
+    }
+    pass('s4_native_list_and_inbox2_cards_preserved_while_one_native_detail_is_denied');
+  } finally {
+    wp("update_option('cellq_mode','baseline',false);delete_option('cellq_s4_denied_id');");
+  }
+  await page.locator('[data-ciq2-refresh]').click();
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
     document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
-  pass('host_disclosure_revocation_fails_closed_without_data_and_restore_requalifies');
 
   // Intercept two REAL host-backed reads, delay delivery of the first, create
   // a new native Flow task, and deliver the newer read before the older one.
