@@ -2,7 +2,13 @@
 /** Experimental read-only boundary. No routes, shortcode, UI, or workflow writes. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 
+function ciq_host_version_qualified( $version ) {
+    return is_string( $version ) && '3.1.0' === $version;
+}
 function ciq_entries( $scope = array() ) {
+    if ( ! ciq_host_version_qualified( defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null ) ) {
+        return new WP_Error( 'ciq2_unsupported_host_version' );
+    }
     if ( ! is_user_logged_in() ) { return new WP_Error( 'authentication_required' ); }
     // Server-owned identity and form scope. Never trust browser filter_key/user_id.
     $scope = array_intersect_key( $scope, array( 'form_id' => true ) );
@@ -41,6 +47,9 @@ function ciq_entries( $scope = array() ) {
 function ciq_project( $entries, $skip_denied = false ) {
     if ( is_wp_error( $entries ) ) { return $entries; }
     require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
+    if ( ! is_callable( array( 'Gravity_Flow_Entry_Detail', 'is_permission_granted' ) ) ) {
+        return new WP_Error( 'ciq2_native_detail_permission_contract_changed' );
+    }
     $fixture = get_option( 'ciq_fixture', array() );
     $rows = array();
     foreach ( $entries as $entry ) {
