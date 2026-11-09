@@ -43,6 +43,7 @@ try {
     $measure( 'public_membership_single_call', static function () use ( $scope ) { return ciq_entries( $scope, 2001 ); } );
     $measure( 'project_with_detail_fields', static function () use ( $entries ) { return ciq_project( $entries, true, true ); } );
     $measure( 'project_without_detail_fields', static function () use ( $entries ) { return ciq_project( $entries, true, false ); } );
+    $measure( 'project_native_selection', static function () use ( $entries ) { return ciq_project( $entries, false, false, true ); } );
     $measure( 'task_model_batch40', static function () use ( $scope, $workload ) {
         $all = array();
         for ( $o = 0; $o < $workload; $o += 40 ) {

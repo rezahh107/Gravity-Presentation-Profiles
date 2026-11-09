@@ -22,9 +22,16 @@ The Owner-authorized production architecture remains Native-First.
   statements are cross-checked by task identity, with at most one bounded retry
   for a detected concurrent change. This is not an atomic snapshot, and does not
   qualify production caching or latency.
-- A single Entry Detail guard denial omits that entry (with generic server log)
-  in this **prototype only**. Query/identity failures reject the entire list.
-  The strict PR169/PR170 path remains unchanged by default.
+- Task selection (Owner decision): exactly the native Gravity Flow Inbox
+  membership for the same user and scope, reconciled across the public query
+  and the native Task Model. No Inbox 2-only eligibility rule (step type,
+  active flag or per-task assignee re-read). Native Gravity Flow remains the
+  authority for Detail access and every task action.
+- Independent disclosure authorization stays: a native-selected task whose
+  Entry Detail permission is denied is neither rendered nor silently omitted;
+  the read fails with `native_entry_access_denied`. Query/identity failures
+  reject the entire list. The strict PR169/PR170 helpers keep their own
+  actionability contract by default.
 
 ## Authentic execution
 

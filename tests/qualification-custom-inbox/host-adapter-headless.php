@@ -52,8 +52,14 @@ try {
     $assert( 'CQ_FINAL_MASKED' === $by_id[ (int) $fixture['entries'][0] ]['cells']['national_id']['text'],
         'effective_native_final_mask_retained' );
 
-    $bad = $good; $bad['actionable'] = false;
-    $assert( $reject( $bad ), 'detail_access_without_current_actionability_rejected' );
+    // Owner decision: no Inbox 2-only actionability rule. Admission instead
+    // requires provenance from the reconciled native Inbox membership.
+    $assert( ! array_key_exists( 'actionable', $good ) && 'NATIVE_INBOX_MEMBERSHIP' === ( $good['task_source'] ?? null ),
+        'snapshot_rows_carry_native_membership_provenance_not_inbox2_eligibility' );
+    $bad = $good; unset( $bad['task_source'] );
+    $assert( $reject( $bad ), 'row_without_reconciled_native_membership_rejected' );
+    $bad = $good; $bad['task_source'] = 'DETAIL_ACCESS_ONLY';
+    $assert( $reject( $bad ), 'row_with_other_provenance_rejected' );
     $bad = $good; $bad['date_created'] = '2026-99-99 99:99:99';
     $assert( $reject( $bad ), 'invalid_created_at_rejected_before_fifo' );
     $bad = $good; $bad['binding_state'] = 'NO_QUALIFIED_FORM_PROJECTION';

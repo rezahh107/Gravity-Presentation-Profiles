@@ -24,7 +24,10 @@ add_action( 'template_redirect', static function () {
  * between them is detected and rejected, never merged.
  */
 function ciq2_read_once( $scope ) {
-    $rows = cellq_rows( $scope, true, array( 'batch_size' => 2001, 'with_fields' => false ) );
+    // Strict disclosure: a native-selected task the user may not view is never
+    // omitted silently (that would change task selection) nor rendered; the read
+    // fails with the precise `native_entry_access_denied` reason.
+    $rows = cellq_rows( $scope, false, array( 'batch_size' => 2001, 'with_fields' => false, 'native_selection' => true ) );
     if ( is_wp_error( $rows ) ) { return $rows; }
     foreach ( $rows as $row ) {
         $admission = cellq_admitted_card( $row );
@@ -46,7 +49,7 @@ function ciq2_read_once( $scope ) {
  */
 function ciq2_snapshot_rows( $scope ) {
     $retryable = array( 'native_cell_task_set_changed', 'unstable_or_incomplete_task_set',
-        'current_task_not_proven', 'host_page_size_reduced' );
+        'current_task_not_proven', 'host_page_size_reduced', 'native_entry_access_denied' );
     $GLOBALS['ciq2_snapshot_attempts'] = array();
     $result = new WP_Error( 'ciq2_snapshot_not_attempted' );
     for ( $attempt = 1; $attempt <= 2; ++$attempt ) {
