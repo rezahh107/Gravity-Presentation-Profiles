@@ -82,6 +82,12 @@ try {
     $assert( $reject( $bad ), 'same_host_wrong_port_rejected' );
     $bad = $good; $bad['native_url'] = 'javascript:alert(1)';
     $assert( $reject( $bad ), 'script_url_rejected' );
+    $bad = $good;
+    $bad['native_url'] = add_query_arg( array(
+        'page' => 'gravityflow-inbox', 'view' => 'entry', 'id' => (int) $good['form_id'],
+        'lid' => (int) $good['id'],
+    ), home_url( '/unrelated-wordpress-page/' ) );
+    $assert( $reject( $bad ), 'same_origin_unrelated_route_rejected' );
 
     // Real host source discriminators: do not mock a native row for these cases.
     update_option( 'cellq_mode', 'opaque', false );
@@ -141,7 +147,8 @@ try {
     ), 'authentic_admin_detail_link_valid' );
     $front_args = cellq_args( $scope, 0, 1 );
     $front_args['detail_base_url'] = add_query_arg(
-        'view', 'entry', get_permalink( (int) get_option( 'ciq2_page_id' ) )
+        array( 'page' => 'gravityflow-inbox', 'view' => 'entry' ),
+        $fixture['native_url']
     );
     $front_row = $model->get_inbox_tasks( $front_args );
     $assert( count( $front_row ) === 1 && cellq_native_detail_url_valid(
