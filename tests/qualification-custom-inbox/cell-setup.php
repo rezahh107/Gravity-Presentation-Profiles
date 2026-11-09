@@ -46,7 +46,7 @@ if ( $r['status'] !== InboxSetupService::STATUS_COMPLETED ) { throw new RuntimeE
 $entries = array();
 $witnesses = array(
     array( '1' => 'آرین & همکار', '2' => 'کاظمی «الف»', '4' => 'CQ_RAW_NID_A<&"', '5' => 'grade_code_10', '6' => 'school_code_A' ),
-    array( '1' => 'آزمایش نیمه‌کامل', '2' => '', '4' => '', '5' => 'grade_code_10', '6' => '' ),
+    array( '1' => 'آزمایش نیمه‌کامل', '2' => '', '4' => 'CQ_SYNTH_PARTIAL_NID_B', '5' => 'grade_code_10', '6' => '' ),
     array( '1' => 'نام <img src=x onerror="window.__cellq_xss=1"> امن', '2' => 'کاظمی ب‌پ', '4' => 'CQ_RAW_NID_C', '5' => '', '6' => 'school_code_A' ),
 );
 foreach ( $witnesses as $index => $values ) {
