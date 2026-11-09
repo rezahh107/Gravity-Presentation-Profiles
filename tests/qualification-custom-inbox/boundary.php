@@ -80,8 +80,7 @@ function ciq_project( $entries, $skip_denied = false ) {
         // Only the spike's mapped simple text fields on current assignee Approval
         // are qualified. No fallback for administrator, User Input, or unknown form.
         if ( (int) ( $fixture['form_id'] ?? 0 ) === (int) $entry['form_id']
-            && $step instanceof Gravity_Flow_Step_Approval && $step->is_user_assignee()
-            && ! has_filter( 'gform_field_content' ) ) {
+            && $actionable && ! has_filter( 'gform_field_content' ) ) {
             foreach ( array( 1, 2, 3, 4 ) as $id ) {
                 $field = GFFormsModel::get_field( $form, $id );
                 if ( ! $field || 'text' !== $field->type ) { continue; }
