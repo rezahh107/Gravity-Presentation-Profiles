@@ -1,12 +1,15 @@
 <?php
 /**
  * Owner-approved goal: Inbox 2 task selection == native Gravity Flow Inbox
- * membership for the same user, scope and configuration. No Inbox 2-only
- * eligibility rule; independent disclosure authorization and safe presentation
- * remain. Disposable synthetic DB only (negative-baseline scenario); real
- * Gravity Flow steps, assignments and entry meta, no vendor modification.
+ * membership for the same user, scope and configuration. Detail authorization
+ * is independent and applies when the Native Detail route opens, not when
+ * displaying Native-list values. Safe final-cell presentation still applies.
+ * Disposable synthetic DB only; no vendor modification.
  */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
+ // The independent S4 oracle opens the vendor's Detail authorization contract,
+ // while the Inbox 2 read path intentionally does NOT load this class.
+require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
 $f = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) ( $f['form_id'] ?? 0 ) );
 // Two processes: Gravity Flow caches step feeds per request (`$found_feeds`),
@@ -67,9 +70,9 @@ $add_step = static function ( $settings ) use ( $f, $flow, $as ) {
     if ( ! $id || is_wp_error( $id ) ) { throw new RuntimeException( 'nsp_step_failed' ); }
     return (int) $id;
 };
-// Parity verdict for one actor: exact selection, or an explicit non-selection
-// reason (disclosure / presentation contract) - never a silent exclusion.
-$explicit_reasons = array( 'native_entry_access_denied', 'ciq2_unqualified_required_binding',
+// Parity verdict for one actor: exact native selection, or a genuine
+// presentation-contract failure (not the superseded Detail-denial gate).
+$explicit_reasons = array( 'ciq2_unqualified_required_binding',
     'ciq2_unqualified_required_value', 'ciq2_unqualified_native_detail_url', 'ciq2_unqualified_creation_timestamp' );
 $verdict = static function ( $o, $s ) use ( $same, $explicit_reasons ) {
     if ( isset( $s['ids'] ) ) { return $same( $s['ids'], $o['public'] ) ? 'EXACT_NATIVE_SELECTION' : 'MISMATCH'; }
@@ -184,8 +187,10 @@ try {
     $native_action = is_object( $step ) && $step->is_user_assignee();
     $ok( in_array( $stale, $o['public'], true ), 'nsp_s4_native_membership_includes_stale_pending' );
     $ok( ! $native_detail && ! $native_action, 'nsp_s4_native_denies_detail_and_action' );
-    $ok( isset( $s['error'] ) && 'native_entry_access_denied' === $s['error'] && 2 === count( (array) $s['attempts'] ),
-        'nsp_s4_inbox2_explicit_disclosure_reason_no_rows' );
+    $ok( 'EXACT_NATIVE_SELECTION' === $verdict( $o, $s )
+        && in_array( $stale, $s['ids'], true )
+        && array( 'OK' ) === ( $s['attempts'] ?? null ),
+        'nsp_s4_native_list_row_survives_denied_detail_and_action' );
     $record( 'S4_stale_pending', array( 'officer' => array( 'native' => $o, 'inbox2' => $s,
         'verdict' => $verdict( $o, $s ), 'native_detail_permission' => (bool) $native_detail,
         'native_action_permission' => (bool) $native_action ) ) );
