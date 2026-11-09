@@ -129,9 +129,17 @@ function cellq_native_detail_url_valid( $url, $form_id, $entry_id ) {
     if ( ! is_array( $parts ) || ! isset( $parts['scheme'], $parts['host'], $parts['query'] )
         || ! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true )
         || isset( $parts['user'] ) || isset( $parts['pass'] ) ) { return false; }
-    $host = strtolower( $parts['host'] );
-    $allowed = array( wp_parse_url( home_url(), PHP_URL_HOST ), wp_parse_url( admin_url(), PHP_URL_HOST ) );
-    if ( ! in_array( $host, array_map( 'strtolower', array_filter( $allowed ) ), true ) ) { return false; }
+    $allowed_origin = false;
+    foreach ( array( home_url(), admin_url() ) as $origin_url ) {
+        $origin = wp_parse_url( $origin_url );
+        if ( ! is_array( $origin ) || ! isset( $origin['scheme'], $origin['host'] ) ) { continue; }
+        $url_port = (int) ( $parts['port'] ?? ( 'https' === strtolower( $parts['scheme'] ) ? 443 : 80 ) );
+        $origin_port = (int) ( $origin['port'] ?? ( 'https' === strtolower( $origin['scheme'] ) ? 443 : 80 ) );
+        if ( strtolower( $parts['scheme'] ) === strtolower( $origin['scheme'] )
+            && strtolower( $parts['host'] ) === strtolower( $origin['host'] )
+            && $url_port === $origin_port ) { $allowed_origin = true; break; }
+    }
+    if ( ! $allowed_origin ) { return false; }
     parse_str( $parts['query'], $query );
     return isset( $query['id'], $query['lid'], $query['view'] )
         && is_scalar( $query['id'] ) && is_scalar( $query['lid'] )
@@ -142,7 +150,8 @@ function cellq_native_detail_url_valid( $url, $form_id, $entry_id ) {
 
 /** One admission gate for both initial cards and refreshed HTML. */
 function cellq_admitted_card( $row ) {
-    if ( ! is_array( $row ) || 'CURRENT_HOST_QUALIFIED' !== ( $row['binding_state'] ?? null ) ) {
+    if ( ! is_array( $row ) || true !== ( $row['actionable'] ?? false )
+        || 'CURRENT_HOST_QUALIFIED' !== ( $row['binding_state'] ?? null ) ) {
         return new WP_Error( 'ciq2_unqualified_required_binding' );
     }
     foreach ( array( 'student_name', 'national_id', 'school_grade' ) as $semantic ) {
