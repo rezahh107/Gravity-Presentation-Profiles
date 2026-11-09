@@ -7,6 +7,9 @@
  * Disposable synthetic DB only; no vendor modification.
  */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
+ // The independent S4 oracle opens the vendor's Detail authorization contract,
+ // while the Inbox 2 read path intentionally does NOT load this class.
+require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
 $f = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) ( $f['form_id'] ?? 0 ) );
 // Two processes: Gravity Flow caches step feeds per request (`$found_feeds`),
