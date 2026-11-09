@@ -52,6 +52,84 @@ try {
     $assert( 'CQ_FINAL_MASKED' === $by_id[ (int) $fixture['entries'][0] ]['cells']['national_id']['text'],
         'effective_native_final_mask_retained' );
 
+    // S4: Native Inbox list membership and effective cell values are independent
+    // from Entry Detail permission. A single Detail-denied native-listed task
+    // must remain a card alongside all other authorized native-listed tasks.
+    $s4_target = (int) $fixture['entries'][0];
+    $s4_detail_filter_calls = 0;
+    $s4_detail_deny = static function ( $allowed, $entry ) use ( $s4_target, &$s4_detail_filter_calls ) {
+        ++$s4_detail_filter_calls;
+        return (int) ( $entry['id'] ?? 0 ) === $s4_target ? false : $allowed;
+    };
+    add_filter( 'gravityflow_permission_granted_entry_detail', $s4_detail_deny, PHP_INT_MAX, 4 );
+    try {
+        $native_s4 = cellq_model()->get_inbox_tasks( cellq_args( $scope, 0, 40 ) );
+        $cards_s4 = ciq2_snapshot_rows( $scope );
+        $assert( is_array( $native_s4 ) && is_array( $cards_s4 ) && 3 === count( $native_s4 )
+            && 3 === count( $cards_s4 ), 's4_denied_detail_does_not_fail_native_list_or_inbox2' );
+        $native_s4_by_id = array_column( $native_s4, null, 'id' );
+        $card_s4_by_id = array_column( $cards_s4, null, 'id' );
+        $native_s4_ids = array_map( 'intval', array_keys( $native_s4_by_id ) );
+        $card_s4_ids = array_map( 'intval', array_keys( $card_s4_by_id ) );
+        sort( $native_s4_ids, SORT_NUMERIC ); sort( $card_s4_ids, SORT_NUMERIC );
+        $assert( $native_s4_ids === $card_s4_ids && in_array( $s4_target, $card_s4_ids, true ),
+            's4_exact_authenticated_native_membership_parity' );
+        $defs_s4 = cellq_model()->get_table_header_defs( cellq_args( $scope ) );
+        $s4_keys = array();
+        foreach ( $defs_s4 as $def ) {
+            if ( isset( $def['field'], $def['displayKey'] ) && is_string( $def['displayKey'] ) ) {
+                $s4_keys[ (string) $def['field'] ] = $def['displayKey'];
+            }
+        }
+        foreach ( $cards_s4 as $card ) {
+            $native = $native_s4_by_id[ $card['id'] ];
+            foreach ( array( 'student_name', 'national_id', 'school_grade' ) as $semantic ) {
+                $column = $card['cells'][ $semantic ]['column_id'];
+                $key = $s4_keys[ $column ] ?? null;
+                $assert( null !== $key && array_key_exists( $key, $native )
+                    && $card['cells'][ $semantic ]['text'] === cellq_text( $native[ $key ] ),
+                    's4_final_native_list_cell_parity_' . $semantic );
+            }
+        }
+        $serialized_s4 = wp_json_encode( $cards_s4 );
+        $assert( is_string( $serialized_s4 ) && false === strpos( $serialized_s4, 'CQ_SECRET_DO_NOT_EXPOSE_' )
+            && false === strpos( $serialized_s4, 'CQ_RAW_NID_' )
+            && 'CQ_FINAL_MASKED' === $card_s4_by_id[ $s4_target ]['cells']['national_id']['text'],
+            's4_hidden_field_excluded_and_effective_list_mask_retained' );
+        $assert( 0 === $s4_detail_filter_calls,
+            's4_inbox2_read_never_calls_detail_permission_filter' );
+
+        // The genuine Native Detail renderer MUST still evaluate its own gate.
+        $native_entry = GFAPI::get_entry( $s4_target );
+        $native_form = GFAPI::get_form( $scope['form_id'] );
+        $native_step = ( new Gravity_Flow_API( $scope['form_id'] ) )->get_current_step( $native_entry );
+        ob_start();
+        try {
+            Gravity_Flow_Entry_Detail::entry_detail( $native_form, $native_entry, $native_step );
+            $denied_html = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        $assert( $s4_detail_filter_calls > 0 && is_string( $denied_html )
+            && false !== strpos( $denied_html, "You don't have permission to view this entry." ),
+            's4_real_native_detail_denied_after_list_card_is_shown' );
+        $allowed_entry = GFAPI::get_entry( (int) $fixture['entries'][1] );
+        $allowed_step = ( new Gravity_Flow_API( $scope['form_id'] ) )->get_current_step( $allowed_entry );
+        $allowed_detail = Gravity_Flow_Entry_Detail::is_permission_granted(
+            $allowed_entry, $native_form, $allowed_step
+        );
+        $assert( (bool) apply_filters( 'gravityflow_permission_granted_entry_detail',
+            $allowed_detail, $allowed_entry, $native_form, $allowed_step ),
+            's4_other_native_detail_positive_control' );
+        $report['s4_native_list_vs_detail'] = array(
+            'native_tasks' => count( $native_s4_ids ), 'inbox2_cards' => count( $card_s4_ids ),
+            'denied_detail_rendered' => true, 'detail_filter_called_by_inbox2' => false,
+            'final_mask_preserved' => true,
+        );
+    } finally {
+        remove_filter( 'gravityflow_permission_granted_entry_detail', $s4_detail_deny, PHP_INT_MAX );
+    }
+
     // Owner decision: no Inbox 2-only actionability rule. Admission instead
     // requires provenance from the reconciled native Inbox membership.
     $assert( ! array_key_exists( 'actionable', $good ) && 'NATIVE_INBOX_MEMBERSHIP' === ( $good['task_source'] ?? null ),
