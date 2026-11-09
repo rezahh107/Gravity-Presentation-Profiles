@@ -140,7 +140,18 @@ function cellq_native_detail_url_valid( $url, $form_id, $entry_id ) {
             && $url_port === $origin_port ) { $allowed_origin = true; break; }
     }
     if ( ! $allowed_origin ) { return false; }
+    // Exact native Inbox routes only: a matching origin and query tuple alone
+    // must not turn an unrelated WordPress page into a trusted Detail target.
+    $native_fixture = get_option( 'cellq_fixture', array() );
+    $native_frontend_path = wp_parse_url( $native_fixture['native_url'] ?? '', PHP_URL_PATH );
+    $native_admin_path = wp_parse_url( admin_url( 'admin.php' ), PHP_URL_PATH );
+    $path = $parts['path'] ?? '/';
+    $admin_detail = is_string( $native_admin_path ) && $path === $native_admin_path;
+    $frontend_detail = is_string( $native_frontend_path ) && $path === $native_frontend_path;
+    if ( ! $admin_detail && ! $frontend_detail ) { return false; }
     parse_str( $parts['query'], $query );
+    if ( ! isset( $query['page'] ) || ! is_string( $query['page'] )
+        || 'gravityflow-inbox' !== $query['page'] ) { return false; }
     return isset( $query['id'], $query['lid'], $query['view'] )
         && is_scalar( $query['id'] ) && is_scalar( $query['lid'] )
         && ctype_digit( (string) $query['id'] ) && ctype_digit( (string) $query['lid'] )
