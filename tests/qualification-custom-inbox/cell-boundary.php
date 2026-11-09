@@ -6,6 +6,25 @@ require_once __DIR__ . '/boundary.php';
 function cellq_model() {
     return gravity_flow()->container()->get( \Gravity_Flow\Gravity_Flow\Inbox\Inbox_Service_Provider::TASK_MODEL );
 }
+/** Internal Task Model: only the exact pinned Gravity Flow host is admitted. */
+function cellq_host_model() {
+    if ( ! defined( 'GRAVITY_FLOW_VERSION' ) || '3.1.0' !== GRAVITY_FLOW_VERSION
+        || ! function_exists( 'gravity_flow' )
+        || ! class_exists( 'Gravity_Flow\Gravity_Flow\Inbox\Inbox_Service_Provider' ) ) {
+        return new WP_Error( 'ciq2_unsupported_host_version' );
+    }
+    try {
+        $model = cellq_model();
+    } catch ( Throwable $error ) {
+        return new WP_Error( 'ciq2_native_task_service_unavailable' );
+    }
+    if ( ! $model instanceof \Gravity_Flow\Gravity_Flow\Inbox\Models\Task
+        || ! is_callable( array( $model, 'get_inbox_tasks' ) )
+        || ! is_callable( array( $model, 'get_table_header_defs' ) ) ) {
+        return new WP_Error( 'ciq2_native_task_contract_changed' );
+    }
+    return $model;
+}
 function cellq_args( $scope = array(), $offset = 0, $page_size = 1 ) {
     $fixture = get_option( 'cellq_fixture', array() );
     return array_merge( array_intersect_key( $scope, array( 'form_id' => true ) ), array(
@@ -28,8 +47,15 @@ function cellq_rows( $scope = array(), $skip_denied = false ) {
     $entries = ciq_entries( $scope );
     $metadata = ciq_project( $entries, $skip_denied ); // Preserve PR169 entry guard and all task predicates.
     if ( is_wp_error( $metadata ) ) { return $metadata; }
+    $model = cellq_host_model();
+    if ( is_wp_error( $model ) ) { return $model; }
     $contract = \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::initialGeometryContract( $scope );
-    $defs = cellq_model()->get_table_header_defs( cellq_args( $scope ) );
+    try {
+        $defs = $model->get_table_header_defs( cellq_args( $scope ) );
+    } catch ( Throwable $error ) {
+        return new WP_Error( 'ciq2_native_header_contract_changed' );
+    }
+    if ( ! is_array( $defs ) ) { return new WP_Error( 'ciq2_native_header_contract_changed' ); }
     $native = array();
     $batch_size = 40;
     $GLOBALS['cellq_task_model_paging'] = array();
@@ -37,13 +63,29 @@ function cellq_rows( $scope = array(), $skip_denied = false ) {
     // guard can optionally omit an individual denied row from presentation.
     for ( $offset = 0; $offset < count( $entries ); $offset += $batch_size ) {
         $GLOBALS['cellq_task_model_paging'][] = array( 'offset' => $offset, 'page_size' => $batch_size );
-        foreach ( cellq_model()->get_inbox_tasks( cellq_args( $scope, $offset, $batch_size ) ) as $row ) {
-            $id = (int) ( $row['id'] ?? 0 );
+        try {
+            $page = $model->get_inbox_tasks( cellq_args( $scope, $offset, $batch_size ) );
+        } catch ( Throwable $error ) {
+            return new WP_Error( 'ciq2_native_task_contract_changed' );
+        }
+        if ( ! is_array( $page ) || count( $page ) > $batch_size ) {
+            return new WP_Error( 'ciq2_native_task_contract_changed' );
+        }
+        foreach ( $page as $row ) {
+            if ( ! is_array( $row ) || ! isset( $row['id'] )
+                || ! ctype_digit( (string) $row['id'] ) ) {
+                return new WP_Error( 'native_cell_identity_invalid' );
+            }
+            $id = (int) $row['id'];
             if ( $id < 1 || isset( $native[ $id ] ) ) { return new WP_Error( 'native_cell_identity_invalid' ); }
             $native[ $id ] = $row;
         }
     }
-    if ( count( $native ) !== count( $entries ) ) { return new WP_Error( 'native_cell_task_set_changed' ); }
+    $expected_ids = array();
+    foreach ( $entries as $entry ) { $expected_ids[ (int) $entry['id'] ] = true; }
+    if ( count( $native ) !== count( $entries ) || array_diff_key( $native, $expected_ids ) ) {
+        return new WP_Error( 'native_cell_task_set_changed' );
+    }
     $created = array();
     foreach ( $entries as $entry ) { $created[ (int) $entry['id'] ] = (string) ( $entry['date_created'] ?? '' ); }
     $keys = null === $contract ? array() : array(
@@ -74,4 +116,45 @@ function cellq_rows( $scope = array(), $skip_denied = false ) {
     }
     unset( $row );
     return $metadata;
+}
+
+/** Validate a same-site native Detail link, including same-site customization filters. */
+function cellq_native_detail_url_valid( $url, $form_id, $entry_id ) {
+    if ( ! is_string( $url ) || '' === $url || $form_id < 1 || $entry_id < 1 ) { return false; }
+    $parts = wp_parse_url( $url );
+    if ( ! is_array( $parts ) || ! isset( $parts['scheme'], $parts['host'], $parts['query'] )
+        || ! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true )
+        || isset( $parts['user'] ) || isset( $parts['pass'] ) ) { return false; }
+    $host = strtolower( $parts['host'] );
+    $allowed = array( wp_parse_url( home_url(), PHP_URL_HOST ), wp_parse_url( admin_url(), PHP_URL_HOST ) );
+    if ( ! in_array( $host, array_map( 'strtolower', array_filter( $allowed ) ), true ) ) { return false; }
+    parse_str( $parts['query'], $query );
+    return isset( $query['id'], $query['lid'], $query['view'] )
+        && is_scalar( $query['id'] ) && is_scalar( $query['lid'] )
+        && ctype_digit( (string) $query['id'] ) && ctype_digit( (string) $query['lid'] )
+        && (int) $query['id'] === $form_id && (int) $query['lid'] === $entry_id
+        && 'entry' === $query['view'];
+}
+
+/** One admission gate for both initial cards and refreshed HTML. */
+function cellq_admitted_card( $row ) {
+    if ( ! is_array( $row ) || 'CURRENT_HOST_QUALIFIED' !== ( $row['binding_state'] ?? null ) ) {
+        return new WP_Error( 'ciq2_unqualified_required_binding' );
+    }
+    foreach ( array( 'student_name', 'national_id', 'school_grade' ) as $semantic ) {
+        if ( ( $row['cell_status'][ $semantic ] ?? null ) !== 'NATIVE_PLAIN_CELL'
+            || ! isset( $row['cells'][ $semantic ]['column_id'], $row['cells'][ $semantic ]['text'] )
+            || ! is_string( $row['cells'][ $semantic ]['column_id'] )
+            || '' === $row['cells'][ $semantic ]['column_id']
+            || ! is_string( $row['cells'][ $semantic ]['text'] )
+            || in_array( trim( $row['cells'][ $semantic ]['text'] ), array( '', '-', '—' ), true ) ) {
+            return new WP_Error( 'ciq2_unqualified_required_value' );
+        }
+    }
+    if ( ! isset( $row['form_id'], $row['id'] ) || ! cellq_native_detail_url_valid(
+        $row['native_url'] ?? null, (int) $row['form_id'], (int) $row['id']
+    ) ) {
+        return new WP_Error( 'ciq2_unqualified_native_detail_url' );
+    }
+    return true;
 }
