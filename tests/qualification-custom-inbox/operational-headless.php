@@ -15,7 +15,13 @@ try {
     $ok( function_exists( 'ciq2_snapshot_rows' ), 'new_mu_loaded' );
     wp_set_current_user( (int) $f['officer'] );
     $base = ciq2_snapshot_rows( $scope );
-    $ok( is_array( $base ) && count( $base ) >= 1 && count( $base ) <= 3, 'native_baseline_active' );
+    // Either the small authentic baseline, or the exact 300-task set recorded by
+    // scale-300.php in this same disposable database. Never admit unknown growth.
+    $known_300 = array_map( 'intval', (array) get_option( 'ciq2_scale300_ids', array() ) );
+    $base_ids = is_array( $base ) ? array_map( 'intval', array_column( $base, 'id' ) ) : array();
+    sort( $base_ids );
+    $ok( is_array( $base ) && ( ( count( $base ) >= 1 && count( $base ) <= 3 )
+        || ( 300 === count( $base ) && $base_ids === $known_300 ) ), 'native_baseline_active' );
     $flow = new Gravity_Flow_API( (int) $f['form_id'] );
     $temporary = array();
     wp_set_current_user( (int) $f['admin'] );

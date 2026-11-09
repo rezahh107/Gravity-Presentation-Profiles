@@ -497,6 +497,19 @@ jobs:
         set -euo pipefail
         php -l tests/qualification-custom-inbox/scale-baseline.php
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-baseline.php
+    - name: Measure Native and Inbox 2 at about 300 synthetic tasks
+      if: matrix.scenario == 'scale'
+      shell: bash
+      timeout-minutes: 12
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/scale-300.php
+        php -l tests/qualification-custom-inbox/cost-profile.php
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-300.php
+        CIQ2_PROFILE_WORKLOAD=300 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
+        cp tests/qualification-custom-inbox/native-cost-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
+        node tests/qualification-custom-inbox/native-cost-browser.mjs 300
+        rm -f "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
     - name: Qualify 500/501 native task membership and operational Live Refresh
       if: matrix.scenario == 'scale'
       shell: bash
@@ -521,6 +534,7 @@ jobs:
         php -l tests/qualification-custom-inbox/native-cost-mu.php
         node --check tests/qualification-custom-inbox/native-cost-browser.mjs
         cp tests/qualification-custom-inbox/native-cost-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
+        CIQ2_PROFILE_WORKLOAD=501 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
         node tests/qualification-custom-inbox/native-cost-browser.mjs 501
     - name: Measure authentic 2000-task boundary and 2001 fail-closed behavior
       if: matrix.scenario == 'scale'
@@ -537,6 +551,7 @@ jobs:
       run: |
         set -euo pipefail
         node tests/qualification-custom-inbox/native-cost-browser.mjs 2000
+        CIQ2_PROFILE_WORKLOAD=2000 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
     - name: Upload isolated evidence even on failure
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
