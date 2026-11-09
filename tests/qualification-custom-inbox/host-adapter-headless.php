@@ -112,8 +112,9 @@ try {
         } finally {
             ob_end_clean();
         }
+        $denied_text = html_entity_decode( wp_strip_all_tags( $denied_html ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
         $assert( $s4_detail_filter_calls > 0 && is_string( $denied_html )
-            && false !== strpos( $denied_html, "You don't have permission to view this entry." ),
+            && false !== strpos( $denied_text, "You don't have permission to view this entry." ),
             's4_real_native_detail_denied_after_list_card_is_shown' );
         $allowed_entry = GFAPI::get_entry( (int) $fixture['entries'][1] );
         $allowed_step = ( new Gravity_Flow_API( $scope['form_id'] ) )->get_current_step( $allowed_entry );
