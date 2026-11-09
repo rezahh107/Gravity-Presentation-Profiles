@@ -77,7 +77,7 @@ function cellq_rows( $scope = array(), $skip_denied = false ) {
         }
         foreach ( $page as $row ) {
             if ( ! is_array( $row ) || ! isset( $row['id'] )
-                || ! ctype_digit( (string) $row['id'] ) ) {
+                || ! is_scalar( $row['id'] ) || ! ctype_digit( (string) $row['id'] ) ) {
                 return new WP_Error( 'native_cell_identity_invalid' );
             }
             $id = (int) $row['id'];
