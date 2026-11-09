@@ -85,6 +85,36 @@ try {
         remove_filter( 'gravityflow_columns_inbox_table', $remove_column, PHP_INT_MAX );
     }
 
+    // Mutate actual host filter outputs, not only a copied candidate row.
+    $bad_id = static function ( $value, $form_id, $field_id ) use ( $scope ) {
+        return (int) $form_id === $scope['form_id'] && 'id' === (string) $field_id
+            ? array( 'unexpected' => 'row-shape' ) : $value;
+    };
+    add_filter( 'gravityflow_inbox_field_value', $bad_id, PHP_INT_MAX, 4 );
+    try {
+        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'non_scalar_native_task_identity_rejected' );
+    } finally {
+        remove_filter( 'gravityflow_inbox_field_value', $bad_id, PHP_INT_MAX );
+    }
+    $blank_nid = static function ( $value, $form_id, $field_id ) use ( $scope ) {
+        return (int) $form_id === $scope['form_id'] && '4' === (string) $field_id ? '' : $value;
+    };
+    add_filter( 'gravityflow_inbox_field_value', $blank_nid, PHP_INT_MAX, 4 );
+    try {
+        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'empty_final_native_nid_rejected' );
+    } finally {
+        remove_filter( 'gravityflow_inbox_field_value', $blank_nid, PHP_INT_MAX );
+    }
+    $wrong_host_detail = static function ( $url, $entry ) {
+        return add_query_arg( 'lid', (int) $entry['id'] + 1, $url );
+    };
+    add_filter( 'gravityflow_entry_url_inbox_table', $wrong_host_detail, PHP_INT_MAX, 4 );
+    try {
+        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'wrong_id_from_native_url_hook_rejected' );
+    } finally {
+        remove_filter( 'gravityflow_entry_url_inbox_table', $wrong_host_detail, PHP_INT_MAX );
+    }
+
     // Native Task Model constructs both URLs; the adapter does not reconstruct them.
     $model = cellq_host_model();
     $admin_args = cellq_args( $scope, 0, 1 );
