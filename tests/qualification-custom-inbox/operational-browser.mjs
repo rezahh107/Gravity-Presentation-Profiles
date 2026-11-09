@@ -106,16 +106,17 @@ try{
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]')&&document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
   pass('expired_session_clears_rows_and_reauthentication_recovers');
 
-  // A currently authorized host task must disappear when the authentic
-  // Entry Detail permission hook revokes access, without a stale data leak.
+  // When the authentic Entry Detail permission hook revokes disclosure for
+  // native-selected tasks, Inbox 2 must neither show their data nor silently
+  // drop them (task-selection parity): the list is cleared as unverifiable.
   wp("update_option('cellq_mode','deny_entry',false);");
-  await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
+  await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="stale"]') &&
     document.querySelectorAll('[data-ciq2-entry]').length===0,null,{timeout:90000});
   assert.deepEqual(await all(page),[]);
   wp("update_option('cellq_mode','baseline',false);");
   await page.waitForFunction(()=>document.querySelector('[data-ciq2-state="current"]') &&
     document.querySelectorAll('[data-ciq2-entry]').length===500,null,{timeout:90000});
-  pass('host_entry_permission_revocation_and_restore_requalify_every_poll');
+  pass('host_disclosure_revocation_fails_closed_without_data_and_restore_requalifies');
 
   // Intercept two REAL host-backed reads, delay delivery of the first, create
   // a new native Flow task, and deliver the newer read before the older one.

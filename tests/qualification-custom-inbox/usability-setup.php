@@ -17,3 +17,5 @@ $data['head'] = getenv( 'GPP_WU21_REPOSITORY_SHA' );
 file_put_contents( getenv( 'WU21_ARTIFACT_DIR' ) . '/ciq2-browser-fixture.json',
     wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
 echo "CIQ2_USABILITY_PAGE_READY\n";
+// Validate the exact pristine Officer fixture before comparative workflow transitions.
+require_once __DIR__ . '/host-adapter-headless.php';

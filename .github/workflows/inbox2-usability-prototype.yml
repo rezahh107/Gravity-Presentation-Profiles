@@ -363,16 +363,26 @@ jobs:
         result=$?
         set -e
         test "$result" -ne 0
-        grep -Fq 'scale_baseline_invalid' "$WU21_ARTIFACT_DIR/ciq2-negative-baseline.log"
+        # Native-selection parity: a native-selected task whose disclosure is denied
+        # is never omitted silently; the read fails with the precise reason.
+        grep -Fq 'scale_baseline_unreadable' "$WU21_ARTIFACT_DIR/ciq2-negative-baseline.log"
         php -r '
         $r=json_decode(file_get_contents(getenv("WU21_ARTIFACT_DIR").
           "/ciq2-scale-baseline-negative-baseline.json"),true);
         if (!is_array($r) || ($r["status"]??null)!=="FAIL" ||
-            ($r["error"]??null)!=="scale_baseline_invalid" ||
-            ($r["count"]??null)!==0) {exit(1);}
+            ($r["error"]??null)!=="scale_baseline_unreadable" ||
+            ($r["snapshot_error"]??null)!=="native_entry_access_denied") {exit(1);}
         echo "CIQ2_INVALID_SCALE_BASELINE_REJECTED\n";
         '
         test ! -e "$WU21_ARTIFACT_DIR/ciq2-operational-fixture.json"
+    - name: Qualify Native Inbox task-selection parity in disposable negative-control DB
+      if: matrix.scenario == 'negative-baseline'
+      shell: bash
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/native-selection-parity-headless.php
+        CIQ2_NSP_PHASE=main php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/native-selection-parity-headless.php
+        CIQ2_NSP_PHASE=inactive php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/native-selection-parity-headless.php
     - name: Compare native Inbox and Inbox 2 on same synthetic three- and 47-task workloads
       if: matrix.scenario != 'negative-baseline'
       shell: bash
@@ -497,6 +507,19 @@ jobs:
         set -euo pipefail
         php -l tests/qualification-custom-inbox/scale-baseline.php
         php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-baseline.php
+    - name: Measure Native and Inbox 2 at about 300 synthetic tasks
+      if: matrix.scenario == 'scale'
+      shell: bash
+      timeout-minutes: 12
+      run: |
+        set -euo pipefail
+        php -l tests/qualification-custom-inbox/scale-300.php
+        php -l tests/qualification-custom-inbox/cost-profile.php
+        php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/scale-300.php
+        CIQ2_PROFILE_WORKLOAD=300 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
+        cp tests/qualification-custom-inbox/native-cost-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
+        node tests/qualification-custom-inbox/native-cost-browser.mjs 300
+        rm -f "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
     - name: Qualify 500/501 native task membership and operational Live Refresh
       if: matrix.scenario == 'scale'
       shell: bash
@@ -521,6 +544,7 @@ jobs:
         php -l tests/qualification-custom-inbox/native-cost-mu.php
         node --check tests/qualification-custom-inbox/native-cost-browser.mjs
         cp tests/qualification-custom-inbox/native-cost-mu.php "$WU21_WP_PATH/wp-content/mu-plugins/ciq2-native-cost.php"
+        CIQ2_PROFILE_WORKLOAD=501 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
         node tests/qualification-custom-inbox/native-cost-browser.mjs 501
     - name: Measure authentic 2000-task boundary and 2001 fail-closed behavior
       if: matrix.scenario == 'scale'
@@ -537,6 +561,7 @@ jobs:
       run: |
         set -euo pipefail
         node tests/qualification-custom-inbox/native-cost-browser.mjs 2000
+        CIQ2_PROFILE_WORKLOAD=2000 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/qualification-custom-inbox/cost-profile.php
     - name: Upload isolated evidence even on failure
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

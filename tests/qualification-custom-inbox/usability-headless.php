@@ -70,6 +70,33 @@ try {
             $GLOBALS['ciq_query_paging'][1]['offset'] === 40, 'public_api_second_page_offset_40' );
         $assert( count( $GLOBALS['cellq_task_model_paging'] ) === 2 &&
             $GLOBALS['cellq_task_model_paging'][1]['offset'] === 40, 'task_model_second_page_offset_40' );
+
+        // Inbox 2 snapshot read (O1/O2): one bounded call per host source and no
+        // Detail field projection. It must equal the historical batched read on
+        // identity, order-independent membership, cells, URLs and actionability.
+        $before_queries = get_num_queries(); $start = microtime( true );
+        $single = cellq_rows( $scope, true, array( 'batch_size' => 2001, 'with_fields' => false ) );
+        $report['measurements']['forty_seven_tasks_single_read'] = array(
+            'elapsed_ms' => round( ( microtime( true ) - $start ) * 1000, 1 ),
+            'wordpress_db_query_delta' => get_num_queries() - $before_queries,
+            'public_pages' => $GLOBALS['ciq_query_paging'],
+            'task_model_pages' => $GLOBALS['cellq_task_model_paging'],
+        );
+        $assert( is_array( $single ) && count( $single ) === 47, 'single_read_forty_seven_complete' );
+        $assert( count( $GLOBALS['ciq_query_paging'] ) === 1 && 2001 === $GLOBALS['ciq_query_paging'][0]['page_size']
+            && count( $GLOBALS['cellq_task_model_paging'] ) === 1
+            && 2001 === $GLOBALS['cellq_task_model_paging'][0]['page_size'], 'single_bounded_call_per_host_source' );
+        $index = static function ( $rows ) {
+            $out = array();
+            foreach ( $rows as $row ) {
+                $out[ (int) $row['id'] ] = array( $row['cells'], $row['cell_status'], $row['native_url'],
+                    $row['actionable'], $row['binding_state'], $row['date_created'], $row['step_id'] );
+            }
+            ksort( $out );
+            return $out;
+        };
+        $assert( $index( $single ) === $index( $bulk ), 'single_read_equals_batched_cells_urls_actionability' );
+        $assert( ! array_filter( array_column( $single, 'fields' ) ), 'snapshot_path_skips_unused_detail_fields' );
     } finally {
         wp_set_current_user( (int) $f['admin'] );
         foreach ( $temp as $id ) { GFAPI::delete_entry( $id ); }

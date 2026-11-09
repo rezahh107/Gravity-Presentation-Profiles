@@ -11,10 +11,13 @@ import {chromium} from 'playwright';
 const env=process.env, dir=env.WU21_ARTIFACT_DIR, base=env.WU21_BASE_URL;
 assert.equal(base,'http://127.0.0.1:8080');
 const workload=Number(process.argv[2]);
-assert.ok([501,2000].includes(workload));
+assert.ok([300,501,2000].includes(workload));
 const file=path.join(dir,'ciq2-native-cost-'+workload+'.json');
 const serverLog=path.join(dir,'ciq2-native-cost-server.ndjson');
-const fixture=JSON.parse(fs.readFileSync(path.join(dir,'ciq2-operational-fixture.json'),'utf8'));
+// The 300-task measurement runs before the 500/501 lab writes its fixture file;
+// then the officer identity comes from the same server-owned cellq fixture.
+const operationalFixture=path.join(dir,'ciq2-operational-fixture.json');
+let fixture=fs.existsSync(operationalFixture)?JSON.parse(fs.readFileSync(operationalFixture,'utf8')):null;
 const report={head:env.GPP_WU21_REPOSITORY_SHA,workload,status:'RUNNING',
   runtime:{wordpress:'6.8.3',php:'8.2.35',gravity_forms:'3.1.1.1',gravity_flow:'3.1.0',flow_sha256:env.WU21_FLOW_SHA256},
   scenarios:[],limitations:[
@@ -32,6 +35,7 @@ function wp(code){
   assert.equal(r.status,0,r.stderr||r.stdout);return r.stdout.trim();
 }
 const jsonWP=code=>JSON.parse(wp(code));
+if(!fixture)fixture=jsonWP('$f=get_option("cellq_fixture");echo wp_json_encode(["officer"=>(int)$f["officer"]]);');
 let independentIds=[];
 function nativeInternalSnapshot(){
   const root=document.querySelector('[data-js="gflow-inbox"]');
@@ -176,6 +180,17 @@ try{
   };
   report.status=native.page_errors.length?'COST_MEASURED_NATIVE_BROWSER_ERROR_OBSERVED':
     'PASS_MEASURED_BOTH_AUTHENTIC_UI_PATHS';save();
+  const per=r=>{const refresh=r.refresh_server.records,ok=r.transactions.filter(x=>x.status===200);
+    const avg=a=>a.length?Math.round(10*a.reduce((n,x)=>n+x,0)/a.length)/10:null;
+    return {initial_browser_ms:r.view.initial_ms,
+      initial_server:r.initial_server.records.map(x=>({queries:x.queries,ms:x.server_elapsed_ms,php_peak_bytes:x.php_peak_bytes})),
+      refresh_requests:refresh.length,refresh_queries_avg:avg(refresh.map(x=>x.queries||0)),
+      refresh_server_ms_avg:avg(refresh.map(x=>x.server_elapsed_ms||0)),
+      refresh_php_peak_bytes_max:Math.max(0,...refresh.map(x=>x.php_peak_bytes||0)),
+      refresh_response_bytes_avg:avg(ok.map(x=>x.response_bytes||0)),
+      refresh_browser_ms_avg:avg(ok.map(x=>x.browser_elapsed_ms||0)),
+      native_config:r.view.native_config};};
+  console.log('CIQ2_COST_SUMMARY '+JSON.stringify({workload,head:env.GPP_WU21_REPOSITORY_SHA,native:per(native),inbox2:per(inbox2)}));
   console.log('CIQ2_NATIVE_COST_PASS '+JSON.stringify({workload,comparison:report.comparison,
     native_row_integrity:native.post_refresh_task_id_integrity,native_errors:native.page_errors.length,
     native_median_request_ms:native.refresh_server.records.map(x=>x.server_elapsed_ms),

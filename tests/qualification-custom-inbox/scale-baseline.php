@@ -61,6 +61,8 @@ try {
     wp_set_current_user( (int) $f['officer'] );
     $rows = ciq2_snapshot_rows( array( 'form_id' => (int) $f['form_id'] ) );
     if ( is_wp_error( $rows ) || ! is_array( $rows ) ) {
+        // Record the precise fail-closed reason (e.g. native_entry_access_denied).
+        $report['snapshot_error'] = is_wp_error( $rows ) ? $rows->get_error_code() : gettype( $rows );
         throw new RuntimeException( 'scale_baseline_unreadable' );
     }
     $ids = array_map( 'intval', array_column( $rows, 'id' ) );
