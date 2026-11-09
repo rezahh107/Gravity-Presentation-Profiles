@@ -2,6 +2,8 @@
 /** Focused, disposable native host-adapter safety tests. Synthetic entries only. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 require_once __DIR__ . '/cell-boundary.php';
+// The actual Native Detail renderer is exercised ONLY as a separate S4 oracle.
+require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
 
 $fixture = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) ( $fixture['form_id'] ?? 0 ) );
