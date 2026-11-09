@@ -24,7 +24,7 @@ const report={head:env.GPP_WU21_REPOSITORY_SHA,workload,status:'RUNNING',
     'Single-threaded disposable WP-CLI PHP server: not a production concurrency capacity test.',
     'Peak PHP memory includes WordPress/bootstrap, not isolated endpoint allocation.',
     'Native DOM can virtualize rows; DOM count does not certify complete task membership.',
-    'Natural polling cadence is preserved, so equal time windows contain unequal request counts.',
+    'Natural polling cadence is preserved; observed request counts depend on timing and successful responses.',
     'Native internal endpoint is observed only through its legitimate authenticated UI.'
   ]};
 const save=()=>fs.writeFileSync(file,JSON.stringify(report,null,2)+'\n');
@@ -99,12 +99,12 @@ async function capture(browser,kind,url,ms){
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
   await ctx.addCookies(correctCookies(fixture.officer));
   const page=await ctx.newPage();
-  const transactions=[],starts=new WeakMap(),errors=[];
+  const transactions=[],starts=new WeakMap(),requestStarts=[],errors=[];
   const suffix=kind==='native'?'/wp-json/gravityflow/internal/inbox/changes':'/wp-admin/admin-ajax.php';
   const match=req=>req.url().includes(suffix) &&
     (kind==='native'||(req.postData()||'').includes('ciq2_read'));
   page.on('pageerror',e=>errors.push(String(e).slice(0,300)));
-  page.on('request',req=>{if(match(req))starts.set(req,Date.now())});
+  page.on('request',req=>{if(match(req)){const at=Date.now();starts.set(req,at);requestStarts.push(at)}});
   page.on('requestfailed',req=>{if(match(req))transactions.push({status:'NETWORK_FAILURE',error:req.failure()?.errorText})});
   page.on('response',async res=>{
     if(!match(res.request()))return;
@@ -146,10 +146,22 @@ async function capture(browser,kind,url,ms){
     const min=kind==='native'?2:3;
     await waitFor(()=>transactions.filter(x=>x.status===200).length>=min,ms,kind+' '+min+' polls');
     const elapsed=Date.now()-start;
+    const cadence=kind==='inbox2'?{
+      expected_interval_ms:30000,
+      first_request_after_navigation_ms:requestStarts[0]-start,
+      between_request_ms:requestStarts.slice(1).map((time,i)=>time-requestStarts[i])
+    }:null;
+    if(cadence){
+      assert.ok(requestStarts.length>=3,'Inbox 2 must issue three automatic polls');
+      assert.ok(cadence.first_request_after_navigation_ms>=28000,
+        'Inbox 2 polled before the 30-second timer elapsed');
+      assert.ok(cadence.between_request_ms.slice(0,2).every(ms=>ms>=28000 && ms<=45000),
+        'Inbox 2 automatic poll interval was not 30 seconds (allowing scheduler jitter)');
+    }
     const logs=readServer().slice(before);
     const endpoint=kind==='native'?'native_delta':'inbox2_delta';
     const postInternal=kind==='native'?normalizedIdentity(await page.evaluate(nativeInternalSnapshot)):null;
-    const result={kind,view,post_refresh_task_id_integrity:postInternal,window_ms:elapsed,transactions,initial_server:summary(logs,kind+'_initial'),
+    const result={kind,view,post_refresh_task_id_integrity:postInternal,window_ms:elapsed,polling_cadence:cadence,transactions,initial_server:summary(logs,kind+'_initial'),
       refresh_server:summary(logs,endpoint),page_errors:errors};
     assert.ok(result.refresh_server.request_count>=min,
       kind+' browser polls have no matching real PHP request measurements');
@@ -176,13 +188,21 @@ try{
     native_refresh_requests:native.refresh_server.request_count,
     inbox2_refresh_db_queries:inbox2.refresh_server.query_total,
     inbox2_refresh_requests:inbox2.refresh_server.request_count,
-    note:'Different natural intervals; compare per-request and actual window separately, not unadjusted totals.'
+    note:'Approximately aligned 30-second natural polling; compare per-request costs, not unadjusted sample totals. The 10-second measurements are historical.'
   };
   report.status=native.page_errors.length?'COST_MEASURED_NATIVE_BROWSER_ERROR_OBSERVED':
     'PASS_MEASURED_BOTH_AUTHENTIC_UI_PATHS';save();
   const per=r=>{const refresh=r.refresh_server.records,ok=r.transactions.filter(x=>x.status===200);
     const avg=a=>a.length?Math.round(10*a.reduce((n,x)=>n+x,0)/a.length)/10:null;
+    const intervalMs=r.kind==='inbox2'?r.polling_cadence.expected_interval_ms:
+      Number(r.view.native_config?.[0]?.fetch_interval)*1000;
+    assert.ok(Number.isFinite(intervalMs)&&intervalMs>0,'Missing observed polling cadence');
+    const averageQueries=avg(refresh.map(x=>x.queries||0));
     return {initial_browser_ms:r.view.initial_ms,
+      polling_cadence:r.polling_cadence,
+      estimated_auto_refresh_requests_per_minute:Math.round(600000/intervalMs)/10,
+      estimated_auto_refresh_db_queries_per_minute:averageQueries===null?null:
+        Math.round(10*averageQueries*60000/intervalMs)/10,
       initial_server:r.initial_server.records.map(x=>({queries:x.queries,ms:x.server_elapsed_ms,php_peak_bytes:x.php_peak_bytes})),
       refresh_requests:refresh.length,refresh_queries_avg:avg(refresh.map(x=>x.queries||0)),
       refresh_server_ms_avg:avg(refresh.map(x=>x.server_elapsed_ms||0)),

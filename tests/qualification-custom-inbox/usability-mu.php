@@ -296,7 +296,7 @@ add_shortcode( 'ciq2_usability_inbox', static function () {
         }
       });
       draw();
-      setInterval(() => { if (!document.hidden) refresh(); }, 10000);
+      setInterval(() => { if (!document.hidden) refresh(); }, 30000);
     })();
     </script>
     <?php

@@ -105,7 +105,7 @@ as execution proof.
 - RTL operator pages display 20 tasks in date/ID order. Search covers the
   complete verified list. Invalidated page numbers clamp automatically.
 - The experimental authenticated + nonce-checked WordPress AJAX read polls
-  every 10 seconds; no native inbox/changes requests. Aborted/outdated
+  every 30 seconds; no native inbox/changes requests. Aborted/outdated
   responses cannot overwrite the newer view. Errors and expired permissions
   clear old rows and retain search/page state for a retry.
 - The isolated workflow runs an exact 500/501-task independent native identity
@@ -113,3 +113,37 @@ as execution proof.
   clearing and recovery. Passing these requires observed CI evidence.
 - Host throughput at 2000 tasks, true atomic concurrent mutation, mobile
   visual polish and real operator acceptance remain NOT_PROVEN.
+
+## PR #179 — Owner-approved 30-second automatic polling
+
+The isolated Inbox 2 timer is **30,000 ms** (previously 10,000 ms),
+approximately matching the observed Native Gravity Flow Inbox
+`fetch_interval=30` seconds. The separate `requestDeadlineMs=30000` is a
+per-request timeout, **not** the automatic refresh interval. Manual refresh,
+native Detail return, BFCache restore and tab re-entry still trigger immediate
+server revalidation; automatic polling is skipped while the tab is hidden.
+
+### Historical 10-second measurements and normalized server cost
+
+Historical baseline: PR #179 Head `e12465c5266feacecf00464ba4d7ac7a67fc1834`,
+WU21 run `42664450354` (2026-11-09), authentic Chromium and disposable
+WordPress 6.8.3 / Gravity Flow 3.1.0. Values below are *measured* average DB
+queries per successful refresh request, followed by arithmetic projections
+for one continuously active tab (excluding manual/return-triggered reads).
+They are not new-Head measurements or a production capacity benchmark.
+
+| Tasks | Historical Inbox 2 queries/request | Old 10s Inbox 2 queries/min (6/min) | New 30s Inbox 2 queries/min (2/min; projected) | Native 30s queries/min (historical) |
+| ---: | ---: | ---: | ---: | ---: |
+| 300 | 95 | 570 | 190 | 178 |
+| 501 | 95 | 570 | 190 | 178 |
+| 2000 | 95 | 570 | 190 | 245 |
+
+Reducing scheduled requests from six to two per minute is a **66.7% reduction**
+in automatic polling frequency and projected polling DB-query demand per active
+tab, if per-request cost stays comparable. The new-Head real-browser cost
+harness must observe the first request no earlier than 28 seconds and two
+consecutive intervals in a 28–45 second scheduler-jitter window; it also
+reports measured queries/request and normalized estimated queries/minute.
+This does not measure concurrent production throughput or extra manual/return
+reads. The historical 2000-task Native browser measurement recorded two JS
+errors, not repaired by the polling correction.
