@@ -5,6 +5,7 @@ require_once __DIR__ . '/cell-boundary.php';
 
 $fixture = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) ( $fixture['form_id'] ?? 0 ) );
+$original_cellq_mode = get_option( 'cellq_mode', 'baseline' );
 $checks = array();
 $assert = static function ( $condition, $label ) use ( &$checks ) {
     if ( ! $condition ) { throw new RuntimeException( $label ); }
@@ -200,10 +201,12 @@ try {
         update_option( 'cellq_mode', 'final_mask', false );
     }
 
+    update_option( 'cellq_mode', $original_cellq_mode, false );
     $report['status'] = 'PASS_PINNED_ADAPTER_NEGATIVE_AND_POSITIVE';
     $save();
     echo "CIQ2_HOST_ADAPTER_SAFETY_PASS\n";
 } catch ( Throwable $error ) {
+    update_option( 'cellq_mode', $original_cellq_mode, false );
     $report['status'] = 'FAIL';
     $report['error'] = $error->getMessage();
     $save();
