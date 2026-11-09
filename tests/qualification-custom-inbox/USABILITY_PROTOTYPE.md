@@ -91,6 +91,10 @@ as execution proof.
   attempt; one bounded retry re-runs every authorization check, and a second
   difference fails closed. A mutation immediately after the read remains a
   known race. Nothing is cached between attempts or requests.
+- An empty public membership is never accepted on its own: the native Task
+  Model is always read at least once and must also be empty; otherwise the
+  attempt is rejected (`native_cell_task_set_changed`) like any other
+  cross-source difference.
 - RTL operator pages display 20 tasks in date/ID order. Search covers the
   complete verified list. Invalidated page numbers clamp automatically.
 - The experimental authenticated + nonce-checked WordPress AJAX read polls

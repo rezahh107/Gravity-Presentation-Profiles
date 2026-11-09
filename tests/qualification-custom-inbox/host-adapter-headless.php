@@ -190,6 +190,23 @@ try {
         remove_filter( 'gravityflow_inbox_paging', $shrink, PHP_INT_MAX );
     }
 
+    // Empty-set parity: an empty public membership must still be confirmed by the
+    // native Task Model. A reversible argument-shape-sensitive filter empties only
+    // the public read (no `is_shortcode`); the Task Model still has the 3 tasks.
+    $public_only_empty = static function ( $args ) {
+        if ( ! isset( $args['is_shortcode'] ) ) { $args['filter_key'] = 'workflow_user_id_999999999'; }
+        return $args;
+    };
+    add_filter( 'gravityflow_inbox_args', $public_only_empty, 500, 1 );
+    try {
+        $false_empty = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $false_empty ) && 'native_cell_task_set_changed' === $false_empty->get_error_code()
+            && 2 === count( $GLOBALS['ciq2_snapshot_attempts'] ?? array() ),
+            'empty_public_membership_with_nonempty_task_model_fails_closed' );
+    } finally {
+        remove_filter( 'gravityflow_inbox_args', $public_only_empty, 500 );
+    }
+
     // The known early-mask override is explicitly observed, not misrepresented
     // as a guarantee that the underlying GPP native Inbox always masks identity.
     update_option( 'cellq_mode', 'early_mask', false );
@@ -225,6 +242,9 @@ try {
         $viewer_snapshot = ciq2_snapshot_rows( $scope );
         $assert( is_array( $viewer_snapshot ) && 0 === count( $viewer_snapshot ),
             'creator_only_detail_access_does_not_create_inbox2_card' );
+        // Genuinely empty on both sources: the Task Model is still consulted once.
+        $assert( 1 === count( $GLOBALS['cellq_task_model_paging'] ?? array() ),
+            'empty_queue_confirmed_by_exactly_one_task_model_read' );
     } finally {
         wp_set_current_user( (int) $fixture['admin'] );
         if ( is_numeric( $new_entry ) && (int) $new_entry > 0 ) {

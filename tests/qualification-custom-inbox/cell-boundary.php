@@ -71,7 +71,10 @@ function cellq_rows( $scope = array(), $skip_denied = false, $options = array() 
     $GLOBALS['cellq_task_model_paging'] = array();
     // Query the complete native task set in bounded pages. The per-entry
     // guard can optionally omit an individual denied row from presentation.
-    for ( $offset = 0; $offset < count( $entries ); $offset += $batch_size ) {
+    // At least one Task Model read always runs: an empty public membership must
+    // be independently confirmed, never accepted as a vacuous set comparison.
+    $task_model_pages = max( 1, (int) ceil( count( $entries ) / $batch_size ) );
+    for ( $page_index = 0, $offset = 0; $page_index < $task_model_pages; ++$page_index, $offset += $batch_size ) {
         $GLOBALS['cellq_task_model_paging'][] = array( 'offset' => $offset, 'page_size' => $batch_size );
         try {
             $page = $model->get_inbox_tasks( cellq_args( $scope, $offset, $batch_size ) );
