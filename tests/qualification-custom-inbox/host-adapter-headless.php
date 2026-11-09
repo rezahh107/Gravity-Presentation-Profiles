@@ -38,6 +38,8 @@ try {
     $assert( 'CQ_FINAL_MASKED' === $by_id[ (int) $fixture['entries'][0] ]['cells']['national_id']['text'],
         'effective_native_final_mask_retained' );
 
+    $bad = $good; $bad['actionable'] = false;
+    $assert( $reject( $bad ), 'detail_access_without_current_actionability_rejected' );
     $bad = $good; $bad['binding_state'] = 'NO_QUALIFIED_FORM_PROJECTION';
     $assert( $reject( $bad ), 'no_semantic_binding_fails_closed' );
     $bad = $good; unset( $bad['cells']['student_name'] );
@@ -56,6 +58,12 @@ try {
         'view' => 'entry', 'id' => (int) $good['form_id'], 'lid' => (int) $good['id'],
     ), 'https://other.example.invalid/inbox' );
     $assert( $reject( $bad ), 'cross_origin_native_url_rejected' );
+    $bad = $good;
+    $parsed = wp_parse_url( $good['native_url'] );
+    $bad['native_url'] = $parsed['scheme'] . '://' . $parsed['host'] . ':'
+        . ( (int) ( $parsed['port'] ?? 80 ) + 1 ) . '/'
+        . ( isset( $parsed['query'] ) ? '?' . $parsed['query'] : '' );
+    $assert( $reject( $bad ), 'same_host_wrong_port_rejected' );
     $bad = $good; $bad['native_url'] = 'javascript:alert(1)';
     $assert( $reject( $bad ), 'script_url_rejected' );
 
