@@ -1,8 +1,6 @@
 <?php
 /** Disposable, authentic 500/501-task native-ID oracle; never run on real data. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
-// Exercise the new focused adapter gate on the existing pinned scale fixture.
-require_once __DIR__ . '/host-adapter-headless.php';
 $f = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) $f['form_id'] );
 $r = array( 'head' => getenv( 'GPP_WU21_REPOSITORY_SHA' ), 'status' => 'RUNNING', 'checks' => array() );
