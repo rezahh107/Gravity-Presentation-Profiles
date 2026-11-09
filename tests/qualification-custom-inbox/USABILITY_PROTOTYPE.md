@@ -27,11 +27,16 @@ The Owner-authorized production architecture remains Native-First.
   and the native Task Model. No Inbox 2-only eligibility rule (step type,
   active flag or per-task assignee re-read). Native Gravity Flow remains the
   authority for Detail access and every task action.
-- Independent disclosure authorization stays: a native-selected task whose
-  Entry Detail permission is denied is neither rendered nor silently omitted;
-  the read fails with `native_entry_access_denied`. Query/identity failures
-  reject the entire list. The strict PR169/PR170 helpers keep their own
-  actionability contract by default.
+- Native Inbox list membership and Entry Detail authorization are separate
+  host decisions. A task selected by the authenticated Native Inbox remains an
+  Inbox 2 card even when the native Entry Detail route denies that task's
+  Detail access; opening the native route must still enforce that denial and
+  prevent actions. The Inbox 2 list read does not call the Detail permission
+  filter or omit such a native-selected task on that basis. Invalid task
+  identity, unqualified required card values/bindings, timestamp or native
+  Detail URL, and source-set disagreement still fail closed rather than
+  silently dropping rows. The legacy PR169/PR170 helpers retain their separate
+  Detail-permission and actionability checks by default.
 
 ## Authentic execution
 
@@ -67,9 +72,11 @@ No vendor runtime code is modified. See `UPSTREAM_AJAX_TEST_RETIREMENT.md`.
   prove native Search/Sort/Pagination equivalence or faster human completion time.
   Real operator comparative usability remains `NOT_PROVEN`.
 - Data mapping currently uses the **internal** GPP
-  `InboxTableHeaderPresentation::initialGeometryContract()`, and row rendering
-  uses **internal** Gravity Flow Task Model and Entry Detail guards.
-  These are experimental dependencies, not qualified production integration.
+  `InboxTableHeaderPresentation::initialGeometryContract()`, and Inbox 2
+  card values are read from the **internal** Gravity Flow Task Model. The
+  card-list path does not apply Entry Detail guards; native Detail continues
+  to enforce its own permissions and actions when opened. These internal
+  dependencies are experimental, not qualified production integration.
   Decide a small versioned mapping/read seam versus independent form mapping
   only after usability evidence. Do not invent parallel persistent bindings.
 - National-ID output follows the synthetic **native Inbox**. Displaying it raw
