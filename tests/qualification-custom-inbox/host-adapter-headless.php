@@ -175,6 +175,21 @@ try {
         remove_filter( 'gravityflow_entry_url_inbox_table', $url_filter, 50 );
     }
 
+    // Single-read safeguards: a stable set needs exactly one attempt, and a host
+    // paging filter that shrinks the page fails closed instead of skipping tasks.
+    $stable = ciq2_snapshot_rows( $scope );
+    $assert( is_array( $stable ) && 3 === count( $stable )
+        && array( 'OK' ) === ( $GLOBALS['ciq2_snapshot_attempts'] ?? null ), 'stable_set_single_attempt' );
+    $shrink = static function ( $paging ) { $paging['page_size'] = 2; return $paging; };
+    add_filter( 'gravityflow_inbox_paging', $shrink, PHP_INT_MAX, 1 );
+    try {
+        $shrunk = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $shrunk ) && 'host_page_size_reduced' === $shrunk->get_error_code()
+            && 2 === count( $GLOBALS['ciq2_snapshot_attempts'] ?? array() ), 'host_paging_shrink_fails_closed_after_bounded_retry' );
+    } finally {
+        remove_filter( 'gravityflow_inbox_paging', $shrink, PHP_INT_MAX );
+    }
+
     // The known early-mask override is explicitly observed, not misrepresented
     // as a guarantee that the underlying GPP native Inbox always masks identity.
     update_option( 'cellq_mode', 'early_mask', false );

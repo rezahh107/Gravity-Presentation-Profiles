@@ -47,9 +47,16 @@ function cellq_text( $value ) {
     if ( preg_match( '/<[a-z\/!][\s\S]*>/i', $value ) ) { return null; }
     return html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 }
-function cellq_rows( $scope = array(), $skip_denied = false ) {
-    $entries = ciq_entries( $scope );
-    $metadata = ciq_project( $entries, $skip_denied ); // Preserve PR169 entry guard and all task predicates.
+/**
+ * Options (Inbox 2 snapshot path only): `batch_size` for both host reads
+ * (default 40 = historical PR169/PR170 parity path) and `with_fields` (default
+ * true) for the unused-by-cards Detail field projection.
+ */
+function cellq_rows( $scope = array(), $skip_denied = false, $options = array() ) {
+    $batch_size = (int) ( $options['batch_size'] ?? 40 );
+    $with_fields = (bool) ( $options['with_fields'] ?? true );
+    $entries = ciq_entries( $scope, $batch_size );
+    $metadata = ciq_project( $entries, $skip_denied, $with_fields ); // Preserve PR169 entry guard and all task predicates.
     if ( is_wp_error( $metadata ) ) { return $metadata; }
     $model = cellq_host_model();
     if ( is_wp_error( $model ) ) { return $model; }
@@ -61,7 +68,6 @@ function cellq_rows( $scope = array(), $skip_denied = false ) {
     }
     if ( ! is_array( $defs ) ) { return new WP_Error( 'ciq2_native_header_contract_changed' ); }
     $native = array();
-    $batch_size = 40;
     $GLOBALS['cellq_task_model_paging'] = array();
     // Query the complete native task set in bounded pages. The per-entry
     // guard can optionally omit an individual denied row from presentation.

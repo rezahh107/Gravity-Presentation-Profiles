@@ -12,12 +12,16 @@ The Owner-authorized production architecture remains Native-First.
 - Server-rendered RTL cards, 390px name visibility, keyboard focus, full-list
   client-side search by name/national ID, 20-task operator pages, automatic
   polling and manually retried AJAX with non-JS GET fallback.
-- Public entry and internal native task projection are queried in pages of 40.
+- The Inbox 2 snapshot queries public entry membership and the internal native
+  task projection with one bounded call each (page size = bound + 1); the
+  historical PR169/PR170 parity helpers keep their 40-row pages.
   A strict 2000-task safety bound replaces the historical 500-task limit;
   over-bound requests fail closed, not silently truncate.
 - Automatic polling uses a separate authenticated test-only WordPress AJAX
-  route and reconciles two full host-authorized reads per update. This is not
-  an atomic snapshot, and does not qualify production caching or latency.
+  route; each update is one complete host-authorized read whose two source
+  statements are cross-checked by task identity, with at most one bounded retry
+  for a detected concurrent change. This is not an atomic snapshot, and does not
+  qualify production caching or latency.
 - A single Entry Detail guard denial omits that entry (with generic server log)
   in this **prototype only**. Query/identity failures reject the entire list.
   The strict PR169/PR170 path remains unchanged by default.
@@ -78,11 +82,15 @@ as execution proof.
 ## Experimental operational task-list contract
 
 - Host retains workflow, authorization, assignment and Entry Detail ownership.
-- Native/public authorized tasks are collected in batches of 40, up to an
-  explicit 2000-task bound. Larger lists fail closed, never silently truncate.
-- Two complete native-authorized reads are reconciled before display. Offset
-  paging is not atomic; any detected difference rejects the response. A
-  mutation immediately after the second read remains a known race.
+- Native/public authorized tasks are collected with one bounded call per
+  source, up to an explicit 2000-task bound. Larger lists fail closed
+  (`task_set_bound_exceeded`); a host paging filter that shrinks the page fails
+  closed (`host_page_size_reduced`), never silently truncates.
+- Public membership and the native Task Model are compared by exact task
+  identity. A difference (a change between the two statements) rejects that
+  attempt; one bounded retry re-runs every authorization check, and a second
+  difference fails closed. A mutation immediately after the read remains a
+  known race. Nothing is cached between attempts or requests.
 - RTL operator pages display 20 tasks in date/ID order. Search covers the
   complete verified list. Invalidated page numbers clamp automatically.
 - The experimental authenticated + nonce-checked WordPress AJAX read polls

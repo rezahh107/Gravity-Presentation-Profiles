@@ -5,7 +5,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 function ciq_host_version_qualified( $version ) {
     return is_string( $version ) && '3.1.0' === $version;
 }
-function ciq_entries( $scope = array() ) {
+/**
+ * Public, documented Inbox membership read. Default 40-row batches are the
+ * historical PR169 path; Inbox 2 passes max+1 so a complete set comes from a
+ * single host statement instead of an offset scan (not an atomic snapshot).
+ */
+function ciq_entries( $scope = array(), $batch_size = 40 ) {
     if ( ! ciq_host_version_qualified( defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null ) ) {
         return new WP_Error( 'ciq2_unsupported_host_version' );
     }
@@ -14,10 +19,13 @@ function ciq_entries( $scope = array() ) {
     $scope = array_intersect_key( $scope, array( 'form_id' => true ) );
     $entries = array();
     $expected = null;
-    $batch_size = 40;
     // Explicit operational safety bound, not a hidden 500-task truncation.
     // A larger authorized Inbox fails closed rather than claiming a complete list.
     $max_tasks = 2000;
+    $batch_size = (int) $batch_size;
+    if ( $batch_size < 1 || $batch_size > $max_tasks + 1 ) {
+        return new WP_Error( 'host_query_failed' );
+    }
     $GLOBALS['ciq_query_paging'] = array();
     for ( $offset = 0; $offset < $max_tasks; $offset += $batch_size ) {
         $args = $scope;
@@ -30,9 +38,15 @@ function ciq_entries( $scope = array() ) {
             return new WP_Error( 'host_query_failed' );
         }
         if ( null === $expected ) { $expected = (int) $total; }
-        if ( $expected < 0 || $expected > $max_tasks || (int) $total !== $expected
+        if ( $expected > $max_tasks ) { return new WP_Error( 'task_set_bound_exceeded' ); }
+        if ( $expected < 0 || (int) $total !== $expected
             || ( empty( $page ) && $offset < $expected ) ) {
             return new WP_Error( 'unstable_or_incomplete_task_set' );
+        }
+        // A host `gravityflow_inbox_paging` filter that shrinks the page would make
+        // the next offset skip tasks. Detect it instead of reporting a partial set.
+        if ( count( $page ) < min( $batch_size, $expected - $offset ) ) {
+            return new WP_Error( 'host_page_size_reduced' );
         }
         foreach ( $page as $entry ) {
             $id = (int) ( $entry['id'] ?? 0 );
@@ -44,7 +58,13 @@ function ciq_entries( $scope = array() ) {
     return new WP_Error( 'task_set_bound_exceeded' );
 }
 
-function ciq_project( $entries, $skip_denied = false ) {
+/**
+ * Native Detail permission + current Officer actionability per task.
+ * `$with_fields` keeps the PR169 Detail-derived `fields` projection for its own
+ * tests; Inbox 2 cards never read `fields` (they render native Task Model cells),
+ * so its snapshot path skips that per-field Detail formatting.
+ */
+function ciq_project( $entries, $skip_denied = false, $with_fields = true ) {
     if ( is_wp_error( $entries ) ) { return $entries; }
     require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
     if ( ! is_callable( array( 'Gravity_Flow_Entry_Detail', 'is_permission_granted' ) ) ) {
@@ -79,7 +99,7 @@ function ciq_project( $entries, $skip_denied = false ) {
             'step_id' => (int) $step->get_id(), 'actionable' => $actionable, 'fields' => array() );
         // Only the spike's mapped simple text fields on current assignee Approval
         // are qualified. No fallback for administrator, User Input, or unknown form.
-        if ( (int) ( $fixture['form_id'] ?? 0 ) === (int) $entry['form_id']
+        if ( $with_fields && (int) ( $fixture['form_id'] ?? 0 ) === (int) $entry['form_id']
             && $actionable && ! has_filter( 'gform_field_content' ) ) {
             foreach ( array( 1, 2, 3, 4 ) as $id ) {
                 $field = GFFormsModel::get_field( $form, $id );

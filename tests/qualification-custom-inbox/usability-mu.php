@@ -17,35 +17,46 @@ add_action( 'template_redirect', static function () {
 
 
 /**
- * Reconcile two independently refreshed public+native host reads. Offset paging
- * is not a snapshot; never present a mixed or unstable scan as complete.
- * This is a bounded lab-only best-effort consistency check, not an atomic
- * transaction or a guarantee about mutations immediately after the response.
+ * One complete authorized read: public Inbox membership and the native Task
+ * Model are each fetched with a single bounded host call (page size = bound+1),
+ * then cross-checked by exact task identity, admitted card by card and ordered
+ * FIFO A. Two independent statements are NOT an atomic snapshot; a difference
+ * between them is detected and rejected, never merged.
+ */
+function ciq2_read_once( $scope ) {
+    $rows = cellq_rows( $scope, true, array( 'batch_size' => 2001, 'with_fields' => false ) );
+    if ( is_wp_error( $rows ) ) { return $rows; }
+    foreach ( $rows as $row ) {
+        $admission = cellq_admitted_card( $row );
+        if ( is_wp_error( $admission ) ) { return $admission; }
+    }
+    usort( $rows, static function ( $a, $b ) {
+        $date = strcmp( (string) $a['date_created'], (string) $b['date_created'] );
+        return 0 !== $date ? $date : ( (int) $a['id'] <=> (int) $b['id'] );
+    } );
+    return $rows;
+}
+
+/**
+ * Bounded retry replaces the former second complete scan. Only causes that can
+ * come from a concurrent host change between source statements are retried, at
+ * most once; every other failure (authorization, contract, card qualification,
+ * bound) fails closed immediately with its precise code. Nothing is cached:
+ * each attempt re-runs every host authorization check.
  */
 function ciq2_snapshot_rows( $scope ) {
-    $read = static function () use ( $scope ) {
-        $rows = cellq_rows( $scope, true );
-        if ( is_wp_error( $rows ) ) { return $rows; }
-        foreach ( $rows as $row ) {
-            $admission = cellq_admitted_card( $row );
-            if ( is_wp_error( $admission ) ) { return $admission; }
+    $retryable = array( 'native_cell_task_set_changed', 'unstable_or_incomplete_task_set',
+        'current_task_not_proven', 'host_page_size_reduced' );
+    $GLOBALS['ciq2_snapshot_attempts'] = array();
+    $result = new WP_Error( 'ciq2_snapshot_not_attempted' );
+    for ( $attempt = 1; $attempt <= 2; ++$attempt ) {
+        $result = ciq2_read_once( $scope );
+        $GLOBALS['ciq2_snapshot_attempts'][] = is_wp_error( $result ) ? $result->get_error_code() : 'OK';
+        if ( ! is_wp_error( $result ) || ! in_array( $result->get_error_code(), $retryable, true ) ) {
+            return $result;
         }
-        usort( $rows, static function ( $a, $b ) {
-            $date = strcmp( (string) $a['date_created'], (string) $b['date_created'] );
-            return 0 !== $date ? $date : ( (int) $a['id'] <=> (int) $b['id'] );
-        } );
-        return $rows;
-    };
-    $first = $read();
-    if ( is_wp_error( $first ) ) { return $first; }
-    $second = $read();
-    if ( is_wp_error( $second ) ) { return $second; }
-    $first_json = wp_json_encode( $first );
-    $second_json = wp_json_encode( $second );
-    if ( ! is_string( $first_json ) || ! is_string( $second_json ) || $first_json !== $second_json ) {
-        return new WP_Error( 'ciq2_concurrent_task_set_change' );
     }
-    return $second;
+    return $result;
 }
 
 /** Test-only read route: fresh native authorization on every request. */

@@ -1,5 +1,5 @@
 <?php
-/** Synthetic, actual-Flow mutation probes for offset scans; no vendor modifications. */
+/** Synthetic, actual-Flow mutation probes between Inbox 2 source reads; no vendor modifications. */
 if ( ! defined( 'ABSPATH' ) ) { exit( 1 ); }
 $f = get_option( 'cellq_fixture', array() );
 $scope = array( 'form_id' => (int) $f['form_id'] );
@@ -19,7 +19,12 @@ try {
     sort( $baseline_ids );
     $flow = new Gravity_Flow_API( (int) $f['form_id'] );
 
-    foreach ( array( 'during_offset_pagination', 'between_complete_scans' ) as $kind ) {
+    // Real Gravity Flow step moves injected between the two independent source
+    // statements of one read (public membership, then native Task Model).
+    // recovered: one transient change -> first attempt rejected, bounded retry
+    //            returns the exact current host membership.
+    // persistent: the set changes inside every attempt -> fail closed, no rows.
+    foreach ( array( 'between_source_reads_recovered', 'persistent_instability_fails_closed' ) as $kind ) {
         wp_set_current_user( (int) $f['admin'] );
         $extra = GFAPI::add_entry( array(
             'form_id' => (int) $f['form_id'], 'created_by' => (int) $f['admin'],
@@ -29,44 +34,53 @@ try {
         $ok( ! is_wp_error( $extra ) && (int) $extra > 0, 'mutation_entry_creation_' . $kind );
         $done = $flow->process_workflow( (int) $extra );
         $ok( ! is_wp_error( $done ), 'mutation_entry_workflow_' . $kind );
-        wp_set_current_user( (int) $f['officer'] );
-        // The boundary test records its public API pages in this request-local global.
-        $public_first_page_calls = 0;
-        $injected = false;
-        $mutate = static function ( $args ) use ( &$public_first_page_calls, &$injected, $kind, $extra, $f, $flow ) {
-            $paging = $args['paging'] ?? array();
-            $offset = (int) ( $paging['offset'] ?? -1 );
-            // Only the public paging function clears this ledger before its first page.
-            // The native Task Model may also apply the same host filter, so an
-            // unqualified offset=0 counter would misidentify the scan boundary.
-            if ( 0 === $offset && empty( $GLOBALS['ciq_query_paging'] ) ) {
-                ++$public_first_page_calls;
+        $move = static function ( $step_id ) use ( $f, $flow, $extra ) {
+            $prior = get_current_user_id();
+            wp_set_current_user( (int) $f['admin'] );
+            $result = $flow->send_to_step( GFAPI::get_entry( (int) $extra ), (int) $step_id );
+            wp_set_current_user( $prior );
+            if ( is_wp_error( $result ) || false === $result ) {
+                throw new RuntimeException( 'authentic_native_mutation_failed' );
             }
-            $should_change = ( 'during_offset_pagination' === $kind && 40 === $offset )
-                || ( 'between_complete_scans' === $kind && 0 === $offset && 2 === $public_first_page_calls );
-            if ( $should_change && ! $injected ) {
-                $injected = true;
-                $prior = get_current_user_id();
-                wp_set_current_user( (int) $f['admin'] );
-                $entry = GFAPI::get_entry( (int) $extra );
-                $result = $flow->send_to_step( $entry, (int) $f['next_step'] );
-                wp_set_current_user( $prior );
-                if ( is_wp_error( $result ) || false === $result ) {
-                    throw new RuntimeException( 'authentic_native_mutation_failed' );
-                }
+        };
+        wp_set_current_user( (int) $f['officer'] );
+        $attempt = 0; $injections = 0; $in_officer_queue = true; $armed = false;
+        // The public read starts with an empty request-local paging ledger; the
+        // first filter call after that ledger is filled belongs to the Task Model
+        // side of the same attempt (header defs or task query).
+        $mutate = static function ( $args ) use ( &$attempt, &$injections, &$in_officer_queue, &$armed, $kind, $move, $f ) {
+            if ( empty( $GLOBALS['ciq_query_paging'] ) ) { ++$attempt; $armed = true; return $args; }
+            if ( $armed && ( 1 === $attempt || 'persistent_instability_fails_closed' === $kind ) ) {
+                $armed = false; ++$injections;
+                $move( $in_officer_queue ? (int) $f['next_step'] : (int) $f['step_id'] );
+                $in_officer_queue = ! $in_officer_queue;
             }
             return $args;
         };
         add_filter( 'gravityflow_inbox_args', $mutate, 999, 1 );
         try {
-            $unstable = ciq2_snapshot_rows( $scope );
+            $result = ciq2_snapshot_rows( $scope );
         } finally {
             remove_filter( 'gravityflow_inbox_args', $mutate, 999 );
         }
-        $ok( $injected, 'mutation_was_not_injected_' . $kind . '_public_scans_' . $public_first_page_calls );
-        $ok( is_wp_error( $unstable ), 'unstable_scan_silently_accepted_' . $kind );
+        $attempts = $GLOBALS['ciq2_snapshot_attempts'] ?? array();
+        $ok( $injections >= 1, 'mutation_was_not_injected_' . $kind );
+        $ok( 2 === count( $attempts ) && 'native_cell_task_set_changed' === $attempts[0],
+            'first_attempt_detects_cross_source_change_' . $kind );
+        if ( 'between_source_reads_recovered' === $kind ) {
+            $ok( is_array( $result ) && 'OK' === $attempts[1], 'bounded_retry_recovers_' . $kind );
+            $ids = array_map( 'intval', array_column( $result, 'id' ) );
+            sort( $ids );
+            // The extra left the Officer queue during attempt 1: exact baseline.
+            $ok( $ids === $baseline_ids && ! $in_officer_queue, 'retry_returns_exact_current_membership_' . $kind );
+        } else {
+            $ok( is_wp_error( $result ) && 'native_cell_task_set_changed' === $result->get_error_code()
+                && 2 === $injections, 'persistent_change_fails_closed_without_rows' );
+            if ( $in_officer_queue ) { $move( (int) $f['next_step'] ); }
+        }
         $report['scenarios'][ $kind ] = array(
-            'rejected' => $unstable->get_error_code(), 'public_first_page_calls' => $public_first_page_calls,
+            'attempts' => $attempts, 'injections' => $injections,
+            'result' => is_wp_error( $result ) ? $result->get_error_code() : 'ROWS_' . count( $result ),
         );
         $recovered = ciq2_snapshot_rows( $scope );
         $ok( is_array( $recovered ) && count( $recovered ) === 501, 'recovery_failed_' . $kind );
