@@ -71,8 +71,12 @@ function ciq_project( $entries, $skip_denied = false ) {
             }
             return new WP_Error( 'native_entry_access_denied' );
         }
+        // Membership came from the host Inbox query; this independently
+        // proves current Officer Approval-step actionability, not merely Detail access.
+        $actionable = $step instanceof Gravity_Flow_Step_Approval
+            && $step->is_active() && $step->is_user_assignee();
         $row = array( 'id' => (int) $entry['id'], 'form_id' => (int) $entry['form_id'],
-            'step_id' => (int) $step->get_id(), 'fields' => array() );
+            'step_id' => (int) $step->get_id(), 'actionable' => $actionable, 'fields' => array() );
         // Only the spike's mapped simple text fields on current assignee Approval
         // are qualified. No fallback for administrator, User Input, or unknown form.
         if ( (int) ( $fixture['form_id'] ?? 0 ) === (int) $entry['form_id']
