@@ -26,6 +26,19 @@ try {
     wp_set_current_user( (int) $fixture['officer'] );
     update_option( 'cellq_mode', 'final_mask', false );
     $rows = ciq2_snapshot_rows( $scope );
+    if ( is_wp_error( $rows ) ) {
+        // Codes only, never student values or external URLs in diagnostics.
+        $report['snapshot_error_code'] = $rows->get_error_code();
+        $candidate = cellq_rows( $scope, true );
+        $report['raw_candidate_error_code'] = is_wp_error( $candidate ) ? $candidate->get_error_code() : null;
+        if ( is_array( $candidate ) ) {
+            $report['individual_admission_codes'] = array();
+            foreach ( $candidate as $r ) {
+                $admitted = cellq_admitted_card( $r );
+                $report['individual_admission_codes'][] = is_wp_error( $admitted ) ? $admitted->get_error_code() : 'OK';
+            }
+        }
+    }
     $assert( is_array( $rows ) && count( $rows ) === 3, 'qualified_snapshot_positive' );
     $good = $rows[0];
     $assert( true === cellq_admitted_card( $good ), 'complete_native_card_admitted' );
