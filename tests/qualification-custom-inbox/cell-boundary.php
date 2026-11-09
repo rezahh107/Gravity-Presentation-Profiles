@@ -164,6 +164,14 @@ function cellq_admitted_card( $row ) {
             return new WP_Error( 'ciq2_unqualified_required_value' );
         }
     }
+    // FIFO A is meaningful only for a real, canonical Gravity Forms timestamp.
+    $created = $row['date_created'] ?? null;
+    $timestamp = is_string( $created ) ? DateTimeImmutable::createFromFormat(
+        '!Y-m-d H:i:s', $created, new DateTimeZone( 'UTC' )
+    ) : false;
+    if ( false === $timestamp || $timestamp->format( 'Y-m-d H:i:s' ) !== $created ) {
+        return new WP_Error( 'ciq2_unqualified_creation_timestamp' );
+    }
     if ( ! isset( $row['form_id'], $row['id'] ) || ! cellq_native_detail_url_valid(
         $row['native_url'] ?? null, (int) $row['form_id'], (int) $row['id']
     ) ) {
