@@ -40,6 +40,8 @@ try {
 
     $bad = $good; $bad['actionable'] = false;
     $assert( $reject( $bad ), 'detail_access_without_current_actionability_rejected' );
+    $bad = $good; $bad['date_created'] = '2026-99-99 99:99:99';
+    $assert( $reject( $bad ), 'invalid_created_at_rejected_before_fifo' );
     $bad = $good; $bad['binding_state'] = 'NO_QUALIFIED_FORM_PROJECTION';
     $assert( $reject( $bad ), 'no_semantic_binding_fails_closed' );
     $bad = $good; unset( $bad['cells']['student_name'] );
