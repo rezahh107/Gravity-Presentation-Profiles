@@ -25,7 +25,8 @@ add_action( 'wp_loaded', static function () {
         if ( ! cellq_target( $form ) ) { return $v; }
         $mode = get_option( 'cellq_mode', 'baseline' );
         cellq_trace( 'inbox_after_gpp', $form, $field, $v );
-        if ( 'final_mask' === $mode && (string) $field === '4' ) { return 'CQ_FINAL_MASKED'; }
+        if ( in_array( $mode, array( 'final_mask', 'deny_one_entry' ), true )
+            && (string) $field === '4' ) { return 'CQ_FINAL_MASKED'; }
         if ( 'opaque' === $mode && (string) $field === '6' ) { return array( 'unqualified' => 'CQ_OPAQUE' ); }
         if ( 'content_participating' === $mode && (string) $field === '4' ) {
             return apply_filters( 'gform_field_content', $v, GFAPI::get_field( $form, 4 ), '', $entry['id'], $form );
