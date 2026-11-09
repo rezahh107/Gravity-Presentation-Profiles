@@ -59,18 +59,35 @@ function ciq_entries( $scope = array(), $batch_size = 40 ) {
 }
 
 /**
- * Per-task disclosure authorization (native Detail permission) for tasks that
- * the host Inbox query already selected.
- * `$with_fields` keeps the PR169 Detail-derived `fields` projection for its own
- * tests; Inbox 2 cards never read `fields` (they render native Task Model cells).
- * `$native_selection` (Inbox 2 path, Owner decision): task selection is exactly
- * the native Gravity Flow Inbox membership. No Inbox 2-only eligibility rule
- * (step type, active flag, assignee re-read) is applied; only the independent
- * permission to disclose student data remains. The legacy PR169/PR170 helpers
- * keep their stricter actionability contract by default.
+ * Legacy PR169/PR170 callers retain their native Entry Detail permission and
+ * optional field-projection checks. Inbox 2 requests `$native_selection` to
+ * consume ONLY entries selected by the authenticated Native Inbox query; its
+ * visible cells are independently provided by the Native Task Model and
+ * reconciled by exact task ID in cellq_rows().
+ *
+ * Native Inbox list visibility does NOT depend on Entry Detail permission.
+ * Leave Detail authorization to the native Detail route and actions.
  */
 function ciq_project( $entries, $skip_denied = false, $with_fields = true, $native_selection = false ) {
     if ( is_wp_error( $entries ) ) { return $entries; }
+    if ( $native_selection ) {
+        // List selection is already constrained by the authenticated native
+        // Gravity Flow Inbox. Do not call Entry Detail authorization, step
+        // eligibility or Detail-only pre_render filters on this card path.
+        $rows = array();
+        foreach ( $entries as $entry ) {
+            if ( ! is_array( $entry ) || empty( $entry['id'] ) || empty( $entry['form_id'] ) ) {
+                return new WP_Error( 'invalid_identity' );
+            }
+            $rows[] = array(
+                'id' => (int) $entry['id'],
+                'form_id' => (int) $entry['form_id'],
+                'step_id' => (int) ( $entry['workflow_step'] ?? 0 ),
+                'fields' => array(),
+            );
+        }
+        return $rows;
+    }
     require_once gravity_flow()->get_base_path() . '/includes/pages/class-entry-detail.php';
     if ( ! is_callable( array( 'Gravity_Flow_Entry_Detail', 'is_permission_granted' ) ) ) {
         return new WP_Error( 'ciq2_native_detail_permission_contract_changed' );
@@ -82,10 +99,7 @@ function ciq_project( $entries, $skip_denied = false, $with_fields = true, $nati
         $step = $api->get_current_step( $entry );
         $form = GFAPI::get_form( (int) $entry['form_id'] );
         if ( ! $form ) { return new WP_Error( 'current_task_not_proven' ); }
-        // Native Inbox lists host membership even without a resolvable current
-        // step; only the legacy contract requires one. The permission check below
-        // still runs (with no step, only creator or full-access users pass).
-        if ( ! $step && ! $native_selection ) { return new WP_Error( 'current_task_not_proven' ); }
+        if ( ! $step ) { return new WP_Error( 'current_task_not_proven' ); }
         // Mirror the native pre-render lifecycle, then CALL host permission logic.
         $form = apply_filters( 'gform_pre_render', $form, false, null );
         $form = apply_filters( 'gform_pre_render_' . $form['id'], $form, false, null );
@@ -99,11 +113,6 @@ function ciq_project( $entries, $skip_denied = false, $with_fields = true, $nati
                 continue;
             }
             return new WP_Error( 'native_entry_access_denied' );
-        }
-        if ( $native_selection ) {
-            $rows[] = array( 'id' => (int) $entry['id'], 'form_id' => (int) $entry['form_id'],
-                'step_id' => is_object( $step ) ? (int) $step->get_id() : 0, 'fields' => array() );
-            continue;
         }
         // Legacy PR169/PR170 contract: membership came from the host Inbox query;
         // this independently proves current Officer Approval-step actionability.
