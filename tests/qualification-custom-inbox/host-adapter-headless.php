@@ -91,7 +91,9 @@ try {
 
     // Real host source discriminators: do not mock a native row for these cases.
     update_option( 'cellq_mode', 'opaque', false );
-    $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'opaque_final_school_cell_blocks_entire_snapshot' );
+    $opaque = ciq2_snapshot_rows( $scope );
+    $assert( is_wp_error( $opaque ) && 'ciq2_unqualified_required_value' === $opaque->get_error_code(),
+        'opaque_final_school_cell_blocks_entire_snapshot' );
     update_option( 'cellq_mode', 'final_mask', false );
     $contract = \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::initialGeometryContract( $scope );
     $assert( is_array( $contract ), 'qualified_semantic_mapping_available' );
@@ -102,7 +104,9 @@ try {
     };
     add_filter( 'gravityflow_columns_inbox_table', $remove_column, PHP_INT_MAX, 2 );
     try {
-        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'removed_native_display_column_blocks_snapshot' );
+        $missing_column = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $missing_column ) && 'ciq2_unqualified_required_value' === $missing_column->get_error_code(),
+            'removed_native_display_column_blocks_snapshot' );
     } finally {
         remove_filter( 'gravityflow_columns_inbox_table', $remove_column, PHP_INT_MAX );
     }
@@ -114,7 +118,9 @@ try {
     };
     add_filter( 'gravityflow_inbox_field_value', $bad_id, PHP_INT_MAX, 4 );
     try {
-        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'non_scalar_native_task_identity_rejected' );
+        $bad_identity = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $bad_identity ) && 'native_cell_identity_invalid' === $bad_identity->get_error_code(),
+            'non_scalar_native_task_identity_rejected' );
     } finally {
         remove_filter( 'gravityflow_inbox_field_value', $bad_id, PHP_INT_MAX );
     }
@@ -123,7 +129,9 @@ try {
     };
     add_filter( 'gravityflow_inbox_field_value', $blank_nid, PHP_INT_MAX, 4 );
     try {
-        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'empty_final_native_nid_rejected' );
+        $empty_identity = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $empty_identity ) && 'ciq2_unqualified_required_value' === $empty_identity->get_error_code(),
+            'empty_final_native_nid_rejected' );
     } finally {
         remove_filter( 'gravityflow_inbox_field_value', $blank_nid, PHP_INT_MAX );
     }
@@ -132,7 +140,9 @@ try {
     };
     add_filter( 'gravityflow_entry_url_inbox_table', $wrong_host_detail, PHP_INT_MAX, 4 );
     try {
-        $assert( is_wp_error( ciq2_snapshot_rows( $scope ) ), 'wrong_id_from_native_url_hook_rejected' );
+        $invalid_url = ciq2_snapshot_rows( $scope );
+        $assert( is_wp_error( $invalid_url ) && 'ciq2_unqualified_native_detail_url' === $invalid_url->get_error_code(),
+            'wrong_id_from_native_url_hook_rejected' );
     } finally {
         remove_filter( 'gravityflow_entry_url_inbox_table', $wrong_host_detail, PHP_INT_MAX );
     }
