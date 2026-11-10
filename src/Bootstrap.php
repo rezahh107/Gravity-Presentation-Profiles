@@ -15,6 +15,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPres
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxInitialGeometryGuard;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
+use GravityPresentationProfiles\SRWF\GravityFlow\Inbox2Shortcode;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
@@ -33,6 +34,7 @@ final class Bootstrap {
 
         if ( function_exists( 'add_action' ) ) {
             add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
+            add_action( 'init', array( Inbox2Shortcode::class, 'register' ), 5 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
         }
     }
