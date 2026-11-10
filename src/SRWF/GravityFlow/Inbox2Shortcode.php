@@ -427,50 +427,73 @@ private static function snapshotRows( $scope ) {
     return $result;
 }
     private static function renderMarkup( $rows, $form_id, $native_page_id, $page_id ) {
-        $identity = 'gpp-inbox2-' . $page_id . '-' . $form_id;
-    $url = get_permalink( $page_id );
-    ob_start();
-    ?>
-    
-    <section class="ciq2" dir="rtl" aria-labelledby="<?php echo esc_attr( $identity . '-heading' ); ?>" data-ciq2-root data-ciq2-state="current" data-ciq2-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-ciq2-nonce="<?php echo esc_attr( wp_create_nonce( self::nonceAction( $page_id, $form_id, $native_page_id ) ) ); ?>" data-ciq2-page="<?php echo esc_attr( $page_id ); ?>" data-ciq2-form="<?php echo esc_attr( $form_id ); ?>" data-ciq2-native-page="<?php echo esc_attr( $native_page_id ); ?>">
-      <h2 id="<?php echo esc_attr( $identity . '-heading' ); ?>">وظایف من</h2>
-      <p class="ciq2-muted">فهرست فقط‌خواندنی؛ اقدامات پرونده در Gravity Flow انجام می‌شوند.</p>
-      <div class="ciq2-tools">
-        <label for="<?php echo esc_attr( $identity . '-search' ); ?>">جست‌وجوی پرونده</label>
-        <input id="<?php echo esc_attr( $identity . '-search' ); ?>" data-ciq2-search type="search" placeholder="نام یا کد ملی" autocomplete="off" aria-describedby="<?php echo esc_attr( $identity . '-status' ); ?>"/>
-        <form action="<?php echo esc_url( $url ); ?>" method="get"><button type="submit" data-ciq2-refresh>به‌روزرسانی</button></form>
-      </div>
-      <p class="ciq2-muted" id="<?php echo esc_attr( $identity . '-status' ); ?>" aria-live="polite" data-ciq2-status>
-        <?php echo esc_html( sprintf( '%d پرونده', count( $rows ) ) ); ?>
-      </p>
-      <nav class="ciq2-pages" aria-label="صفحه‌بندی وظایف" data-ciq2-pager>
-        <button type="button" data-ciq2-prev disabled>صفحه قبل</button>
-        <span data-ciq2-page aria-live="polite">صفحه ۱ از ۱</span>
-        <button type="button" data-ciq2-next disabled>صفحه بعد</button>
-      </nav>
-        <ul data-ciq2-list>
-          <?php foreach ( $rows as $row ) :
-            $name = $row['cells']['student_name']['text'] ?? '';
-            $nid = $row['cells']['national_id']['text'] ?? '';
-            $school_grade = $row['cells']['school_grade']['text'] ?? '';
-            ?>
-            <li data-ciq2-entry="<?php echo esc_attr( $row['id'] ); ?>">
-              <h3 data-ciq2-name><?php echo esc_html( '' !== $name ? $name : 'نام ثبت نشده' ); ?></h3>
-              <dl>
-                <dt>کد ملی</dt><dd data-ciq2-national-id><?php echo esc_html( '' !== $nid ? $nid : '—' ); ?></dd>
-                <dt>مدرسه / پایه</dt><dd data-ciq2-school-grade><?php echo esc_html( '' !== $school_grade ? $school_grade : '—' ); ?></dd>
-                <dt>شماره پرونده</dt><dd><?php echo esc_html( $row['id'] ); ?></dd>
-                <dt>تاریخ ثبت</dt><dd><?php echo esc_html( $row['date_created'] ?? '' ); ?></dd>
-              </dl>
-              <a class="ciq2-detail" data-ciq2-detail href="<?php echo esc_url( $row['native_url'] ); ?>">مشاهده پرونده</a>
-            </li>
-          <?php endforeach; ?>
-        </ul>
-        <p class="ciq2-empty" data-ciq2-empty hidden>پرونده‌ای برای بررسی وجود ندارد.</p>
-        <p class="ciq2-empty" data-ciq2-no-results hidden>موردی مطابق جست‌وجو پیدا نشد.</p>
-    </section>
-    
-    <?php
-    return ob_get_clean();
+        // Multiple shortcode instances cannot share DOM IDs.
+        static $instance = 0;
+        $identity = 'gpp-inbox2-' . $page_id . '-' . $form_id . '-' . ++$instance;
+        $url = get_permalink( $page_id );
+        // Site-local time of this server-confirmed snapshot. This is not the
+        // task creation date, whose canonical Gravity Forms value stays intact.
+        $verified_at = wp_date( 'H:i' );
+        ob_start();
+        ?>
+        <section class="ciq2" dir="rtl" lang="fa"
+            aria-labelledby="<?php echo esc_attr( $identity . '-heading' ); ?>"
+            data-ciq2-root data-ciq2-state="current"
+            data-ciq2-verified-at="<?php echo esc_attr( $verified_at ); ?>"
+            data-ciq2-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
+            data-ciq2-nonce="<?php echo esc_attr( wp_create_nonce( self::nonceAction( $page_id, $form_id, $native_page_id ) ) ); ?>"
+            data-ciq2-page="<?php echo esc_attr( $page_id ); ?>"
+            data-ciq2-form="<?php echo esc_attr( $form_id ); ?>"
+            data-ciq2-native-page="<?php echo esc_attr( $native_page_id ); ?>">
+            <header class="ciq2-header">
+                <div>
+                    <h2 id="<?php echo esc_attr( $identity . '-heading' ); ?>" tabindex="-1">کارهای من</h2>
+                    <p class="ciq2-muted">پرونده‌های مجاز برای بررسی شما</p>
+                </div>
+                <form action="<?php echo esc_url( $url ); ?>" method="get">
+                    <button type="submit" data-ciq2-refresh>تازه‌سازی فهرست</button>
+                </form>
+            </header>
+            <div class="ciq2-tools">
+                <label for="<?php echo esc_attr( $identity . '-search' ); ?>">جست‌وجوی پرونده</label>
+                <input id="<?php echo esc_attr( $identity . '-search' ); ?>"
+                    data-ciq2-search type="search" placeholder="نام یا کد ملی"
+                    autocomplete="off" aria-describedby="<?php echo esc_attr( $identity . '-status' ); ?>"/>
+            </div>
+            <p class="ciq2-status" id="<?php echo esc_attr( $identity . '-status' ); ?>"
+                data-ciq2-status><?php echo esc_html( sprintf( '%d پرونده', count( $rows ) ) ); ?></p>
+            <p class="ciq2-sr-only" data-ciq2-announcement aria-live="polite" aria-atomic="true"></p>
+            <ul class="ciq2-list" data-ciq2-list>
+                <?php foreach ( $rows as $row ) :
+                    $name = $row['cells']['student_name']['text'] ?? '';
+                    $nid = $row['cells']['national_id']['text'] ?? '';
+                    $school_grade = $row['cells']['school_grade']['text'] ?? '';
+                ?>
+                <li class="ciq2-case" data-ciq2-entry="<?php echo esc_attr( $row['id'] ); ?>">
+                    <span class="ciq2-ordinal" data-ciq2-ordinal aria-label="شماره نمایشی در صفحه"></span>
+                    <div class="ciq2-primary">
+                        <h3 data-ciq2-name><?php echo esc_html( $name ); ?></h3>
+                        <p class="ciq2-school" data-ciq2-school-grade><?php echo esc_html( $school_grade ); ?></p>
+                    </div>
+                    <dl class="ciq2-meta">
+                        <div><dt>تاریخ ثبت</dt><dd><?php echo esc_html( $row['date_created'] ); ?></dd></div>
+                        <div><dt>کد ملی</dt><dd data-ciq2-national-id><?php echo esc_html( $nid ); ?></dd></div>
+                        <div><dt>شماره پرونده</dt><dd><?php echo esc_html( $row['id'] ); ?></dd></div>
+                    </dl>
+                    <a class="ciq2-detail" data-ciq2-detail
+                        href="<?php echo esc_url( $row['native_url'] ); ?>">باز کردن پرونده</a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+            <p class="ciq2-empty" data-ciq2-empty hidden>پرونده‌ای برای بررسی وجود ندارد.</p>
+            <p class="ciq2-empty" data-ciq2-no-results hidden>موردی مطابق جست‌وجو پیدا نشد.</p>
+            <nav class="ciq2-pages" aria-label="صفحه‌بندی پرونده‌ها" data-ciq2-pager>
+                <button type="button" data-ciq2-prev disabled>صفحه قبل</button>
+                <span data-ciq2-page>صفحه ۱ از ۱</span>
+                <button type="button" data-ciq2-next disabled>صفحه بعد</button>
+            </nav>
+        </section>
+        <?php
+        return ob_get_clean();
     }
 }
