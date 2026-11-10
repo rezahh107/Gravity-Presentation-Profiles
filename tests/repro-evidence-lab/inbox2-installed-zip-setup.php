@@ -81,9 +81,17 @@ $page_id = wp_insert_post( array(
     'post_content' => '[gpp_inbox_2 form="' . $form_id . '" native_page="' . $native_page . '"]',
 ), true );
 $assert( ! is_wp_error( $page_id ) && (int) $page_id > 0, 'SHORTCODE_PAGE_NOT_CREATED' );
+// Exercise two real shortcode renderings on one independently published page.
+$multi_page = wp_insert_post( array(
+    'post_title' => 'Installed Inbox 2 repeated-shortcode smoke',
+    'post_status' => 'publish', 'post_type' => 'page',
+    'post_content' => '[gpp_inbox_2 form="' . $form_id . '" native_page="' . $native_page . '"]' .
+        "\n" . '[gpp_inbox_2 form="' . $form_id . '" native_page="' . $native_page . '"]',
+), true );
+$assert( ! is_wp_error( $multi_page ) && (int) $multi_page > 0, 'MULTI_SHORTCODE_PAGE_NOT_CREATED' );
 $fixture = array(
     'status' => 'SETUP_PASS', 'version' => $header['version'],
-    'url' => get_permalink( (int) $page_id ), 'page_id' => (int) $page_id,
+    'url' => get_permalink( (int) $page_id ), 'multi_url' => get_permalink( (int) $multi_page ), 'page_id' => (int) $page_id,
     'form_id' => $form_id, 'native_page_id' => $native_page,
     'operator_id' => $operator, 'viewer_id' => (int) $manifest['viewer']['id'],
     'expected_native_ids' => $ids, 'expected_count' => count( $ids ),
