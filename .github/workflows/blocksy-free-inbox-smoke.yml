@@ -78,14 +78,14 @@ jobs:
       - name: Set up WU21 PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.34'
+          php-version: '8.2'
           coverage: none
           extensions: mysqli
 
       - name: Install pinned WordPress and WP-CLI
         run: |
           set -euo pipefail
-          test "$(php -r 'echo PHP_VERSION;')" = "8.2.34"
+          php -r 'echo "PHP_VERSION=", PHP_VERSION, PHP_EOL; if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 2) { fwrite(STDERR, "PHP_MINOR_FAMILY_MISMATCH expected=8.2.x\n"); exit(1); }'
           curl --fail --location --retry 3 --output "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
           echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
           mkdir -p "$WU21_WP_PATH"

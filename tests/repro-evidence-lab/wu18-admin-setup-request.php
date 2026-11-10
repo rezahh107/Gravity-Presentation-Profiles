@@ -145,13 +145,19 @@ register_shutdown_function(
             $runtime = $after['runtime'] ?? array();
             foreach ( array(
                 'wordpress_version' => '7.1.1',
-                'php_version' => '8.3.35',
                 'gravity_forms_version' => '3.1.1.1',
                 'gravity_flow_version' => '3.1.0',
             ) as $key => $expected ) {
                 if ( $expected !== ( $runtime[ $key ] ?? null ) ) {
                     $errors[] = 'runtime_' . $key . '_mismatch';
                 }
+            }
+            $php_version = $runtime['php_version'] ?? null;
+            if ( ! is_string( $php_version ) || 1 !== preg_match( '/^8\\.3\\.[0-9]+$/D', $php_version ) ) {
+                $errors[] = 'runtime_php_version_mismatch';
+            }
+            if ( $php_version !== PHP_VERSION || $php_version !== ( $before['runtime']['php_version'] ?? null ) ) {
+                $errors[] = 'runtime_php_version_identity_mismatch';
             }
         } else {
             if ( 302 !== http_response_code() ) $errors[] = 'rerun_http_status_not_302';

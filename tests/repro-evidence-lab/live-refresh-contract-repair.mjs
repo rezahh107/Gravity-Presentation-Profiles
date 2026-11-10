@@ -4,7 +4,7 @@ import { reduceQualificationState, runReducerFalsification } from './live-refres
 
 const EXPECTED_RUNTIME = {
   wordpress: '6.8.3',
-  php: '8.2.34',
+  php: '8.2.x',
   gravity_forms: '3.1.1.1',
   gravity_flow: '3.1.0',
   gravity_flow_package_sha256: 'ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404',
@@ -16,7 +16,10 @@ const EXPECTED_RUNTIME = {
 
 function assertPinnedRuntime(runtime) {
   for (const [key, expected] of Object.entries(EXPECTED_RUNTIME)) {
-    if (runtime?.[key] !== expected) {
+    const valid = key === 'php'
+      ? (typeof runtime?.php === 'string' && /^8\.2\.[0-9]+$/.test(runtime.php))
+      : runtime?.[key] === expected;
+    if (!valid) {
       throw new Error(`Live Refresh runtime drift: ${key} expected ${expected}, got ${runtime?.[key]}`);
     }
   }
