@@ -9,6 +9,7 @@ final class Inbox2Shortcode {
     const TAG = 'gpp_inbox_2';
 
     public static function register() {
+        if ( ! function_exists( 'add_shortcode' ) || ! function_exists( 'add_action' ) ) { return; }
         add_shortcode( self::TAG, array( __CLASS__, 'render' ) );
         add_action( 'wp_ajax_gpp_inbox2_read', array( __CLASS__, 'ajaxRead' ) );
         add_action( 'wp_ajax_nopriv_gpp_inbox2_read', array( __CLASS__, 'ajaxDenied' ) );
