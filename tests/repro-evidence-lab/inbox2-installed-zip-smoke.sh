@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Ephemeral WU21-only installed ZIP boundary. Never publishes a release.
 set -euo pipefail
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/../.." && pwd -P)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$ROOT"
 source scripts/release/release-lib.sh
-: "\${WU21_WP_PATH:?}" "\${WU21_WP_CLI:?}" "\${WU21_ARTIFACT_DIR:?}"
+: "${WU21_WP_PATH:?}" "${WU21_WP_CLI:?}" "${WU21_ARTIFACT_DIR:?}"
 VERSION=9999.0.0
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -14,11 +14,11 @@ while IFS= read -r file; do
   mkdir -p "$SRC/$(dirname "$file")"
   cp "$file" "$SRC/$file"
 done < <(release_runtime_files "$ROOT")
-sed -i "s/Version: 0.0.0-dev/Version: \${VERSION}/" "$SRC/gravity-presentation-profiles.php"
-sed -i "s/'0.0.0-dev'/'\${VERSION}'/" "$SRC/src/GravityForms/AddOn.php"
+sed -i "s/Version: 0.0.0-dev/Version: ${VERSION}/" "$SRC/gravity-presentation-profiles.php"
+sed -i "s/'0.0.0-dev'/'${VERSION}'/" "$SRC/src/GravityForms/AddOn.php"
 release_assert_version_mirrors "$SRC"
 bash scripts/release/build-release.sh "$SRC" "$VERSION" "$STAGE/out"
-ZIP="$STAGE/out/gravity-presentation-profiles-\${VERSION}.zip"
+ZIP="$STAGE/out/gravity-presentation-profiles-${VERSION}.zip"
 bash scripts/release/validate-release.sh "$SRC" "$ZIP" "$VERSION"
 unzip -Z1 "$ZIP" > "$STAGE/zip-list.txt"
 grep -Fxq 'gravity-presentation-profiles/src/SRWF/GravityFlow/Inbox2Shortcode.php' "$STAGE/zip-list.txt"
