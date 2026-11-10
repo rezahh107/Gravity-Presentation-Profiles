@@ -20,10 +20,11 @@ release_assert_version_mirrors "$SRC"
 bash scripts/release/build-release.sh "$SRC" "$VERSION" "$STAGE/out"
 ZIP="$STAGE/out/gravity-presentation-profiles-\${VERSION}.zip"
 bash scripts/release/validate-release.sh "$SRC" "$ZIP" "$VERSION"
-unzip -Z1 "$ZIP" | grep -Fxq 'gravity-presentation-profiles/src/SRWF/GravityFlow/Inbox2Shortcode.php'
-unzip -Z1 "$ZIP" | grep -Fxq 'gravity-presentation-profiles/assets/css/gpp-inbox2.css'
-unzip -Z1 "$ZIP" | grep -Fxq 'gravity-presentation-profiles/assets/js/gpp-inbox2.js'
-if unzip -Z1 "$ZIP" | grep -Eq '^gravity-presentation-profiles/(tests|mu-plugins|\.github)/'; then
+unzip -Z1 "$ZIP" > "$STAGE/zip-list.txt"
+grep -Fxq 'gravity-presentation-profiles/src/SRWF/GravityFlow/Inbox2Shortcode.php' "$STAGE/zip-list.txt"
+grep -Fxq 'gravity-presentation-profiles/assets/css/gpp-inbox2.css' "$STAGE/zip-list.txt"
+grep -Fxq 'gravity-presentation-profiles/assets/js/gpp-inbox2.js' "$STAGE/zip-list.txt"
+if grep -Eq '^gravity-presentation-profiles/(tests|mu-plugins|\.github)/' "$STAGE/zip-list.txt"; then
   echo 'Test-only files in GPP ZIP' >&2
   exit 1
 fi
