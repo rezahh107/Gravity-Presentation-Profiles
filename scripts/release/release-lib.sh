@@ -168,6 +168,9 @@ LICENSE
 gravity-presentation-profiles.php
 src/Autoloader.php
 src/Bootstrap.php
+src/SRWF/GravityFlow/Inbox2Shortcode.php
+assets/css/gpp-inbox2.css
+assets/js/gpp-inbox2.js
 src/GravityForms/AddOn.php
 src/GravityForms/InPluginHelp.php
 help/en_US.html
