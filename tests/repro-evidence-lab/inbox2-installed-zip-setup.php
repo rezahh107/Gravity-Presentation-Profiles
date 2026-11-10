@@ -16,6 +16,39 @@ $assert( '9999.0.0' === $header['version'] && defined( 'GRAVITY_FLOW_VERSION' )
     && '3.1.0' === GRAVITY_FLOW_VERSION && shortcode_exists( 'gpp_inbox_2' ), 'BOOTSTRAP_OR_HOST_UNSUPPORTED' );
 $assert( ! file_exists( WPMU_PLUGIN_DIR . '/wu21-lab-plugin.php' ), 'TEST_MU_PLUGIN_STILL_PRESENT' );
 $form_id = (int) $manifest['forms'][0]['form_id'];
+// The shared WU21 fixture distributes 25 entries across two forms. Add only
+// the missing Alpha entries for this installed-ZIP pagination test, then remove
+// them in the smoke wrapper's EXIT trap so later WU21 checks see their baseline.
+$extra_key = 'gpp_wu21_inbox2_extra_ids';
+$assert( false === get_option( $extra_key, false ), 'LEFTOVER_EXTRA_ENTRIES' );
+$alpha = $manifest['forms'][0];
+$baseline_alpha = count( array_filter( $manifest['entry_records'], static function ( $record ) use ( $form_id ) {
+    return (int) ( $record['form_id'] ?? 0 ) === $form_id;
+} ) );
+$assert( $baseline_alpha > 0 && $baseline_alpha < 25, 'BASELINE_COUNT_UNEXPECTED' );
+$extra = array( 'form_id' => $form_id, 'ids' => array() );
+update_option( $extra_key, $extra, false );
+for ( $index = $baseline_alpha; $index < 25; ++$index ) {
+    $entry = array(
+        'form_id' => $form_id,
+        'created_by' => (int) $manifest['operator']['id'],
+        (string) $alpha['first_name_field_id'] => 'WU21 Alpha',
+        (string) $alpha['last_name_field_id'] => sprintf( 'Paging %02d', $index ),
+        (string) $alpha['national_id_field_id'] => sprintf( 'SYN-PAGING-%06d', $index ),
+        (string) $alpha['grade_group_field_id'] => 'پایه آزمایشی صفحه‌بندی',
+        (string) $alpha['school_field_id'] => 'مدرسهٔ ساختگی WU21',
+    );
+    $id = GFAPI::add_entry( $entry );
+    $assert( ! is_wp_error( $id ) && (int) $id > 0, 'EXTRA_ENTRY_CREATION' );
+    $extra['ids'][] = (int) $id;
+    update_option( $extra_key, $extra, false );
+    $created = gmdate( 'Y-m-d H:i:s', strtotime( '2026-01-02 00:00:00 UTC' ) + $index * 60 );
+    $assert( true === GFAPI::update_entry_property( (int) $id, 'date_created', $created ),
+        'EXTRA_ENTRY_TIMESTAMP' );
+    $api = new Gravity_Flow_API( $form_id );
+    $api->process_workflow( (int) $id );
+    $assert( (bool) $api->get_current_step( GFAPI::get_entry( (int) $id ) ), 'EXTRA_ENTRY_WORKFLOW' );
+}
 $native_page = (int) $manifest['frontend_inbox_page_id'];
 $operator = (int) $manifest['operator']['id'];
 $assert( is_array( GFAPI::get_form( $form_id ) ) && get_post( $native_page ), 'NATIVE_FORM_OR_PAGE_MISSING' );
@@ -27,7 +60,14 @@ $args = apply_filters( 'gravityflow_inbox_args', array_merge( Gravity_Flow_Inbox
 ) ) );
 $total = 0;
 $native = Gravity_Flow_API::get_inbox_entries( $args, $total );
-$assert( is_array( $native ) && count( $native ) > 0 && (int) $total <= 2000, 'NATIVE_AUTHORIZED_TASKS_MISSING' );
+$assert( is_array( $native ) && count( $native ) >= 25 && (int) $total <= 2000,
+    'NATIVE_AUTHORIZED_PAGING_TASKS_MISSING' );
+$ordered = $native;
+usort( $ordered, static function ( $a, $b ) {
+    $date = strcmp( (string) ( $a['date_created'] ?? '' ), (string) ( $b['date_created'] ?? '' ) );
+    return 0 !== $date ? $date : ( (int) $a['id'] <=> (int) $b['id'] );
+} );
+$expected_fifo_ids = array_map( 'intval', array_column( $ordered, 'id' ) );
 $ids = array_map( 'intval', array_column( $native, 'id' ) );
 sort( $ids, SORT_NUMERIC );
 // Independent direct Native Task Model oracle for the exact final cell texts.
@@ -94,7 +134,8 @@ $fixture = array(
     'url' => get_permalink( (int) $page_id ), 'multi_url' => get_permalink( (int) $multi_page ), 'page_id' => (int) $page_id,
     'form_id' => $form_id, 'native_page_id' => $native_page,
     'operator_id' => $operator, 'viewer_id' => (int) $manifest['viewer']['id'],
-    'expected_native_ids' => $ids, 'expected_count' => count( $ids ),
+    'expected_native_ids' => $ids, 'expected_fifo_ids' => $expected_fifo_ids,
+    'expected_count' => count( $ids ), 'added_synthetic_count' => count( $extra['ids'] ),
     'expected_final_cells' => $expected_cells,
 );
 $assert( false !== file_put_contents( getenv( 'WU21_ARTIFACT_DIR' ) . '/gpp-inbox2-installed-fixture.json',
