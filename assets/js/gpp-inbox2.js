@@ -4,21 +4,46 @@
   if (window.GPPInbox2) { window.GPPInbox2.initAll(document); return; }
   const instances = new Map();
   const rootSelector = '[data-ciq2-root]';
+  // Identity of roots already in the parsed server document is private to this
+  // script evaluation. DOM attributes and public initAll() cannot grant trust.
+  const initialRoots = [...document.querySelectorAll(rootSelector)];
+  function discardCopiedCards(root) {
+    // Scrub before validating controls: an incomplete copied widget is not
+    // allowed to expose its previous authenticated user's cards.
+    root.querySelectorAll('[data-ciq2-entry], .ciq2-case').forEach(node => node.remove());
+    root.querySelectorAll('[data-ciq2-list]').forEach(list => list.replaceChildren());
+    root.dataset.ciq2State = 'stale';
+  }
+  function rejectMalformed(root) {
+    root.replaceChildren();
+    root.dataset.ciq2State = 'stale';
+    const message = document.createElement('p');
+    message.setAttribute('role', 'alert');
+    message.textContent = 'فهرست در دسترس نیست. صفحه را دوباره بارگذاری کنید.';
+    root.appendChild(message);
+  }
   const formatNumber = n => new Intl.NumberFormat('fa-IR', {useGrouping: false}).format(n);
   const normalize = s => String(s).replace(/[۰-۹٠-٩]/g, d => {
     const cp = d.charCodeAt(0);
     return String(cp >= 0x6f0 ? cp - 0x6f0 : cp - 0x660);
   }).trim().toLocaleLowerCase('fa-IR');
 
-  function mount(root, dynamic = false) {
+  function mount(root, initial = false) {
     if (!root.isConnected || instances.has(root)) return;
+    if (!initial) discardCopiedCards(root);
     const find = name => root.querySelector('[data-ciq2-' + name + ']');
     const list = find('list'), input = find('search'), status = find('status');
     const empty = find('empty'), noResults = find('no-results');
     const previous = find('prev'), next = find('next'), pageLabel = find('page');
     const pager = find('pager'), announcement = find('announcement');
     const heading = root.querySelector('h2'), form = root.querySelector('form');
-    if (![list,input,status,empty,noResults,previous,next,pageLabel,pager,announcement,heading,form].every(Boolean)) return;
+    if (![list,input,status,empty,noResults,previous,next,pageLabel,pager,announcement,heading,form].every(Boolean) ||
+        root.querySelectorAll('[data-ciq2-list]').length !== 1 ||
+        root.querySelectorAll('[data-ciq2-search]').length !== 1 ||
+        root.querySelectorAll('form').length !== 1) {
+      rejectMalformed(root);
+      return;
+    }
 
     let page = 1, generation = 0, busy = false, controller = null, watchdog = null, announcementTimer = null;
     let verifiedAt = root.dataset.ciq2VerifiedAt || '';
@@ -186,19 +211,28 @@
         root.removeEventListener('submit', onSubmit);
       }
     });
-    if (dynamic) {
-      // Never trust old personalized HTML carried by an inserted/replaced widget.
-      cancel(); stale(503, 'در حال دریافت فهرست تأییدشده…');
+    if (initial) {
+      draw();
+    } else {
+      // Every public mount must get its own server-confirmed snapshot.
+      stale(503, 'در حال دریافت فهرست تأییدشده…');
       refresh(true, true);
-    } else draw();
+    }
   }
   function destroy(root) {
     const instance = instances.get(root);
-    if (instance) { instance.cleanup(); instances.delete(root); }
+    if (instance) {
+      instance.invalidate('نمایش قبلی دیگر معتبر نیست.');
+      instance.cleanup();
+      instances.delete(root);
+    }
   }
-  function initAll(container = document, dynamic = false) {
-    if (container.matches?.(rootSelector)) mount(container, dynamic);
-    container.querySelectorAll?.(rootSelector).forEach(root => mount(root, dynamic));
+  // Public initialization is always untrusted. In-place mutation of a mounted
+  // root (including scope or card edits) is unsupported: hosts must destroy
+  // the old root and insert a new root, then call initAll().
+  function initAll(container = document) {
+    if (container.matches?.(rootSelector)) mount(container);
+    container.querySelectorAll?.(rootSelector).forEach(root => mount(root));
   }
   window.GPPInbox2 = Object.freeze({initAll, destroy});
   window.addEventListener('pagehide', () => instances.forEach(instance => instance.invalidate()));
@@ -219,12 +253,15 @@
         node.querySelectorAll?.(rootSelector).forEach(root => { if (!root.isConnected) destroy(root); });
       }
       for (const node of mutation.addedNodes) {
-        if (node.nodeType === 1) initAll(node, true);
+        if (node.nodeType === 1) initAll(node);
       }
     }
   });
   observer.observe(document.documentElement, {childList:true,subtree:true});
+  // The sole trusted hydration entry point, private and one-shot. WordPress
+  // enqueues this script in the footer after shortcode HTML has been parsed.
+  initialRoots.forEach(root => mount(root, true));
+  // If loaded early, later parser roots are untrusted and use AJAX instead.
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', () => initAll(document), {once:true});
-  else initAll(document);
 })();
