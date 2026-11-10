@@ -106,7 +106,7 @@ jobs:
       - name: Set up exact PHP runtime
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: '8.2.34'
+          php-version: '8.2'
           coverage: none
           extensions: mysqli
           tools: composer:2.8.12
@@ -115,7 +115,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(php -r 'echo PHP_VERSION;')" = "8.2.34"
+          php -r 'echo "PHP_VERSION=", PHP_VERSION, PHP_EOL; if (PHP_MAJOR_VERSION !== 8 || PHP_MINOR_VERSION !== 2) { fwrite(STDERR, "PHP_MINOR_FAMILY_MISMATCH expected=8.2.x\n"); exit(1); }'
           composer validate --no-check-publish
           bash scripts/validate-visual-governance.sh .
           bash tests/visual-governance-guardrail.sh
@@ -285,6 +285,14 @@ jobs:
           done
           cat /tmp/wu21-wp-server.log >&2
           exit 1
+
+      - name: Smoke-test the actual installed GPP ZIP Inbox 2 shortcode
+        # Check the real installed ZIP before the lengthy unrelated Native
+        # visual suite; the smoke script restores the original WU21 checkout.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
 
       - name: Assert native Gravity Flow REST route over HTTP
         shell: bash

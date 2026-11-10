@@ -62,7 +62,10 @@ req( 'REPRODUCIBLE_SIMULATION' === $e['environment_class'], 'environment_class m
 req( 'PASS' === $e['overall_status'], 'Evidence overall_status is not PASS' );
 req( 'NOT_PROVEN' === $e['production_equivalence']['state'], 'Production equivalence must remain NOT_PROVEN' );
 req( $config['wordpress']['version'] === $e['environment']['wordpress']['version'], 'WordPress runtime version mismatch' );
-req( $config['php']['version'] === $e['environment']['php']['version'], 'PHP runtime version mismatch' );
+req( '8.2' === ( $config['php']['version'] ?? null ), 'WU21 PHP minor family declaration mismatch' );
+$observed_php = $runtime['php']['version'] ?? null;
+req( is_string( $observed_php ) && 1 === preg_match( '/^8\\.2\\.[0-9]+$/D', $observed_php ), 'Invalid WU21 PHP runtime family/version' );
+req( $observed_php === ( $e['environment']['php']['version'] ?? null ), 'PHP runtime evidence identity mismatch' );
 req( false !== strpos( $e['environment']['database']['reported_version'], $config['database']['version'] ), 'Database runtime version mismatch' );
 foreach ( array( 'gravity_forms', 'gravity_flow' ) as $p ) {
     req( $config['plugins'][$p]['version'] === $e['packages'][$p]['runtime_version'], $p . ' runtime version mismatch' );

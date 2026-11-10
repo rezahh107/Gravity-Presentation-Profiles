@@ -6,6 +6,10 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+### Added
+
+- Added a separate, opt-in GPP-owned `[gpp_inbox_2 form="…" native_page="…"]` read-only shortcode candidate, using existing GPP form/binding configuration and qualified Gravity Flow 3.1.0 Native Inbox membership and final-cell projection. The existing Native-First Inbox remains unchanged. Installed-ZIP synthetic-host tests cover authentication, authorized task IDs, permitted cells, Native Detail and stale-session handling. Real-person usability, host versions outside the qualified contract and national-ID disclosure policy remain outside release admission.
+
 ## [0.5.0] - 2026-10-20
 
 ### Added

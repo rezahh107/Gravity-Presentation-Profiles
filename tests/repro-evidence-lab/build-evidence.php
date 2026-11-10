@@ -85,6 +85,10 @@ function require_inbox_v2_qualification_provenance( $qualification, $browser, $r
 
 $config = read_json( $repo . '/tests/repro-evidence-lab/lab-config.json' );
 $runtime = read_json( $artifact_dir . '/runtime.json' );
+if ( '8.2' !== ( $config['php']['version'] ?? null ) || ! is_string( $runtime['php']['version'] ?? null )
+    || 1 !== preg_match( '/^8\\.2\\.[0-9]+$/D', $runtime['php']['version'] ) ) {
+    throw new RuntimeException( 'WU21 PHP minor-family/actual-version evidence mismatch.' );
+}
 $fixture = read_json( $artifact_dir . '/fixture-manifest.json' );
 $php = read_json( $artifact_dir . '/php-results.json' );
 $browser = read_json( $artifact_dir . '/browser-results.json' );

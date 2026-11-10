@@ -15,6 +15,7 @@ use GravityPresentationProfiles\SRWF\GravityFlow\EntryDetailTimelineSemanticPres
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxBlockCompositionBridge;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxInitialGeometryGuard;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxManualRefreshControl;
+use GravityPresentationProfiles\SRWF\GravityFlow\Inbox2Shortcode;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxPresentationAdapter;
 use GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation;
 use GravityPresentationProfiles\SRWF\GravityFlow\PrintDossierPresentationAdapter;
@@ -77,6 +78,7 @@ final class Bootstrap {
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are
         // registered only after Gravity Forms has loaded successfully.
+        Inbox2Shortcode::register();
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         InboxTableHeaderPresentation::register();
