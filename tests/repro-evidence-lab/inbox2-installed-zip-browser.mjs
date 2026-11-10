@@ -179,6 +179,150 @@ try {
   await multi.waitForFunction(() => document.querySelectorAll('[data-ciq2-root]').length === 2);
   checks.push('dynamic_instance_clears_old_cells_idempotent_init_and_removal');
 
+  // Local test helper: copies only synthetic authorized cards in this
+  // disposable browser host. Every inserted copy has distinct DOM IDs.
+  await multi.evaluate(() => {
+    let serial = 0;
+    window.__ciq2SyntheticClone = () => {
+      const clone = document.querySelector('[data-ciq2-root]').cloneNode(true);
+      const suffix = '-copy-' + (++serial);
+      clone.querySelectorAll('[id]').forEach(el => { el.id += suffix; });
+      clone.querySelectorAll('label[for]').forEach(el => { el.htmlFor += suffix; });
+      const labelled = clone.getAttribute('aria-labelledby');
+      if (labelled) clone.setAttribute('aria-labelledby', labelled + suffix);
+      return clone;
+    };
+  });
+
+  // T1/T2: call public initAll synchronously before observer delivery.
+  // A mixed authorized+copied-stale list must be blank before any AJAX reply.
+  let allowT1, seenT1;
+  const t1Request = new Promise(resolve => { seenT1 = resolve; });
+  const t1Gate = new Promise(resolve => { allowT1 = resolve; });
+  const t1Route = async route => {
+    if (route.request().postData()?.includes('gpp_inbox2_read')) {
+      seenT1();
+      await t1Gate;
+    }
+    await route.continue();
+  };
+  await multi.route('**/admin-ajax.php', t1Route);
+  const t1 = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    const copied = clone.querySelector('[data-ciq2-entry]').cloneNode(true);
+    copied.dataset.ciq2Entry = '999999';
+    copied.querySelector('[data-ciq2-name]').textContent = 'SYNTHETIC-COPIED-STALE';
+    clone.querySelector('[data-ciq2-list]').appendChild(copied);
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(document); // same JS task; observer not delivered
+    return {
+      state:clone.dataset.ciq2State,
+      cards:clone.querySelectorAll('[data-ciq2-entry]').length,
+      hasOld:clone.textContent.includes('SYNTHETIC-COPIED-STALE')
+    };
+  });
+  assert.equal(t1.state, 'syncing');
+  assert.equal(t1.cards, 0);
+  assert.equal(t1.hasOld, false);
+  await t1Request;
+  assert.equal(await roots.last().locator('[data-ciq2-entry]').count(), 0);
+  allowT1();
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'current');
+  assert.equal(await roots.last().locator('[data-ciq2-entry]').count(), fixture.expected_count);
+  await multi.unroute('**/admin-ajax.php', t1Route);
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('T1_T2_public_init_clears_mixed_stale_copied_cards_pre_observer');
+
+  // T4: loading the same script twice must never re-enable trusted hydration.
+  const exactScript = fs.readFileSync(path.resolve('assets/js/gpp-inbox2.js'), 'utf8');
+  const t4 = await multi.evaluate(script => {
+    const clone = window.__ciq2SyntheticClone();
+    document.body.appendChild(clone);
+    (0, eval)(script);
+    return {state:clone.dataset.ciq2State, count:clone.querySelectorAll('[data-ciq2-entry]').length};
+  }, exactScript);
+  assert.equal(t4.count, 0);
+  assert.equal(t4.state, 'syncing');
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'current');
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('T4_duplicate_script_cannot_trust_new_copied_root');
+
+  // T5/T7: neither a narrow public mount nor a boolean passed from outside
+  // grants initial-server authority.
+  const t5 = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(clone);
+    return {state:clone.dataset.ciq2State, cards:clone.querySelectorAll('[data-ciq2-entry]').length};
+  });
+  assert.equal(t5.state, 'syncing'); assert.equal(t5.cards, 0);
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'current');
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  const t7 = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(document, false);
+    return {state:clone.dataset.ciq2State, cards:clone.querySelectorAll('[data-ciq2-entry]').length};
+  });
+  assert.equal(t7.state, 'syncing'); assert.equal(t7.cards, 0);
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'current');
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('T5_T7_public_initialization_has_no_trust_override');
+
+  // T9: malformed roots are sanitized even when missing an essential control.
+  const t9 = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    clone.querySelector('[data-ciq2-announcement]').remove();
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(clone);
+    return {state:clone.dataset.ciq2State, cards:clone.querySelectorAll('[data-ciq2-entry]').length,
+      text:clone.textContent, alerts:clone.querySelectorAll('[role=alert]').length};
+  });
+  assert.equal(t9.state, 'stale'); assert.equal(t9.cards, 0); assert.equal(t9.alerts, 1);
+  assert.doesNotMatch(t9.text, /WU21 Alpha|SYN-PAGING/);
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('T9_malformed_root_fail_closed_without_old_cells');
+
+  // T8/T10: in-place *host* edits of a mounted root are explicitly unsupported,
+  // not claimed fail-closed. A supported rebind uses destroy + new root and
+  // always begins with cleared cards. GPP's own draw() mutations are unchanged.
+  const unsupported = await multi.evaluate(() => {
+    const root = document.querySelector('[data-ciq2-root]');
+    const originalScope = root.dataset.ciq2Form;
+    const oldCount = root.querySelectorAll('[data-ciq2-entry]').length;
+    const extra = root.querySelector('[data-ciq2-entry]').cloneNode(true);
+    extra.dataset.ciq2Entry = '999998';
+    root.querySelector('[data-ciq2-list]').appendChild(extra);
+    root.dataset.ciq2Form = '999997';
+    const snapshot = {state:root.dataset.ciq2State,
+      cardCount:root.querySelectorAll('[data-ciq2-entry]').length,
+      scope:root.dataset.ciq2Form};
+    extra.remove();
+    root.dataset.ciq2Form = originalScope;
+    return {...snapshot, oldCount};
+  });
+  assert.equal(unsupported.state, 'current');
+  assert.equal(unsupported.cardCount, unsupported.oldCount + 1);
+  assert.equal(unsupported.scope, '999997');
+  const t8t10 = await multi.evaluate(() => {
+    const previous = document.querySelector('[data-ciq2-root]');
+    const replacement = window.__ciq2SyntheticClone();
+    window.GPPInbox2.destroy(previous);
+    previous.replaceWith(replacement);
+    window.GPPInbox2.initAll(replacement);
+    return {state:replacement.dataset.ciq2State,
+      cards:replacement.querySelectorAll('[data-ciq2-entry]').length};
+  });
+  assert.equal(t8t10.state, 'syncing'); assert.equal(t8t10.cards, 0);
+  await multi.waitForFunction(() =>
+    document.querySelector('[data-ciq2-root]')?.dataset.ciq2State === 'current');
+  assert.equal(await roots.count(), 2);
+  checks.push('T8_T10_unsupported_inplace_mutation_and_supported_replacement_revalidation');
+
   // Parent-constrained layout at desktop viewport: genuine CSS container query,
   // not only a narrow device-width media query.
   await multi.setViewportSize({width:1440,height:900});
