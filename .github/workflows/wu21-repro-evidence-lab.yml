@@ -286,6 +286,14 @@ jobs:
           cat /tmp/wu21-wp-server.log >&2
           exit 1
 
+      - name: Smoke-test the actual installed GPP ZIP Inbox 2 shortcode
+        # Check the real installed ZIP before the lengthy unrelated Native
+        # visual suite; the smoke script restores the original WU21 checkout.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
+
       - name: Assert native Gravity Flow REST route over HTTP
         shell: bash
         run: |
@@ -565,15 +573,6 @@ jobs:
           test -s "$WU21_ARTIFACT_DIR/inbox-mixed-readiness-php.json"
           node tests/repro-evidence-lab/inbox-mixed-readiness-browser.mjs
           test -s "$WU21_ARTIFACT_DIR/inbox-mixed-readiness-browser.json"
-
-      - name: Smoke-test the actual installed GPP ZIP Inbox 2 shortcode
-        # Execute regardless of unrelated Native visual regressions. The
-        # comparison is meaningful only after authentic pinned host fixtures.
-        if: ${{ always() && !cancelled() && steps.wu21_fixture_setup.outcome == 'success' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
 
       - name: Publish Inbox visual diagnostic summary
         if: always()
