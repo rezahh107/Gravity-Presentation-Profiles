@@ -133,6 +133,11 @@ final class Inbox2Shortcode {
             'html' => self::renderMarkup( $rows, $form_id, $native_page_id, $page_id ) ) );
     }
 
+    /** Explicitly qualified private host version. */
+    private static function hostVersionQualified( $version ) {
+        return is_string( $version ) && '3.1.0' === $version;
+    }
+
     /** The public authenticated Inbox list, never the Detail permission predicate. */
     private static function projectNative( $entries, $form_id ) {
         if ( is_wp_error( $entries ) ) { return $entries; }
@@ -147,7 +152,7 @@ final class Inbox2Shortcode {
     }
 
 private static function entries( $scope = array(), $batch_size = 40 ) {
-    if ( ! ciq_host_version_qualified( defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null ) ) {
+    if ( ! self::hostVersionQualified( defined( 'GRAVITY_FLOW_VERSION' ) ? GRAVITY_FLOW_VERSION : null ) ) {
         return new \WP_Error( 'ciq2_unsupported_host_version' );
     }
     if ( ! is_user_logged_in() ) { return new \WP_Error( 'authentication_required' ); }
