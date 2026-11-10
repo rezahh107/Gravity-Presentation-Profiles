@@ -66,6 +66,94 @@ try {
   assert.equal(Object.keys(actualCells).length, Object.keys(fixture.expected_final_cells).length);
   checks.push('installed_shortcode_exact_final_native_task_model_cell_parity');
 
+  // The installed shortcode must retain focus on the SAME authorized case
+  // when a server-confirmed redraw replaces the old element.
+  const focusedId = await page.locator('[data-ciq2-entry]').first().getAttribute('data-ciq2-entry');
+  await page.locator('[data-ciq2-detail]').first().focus();
+  await page.evaluate(() => document.querySelector('[data-ciq2-refresh]').closest('form').requestSubmit());
+  await page.waitForFunction(() => document.querySelector('[data-ciq2-root]')?.dataset.ciq2State === 'current');
+  assert.equal(await page.evaluate(() =>
+    document.activeElement.closest('[data-ciq2-entry]')?.dataset.ciq2Entry), focusedId);
+  checks.push('same_entry_keyboard_focus_survives_authoritative_refresh');
+
+  // Two independently rendered PHP shortcodes on the same authenticated page:
+  // IDs/labels, search, controls, and requested data remain per instance.
+  const multi = await context.newPage();
+  const multiResponse = await multi.goto(fixture.multi_url, {waitUntil:'networkidle'});
+  assert.equal(multiResponse.status(), 200);
+  const roots = multi.locator('[data-ciq2-root]');
+  assert.equal(await roots.count(), 2);
+  const headingIds = await roots.locator('h2').evaluateAll(nodes => nodes.map(node => node.id));
+  const searchIds = await roots.locator('[data-ciq2-search]').evaluateAll(nodes => nodes.map(node => node.id));
+  assert.equal(new Set(headingIds).size, 2);
+  assert.equal(new Set(searchIds).size, 2);
+  await roots.nth(0).locator('[data-ciq2-search]').fill('متن-ساختگی-بدون-تطابق-۹۹۹');
+  assert.equal(await roots.nth(0).locator('[data-ciq2-entry]:visible').count(), 0);
+  assert.ok((await roots.nth(1).locator('[data-ciq2-entry]:visible').count()) > 0);
+  await roots.nth(0).locator('[data-ciq2-search]').fill('');
+  checks.push('two_shortcode_instances_have_unique_ids_and_isolated_search');
+
+  // Dynamic Elementor-like insertion is NOT a widget qualification: no
+  // personalized copied HTML may remain while the new root revalidates.
+  let releaseRead;
+  let signalHeld;
+  const requestHeld = new Promise(resolve => { signalHeld = resolve; });
+  const readGate = new Promise(resolve => { releaseRead = resolve; });
+  await multi.route('**/admin-ajax.php', async route => {
+    if (route.request().postData()?.includes('gpp_inbox2_read')) {
+      signalHeld();
+      await readGate;
+    }
+    await route.continue();
+  });
+  await multi.evaluate(() => {
+    const clone = document.querySelector('[data-ciq2-root]').cloneNode(true);
+    clone.querySelectorAll('[id]').forEach(node => { node.id += '-dynamic'; });
+    clone.querySelectorAll('label[for]').forEach(node => { node.htmlFor += '-dynamic'; });
+    document.body.appendChild(clone);
+  });
+  await requestHeld;
+  assert.equal(await roots.count(), 3);
+  assert.equal(await roots.nth(2).locator('[data-ciq2-entry]').count(), 0);
+  assert.equal(await roots.nth(2).getAttribute('data-ciq2-state'), 'syncing');
+  releaseRead();
+  await multi.waitForFunction(() => {
+    const candidate = [...document.querySelectorAll('[data-ciq2-root]')].at(-1);
+    return candidate?.dataset.ciq2State === 'current' &&
+      candidate.querySelectorAll('[data-ciq2-entry]').length > 0;
+  });
+  await multi.unroute('**/admin-ajax.php');
+  await multi.evaluate(() => {
+    window.GPPInbox2.initAll(document);
+    window.GPPInbox2.initAll(document);
+  });
+  let refreshCalls = 0;
+  multi.on('request', request => {
+    if (request.url().includes('admin-ajax.php') &&
+        request.postData()?.includes('gpp_inbox2_read')) refreshCalls++;
+  });
+  await roots.nth(2).locator('[data-ciq2-refresh]').click();
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'current');
+  assert.equal(refreshCalls, 1, 'repeated initialization duplicated refresh listeners');
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  await multi.waitForFunction(() => document.querySelectorAll('[data-ciq2-root]').length === 2);
+  checks.push('dynamic_instance_clears_old_cells_idempotent_init_and_removal');
+
+  // Parent-constrained layout at desktop viewport: genuine CSS container query,
+  // not only a narrow device-width media query.
+  await multi.setViewportSize({width:1440,height:900});
+  await multi.evaluate(() => {
+    const parent = document.querySelector('[data-ciq2-root]').parentElement;
+    parent.style.width = '390px';
+    parent.style.maxWidth = '390px';
+  });
+  const columns = await roots.first().locator('[data-ciq2-entry]').first().evaluate(node =>
+    getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length);
+  assert.equal(columns, 2, 'narrow parent did not stack the case row');
+  checks.push('desktop_viewport_with_390px_parent_uses_mobile_card_columns');
+  await multi.close();
+
   // A valid nonce for this page/form must not authorize a different target.
   const tamperResults = await page.evaluate(async () => {
     const root = document.querySelector('[data-ciq2-root]');
