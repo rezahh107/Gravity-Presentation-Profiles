@@ -53,10 +53,10 @@ try {
   assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
   await page.locator('[data-ciq2-next]').click();
   assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(20, 40));
-  assert.match(await page.locator('[data-ciq2-page]').innerText(), /۲ از ۲/);
+  assert.match(await page.locator('[data-ciq2-pager] [data-ciq2-page]').innerText(), /۲ از ۲/);
   await page.locator('[data-ciq2-search]').fill('Paging 24');
   assert.equal((await visible(page)).length, 1);
-  assert.match(await page.locator('[data-ciq2-page]').innerText(), /۱ از ۱/);
+  assert.match(await page.locator('[data-ciq2-pager] [data-ciq2-page]').innerText(), /۱ از ۱/);
   await page.locator('[data-ciq2-search]').fill('');
   assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
   checks.push('installed_zip_25_authorized_single_form_fifo_pagination_and_search_reset');
