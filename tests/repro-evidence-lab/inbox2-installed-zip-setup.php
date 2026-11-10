@@ -43,7 +43,10 @@ for ( $index = $baseline_alpha; $index < 25; ++$index ) {
     $extra['ids'][] = (int) $id;
     update_option( $extra_key, $extra, false );
     $created = gmdate( 'Y-m-d H:i:s', strtotime( '2026-01-02 00:00:00 UTC' ) + $index * 60 );
-    $assert( true === GFAPI::update_entry_property( (int) $id, 'date_created', $created ),
+    $update_result = GFAPI::update_entry_property( (int) $id, 'date_created', $created );
+    $stored = GFAPI::get_entry( (int) $id );
+    $assert( false !== $update_result && ! is_wp_error( $update_result )
+        && is_array( $stored ) && (string) ( $stored['date_created'] ?? '' ) === $created,
         'EXTRA_ENTRY_TIMESTAMP' );
     $api = new Gravity_Flow_API( $form_id );
     $api->process_workflow( (int) $id );
