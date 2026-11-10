@@ -286,6 +286,69 @@ try {
   assert.doesNotMatch(t9.text, /WU21 Alpha|SYN-PAGING/);
   await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
   checks.push('T9_malformed_root_fail_closed_without_old_cells');
+  const malformedDuplicate = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    clone.appendChild(clone.querySelector('[data-ciq2-list]').cloneNode(true));
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(clone);
+    return {state:clone.dataset.ciq2State, cards:clone.querySelectorAll('[data-ciq2-entry]').length,
+      alerts:clone.querySelectorAll('[role=alert]').length};
+  });
+  assert.deepEqual(malformedDuplicate, {state:'stale', cards:0, alerts:1});
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('T9_duplicate_list_malformed_root_fails_closed');
+
+  // A tampered dynamic scope is rejected by the actual WordPress AJAX
+  // admission check, with no pre-confirmation display in the browser.
+  const wrongScope = await multi.evaluate(() => {
+    const clone = window.__ciq2SyntheticClone();
+    clone.dataset.ciq2Form = String(Number(clone.dataset.ciq2Form) + 99999);
+    document.body.appendChild(clone);
+    window.GPPInbox2.initAll(clone);
+    return {state:clone.dataset.ciq2State, cards:clone.querySelectorAll('[data-ciq2-entry]').length};
+  });
+  assert.equal(wrongScope.state, 'syncing'); assert.equal(wrongScope.cards, 0);
+  await multi.waitForFunction(() =>
+    [...document.querySelectorAll('[data-ciq2-root]')].at(-1)?.dataset.ciq2State === 'stale');
+  assert.equal(await roots.last().locator('[data-ciq2-entry]').count(), 0);
+  await multi.evaluate(() => [...document.querySelectorAll('[data-ciq2-root]')].at(-1).remove());
+  checks.push('dynamic_wrong_scope_cannot_display_copied_cards');
+
+  // Pending response must never resurrect a destroyed/remounted instance.
+  let releaseAbort, sawAbort;
+  const abortSeen = new Promise(resolve => { sawAbort = resolve; });
+  const abortGate = new Promise(resolve => { releaseAbort = resolve; });
+  const abortRoute = async route => {
+    if (route.request().postData()?.includes('gpp_inbox2_read')) {
+      sawAbort();
+      await abortGate;
+    }
+    try { await route.continue(); } catch (_) { /* Request aborted by the client. */ }
+  };
+  await multi.route('**/admin-ajax.php', abortRoute);
+  const teardown = await multi.evaluate(() => {
+    const root = window.__ciq2SyntheticClone();
+    document.body.appendChild(root);
+    window.GPPInbox2.initAll(root);
+    window.__ciq2DisposedRoot = root;
+    return {state:root.dataset.ciq2State, cards:root.querySelectorAll('[data-ciq2-entry]').length};
+  });
+  assert.equal(teardown.state, 'syncing'); assert.equal(teardown.cards, 0);
+  await abortSeen;
+  await multi.evaluate(() => {
+    window.GPPInbox2.destroy(window.__ciq2DisposedRoot);
+    window.__ciq2DisposedRoot.remove();
+  });
+  releaseAbort();
+  await multi.unroute('**/admin-ajax.php', abortRoute);
+  await multi.waitForTimeout(100);
+  const afterAbort = await multi.evaluate(() => ({
+    state:window.__ciq2DisposedRoot.dataset.ciq2State,
+    cards:window.__ciq2DisposedRoot.querySelectorAll('[data-ciq2-entry]').length
+  }));
+  assert.equal(afterAbort.state, 'stale');
+  assert.equal(afterAbort.cards, 0);
+  checks.push('destroy_aborts_pending_read_without_resurrecting_old_cards');
 
   // T8/T10: in-place *host* edits of a mounted root are explicitly unsupported,
   // not claimed fail-closed. A supported rebind uses destroy + new root and
