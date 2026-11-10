@@ -110,7 +110,10 @@ try {
   assert.ok(received.includes(Number(native.searchParams.get('lid'))));
   await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('a[data-ciq2-detail]').first().click()]);
   assert.equal(new URL(page.url()).searchParams.get('view'), 'entry');
-  checks.push('authentic_native_detail_navigation');
+  await page.locator('.gravityflow_workflow_detail').waitFor({timeout: 15000});
+  const detailText = await page.locator('.gravityflow_workflow_detail').innerText();
+  assert.doesNotMatch(detailText, /You don't have permission to view this entry\./);
+  checks.push('authentic_native_entry_detail_renderer_and_navigation');
 
   await page.goBack({waitUntil: 'domcontentloaded'});
   await page.waitForFunction(() => document.querySelector('[data-ciq2-root]')?.dataset.ciq2State === 'current');
