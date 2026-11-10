@@ -45,6 +45,54 @@ try {
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.css') && x.status === 200));
   checks.push('real_installed_zip_with_native_authorized_task_identity_and_assets');
 
+  // Independently read the pinned Native Task Model at setup; compare every
+  // final permitted text cell against the actual installed shortcode DOM.
+  const actualCells = await page.locator('[data-ciq2-entry]').evaluateAll(nodes =>
+    Object.fromEntries(nodes.map(node => [
+      node.dataset.ciq2Entry,
+      {
+        student_name: node.querySelector('[data-ciq2-name]').textContent.trim(),
+        national_id: node.querySelector('[data-ciq2-national-id]').textContent.trim(),
+        school_grade: node.querySelector('[data-ciq2-school-grade]').textContent.trim()
+      }
+    ])));
+  for (const [id, cells] of Object.entries(fixture.expected_final_cells)) {
+    assert.deepEqual(actualCells[id], {
+      student_name: cells.student_name.trim(),
+      national_id: cells.national_id.trim(),
+      school_grade: cells.school_grade.trim()
+    }, 'final Native Task Model cells diverged on entry ' + id);
+  }
+  assert.equal(Object.keys(actualCells).length, Object.keys(fixture.expected_final_cells).length);
+  checks.push('installed_shortcode_exact_final_native_task_model_cell_parity');
+
+  // A valid nonce for this page/form must not authorize a different target.
+  const tamperResults = await page.evaluate(async () => {
+    const root = document.querySelector('[data-ciq2-root]');
+    const args = {
+      action: 'gpp_inbox2_read', nonce: root.dataset.ciq2Nonce,
+      page_id: root.dataset.ciq2Page, form_id: root.dataset.ciq2Form,
+      native_page_id: root.dataset.ciq2NativePage
+    };
+    const outcomes = [];
+    for (const property of ['form_id', 'native_page_id']) {
+      const params = {...args, [property]: String(Number(args[property]) + 1)};
+      const response = await fetch(root.dataset.ciq2Ajax, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
+        body: new URLSearchParams(params)
+      });
+      outcomes.push({status: response.status, payload: await response.json()});
+    }
+    return outcomes;
+  });
+  for (const check of tamperResults) {
+    assert.equal(check.status, 403);
+    assert.equal(check.payload.success, false);
+    assert.equal(check.payload.data?.reason, 'authorization_required');
+  }
+  checks.push('forged_form_and_native_page_ajax_targets_rejected');
+
   const firstName = await page.locator('[data-ciq2-name]').first().innerText();
   assert.ok(firstName.trim().length > 0);
   assert.ok(await page.locator('[data-ciq2-national-id]').first().innerText());
