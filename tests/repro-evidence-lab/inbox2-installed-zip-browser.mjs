@@ -84,6 +84,20 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-ciq2-root]')?.dataset.ciq2State === 'stale');
   assert.deepEqual(await ids(page), []);
   checks.push('expired_login_clears_old_authorized_cells');
+  const viewerContext = await browser.newContext({viewport: {width: 390, height: 844}});
+  await viewerContext.addCookies(cookies(fixture.viewer_id));
+  const viewerPage = await viewerContext.newPage();
+  await viewerPage.goto(fixture.url, {waitUntil: 'networkidle'});
+  const viewerIds = await ids(viewerPage);
+  const viewerQuery = "wp_set_current_user(" + fixture.viewer_id + ");" +
+    "$a=apply_filters('gravityflow_inbox_args',array_merge(Gravity_Flow_Inbox::get_defaults(),['form_id'=>" +
+    fixture.form_id + ",'paging'=>['offset'=>0,'page_size'=>2001]]));$n=0;" +
+    "$p=Gravity_Flow_API::get_inbox_entries($a,$n);if(is_wp_error($p))$p=[];" +
+    "echo wp_json_encode(array_map('intval',array_column($p,'id')));";
+  const viewerAllowed = JSON.parse(wp(viewerQuery));
+  assert.deepEqual([...viewerIds].sort((a,b)=>a-b), [...viewerAllowed].sort((a,b)=>a-b));
+  await viewerContext.close();
+  checks.push('second_actor_exact_native_list_authorization_parity');
   assert.deepEqual(errors, []);
   checks.push('no_page_javascript_exceptions');
   report.status = 'PASS';
