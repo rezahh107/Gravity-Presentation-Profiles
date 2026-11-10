@@ -60,7 +60,7 @@ try {
   assert.equal(native.searchParams.get('view'), 'entry');
   assert.equal(Number(native.searchParams.get('id')), fixture.form_id);
   assert.ok(received.includes(Number(native.searchParams.get('lid'))));
-  await page.locator('a[data-ciq2-detail]').first().click({waitForNavigation: 'domcontentloaded'});
+  await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('a[data-ciq2-detail]').first().click()]);
   assert.equal(new URL(page.url()).searchParams.get('view'), 'entry');
   checks.push('authentic_native_detail_navigation');
 
