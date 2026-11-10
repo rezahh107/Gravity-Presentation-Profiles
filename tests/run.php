@@ -51,6 +51,7 @@ $cases = array(
     'inbox-package-authority.php',
     'inbox-production-activation.php',
     'inbox-settings-contract.php',
+    'inbox-axis-intervention.php',
     'inbox-asset-reachability.php',
     'inbox-block-full-width-composition.php',
     'inbox-asset-versioning.php',

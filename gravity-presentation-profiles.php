@@ -26,4 +26,14 @@ if ( ! defined( 'GPP_PLUGIN_FILE' ) ) {
 require_once __DIR__ . '/src/Autoloader.php';
 
 \GravityPresentationProfiles\Autoloader::register();
+
+/**
+ * GPP public read-only Inbox 1 physical-axis switch status (v1).
+ * Safe for PersianGravity to call; never mutates either plugin's settings.
+ * This reports preference, NOT the initialized AG Grid mode or compatibility.
+ */
+function gpp_gravity_flow_inbox_axis_status() {
+    return \GravityPresentationProfiles\SRWF\GravityFlow\InboxAxisIntervention::status();
+}
+
 \GravityPresentationProfiles\Bootstrap::init();
