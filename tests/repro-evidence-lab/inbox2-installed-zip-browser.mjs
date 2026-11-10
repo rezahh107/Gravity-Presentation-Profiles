@@ -46,6 +46,20 @@ try {
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.js') && x.status === 200));
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.css') && x.status === 200));
   checks.push('real_installed_zip_with_native_authorized_task_identity_and_assets');
+  // An authentic 25-task *single-form* Native Inbox must paginate 20/5,
+  // preserve server FIFO order, and reset to page one when searching.
+  assert.ok(Array.isArray(fixture.expected_fifo_ids) && fixture.expected_fifo_ids.length >= 25);
+  assert.deepEqual(received, fixture.expected_fifo_ids, 'initial server FIFO differs from Native chronology');
+  assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
+  await page.locator('[data-ciq2-next]').click();
+  assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(20, 40));
+  assert.match(await page.locator('[data-ciq2-page]').innerText(), /۲ از ۲/);
+  await page.locator('[data-ciq2-search]').fill('Paging 24');
+  assert.equal((await visible(page)).length, 1);
+  assert.match(await page.locator('[data-ciq2-page]').innerText(), /۱ از ۱/);
+  await page.locator('[data-ciq2-search]').fill('');
+  assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
+  checks.push('installed_zip_25_authorized_single_form_fifo_pagination_and_search_reset');
 
   // Independently read the pinned Native Task Model at setup; compare every
   // final permitted text cell against the actual installed shortcode DOM.
