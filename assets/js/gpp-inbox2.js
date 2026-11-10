@@ -20,7 +20,7 @@
     const heading = root.querySelector('h2'), form = root.querySelector('form');
     if (![list,input,status,empty,noResults,previous,next,pageLabel,pager,announcement,heading,form].every(Boolean)) return;
 
-    let page = 1, generation = 0, busy = false, controller = null, watchdog = null;
+    let page = 1, generation = 0, busy = false, controller = null, watchdog = null, announcementTimer = null;
     let verifiedAt = root.dataset.ciq2VerifiedAt || '';
     function announce(message) {
       if (announcement.textContent !== message) announcement.textContent = message;
@@ -69,6 +69,8 @@
       ++generation;
       if (controller) controller.abort();
       if (watchdog) clearTimeout(watchdog);
+      if (announcementTimer) clearTimeout(announcementTimer);
+      announcementTimer = null;
       controller = null; watchdog = null; busy = false;
     }
     function stale(code = 503, message = '') {
@@ -146,7 +148,14 @@
     const onInput = event => {
       if (event.target !== input) return;
       page = 1;
-      if (root.dataset.ciq2State === 'current') draw(true);
+      if (root.dataset.ciq2State === 'current') {
+        draw();
+        if (announcementTimer) clearTimeout(announcementTimer);
+        announcementTimer = setTimeout(() => {
+          announcementTimer = null;
+          announce(status.textContent);
+        }, 350);
+      }
     };
     const onClick = event => {
       if (previous.contains(event.target)) { if (page > 1) { page--; draw(true); } }

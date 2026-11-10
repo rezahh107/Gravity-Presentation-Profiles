@@ -35,6 +35,8 @@ try {
   });
   const response = await page.goto(fixture.url, {waitUntil: 'networkidle'});
   assert.equal(response.status(), 200);
+  assert.match(response.headers()['cache-control'] || '', /\bno-store\b/i);
+  checks.push('personalized_shortcode_page_has_no_store_response_header');
   assert.equal(await page.locator('[data-ciq2-root][data-ciq2-state="current"]').count(), 1);
   const received = await ids(page);
   const expected = fixture.expected_native_ids;
@@ -81,6 +83,7 @@ try {
   const multi = await context.newPage();
   const multiResponse = await multi.goto(fixture.multi_url, {waitUntil:'networkidle'});
   assert.equal(multiResponse.status(), 200);
+  assert.match(multiResponse.headers()['cache-control'] || '', /\bno-store\b/i);
   const roots = multi.locator('[data-ciq2-root]');
   assert.equal(await roots.count(), 2);
   const headingIds = await roots.locator('h2').evaluateAll(nodes => nodes.map(node => node.id));
@@ -92,6 +95,28 @@ try {
   assert.ok((await roots.nth(1).locator('[data-ciq2-entry]:visible').count()) > 0);
   await roots.nth(0).locator('[data-ciq2-search]').fill('');
   checks.push('two_shortcode_instances_have_unique_ids_and_isolated_search');
+
+  // Avoid a screen-reader status burst for each intermediate search keystroke.
+  const announcements = await multi.evaluate(async () => {
+    const root = document.querySelector('[data-ciq2-root]');
+    const output = root.querySelector('[data-ciq2-announcement]');
+    const search = root.querySelector('[data-ciq2-search]');
+    let changes = 0;
+    const observer = new MutationObserver(mutations => { changes += mutations.length; });
+    observer.observe(output, {childList:true,characterData:true,subtree:true});
+    for (const value of ['الف-یک', 'الف-دو', 'الف-سه']) {
+      search.value = value;
+      search.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    observer.disconnect();
+    search.value = '';
+    search.dispatchEvent(new Event('input', {bubbles:true}));
+    return changes;
+  });
+  assert.equal(announcements, 1, 'rapid search emitted repetitive live announcements');
+  checks.push('debounced_accessible_search_status_announcements');
+
 
   // Dynamic Elementor-like insertion is NOT a widget qualification: no
   // personalized copied HTML may remain while the new root revalidates.
