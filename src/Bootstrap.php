@@ -34,7 +34,6 @@ final class Bootstrap {
 
         if ( function_exists( 'add_action' ) ) {
             add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
-            add_action( 'init', array( Inbox2Shortcode::class, 'register' ), 5 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
         }
     }
@@ -79,6 +78,7 @@ final class Bootstrap {
         // Preserve the repository's single deferred bootstrap path. Gravity Flow
         // depends on Gravity Forms, so native-surface presentation adapters are
         // registered only after Gravity Forms has loaded successfully.
+        Inbox2Shortcode::register();
         InboxManualRefreshControl::register();
         InboxPresentationAdapter::register();
         InboxTableHeaderPresentation::register();
