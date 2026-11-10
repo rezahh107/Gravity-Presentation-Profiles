@@ -169,7 +169,7 @@ private static function entries( $scope = array(), $batch_size = 40 ) {
         return new \WP_Error( 'host_query_failed' );
     }
     for ( $offset = 0; $offset < $max_tasks; $offset += $batch_size ) {
-        $args = $scope;
+        $args = array( 'form_id' => (int) ( $scope['form_id'] ?? 0 ) );
         $args['paging'] = array( 'offset' => $offset, 'page_size' => $batch_size );
         $args = apply_filters( 'gravityflow_inbox_args', array_merge( \Gravity_Flow_Inbox::get_defaults(), $args ) );
         $total = 0;
@@ -189,8 +189,11 @@ private static function entries( $scope = array(), $batch_size = 40 ) {
             return new \WP_Error( 'host_page_size_reduced' );
         }
         foreach ( $page as $entry ) {
-            $id = (int) ( $entry['id'] ?? 0 );
-            if ( $id < 1 || isset( $entries[ $id ] ) ) { return new \WP_Error( 'invalid_identity' ); }
+            if ( ! is_array( $entry ) || ! self::validId( $entry['id'] ?? null ) ) {
+                return new \WP_Error( 'invalid_identity' );
+            }
+            $id = (int) $entry['id'];
+            if ( isset( $entries[ $id ] ) ) { return new \WP_Error( 'invalid_identity' ); }
             $entries[ $id ] = $entry;
         }
         if ( count( $entries ) === $expected ) { return array_values( $entries ); }
