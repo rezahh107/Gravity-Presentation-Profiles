@@ -248,14 +248,37 @@ try {
 
   // Revoke A's cookies after cards were drawn: subsequent native read must
   // clear every prior authorized card rather than keep stale private HTML.
+  // First verify that the native Elementor flex layout leaves this actual
+  // control clickable at 390px; prior run had a sibling button covering it.
+  const refreshButton=current.locator('[data-ciq2-refresh]');
+  await refreshButton.scrollIntoViewIfNeeded();
+  const hit=await refreshButton.evaluate(button=>{
+    const box=button.getBoundingClientRect();
+    const x=box.left+box.width/2, y=box.top+box.height/2;
+    const top=document.elementFromPoint(x,y);
+    const holder=button.closest('[data-gpp-atomic-element-id]');
+    const rect=element=>{
+      const r=element?.getBoundingClientRect();
+      return r?{x:r.x,y:r.y,w:r.width,h:r.height}:null;
+    };
+    return {clickable:button===top||button.contains(top),
+      button:rect(button),wrapper:rect(holder),
+      topTag:top?.tagName||null,
+      topWidget:top?.closest('[data-gpp-atomic-element-id]')?.getAttribute('data-gpp-atomic-element-id')||null,
+      buttonWidget:holder?.getAttribute('data-gpp-atomic-element-id')||null};
+  });
+  assert.ok(hit.clickable,'ATOMIC_MOBILE_REFRESH_OVERLAP '+JSON.stringify(hit));
+  await aLoaded.page.screenshot({
+    path:path.join(dir,'p1c-atomic-mobile-before-session-revocation.png'),fullPage:true
+  });
   await a.clearCookies();
-  await current.locator('[data-ciq2-refresh]').click();
+  await refreshButton.click();
   await aLoaded.page.waitForFunction(()=> {
     const x=document.querySelector('[data-ciq2-root][data-ciq2-state="stale"]');
     return x && x.querySelectorAll('[data-ciq2-entry]').length===0;
   },null,{timeout:30000});
   assert.equal(await current.locator('[data-ciq2-entry]').count(),0);
-  checks.push('REVOKED_SESSION_CLEARS_PREVIOUS_ATOMIC_CARDS');
+  checks.push('MOBILE_390_ATOMIC_REFRESH_POINTER_REACHABLE','REVOKED_SESSION_CLEARS_PREVIOUS_ATOMIC_CARDS');
 
   await bLoaded.page.screenshot({path:path.join(dir,'p1c-atomic-frontend-b-390.png'),fullPage:true});
   await Promise.all([a.close(),b.close(),replay.close(),anonymous.close()]);
