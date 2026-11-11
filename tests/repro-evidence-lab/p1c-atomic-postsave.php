@@ -53,6 +53,39 @@ foreach (array('draft'=>array('draft',true,false),
     update_post_meta($id,'_elementor_data',wp_slash(wp_json_encode($copy)));
     $neg[$key]=(int)$id;
 }
+// Native page admission has a separate WordPress post-password boundary.
+// Keep this negative fixture distinct from the browser-saved positive page.
+$native_protected = wp_insert_post(array('post_type'=>'page','post_status'=>'publish',
+    'post_title'=>'P1C Protected Native Inbox Negative',
+    'post_password'=>'synthetic-protected-native-only',
+    'post_content'=>'[gravityflow page="inbox"]'),true);
+if (is_wp_error($native_protected) || !$native_protected) {
+    throw new RuntimeException('P1C_PROTECTED_NATIVE_PAGE_CREATE');
+}
+$modified=$nodes;
+$mutate=static function (&$items) use (&$mutate,$found,$native_protected) {
+    foreach ($items as &$node) {
+        if (($node['id'] ?? null)===$found[0]['id']) {
+            $node['settings']['native_page_id']['value']=(string)$native_protected;
+        }
+        if (is_array($node['elements'] ?? null)) { $mutate($node['elements']); }
+    }
+    unset($node);
+};
+$mutate($modified);
+$protected_doc=wp_insert_post(array('post_type'=>'page','post_status'=>'publish',
+    'post_title'=>'P1C Protected Native Source Document Negative'),true);
+if (is_wp_error($protected_doc) || !$protected_doc) {
+    throw new RuntimeException('P1C_PROTECTED_NATIVE_DOCUMENT_CREATE');
+}
+update_post_meta($protected_doc,'_elementor_edit_mode','builder');
+update_post_meta($protected_doc,'_elementor_data',wp_slash(wp_json_encode($modified)));
+$resolved=\GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration::locateSavedInstance(
+    get_post_meta($protected_doc,'_elementor_data',true),$found[0]['id']);
+if (!is_array($resolved) || $resolved['native_page_id']!==(int)$native_protected) {
+    throw new RuntimeException('P1C_PROTECTED_NATIVE_FIXTURE_IDENTITY_FAILED');
+}
+$neg['protected_native_owner']=(int)$protected_doc;
 $m['element_ids_by_form']=$ids; $m['negative_pages']=$neg;
 update_option('gpp_p1c_fixture_manifest',$m,false);
 file_put_contents(getenv('WU21_ARTIFACT_DIR').'/p1c-atomic-fixture.json',

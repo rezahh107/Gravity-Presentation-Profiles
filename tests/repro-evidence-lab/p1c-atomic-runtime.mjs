@@ -172,6 +172,7 @@ try {
     ['draft_document',{action:'gpp_inbox2_atomic_bootstrap',page_id:String(m.negative_pages.draft),element_id:element}],
     ['non_elementor_page',{action:'gpp_inbox2_atomic_bootstrap',page_id:String(m.negative_pages.plain),element_id:element}],
     ['password_protected_page_without_wp_postpass',{action:'gpp_inbox2_atomic_bootstrap',page_id:String(m.negative_pages.protected),element_id:element}],
+    ['password_protected_native_page_without_wp_postpass',{action:'gpp_inbox2_atomic_bootstrap',page_id:String(m.negative_pages.protected_native_owner),element_id:element}],
     ['duplicate_element',{action:'gpp_inbox2_atomic_bootstrap',page_id:String(m.negative_pages.duplicate),element_id:element}],
     ['wrong_nonce',{...validRead,nonce:'invalid'}],
     ['wrong_form',{...validRead,form_id:String(m.forms.b)}],
@@ -185,7 +186,7 @@ try {
     assert.ok(!body.includes('SYN-P1C-') && !body.includes('data-ciq2-entry'),
       'Denied response disclosed task data: '+label);
   }
-  checks.push('TEN_REAL_SERVER_SIDE_IDENTITY_SCOPE_NONCE_NEGATIVE_CONTROLS');
+  checks.push('ELEVEN_REAL_SERVER_SIDE_IDENTITY_SCOPE_NONCE_NEGATIVE_CONTROLS');
 
   // Revoke A's cookies after cards were drawn: subsequent native read must
   // clear every prior authorized card rather than keep stale private HTML.

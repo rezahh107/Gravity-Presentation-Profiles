@@ -44,7 +44,8 @@ final class Inbox2Shortcode {
     private static function nativePageAdmitted( $page_id, $form_id ) {
         $post = get_post( $page_id );
         if ( ! $post instanceof \WP_Post || 'publish' !== $post->post_status
-            || ! current_user_can( 'read_post', $page_id ) ) { return false; }
+            || ! current_user_can( 'read_post', $page_id )
+            || post_password_required( $post ) ) { return false; }
         if ( has_block( 'gravityflow/inbox', $post ) ) { return true; }
         $regex = get_shortcode_regex( array( 'gravityflow' ) );
         if ( ! preg_match_all( '/' . $regex . '/s', $post->post_content, $found, PREG_SET_ORDER ) ) { return false; }
