@@ -88,7 +88,7 @@ foreach ($users as $actor=>$uid) {
 $assert(count($oracle['a']['a'])===25 && count($oracle['b']['b'])===3
     && !$oracle['a']['b'] && !$oracle['b']['a'], 'INDEPENDENT_NATIVE_AB_ISOLATION');
 wp_set_current_user(1);
-$page=wp_insert_post(array('post_type'=>'page','post_status'=>'publish',
+$page=wp_insert_post(array('post_type'=>'page','post_status'=>'draft',
     'post_title'=>'P1C Authentic Elementor Editor Page','post_content'=>''),true);
 $assert(!is_wp_error($page) && $page>0,'EDITOR_PAGE');
 update_post_meta($page,'_elementor_edit_mode','builder');

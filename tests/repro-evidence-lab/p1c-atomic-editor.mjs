@@ -37,8 +37,15 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 let page, context, failed=null;
 try {
   context=await browser.newContext({viewport:{width:1280,height:900}});
-  await context.addCookies(cookies(1));
   page=await context.newPage();
+  await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:45000});
+  await page.locator('#user_login').fill(env.P1C_ADMIN_USERNAME);
+  await page.locator('#user_pass').fill(env.P1C_ADMIN_PASSWORD);
+  await Promise.all([
+    page.waitForURL(/\/wp-admin\//,{timeout:45000}),
+    page.locator('#wp-submit').click()
+  ]);
+  checks.push('WORDPRESS_REAL_UI_LOGIN_AND_ADMIN_SESSION');
   let forbiddenAjax=0;
   page.on('request',req=>{
     if (req.postData()?.includes('gpp_inbox2_atomic_bootstrap') ||

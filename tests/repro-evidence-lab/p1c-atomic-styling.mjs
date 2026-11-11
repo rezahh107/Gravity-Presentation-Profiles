@@ -92,8 +92,15 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 let fail=null;let page;
 try {
   const ctx=await browser.newContext({viewport:{width:1280,height:900}});
-  await ctx.addCookies(cookies(1));
   page=await ctx.newPage();
+  await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:45000});
+  await page.locator('#user_login').fill(env.P1C_ADMIN_USERNAME);
+  await page.locator('#user_pass').fill(env.P1C_ADMIN_PASSWORD);
+  await Promise.all([
+    page.waitForURL(/\/wp-admin\//,{timeout:45000}),
+    page.locator('#wp-submit').click()
+  ]);
+  checks.push('WORDPRESS_REAL_UI_LOGIN');
   await page.goto(origin+'/wp-admin/post.php?post='+fixture.post_id+'&action=elementor',
     {waitUntil:'domcontentloaded',timeout:90000});
   await waitEditor(page);

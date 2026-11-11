@@ -46,6 +46,8 @@ jobs:
       WU21_BASE_URL: http://127.0.0.1:8080
       WU21_ARTIFACT_DIR: /tmp/p1c-artifacts
       WU21_PACKAGE_DIR: /tmp/p1c-packages
+      P1C_ADMIN_USERNAME: bootstrap_admin
+      P1C_ADMIN_PASSWORD: p1c-disposable-admin
       P1C_ELEMENTOR_VERSION: '4.4.0'
       P1C_ELEMENTOR_SHA256: 446534076ff82097c8dc7bf733ce9cbdad6fed0575fe2f43abbaa6328fda2638
       P1C_ELEMENTOR_SIZE: '25029025'
