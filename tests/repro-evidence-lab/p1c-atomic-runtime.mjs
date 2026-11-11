@@ -89,6 +89,39 @@ try {
   const aIds=await assertActor(aLoaded.page,'a');
   assert.deepEqual(aIds,m.native_oracle.a.a);
   checks.push('A_REAL_AUTHORIZED_NATIVE_MEMBERSHIP','TWO_INDEPENDENT_ATOMIC_ROOTS');
+  // The same existing renderer/JS, exercised on the real Atomic adapter:
+  // 25 Native-authorized tasks -> 20/5 pagination, search reset, detail
+  // and an independently verified read round trip.
+  const aRoot=aLoaded.page.locator('[data-ciq2-root][data-ciq2-form="'+m.forms.a+'"]');
+  assert.equal(await aRoot.locator('[data-ciq2-entry]').count(),25);
+  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),20);
+  await aRoot.locator('[data-ciq2-next]').click();
+  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),5);
+  assert.match(await aRoot.locator('[data-ciq2-pager] [data-ciq2-page]').textContent(),/۲ از ۲/);
+  await aRoot.locator('[data-ciq2-search]').fill('SYN-P1C-A-0024');
+  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),1);
+  assert.match(await aRoot.locator('[data-ciq2-pager] [data-ciq2-page]').textContent(),/۱ از ۱/);
+  const detail=await aRoot.locator('[data-ciq2-entry]:visible [data-ciq2-detail]').first().getAttribute('href');
+  assert.ok(detail && detail.includes('page=gravityflow-inbox') &&
+    detail.includes('id='+m.forms.a) && detail.includes('view=entry'),
+    'Detail must remain native Gravity Flow, not an independent GPP action');
+  await aRoot.locator('[data-ciq2-search]').fill('synthetic-query-without-a-match');
+  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),0);
+  assert.equal(await aRoot.locator('[data-ciq2-no-results]').isVisible(),true);
+  await aRoot.locator('[data-ciq2-search]').fill('');
+  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),20);
+  const refreshed=aLoaded.page.waitForResponse(resp=>resp.url().includes('admin-ajax.php') &&
+    (resp.request().postData()||'').includes('action=gpp_inbox2_read') &&
+    (resp.request().postData()||'').includes('form_id='+m.forms.a),{timeout:30000});
+  await aRoot.locator('[data-ciq2-refresh]').click();
+  const fresh=await refreshed;
+  assert.equal(fresh.status(),200,'Real existing Inbox2 read/refresh path failed');
+  await aLoaded.page.waitForFunction(form=>{
+    const root=document.querySelector('[data-ciq2-root][data-ciq2-form="'+form+'"]');
+    return root?.dataset.ciq2State==='current' && root.querySelectorAll('[data-ciq2-entry]').length===25;
+  },String(m.forms.a),{timeout:30000});
+  checks.push('ATOMIC_REAL_25_TASK_FIFO_SEARCH_PAGINATION_DETAIL_REFRESH');
+
   const b=await context(m.users.b);
   const bLoaded=await load(b,'b');
   const bIds=await assertActor(bLoaded.page,'b');

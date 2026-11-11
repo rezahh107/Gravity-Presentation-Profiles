@@ -41,7 +41,10 @@ foreach ($users as $key=>$uid) {
     $out = $inbox->initialize(array('form_id'=>$fid));
     $assert(($out['status'] ?? null) === \GravityPresentationProfiles\GravityForms\InboxSetupService::STATUS_COMPLETED, 'INBOX_SETUP');
     $ids = array();
-    for ($i=1; $i<=3; ++$i) {
+    // Force a real 20+ task Atomic pagination case for actor A, separate
+    // from the prior shortcode-only 25-task regression.
+    $count = $key === 'a' ? 25 : 3;
+    for ($i=1; $i<=$count; ++$i) {
         $id = GFAPI::add_entry(array(
             'form_id'=>$fid, 'created_by'=>$uid, '1'=>'P1C', '2'=>strtoupper($key) . ' Student ' . $i,
             '4'=>sprintf('SYN-P1C-%s-%04d', strtoupper($key), $i), '5'=>'گروه مصنوعی', '6'=>'مدرسه آزمایشی'
@@ -77,7 +80,7 @@ foreach ($users as $actor=>$uid) {
         $oracle[$actor][$key]=$ids;
     }
 }
-$assert(count($oracle['a']['a'])===3 && count($oracle['b']['b'])===3
+$assert(count($oracle['a']['a'])===25 && count($oracle['b']['b'])===3
     && !$oracle['a']['b'] && !$oracle['b']['a'], 'INDEPENDENT_NATIVE_AB_ISOLATION');
 wp_set_current_user(1);
 $page=wp_insert_post(array('post_type'=>'page','post_status'=>'draft',
