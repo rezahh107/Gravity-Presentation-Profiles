@@ -182,6 +182,8 @@ jobs:
           test "$(node --version)" = "v22.19.0"
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
+          # Native X11 window manager: no DOM event synthesis or focus mocking.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openbox
           node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1)"
           for file in assets/js/gpp-inbox2-atomic.js tests/repro-evidence-lab/p1c-atomic-{editor,styling,runtime,lifecycle}.mjs; do
             node --check "$file"
@@ -211,7 +213,7 @@ jobs:
           node tests/repro-evidence-lab/p1c-atomic-styling.mjs
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/p1c-atomic-postsave.php
           node tests/repro-evidence-lab/p1c-atomic-runtime.mjs
-          xvfb-run -a node tests/repro-evidence-lab/p1c-atomic-lifecycle.mjs
+          xvfb-run -a bash -euc 'openbox >/tmp/p1c-openbox.log 2>&1 & sleep 2; exec node tests/repro-evidence-lab/p1c-atomic-lifecycle.mjs'
           test -s "$WU21_ARTIFACT_DIR/p1c-atomic-lifecycle.json"
           test -s "$WU21_ARTIFACT_DIR/p1c-atomic-editor.json"
           test -s "$WU21_ARTIFACT_DIR/p1c-atomic-styling.json"
