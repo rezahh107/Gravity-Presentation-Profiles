@@ -15,6 +15,8 @@ restore_wu21() {
   local rc=$?
   trap - EXIT
   if [[ "$changed_plugin" == 1 ]]; then
+    # Always restore synthetic task count even when a browser assertion fails.
+    if ! php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/inbox2-installed-zip-cleanup.php; then rc=1; fi
     if ! php "$WU21_WP_CLI" plugin deactivate gravity-presentation-profiles --path="$WU21_WP_PATH"; then rc=1; fi
     # Only the disposable copy installed from our test ZIP is deleted.
     if [[ -d "$PLUGIN_DIR" && ! -L "$PLUGIN_DIR" ]]; then rm -rf "$PLUGIN_DIR"; fi
