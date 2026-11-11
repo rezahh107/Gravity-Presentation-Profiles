@@ -2,6 +2,7 @@
 
 namespace GravityPresentationProfiles;
 
+use GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration;
 use GravityPresentationProfiles\GravityForms\BindingRowAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailMappingAdminController;
 use GravityPresentationProfiles\GravityForms\EntryDetailSetupAdminController;
@@ -35,6 +36,8 @@ final class Bootstrap {
         if ( function_exists( 'add_action' ) ) {
             add_action( 'init', array( __CLASS__, 'loadTranslations' ), 1 );
             add_action( 'gform_loaded', array( __CLASS__, 'loadGravityFormsIntegration' ), 5 );
+            // Register the official Atomic extension seam early; no GF or Elementor dependency is loaded here.
+            Inbox2AtomicIntegration::register();
         }
     }
 

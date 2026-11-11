@@ -132,7 +132,8 @@
           body:new URLSearchParams({
             action:'gpp_inbox2_read', nonce:root.dataset.ciq2Nonce,
             page_id:root.dataset.ciq2Page, form_id:root.dataset.ciq2Form,
-            native_page_id:root.dataset.ciq2NativePage
+            native_page_id:root.dataset.ciq2NativePage,
+            element_id:root.dataset.ciq2Element || ''
           }),
           signal:pending.signal
         });
@@ -149,7 +150,7 @@
         const returned = doc.querySelector(rootSelector);
         const authoritative = returned?.querySelector('[data-ciq2-list]');
         if (!authoritative || !returned.dataset.ciq2VerifiedAt ||
-            ['ciq2Page','ciq2Form','ciq2NativePage'].some(key =>
+            ['ciq2Page','ciq2Form','ciq2NativePage','ciq2Element'].some(key =>
               returned.dataset[key] !== root.dataset[key])) throw new Error('invalid_scope_or_shape');
         const incoming = [...authoritative.querySelectorAll('[data-ciq2-entry]')];
         const ids = incoming.map(node => Number(node.dataset.ciq2Entry));

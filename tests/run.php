@@ -50,6 +50,7 @@ $cases = array(
     'inbox-manual-refresh.php',
     'inbox-package-authority.php',
     'inbox-production-activation.php',
+    'inbox2-atomic-document-boundary.php',
     'inbox-settings-contract.php',
     'inbox-asset-reachability.php',
     'inbox-block-full-width-composition.php',
