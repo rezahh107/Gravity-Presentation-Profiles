@@ -50,11 +50,21 @@ async function load(ctx,name,htmlReplay=null) {
   // This assertion fails on the original P1-C failure: a V4 Atomic Twig
   // root without Elementor's data-e-type/data-id can never bootstrap.
   const atomicIdentity=await page.locator('[data-gpp-atomic-inbox2]').evaluateAll(nodes=>
-    nodes.map(node=>({type:node.getAttribute('data-e-type'),
-      id:node.getAttribute('data-id')})));
-  assert.equal(atomicIdentity.length,2,'Exactly two persisted Atomic widget roots required');
+    nodes.map(node=>{
+      const nearest=node.closest('[data-id]');
+      return {type:node.getAttribute('data-e-type'),
+        id:node.getAttribute('data-id'),
+        element_type:node.getAttribute('data_element_type')||node.getAttribute('data-element_type'),
+        attrs:node.getAttributeNames().filter(name=>name.startsWith('data-')).sort(),
+        nearest_id:nearest?.getAttribute('data-id')||null,
+        nearest_type:nearest?.getAttribute('data-e-type')||nearest?.getAttribute('data-widget_type')||null,
+        parent_id:node.parentElement?.getAttribute('data-id')||null,
+        parent_type:node.parentElement?.getAttribute('data-e-type')||null};
+    }));
+  assert.equal(atomicIdentity.length,2,
+    'Exactly two persisted Atomic widget roots required: '+JSON.stringify(atomicIdentity));
   assert.ok(atomicIdentity.every(x=>x.type==='widget' && /^[a-zA-Z0-9]{6,32}$/.test(x.id||'')),
-    'Elementor V4 native root identity unavailable before private bootstrap');
+    'Elementor V4 native root identity unavailable before private bootstrap: '+JSON.stringify(atomicIdentity));
   assert.ok(!source.includes('data-ciq2-nonce') && !source.includes('SYN-P1C-'),
     'Initial cacheable HTML disclosed user-specific task data or a GPP read nonce');
   return {page,source};
