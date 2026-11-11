@@ -67,12 +67,25 @@ try {
     await palette.waitFor({state:'visible',timeout:30000});
     await palette.click();
     await frame.locator('[data-widget_type="e-gpp-inbox-2.default"]').nth(i).waitFor({state:'visible',timeout:45000});
+    const placeholder=frame.locator('[data-gpp-atomic-inbox2="pending"]').nth(i);
+    await placeholder.waitFor({state:'visible',timeout:30000});
+    assert.match(await placeholder.innerText(), /فهرست کارها/);
+    assert.doesNotMatch(await placeholder.innerHTML(), /data-ciq2-nonce|SYN-P1C-/);
+    checks.push('REAL_V4_ATOMIC_INSERTION_AND_STATIC_TWING_PREVIEW_'+(i+1));
     const field=label=>page.locator('[data-type="settings-field"]')
       .filter({has:page.locator('label').filter({hasText:new RegExp('^'+label+'$')})}).getByRole('textbox');
     const form=field('Gravity Forms form ID');
     const native=field('Published Native Gravity Flow Inbox page ID');
+    // The real Elementor 4.4 control Section starts collapsed in the
+    // screenshot captured on run 43014597612. Expand it through the editor
+    // UI rather than treating its hidden fields as a runtime failure.
+    const heading=page.getByText('Inbox source',{exact:true}).first();
+    await heading.waitFor({state:'visible',timeout:30000});
+    if (!(await form.isVisible())) await heading.click();
     await form.waitFor({state:'visible',timeout:30000});
     await form.fill(String(values[i])); await form.blur();
+    if (!(await native.isVisible())) await heading.click();
+    await native.waitFor({state:'visible',timeout:30000});
     await native.fill(String(fixture.native_page_id)); await native.blur();
     assert.equal(await frame.locator('[data-gpp-atomic-inbox2="pending"]').count(),i+1);
   }
