@@ -28,13 +28,13 @@
   }
   async function start(node) {
     if (!node.isConnected || states.has(node) || inEditor() || document.hidden) return;
-    // Atomic_Widget_Base has no legacy data-widget_type wrapper. Its Twig
-    // root carries Elementor's own data-e-type="widget" and data-id from
-    // Has_Atomic_Base/get_initial_attributes (via render_custom_attributes).
-    // The server subsequently re-reads the published document and this ID.
+    // In genuine Elementor 4.4.0, this custom Twig root does not acquire
+    // core data-id/data-e-type automatically (verified in real Chromium).
+    // id/type are the documented Has_Template server render context; emit
+    // them as static, non-personal attributes and verify saved ownership in PHP.
     const host = node;
-    const element = host.getAttribute('data-id') || '';
-    if (host.getAttribute('data-e-type') !== 'widget' ||
+    const element = host.getAttribute('data-gpp-atomic-element-id') || '';
+    if (host.getAttribute('data-gpp-atomic-widget-type') !== 'e-gpp-inbox-2' ||
         !/^[a-zA-Z0-9]{6,32}$/.test(element) ||
         host.querySelectorAll(selector).length !== 0) {
       safeMessage(node);
@@ -65,7 +65,8 @@
           root.querySelectorAll('[data-ciq2-entry]').length ||
           root.querySelectorAll('[data-ciq2-list]').length !== 1) throw new Error('unsafe_bootstrap');
       if (serial.aborted || !node.isConnected || document.hidden || inEditor() ||
-          !host.isConnected || host.getAttribute('data-id') !== element) return;
+          !host.isConnected || host.getAttribute('data-gpp-atomic-element-id') !== element ||
+          host.getAttribute('data-gpp-atomic-widget-type') !== 'e-gpp-inbox-2') return;
       const inserted = document.importNode(root, true);
       // Keep the original Atomic/Twig class-bearing element: Elementor native
       // Classes, Variables and breakpoint styles target this wrapper.

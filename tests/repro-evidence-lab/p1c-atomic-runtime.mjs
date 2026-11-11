@@ -63,8 +63,17 @@ async function load(ctx,name,htmlReplay=null) {
     }));
   assert.equal(atomicIdentity.length,2,
     'Exactly two persisted Atomic widget roots required: '+JSON.stringify(atomicIdentity));
-  assert.ok(atomicIdentity.every(x=>x.type==='widget' && /^[a-zA-Z0-9]{6,32}$/.test(x.id||'')),
-    'Elementor V4 native root identity unavailable before private bootstrap: '+JSON.stringify(atomicIdentity));
+  const staticIdentity=await page.locator('[data-gpp-atomic-inbox2]').evaluateAll(nodes=>
+    nodes.map(node=>({
+      id:node.getAttribute('data-gpp-atomic-element-id'),
+      type:node.getAttribute('data-gpp-atomic-widget-type')
+    })));
+  assert.ok(staticIdentity.every(x=>x.type==='e-gpp-inbox-2' &&
+    /^[a-zA-Z0-9]{6,32}$/.test(x.id||'')),
+    'Missing official Has_Template id/type on Atomic root: '+JSON.stringify({staticIdentity,atomicIdentity}));
+  assert.deepEqual(staticIdentity.map(x=>x.id).sort(),
+    Object.values(m.element_ids_by_form).sort(),
+    'Twig element identities differ from independently read persisted Elementor document');
   assert.ok(!source.includes('data-ciq2-nonce') && !source.includes('SYN-P1C-'),
     'Initial cacheable HTML disclosed user-specific task data or a GPP read nonce');
   return {page,source};
