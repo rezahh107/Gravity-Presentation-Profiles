@@ -40,9 +40,13 @@ if (count($ids)!==2 || str_contains($raw,'SYN-P1C-') || str_contains($raw,'data-
 $neg=array();
 foreach (array('draft'=>array('draft',true,false),
     'plain'=>array('publish',false,false),
-    'duplicate'=>array('publish',true,true)) as $key=>$spec) {
+    'duplicate'=>array('publish',true,true),
+    // Published does not imply readable: without the correct WP post-password
+    // cookie, this copy must never mint a private GPP read nonce.
+    'protected'=>array('publish',true,false)) as $key=>$spec) {
     $id=wp_insert_post(array('post_type'=>'page','post_status'=>$spec[0],
-        'post_title'=>'P1C Negative '.$key),true);
+        'post_title'=>'P1C Negative '.$key,
+        'post_password'=>$key==='protected' ? 'p1c-only-synthetic-access-code' : ''),true);
     if (is_wp_error($id) || !$id) { throw new RuntimeException('P1C_NEG_PAGE_CREATE'); }
     if ($spec[1]) { update_post_meta($id,'_elementor_edit_mode','builder'); }
     $copy=$nodes; if ($spec[2]) { $copy[]=$found[0]; }

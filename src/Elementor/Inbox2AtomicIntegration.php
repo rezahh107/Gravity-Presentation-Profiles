@@ -106,6 +106,9 @@ final class Inbox2AtomicIntegration {
         $post = get_post( $page_id );
         if ( ! $post instanceof \WP_Post || 'page' !== $post->post_type
             || 'publish' !== $post->post_status || ! current_user_can( 'read_post', $page_id )
+            // Publicly published pages may still require a post-password cookie.
+            // WP read_post capability alone does not establish that access.
+            || post_password_required( $post )
             || 'builder' !== get_post_meta( $page_id, '_elementor_edit_mode', true ) ) {
             return null;
         }
