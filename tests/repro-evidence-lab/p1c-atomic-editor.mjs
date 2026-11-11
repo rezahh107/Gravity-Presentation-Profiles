@@ -97,11 +97,17 @@ try {
   // Use the REAL native Elementor responsive container control, rather than
   // hard-coding the parent layout in the GPP widget or mutating saved JSON.
   await page.locator('[aria-label="Switch Device"]').getByTestId('switch-device-to-mobile').click();
-  const parent=frame.locator('[data-gpp-atomic-inbox2="pending"]').first().locator('xpath=..');
-  assert.equal(await parent.getAttribute('data-e-type'),'e-flexbox',
-    'P1C layout must be owned by genuine Elementor e-flexbox');
-  await parent.click({position:{x:4,y:4},timeout:20000});
+  // The screenshot from exact-head run 43021731828 establishes a real
+  // Structure panel containing ONE Flexbox parent and two GPP children.
+  // The Twig placeholder's immediate DOM parent is NOT the native Flexbox;
+  // select the parent using Elementor's own Structure UI, not a guessed
+  // HTML ancestor or a forced CSS override.
+  const nativeParent=page.getByText('Flexbox',{exact:true});
+  assert.equal(await nativeParent.count(),1,
+    'Expected one genuine Flexbox parent in disposable Elementor Structure');
+  await nativeParent.click();
   const panel=page.locator('#elementor-panel');
+  await panel.getByText(/Edit Flexbox/i).first().waitFor({state:'visible',timeout:15000});
   await panel.getByRole('tab',{name:'Style',exact:true}).click();
   const layout=panel.locator('[aria-label="Layout section content"]');
   if (!(await layout.isVisible())) {
@@ -116,6 +122,24 @@ try {
   await column.waitFor({state:'visible',timeout:15000});
   if (!(await column.getAttribute('class')||'').includes('Mui-selected')) await column.click();
   assert.match(await column.getAttribute('class')||'',/Mui-selected/);
+  // Confirm the change is applied to the live native layout, not merely
+  // selected in an unrelated controls panel.
+  const layoutState=await frame.locator('[data-gpp-atomic-inbox2="pending"]').first()
+    .evaluate(node=>{
+      const hosts=[...document.querySelectorAll('[data-gpp-atomic-inbox2="pending"]')];
+      const same=element=>hosts.every(x=>element.contains(x));
+      const ancestors=[];let element=node.parentElement;
+      while(element&&ancestors.length<12){
+        ancestors.push({type:element.getAttribute('data-e-type'),
+          id:element.getAttribute('data-id'),layout:getComputedStyle(element).flexDirection,
+          containsBoth:same(element)});
+        element=element.parentElement;
+      }
+      return ancestors;
+    });
+  const mobileParent=layoutState.find(x=>x.containsBoth&&x.layout==='column');
+  assert.ok(mobileParent,
+    'Native Elementor mobile Flexbox must contain both widgets vertically: '+JSON.stringify(layoutState));
   checks.push('REAL_ATOMIC_MOBILE_PARENT_FLEX_DIRECTION_COLUMN_VIA_EDITOR_UI');
 
   const [saved]=await Promise.all([
