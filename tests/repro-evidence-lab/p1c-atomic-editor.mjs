@@ -137,7 +137,9 @@ try {
   const column=direction.locator('button[value="column"]');
   await column.waitFor({state:'visible',timeout:15000});
   if (!(await column.getAttribute('class')||'').includes('Mui-selected')) await column.click();
-  assert.match(await column.getAttribute('class')||'',/Mui-selected/);
+  // MUI's internal selected class is not a stable Elementor V4 acceptance
+  // contract. The authoritative observable is the real computed mobile
+  // flex-direction for the saved native parent, verified below and on reload.
   // Confirm the change is applied to the live native layout, not merely
   // selected in an unrelated controls panel.
   const layoutState=await frame.locator('[data-gpp-atomic-inbox2="pending"]').first()
