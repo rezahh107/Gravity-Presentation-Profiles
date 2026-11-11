@@ -41,6 +41,12 @@ async function createContext(browser,id=null){
   });
   return context;
 }
+// Playwright forces page focus in Chromium. Remove that focus emulation
+// *before* a real browser tab switch; never emulate visibility or dispatch events.
+async function releaseFocusEmulation(context,page){
+  const session=await context.newCDPSession(page);
+  await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});
+}
 async function current(page){
   await page.waitForFunction(()=>{
     const roots=[...document.querySelectorAll('[data-ciq2-root]')];
@@ -60,9 +66,12 @@ try {
   const probe=await createContext(browser);
   const one=await probe.newPage();
   await one.goto('about:blank');
+  await releaseFocusEmulation(probe,one);
   const two=await probe.newPage();
   await two.goto('about:blank');
+  await releaseFocusEmulation(probe,two);
   await one.bringToFront();
+  await releaseFocusEmulation(probe,one);
   assert.equal(await one.evaluate(()=>document.visibilityState),'visible',
     'CONTROL_VISIBLE_NOT_ESTABLISHED');
   await two.bringToFront();
@@ -82,9 +91,11 @@ try {
   const loaded=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   assert.ok(loaded?.ok(),'Authentic P1-C frontend did not load');
   await current(page);
+  await releaseFocusEmulation(ctx,page);
   sameItems(await identities(page),fixture.native_oracle.a.a,'Initial A task membership');
   const alternate=await ctx.newPage();
   await alternate.goto('about:blank');
+  await releaseFocusEmulation(ctx,alternate);
   await alternate.bringToFront();
   await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:10000});
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-ciq2-root]')]
