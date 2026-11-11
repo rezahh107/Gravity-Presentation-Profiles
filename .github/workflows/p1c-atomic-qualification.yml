@@ -1,0 +1,197 @@
+name: P1-C Genuine Elementor 4.4 Atomic Inbox 2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p1c-atomic-qualification.yml'
+      - 'gravity-presentation-profiles.php'
+      - 'src/**'
+      - 'assets/js/gpp-inbox2*.js'
+      - 'assets/css/gpp-inbox2.css'
+      - 'templates/**'
+      - 'tests/repro-evidence-lab/p1c-*'
+      - 'tests/repro-evidence-lab/setup-fixtures.php'
+      - 'tests/fixtures/wu21-packages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1c-atomic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-atomic-runtime:
+    name: Exact-Head real V4 editor + Native A/B + cache privacy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-p1c-root
+          MARIADB_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-p1c-root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      WU21_WP_PATH: /tmp/p1c-wordpress
+      WU21_WP_CLI: /tmp/p1c-wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+      WU21_ARTIFACT_DIR: /tmp/p1c-artifacts
+      WU21_PACKAGE_DIR: /tmp/p1c-packages
+      P1C_ELEMENTOR_VERSION: '4.4.0'
+      P1C_ELEMENTOR_SHA256: 446534076ff82097c8dc7bf733ce9cbdad6fed0575fe2f43abbaa6328fda2638
+      P1C_ELEMENTOR_SIZE: '25029025'
+
+    steps:
+      - name: Checkout exact authorized PR Head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert repository identity and exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          test "$actual" = "$expected"
+          git diff --quiet && git diff --cached --quiet
+          echo "GPP_WU21_REPOSITORY_SHA=$actual" >> "$GITHUB_ENV"
+          mkdir -p "$WU21_WP_PATH" "$WU21_PACKAGE_DIR" "$WU21_ARTIFACT_DIR"
+          echo "P1C_EXACT_HEAD=$actual"
+
+      - name: Set up pinned PHP and tools
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Install genuine WordPress 6.8.3 and synthetic accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLS --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-p1c-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='P1C Synthetic Native Lab' --admin_user=bootstrap_admin --admin_password='p1c-disposable-admin' --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='p1c-disposable-viewer'
+          php "$WU21_WP_CLI" rewrite structure '/%postname%/' --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
+
+      - name: Verify and activate exact licensed synthetic-host GF and Flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixtures="$GITHUB_WORKSPACE/tests/fixtures/wu21-packages"
+          php tests/repro-evidence-lab/verify-wu21-package-fixtures.php "$fixtures"
+          gf="$fixtures/gravityforms-3.1.1.1-owner-supplied-source-package.zip"
+          flow="$fixtures/gravityflow-3.1.0-owner-supplied-source-package.zip"
+          echo "542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b  $gf" | sha256sum -c -
+          echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  $flow" | sha256sum -c -
+          unzip -q "$gf" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$flow" -d "$WU21_WP_PATH/wp-content/plugins"
+          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            if (!defined("GRAVITY_FLOW_VERSION") || GRAVITY_FLOW_VERSION!=="3.1.0" ||
+                !class_exists("GFAPI") || !shortcode_exists("gpp_inbox_2")) {
+              throw new RuntimeException("P1C_WRONG_NATIVE_HOST_OR_GPP_SHORTCODE");
+            }
+            echo "P1C_NATIVE_HOST_AND_SHORTCODE_PASS\n";
+          '
+
+      - name: Install and verify official Elementor 4.4.0 Atomic
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip=/tmp/p1c-elementor-4.4.0.zip
+          curl -fLS --retry 3 --retry-delay 2 -o "$zip" https://github.com/elementor/elementor/releases/download/4.4.0/elementor-4.4.0.zip
+          echo "$P1C_ELEMENTOR_SHA256  $zip" | sha256sum -c -
+          test "$(stat -c '%s' "$zip")" = "$P1C_ELEMENTOR_SIZE"
+          sha256sum "$zip" > "$WU21_ARTIFACT_DIR/elementor-4.4.0-sha256.txt"
+          php "$WU21_WP_CLI" plugin install "$zip" --activate --path="$WU21_WP_PATH"
+          test "$(php "$WU21_WP_CLI" plugin get elementor --field=version --path="$WU21_WP_PATH")" = "$P1C_ELEMENTOR_VERSION"
+          php "$WU21_WP_CLI" elementor experiments activate e_atomic_elements e_opt_in_v4 --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $core=\Elementor\Plugin::instance();
+            $base="Elementor\\Modules\\AtomicWidgets\\Elements\\Base\\Atomic_Widget_Base";
+            $w=$core->widgets_manager->get_widget_types("e-gpp-inbox-2");
+            if (ELEMENTOR_VERSION!=="4.4.0" ||
+                !$core->experiments->is_feature_active("e_atomic_elements") ||
+                !$core->experiments->is_feature_active("e_opt_in_v4") ||
+                !is_object($w) || !($w instanceof $base) ||
+                !($w->get_initial_config()["atomic"] ?? false)) {
+              throw new RuntimeException("P1C_NOT_GENUINE_ATOMIC_WIDGET");
+            }
+            echo "P1C_GENUINE_ATOMIC_REGISTRATION_PASS\n";
+          '
+
+      - name: Set up real Playwright Chromium 1.55.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+
+      - name: Install and syntax-check browser tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1)"
+          for file in assets/js/gpp-inbox2-atomic.js tests/repro-evidence-lab/p1c-atomic-{editor,styling,runtime}.mjs; do
+            node --check "$file"
+          done
+
+      - name: Start disposable localhost WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 > /tmp/p1c-wp-server.log 2>&1 &
+          echo $! > /tmp/p1c-wp-server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/p1c-wp-server.log >&2
+          exit 1
+
+      - name: Real native fixtures, editor save/reload, native styling, and A/B security
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/p1c-atomic-setup.php
+          test -s "$WU21_ARTIFACT_DIR/p1c-atomic-fixture.json"
+          node tests/repro-evidence-lab/p1c-atomic-editor.mjs
+          node tests/repro-evidence-lab/p1c-atomic-styling.mjs
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/p1c-atomic-postsave.php
+          node tests/repro-evidence-lab/p1c-atomic-runtime.mjs
+          test -s "$WU21_ARTIFACT_DIR/p1c-atomic-editor.json"
+          test -s "$WU21_ARTIFACT_DIR/p1c-atomic-styling.json"
+          test -s "$WU21_ARTIFACT_DIR/p1c-atomic-runtime.json"
+
+      - name: Upload exact-Head synthetic evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p1c-atomic-exact-head-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/p1c-artifacts
+            /tmp/p1c-wp-server.log
+          if-no-files-found: ignore
+          retention-days: 30
