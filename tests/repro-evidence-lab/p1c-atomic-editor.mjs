@@ -44,8 +44,11 @@ try {
     if (req.postData()?.includes('gpp_inbox2_atomic_bootstrap') ||
         req.postData()?.includes('gpp_inbox2_read')) forbiddenAjax++;
   });
-  await page.goto(origin+'/wp-admin/post.php?post='+fixture.post_id+'&action=elementor',
-    {waitUntil:'domcontentloaded',timeout:90000});
+  const editorUrl=origin+'/wp-admin/post.php?post='+fixture.post_id+'&action=elementor';
+  const navigation=await page.goto(editorUrl,{waitUntil:'domcontentloaded',timeout:90000});
+  assert.ok(navigation?.ok() && page.url().includes('/wp-admin/post.php') &&
+    new URL(page.url()).searchParams.get('action')==='elementor',
+    'Authentic Elementor editor was not served: '+page.url()+' (HTTP '+navigation?.status()+')');
   await page.locator('#elementor-preview-iframe').waitFor({state:'visible',timeout:90000});
   await page.locator('#elementor-loading').waitFor({state:'hidden',timeout:90000});
   const top=page.locator('#elementor-editor-wrapper-v2');
@@ -81,7 +84,7 @@ try {
   checks.push('REAL_EDITOR_RELOAD_SAFE_TWO_WIDGET_PREVIEW');
   await page.screenshot({path:path.join(dir,'p1c-editor-reload.png'),fullPage:true});
 } catch(e) {
-  failed=String(e?.stack||e);
+  failed=String(e?.stack||e)+'\nEDITOR_LAST_URL='+String(page?.url()||'NO_PAGE');
   process.stderr.write(failed.slice(0,1600)+'\n');
   if(page) await page.screenshot({path:path.join(dir,'p1c-editor-failure.png'),fullPage:true}).catch(()=>{});
 } finally {
