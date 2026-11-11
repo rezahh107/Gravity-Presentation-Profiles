@@ -102,12 +102,28 @@ try {
   // The Twig placeholder's immediate DOM parent is NOT the native Flexbox;
   // select the parent using Elementor's own Structure UI, not a guessed
   // HTML ancestor or a forced CSS override.
-  const nativeParent=page.getByText('Flexbox',{exact:true});
-  assert.equal(await nativeParent.count(),1,
-    'Expected one genuine Flexbox parent in disposable Elementor Structure');
-  await nativeParent.click();
+  const structureLabels=await page.getByText('Flexbox',{exact:true}).all();
   const panel=page.locator('#elementor-panel');
-  await panel.getByText(/Edit Flexbox/i).first().waitFor({state:'visible',timeout:15000});
+  // Real 4.4 editor may mount more than one text node for the same Structure
+  // label. Select the *visible* Structure item and independently verify the
+  // native parent controls took focus; do not infer the parent by DOM nesting.
+  const selectionEvidence=[];
+  let nativeParentSelected=false;
+  for(const item of structureLabels){
+    const visible=await item.isVisible();
+    selectionEvidence.push({visible});
+    if(!visible)continue;
+    await item.click();
+    const title=await panel.locator('h1,h2,h3').allTextContents();
+    selectionEvidence[selectionEvidence.length-1].title=title.slice(0,4);
+    if(await panel.getByText(/Edit Flexbox/i).first().isVisible().catch(()=>false)){
+      nativeParentSelected=true;
+      break;
+    }
+  }
+  assert.ok(nativeParentSelected,
+    'Native Elementor Flexbox parent could not be selected in Structure: '+
+      JSON.stringify(selectionEvidence));
   await panel.getByRole('tab',{name:'Style',exact:true}).click();
   const layout=panel.locator('[aria-label="Layout section content"]');
   if (!(await layout.isVisible())) {
