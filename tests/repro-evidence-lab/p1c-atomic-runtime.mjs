@@ -24,7 +24,7 @@ function cookies(id) {
 }
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 let failure=null;
-const resources=[];
+const resources=[],requests=[],pageErrors=[];
 async function context(id=null) {
   const ctx=await browser.newContext({viewport:{width:390,height:844}});
   if(id!==null)await ctx.addCookies(cookies(id));
@@ -36,6 +36,14 @@ async function load(ctx,name,htmlReplay=null) {
     await page.route(url,route=>route.fulfill({status:200,contentType:'text/html',
       headers:{'Cache-Control':'public, max-age=3600'},body:htmlReplay}));
   }
+  page.on('pageerror',error=>pageErrors.push({actor:name,error:String(error).slice(0,240)}));
+  page.on('request',req=>{
+    if(!req.url().includes('/admin-ajax.php') ||
+       !req.postData()?.includes('gpp_inbox2_'))return;
+    const data=new URLSearchParams(req.postData());
+    requests.push({actor:name,action:data.get('action'),form_id:data.get('form_id'),
+      element_id:data.get('element_id')});
+  });
   page.on('response',resp=>{
     if(!resp.url().includes('/admin-ajax.php') ||
       !resp.request().postData()?.includes('gpp_inbox2_'))return;
@@ -145,11 +153,26 @@ try {
   assert.equal(await aRoot.locator('[data-ciq2-no-results]').isVisible(),true);
   await aRoot.locator('[data-ciq2-search]').fill('');
   assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),20);
-  const refreshed=aLoaded.page.waitForResponse(resp=>resp.url().includes('admin-ajax.php') &&
-    (resp.request().postData()||'').includes('action=gpp_inbox2_read') &&
-    (resp.request().postData()||'').includes('form_id='+m.forms.a),{timeout:30000});
-  await aRoot.locator('[data-ciq2-refresh]').click();
-  const fresh=await refreshed;
+  let fresh;
+  try {
+    // The existing installed-ZIP Inbox 2 regression also uses requestSubmit:
+    // this is the native form submission event, not a synthetic event dispatch.
+    [fresh]=await Promise.all([
+      aLoaded.page.waitForResponse(resp=>resp.url().includes('admin-ajax.php') &&
+        (resp.request().postData()||'').includes('action=gpp_inbox2_read') &&
+        (resp.request().postData()||'').includes('form_id='+m.forms.a),{timeout:30000}),
+      aRoot.locator('form').evaluate(form=>form.requestSubmit())
+    ]);
+  } catch(error) {
+    const state=await aRoot.evaluate(node=>({
+      state:node.dataset.ciq2State,
+      cards:node.querySelectorAll('[data-ciq2-entry]').length,
+      action:node.querySelector('form')?.getAttribute('action')
+    }));
+    throw new Error('ATOMIC_REFRESH_FAILURE '+JSON.stringify({
+      state,requests,resources,pageErrors,url:aLoaded.page.url()
+    })+' '+String(error));
+  }
   assert.equal(fresh.status(),200,'Real existing Inbox2 read/refresh path failed');
   await aLoaded.page.waitForFunction(form=>{
     const root=document.querySelector('[data-ciq2-root][data-ciq2-form="'+form+'"]');
@@ -243,7 +266,7 @@ try {
   fs.writeFileSync(path.join(dir,'p1c-atomic-runtime.json'),JSON.stringify({
     head:env.GPP_WU21_REPOSITORY_SHA,versions:{
       wordpress:'6.8.3',gravityforms:'3.1.1.1',gravityflow:'3.1.0',elementor:'4.4.0'},
-    checks,private_responses:resources,failure
+    checks,private_requests:requests,private_responses:resources,pageErrors,failure
   },null,2));
   await browser.close();
 }
