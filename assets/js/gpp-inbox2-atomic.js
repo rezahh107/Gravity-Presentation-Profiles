@@ -28,11 +28,15 @@
   }
   async function start(node) {
     if (!node.isConnected || states.has(node) || inEditor() || document.hidden) return;
-    const host = node.closest('[data-widget_type][data-id]');
-    const element = host?.getAttribute('data-id') || '';
-    if (host?.getAttribute('data-widget_type') !== 'e-gpp-inbox-2.default' ||
+    // Atomic_Widget_Base has no legacy data-widget_type wrapper. Its Twig
+    // root carries Elementor's own data-e-type="widget" and data-id from
+    // Has_Atomic_Base/get_initial_attributes (via render_custom_attributes).
+    // The server subsequently re-reads the published document and this ID.
+    const host = node;
+    const element = host.getAttribute('data-id') || '';
+    if (host.getAttribute('data-e-type') !== 'widget' ||
         !/^[a-zA-Z0-9]{6,32}$/.test(element) ||
-        host.querySelectorAll(selector).length !== 1) {
+        host.querySelectorAll(selector).length !== 0) {
       safeMessage(node);
       return;
     }

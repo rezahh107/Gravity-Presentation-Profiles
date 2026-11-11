@@ -1,5 +1,8 @@
 {# Rendered by PHP Twig and editor Twing. Absolutely no task data, nonce, user identity or dynamic HTML. #}
+{% import 'elementor/macros' as m %}
 {% set classes = settings.classes | merge( [ base_styles.base ] ) | join(' ') %}
-<div class="{{ classes }}" data-gpp-atomic-inbox2="pending" lang="fa" dir="rtl">
+{# The official 4.4 Atomic attributes include data-e-type and data-id; the
+   saved Elementor document, NOT these client-visible attributes, owns admission. #}
+<div class="{{ classes }}"{{ m.render_custom_attributes(settings) }} data-gpp-atomic-inbox2="pending" lang="fa" dir="rtl">
     <p role="status">فهرست کارها پس از بررسی دسترسی بارگذاری می‌شود.</p>
 </div>

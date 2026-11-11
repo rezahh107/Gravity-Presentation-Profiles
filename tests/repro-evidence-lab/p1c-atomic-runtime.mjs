@@ -47,6 +47,14 @@ async function load(ctx,name,htmlReplay=null) {
   assert.ok(response?.ok(),'Frontend failed for '+name);
   const source=htmlReplay??await response.text();
   assert.ok(source.includes('data-gpp-atomic-inbox2'),'No static Twig Atomic placeholder');
+  // This assertion fails on the original P1-C failure: a V4 Atomic Twig
+  // root without Elementor's data-e-type/data-id can never bootstrap.
+  const atomicIdentity=await page.locator('[data-gpp-atomic-inbox2]').evaluateAll(nodes=>
+    nodes.map(node=>({type:node.getAttribute('data-e-type'),
+      id:node.getAttribute('data-id')})));
+  assert.equal(atomicIdentity.length,2,'Exactly two persisted Atomic widget roots required');
+  assert.ok(atomicIdentity.every(x=>x.type==='widget' && /^[a-zA-Z0-9]{6,32}$/.test(x.id||'')),
+    'Elementor V4 native root identity unavailable before private bootstrap');
   assert.ok(!source.includes('data-ciq2-nonce') && !source.includes('SYN-P1C-'),
     'Initial cacheable HTML disclosed user-specific task data or a GPP read nonce');
   return {page,source};
@@ -54,10 +62,18 @@ async function load(ctx,name,htmlReplay=null) {
 const ids=async root=>root.locator('[data-ciq2-entry]').evaluateAll(nodes=>
   nodes.map(x=>Number(x.dataset.ciq2Entry)).sort((a,b)=>a-b));
 async function waitForCurrent(page) {
-  await page.waitForFunction(() => {
-    const roots=[...document.querySelectorAll('[data-ciq2-root]')];
-    return roots.length===2 && roots.every(x=>x.dataset.ciq2State==='current');
-  },null,{timeout:45000});
+  try {
+    await page.waitForFunction(() => {
+      const roots=[...document.querySelectorAll('[data-ciq2-root]')];
+      return roots.length===2 && roots.every(x=>x.dataset.ciq2State==='current');
+    },null,{timeout:45000});
+  } catch(error) {
+    const state=await page.locator('[data-gpp-atomic-inbox2]').evaluateAll(nodes=>
+      nodes.map(node=>({type:node.getAttribute('data-e-type'),id:node.getAttribute('data-id'),
+        status:node.dataset.gppAtomicInbox2,rootStates:[...node.querySelectorAll('[data-ciq2-root]')].map(x=>x.dataset.ciq2State),
+        text:node.textContent.trim().slice(0,100)})));
+    throw new Error('ATOMIC_WAIT_NOT_CURRENT '+JSON.stringify({state,resources})+' '+String(error));
+  }
 }
 async function assertActor(page,actor) {
   await waitForCurrent(page);
