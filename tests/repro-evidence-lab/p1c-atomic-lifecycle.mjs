@@ -143,23 +143,39 @@ try {
     entries:(await identities(page)).length,
     events:await page.evaluate(()=>window.__p1cLifecycleEvents)});
 
-  // Only a genuinely persisted page restoration qualifies BFCache.
-  await page.goto(origin+'/',{waitUntil:'domcontentloaded',timeout:60000});
-  await page.goBack({waitUntil:'domcontentloaded',timeout:60000});
-  const backEvents=await page.evaluate(()=>window.__p1cLifecycleEvents);
-  if(backEvents.some(x=>x.type==='pageshow'&&x.persisted===true)){
-    await current(page);
-    sameItems(await identities(page),fixture.native_oracle.a.a,'BFCache revalidated membership');
-    record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','PASS',{events:backEvents});
-  }else{
-    record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
-      reason:'No native pageshow.persisted=true on the actual product document',
-      events:backEvents});
-  }
   await ctx.close();
   }catch(visibilityError){
     record('GENUINE_VISIBILITY_BFCACHE_QUALIFICATION','NOT_PROVEN',{
       reason:String(visibilityError?.stack||visibilityError).slice(0,1300)});
+  }
+
+  // BFCache is independent of tab visibility; test it even if the window
+  // manager does not deliver native visibility transitions under automation.
+  const backCtx=await createContext(browser,fixture.users.a);
+  try{
+    const backPage=await backCtx.newPage();
+    const first=await backPage.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+    assert.ok(first?.ok(),'BFCache source product page did not load');
+    await current(backPage);
+    sameItems(await identities(backPage),fixture.native_oracle.a.a,'BFCache initial membership');
+    await backPage.goto(origin+'/',{waitUntil:'domcontentloaded',timeout:60000});
+    await backPage.goBack({waitUntil:'domcontentloaded',timeout:60000});
+    const events=await backPage.evaluate(()=>window.__p1cLifecycleEvents);
+    if(events.some(x=>x.type==='pageshow'&&x.persisted===true)){
+      await current(backPage);
+      sameItems(await identities(backPage),fixture.native_oracle.a.a,
+        'BFCache must renew Native membership');
+      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','PASS',{events});
+    }else{
+      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
+        reason:'Actual browser navigation did not return with pageshow.persisted=true',
+        events});
+    }
+  }catch(error){
+    record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
+      reason:String(error?.stack||error).slice(0,1000)});
+  }finally{
+    await backCtx.close();
   }
 
   // Hold a real server bootstrap response, detach an in-flight native Atomic
