@@ -246,6 +246,14 @@ try {
   }
   checks.push('ELEVEN_REAL_SERVER_SIDE_IDENTITY_SCOPE_NONCE_NEGATIVE_CONTROLS');
 
+  // Two real Atomic siblings are placed in a native Elementor mobile flex
+  // COLUMN by the editor UI. This is a supported page-layout precondition,
+  // not a GPP-owned override of the page builder's responsive rules.
+  const layout=await aLoaded.page.locator('[data-gpp-atomic-inbox2]').first().evaluate(node=>
+    getComputedStyle(node.parentElement).flexDirection);
+  assert.equal(layout,'column','Native Elementor responsive layout not applied to real frontend');
+  checks.push('NATIVE_ELEMENTOR_MOBILE_TWO_WIDGET_COLUMN_LAYOUT');
+
   // Revoke A's cookies after cards were drawn: subsequent native read must
   // clear every prior authorized card rather than keep stale private HTML.
   // First verify that the native Elementor flex layout leaves this actual

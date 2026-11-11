@@ -91,6 +91,33 @@ try {
   }
   assert.equal(forbiddenAjax,0,'Editor preview attempted private task bootstrap');
   checks.push('REAL_V4_PALETTE_INSERT_AND_TWO_ATOMIC_CONTROL_EDITS','DATA_FREE_TWING_PREVIEW');
+
+  // This disposable page intentionally has two sibling Atomic widgets.
+  // A default e-flexbox row can squeeze their contents to ~26px at 390px.
+  // Use the REAL native Elementor responsive container control, rather than
+  // hard-coding the parent layout in the GPP widget or mutating saved JSON.
+  await page.locator('[aria-label="Switch Device"]').getByTestId('switch-device-to-mobile').click();
+  const parent=frame.locator('[data-gpp-atomic-inbox2="pending"]').first().locator('xpath=..');
+  assert.equal(await parent.getAttribute('data-e-type'),'e-flexbox',
+    'P1C layout must be owned by genuine Elementor e-flexbox');
+  await parent.click({position:{x:4,y:4},timeout:20000});
+  const panel=page.locator('#elementor-panel');
+  await panel.getByRole('tab',{name:'Style',exact:true}).click();
+  const layout=panel.locator('[aria-label="Layout section content"]');
+  if (!(await layout.isVisible())) {
+    await panel.locator('.MuiButtonBase-root').filter({hasText:/^Layout$/i}).first().click();
+  }
+  await layout.waitFor({state:'visible',timeout:15000});
+  const display=layout.locator('label').filter({hasText:/^display$/i}).first().locator('../../');
+  const flex=display.locator('button[value="flex"]');
+  if (!(await flex.getAttribute('class')||'').includes('Mui-selected')) await flex.click();
+  const direction=layout.locator('label').filter({hasText:/^direction$/i}).first().locator('../../..');
+  const column=direction.locator('button[value="column"]');
+  await column.waitFor({state:'visible',timeout:15000});
+  if (!(await column.getAttribute('class')||'').includes('Mui-selected')) await column.click();
+  assert.match(await column.getAttribute('class')||'',/Mui-selected/);
+  checks.push('REAL_ATOMIC_MOBILE_PARENT_FLEX_DIRECTION_COLUMN_VIA_EDITOR_UI');
+
   const [saved]=await Promise.all([
     page.waitForResponse(saveResponse,{timeout:60000}),
     top.getByRole('button',{name:'Publish',exact:true}).click()

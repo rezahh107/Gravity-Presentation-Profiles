@@ -1,13 +1,4 @@
 /* Inbox 2 shared shortcode/host-widget presentation: scoped, container-aware. */
-/* An Atomic widget is a flex item in Elementor e-flexbox. Allow that item
-   to shrink without letting its content paint over a sibling at 390px.
-   Do not override Elementor's chosen flex direction, breakpoints or classes. */
-[data-gpp-atomic-inbox2]{
-  min-inline-size:0;
-  max-inline-size:100%;
-  overflow-wrap:anywhere;
-  box-sizing:border-box;
-}
 .ciq2,.ciq2 *{box-sizing:border-box}
 .ciq2{
   --ciq2-bg:#f3f6fa;--ciq2-card:#fff;--ciq2-ink:#182b48;
