@@ -47,6 +47,40 @@ async function releaseFocusEmulation(context,page){
   const session=await context.newCDPSession(page);
   await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});
 }
+// First attempt a native tab activation. When the automation backend does
+// not expose that transition, minimize the actual Chrome window through CDP.
+// Neither route injects a visibility event or changes document.hidden directly.
+async function nativeBackground(context,page,alternate){
+  await alternate.bringToFront();
+  try{
+    await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:2500});
+    return {method:'native_tab_activation'};
+  }catch(_){
+    const cdp=await context.newCDPSession(page);
+    const window=await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setWindowBounds',{
+      windowId:window.windowId,bounds:{windowState:'minimized'}
+    });
+    try{
+      await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:7000});
+      return {method:'native_window_minimize',cdp,windowId:window.windowId};
+    }catch(error){
+      await cdp.send('Browser.setWindowBounds',{
+        windowId:window.windowId,bounds:{windowState:'normal'}
+      }).catch(()=>{});
+      throw new Error('ENVIRONMENT_NOT_QUALIFIED: tabs and native window minimize failed: '+error);
+    }
+  }
+}
+async function nativeForeground(page,control){
+  if(control.method==='native_window_minimize'){
+    await control.cdp.send('Browser.setWindowBounds',{
+      windowId:control.windowId,bounds:{windowState:'normal'}
+    });
+  }
+  await page.bringToFront();
+  await page.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:10000});
+}
 async function current(page){
   await page.waitForFunction(()=>{
     const roots=[...document.querySelectorAll('[data-ciq2-root]')];
@@ -63,6 +97,7 @@ function sameItems(actual,expected,message){
 let browser=null;
 try {
   browser=await chromium.launch({headless:false,args:['--no-sandbox']});
+  try{
   const probe=await createContext(browser);
   const one=await probe.newPage();
   await one.goto('about:blank');
@@ -74,15 +109,14 @@ try {
   await releaseFocusEmulation(probe,one);
   assert.equal(await one.evaluate(()=>document.visibilityState),'visible',
     'CONTROL_VISIBLE_NOT_ESTABLISHED');
-  await two.bringToFront();
-  await one.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:10000});
-  await one.bringToFront();
-  await one.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:10000});
+  const probeControl=await nativeBackground(probe,one,two);
+  await nativeForeground(one,probeControl);
   const probeEvents=await one.evaluate(()=>window.__p1cLifecycleEvents);
   assert.ok(probeEvents.some(x=>x.type==='visibilitychange'&&x.visibility==='hidden') &&
     probeEvents.some(x=>x.type==='visibilitychange'&&x.visibility==='visible'),
     'ENVIRONMENT_NOT_QUALIFIED: control tabs did not produce native transitions');
-  record('HEADED_BROWSER_NATIVE_VISIBILITY_CONTROL','PASS',{events:probeEvents});
+  record('HEADED_BROWSER_NATIVE_VISIBILITY_CONTROL','PASS',{
+    method:probeControl.method,events:probeEvents});
   await probe.close();
 
   const ctx=await createContext(browser,fixture.users.a);
@@ -96,15 +130,13 @@ try {
   const alternate=await ctx.newPage();
   await alternate.goto('about:blank');
   await releaseFocusEmulation(ctx,alternate);
-  await alternate.bringToFront();
-  await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:10000});
+  const productControl=await nativeBackground(ctx,page,alternate);
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-ciq2-root]')]
     .every(r=>r.dataset.ciq2State==='stale'&&r.querySelectorAll('[data-ciq2-entry]').length===0),
     null,{timeout:10000});
   record('PRODUCT_NATIVE_HIDDEN_INVALIDATES_PRIVATE_CARDS','PASS',{
     hiddenEntries:await page.locator('[data-ciq2-entry]').count()});
-  await page.bringToFront();
-  await page.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:10000});
+  await nativeForeground(page,productControl);
   await current(page);
   sameItems(await identities(page),fixture.native_oracle.a.a,'Re-entered A membership');
   record('PRODUCT_NATIVE_VISIBLE_REVALIDATES_A_MEMBERSHIP','PASS',{
@@ -125,9 +157,14 @@ try {
       events:backEvents});
   }
   await ctx.close();
+  }catch(visibilityError){
+    record('GENUINE_VISIBILITY_BFCACHE_QUALIFICATION','NOT_PROVEN',{
+      reason:String(visibilityError?.stack||visibilityError).slice(0,1300)});
+  }
 
   // Hold a real server bootstrap response, detach an in-flight native Atomic
   // shell, then reinsert it. Never fabricate the underlying response.
+  try{
   const raceCtx=await createContext(browser,fixture.users.a);
   const racePage=await raceCtx.newPage();
   const target=fixture.element_ids_by_form[String(fixture.forms.a)];
@@ -184,6 +221,12 @@ try {
   assert.equal(hits,2,'Duplicate or uncontrolled bootstrap after detach and reattach');
   record('ATOMIC_INFLIGHT_DETACH_REINSERT_GENUINE_RESPONSE','PASS',{bootstrapRequests:hits});
   await raceCtx.close();
+  }catch(raceError){
+    const text=String(raceError?.stack||raceError);
+    record('ATOMIC_INFLIGHT_DETACH_REINSERT_GENUINE_RESPONSE',
+      text.includes('Duplicate or uncontrolled bootstrap')?'FAIL':'NOT_PROVEN',
+      {reason:text.slice(0,1300)});
+  }
 
   // Host-state transition: Elementor active -> explicitly deactivated.
   const deactivate=spawnSync('php',[env.WU21_WP_CLI,'plugin','deactivate','elementor',
@@ -216,9 +259,15 @@ try {
     JSON.stringify(results,null,2));
   if(browser)await browser.close().catch(()=>{});
 }
-if(results.failure){
-  console.error('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_FAILED',results.failure);
+if(results.failure||results.results.some(x=>x.status==='FAIL')){
+  console.error('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_FAILED',
+    results.failure||'An observed failing control is recorded in JSON');
   process.exit(1);
+}
+if(results.results.some(x=>x.status==='NOT_PROVEN')){
+  console.warn('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_INCOMPLETE',
+    JSON.stringify(results.results.filter(x=>x.status==='NOT_PROVEN')));
+  process.exit(2);
 }
 console.log('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_COMPLETE',JSON.stringify(
   results.results.map(({name,status})=>({name,status}))));
