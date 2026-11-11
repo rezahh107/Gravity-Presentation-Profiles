@@ -130,10 +130,10 @@ try {
     await panel.locator('.MuiButtonBase-root').filter({hasText:/^Layout$/i}).first().click();
   }
   await layout.waitFor({state:'visible',timeout:15000});
-  const display=layout.locator('label').filter({hasText:/^display$/i}).first().locator('../../');
+  const display=layout.locator('label').filter({hasText:/^display$/i}).first().locator('xpath=../..');
   const flex=display.locator('button[value="flex"]');
   if (!(await flex.getAttribute('class')||'').includes('Mui-selected')) await flex.click();
-  const direction=layout.locator('label').filter({hasText:/^direction$/i}).first().locator('../../..');
+  const direction=layout.locator('label').filter({hasText:/^direction$/i}).first().locator('xpath=../../..');
   const column=direction.locator('button[value="column"]');
   await column.waitFor({state:'visible',timeout:15000});
   if (!(await column.getAttribute('class')||'').includes('Mui-selected')) await column.click();
