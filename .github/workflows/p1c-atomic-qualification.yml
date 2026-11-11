@@ -99,6 +99,8 @@ jobs:
           echo "P1C_SITEURL_BEFORE_NORMALIZATION=$before_siteurl"
           php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          # Canonical /wp-json/ routing is proven only after rewrite setup.
+          php "$WU21_WP_CLI" rewrite structure '/%postname%/' --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" option get home --path="$WU21_WP_PATH")" = "$WU21_BASE_URL"
           test "$(php "$WU21_WP_CLI" option get siteurl --path="$WU21_WP_PATH")" = "$WU21_BASE_URL"
           WU21_EXPECTED_URL="$WU21_BASE_URL" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
@@ -118,14 +120,7 @@ jobs:
           echo "P1C_WORDPRESS_ROOT_URL_CONTRACT_PASS\n";
           '
           php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='p1c-disposable-viewer'
-          php "$WU21_WP_CLI" rewrite structure '/%postname%/' --path="$WU21_WP_PATH"
           test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
-          # WP-CLI core install can derive siteurl from the filesystem dirname.
-          # The successful P1-B laboratory explicitly pins both URL options.
-          php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
-          php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
-          test "$(php "$WU21_WP_CLI" option get home --path="$WU21_WP_PATH")" = "$WU21_BASE_URL"
-          test "$(php "$WU21_WP_CLI" option get siteurl --path="$WU21_WP_PATH")" = "$WU21_BASE_URL"
 
       - name: Verify and activate exact licensed synthetic-host GF and Flow
         shell: bash
