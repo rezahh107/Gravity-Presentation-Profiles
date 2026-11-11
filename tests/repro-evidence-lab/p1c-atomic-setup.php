@@ -58,6 +58,11 @@ foreach ($users as $key=>$uid) {
         $ids[] = (int)$id;
     }
     $forms[$key]=$fid; $entry_ids[$key]=$ids;
+    // The fixture creates forms and activates bindings in this same WP-CLI
+    // process. The host's per-request geometry cache predates those writes.
+    // Revalidate against the newly persisted lifecycle rather than asserting
+    // the deliberately stale process-local snapshot.
+    \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::resetRuntimeCache();
     $contract = \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::initialGeometryContract(array('form_id'=>$fid));
     $assert(is_array($contract) && count($contract['column_ids'] ?? array())===5, 'NATIVE_COLUMNS');
 }
