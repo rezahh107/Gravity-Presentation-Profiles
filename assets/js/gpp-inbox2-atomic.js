@@ -63,7 +63,10 @@
       if (serial.aborted || !node.isConnected || document.hidden || inEditor() ||
           !host.isConnected || host.getAttribute('data-id') !== element) return;
       const inserted = document.importNode(root, true);
-      node.replaceWith(inserted);
+      // Keep the original Atomic/Twig class-bearing element: Elementor native
+      // Classes, Variables and breakpoint styles target this wrapper.
+      node.replaceChildren(inserted);
+      node.dataset.gppAtomicInbox2 = 'ready';
       window.GPPInbox2?.initAll(inserted);
     } catch (error) {
       if (!serial.aborted) safeMessage(node);
