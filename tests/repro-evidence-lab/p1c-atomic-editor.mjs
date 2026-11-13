@@ -12,6 +12,8 @@ import {chromium} from 'playwright';
 const env=process.env, origin=env.WU21_BASE_URL, dir=env.WU21_ARTIFACT_DIR;
 const fixture=JSON.parse(fs.readFileSync(path.join(dir,'p1c-atomic-fixture.json'),'utf8'));
 const checks=[];
+let mobileDiagnostics=null;
+const diagnosticErrors=[];
 function wp(code) {
   const r=spawnSync('php',[env.WU21_WP_CLI,'--path='+env.WU21_WP_PATH,'eval',code],
     {encoding:'utf8',env,timeout:60000});
@@ -38,6 +40,10 @@ let page, context, failed=null;
 try {
   context=await browser.newContext({viewport:{width:1280,height:900}});
   page=await context.newPage();
+  page.on('pageerror',error=>diagnosticErrors.push({type:'pageerror',message:String(error).slice(0,400)}));
+  page.on('console',message=>{
+    if(message.type()==='error')diagnosticErrors.push({type:'console',message:message.text().slice(0,400)});
+  });
   await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:45000});
   await page.locator('#user_login').fill(env.P1C_ADMIN_USERNAME);
   await page.locator('#user_pass').fill(env.P1C_ADMIN_PASSWORD);
@@ -137,27 +143,129 @@ try {
   const column=direction.locator('button[value="column"]');
   await column.waitFor({state:'visible',timeout:15000});
   if (!(await column.getAttribute('class')||'').includes('Mui-selected')) await column.click();
-  // MUI's internal selected class is not a stable Elementor V4 acceptance
-  // contract. The authoritative observable is the real computed mobile
-  // flex-direction for the saved native parent, verified below and on reload.
-  // Confirm the change is applied to the live native layout, not merely
-  // selected in an unrelated controls panel.
-  const layoutState=await frame.locator('[data-gpp-atomic-inbox2="pending"]').first()
-    .evaluate(node=>{
-      const hosts=[...document.querySelectorAll('[data-gpp-atomic-inbox2="pending"]')];
-      const same=element=>hosts.every(x=>element.contains(x));
-      const ancestors=[];let element=node.parentElement;
-      while(element&&ancestors.length<12){
-        ancestors.push({type:element.getAttribute('data-e-type'),
-          id:element.getAttribute('data-id'),layout:getComputedStyle(element).flexDirection,
-          containsBoth:same(element)});
-        element=element.parentElement;
-      }
-      return ancestors;
-    });
+  // Diagnose the real host layout without changing the native Elementor controls.
+  // Keep the existing Column assertion: a selected MUI button is not proof.
+  const startedAt=Date.now();
+  const samplePeriodMs=200, minimumObservationMs=2500, maximumObservationMs=6500;
+  const stabilitySamplesRequired=4;
+  async function observeMobile(phase) {
+    const state=await frame.locator('[data-gpp-atomic-inbox2="pending"]').first()
+      .evaluate(node=>{
+        const hosts=[...document.querySelectorAll('[data-gpp-atomic-inbox2="pending"]')];
+        const widgets=hosts.map(host=>
+          host.closest('[data-widget_type="e-gpp-inbox-2.default"]') ||
+          host.closest('[data-id]') || host);
+        const rect=element=>{
+          if(!element)return null;
+          const r=element.getBoundingClientRect();
+          return Object.fromEntries(['x','y','width','height','top','left','right','bottom']
+            .map(key=>[key,Math.round(r[key]*10)/10]));
+        };
+        const ancestors=[];let element=node.parentElement;
+        while(element&&ancestors.length<16){
+          const style=getComputedStyle(element);
+          ancestors.push({type:element.getAttribute('data-e-type'),
+            id:element.getAttribute('data-id'),display:style.display,
+            layout:style.flexDirection,containsBoth:hosts.every(x=>element.contains(x))});
+          element=element.parentElement;
+        }
+        const native=(()=>{let el=widgets[0]?.parentElement||null;
+          while(el){
+            if(el.getAttribute('data-e-type')==='e-flexbox' &&
+                widgets.every(widget=>el.contains(widget)))return el;
+            el=el.parentElement;
+          }
+          return null;
+        })();
+        const directChild=widget=>{
+          if(!native||!widget)return null;
+          let el=widget;
+          while(el.parentElement&&el.parentElement!==native)el=el.parentElement;
+          return el.parentElement===native?el:null;
+        };
+        const childOwners=widgets.map(directChild);
+        const parentStyle=native?getComputedStyle(native):null;
+        const boxes=widgets.map((widget,i)=>{
+          const style=getComputedStyle(widget);
+          return {id:widget.getAttribute('data-id'),
+            type:widget.getAttribute('data-e-type'),
+            widgetType:widget.getAttribute('data-widget_type'),
+            directChildId:childOwners[i]?.getAttribute('data-id')??null,
+            directChildDistinct:!!childOwners[i]&&
+              childOwners.every((other,j)=>i===j||other!==childOwners[i]),
+            visible:style.visibility!=='hidden'&&style.display!=='none'&&
+              widget.getBoundingClientRect().width>0&&widget.getBoundingClientRect().height>0,
+            rect:rect(widget)};
+        });
+        const first=boxes[0]?.rect,second=boxes[1]?.rect;
+        const intersection=first&&second?Math.max(0,
+          Math.min(first.right,second.right)-Math.max(first.left,second.left))*
+          Math.max(0,Math.min(first.bottom,second.bottom)-Math.max(first.top,second.top)):null;
+        const vertical=!!(first&&second&&second.top>=first.bottom-2);
+        return {canvas:{innerWidth:innerWidth,innerHeight:innerHeight,
+            clientWidth:document.documentElement.clientWidth,
+            visualViewportWidth:visualViewport?.width??null,
+            devicePixelRatio:devicePixelRatio},
+          atomicHostCount:hosts.length,widgetCount:widgets.length,ancestry:ancestors,
+          nativeParent:native?{id:native.getAttribute('data-id'),
+            type:native.getAttribute('data-e-type'),
+            display:parentStyle.display,flexDirection:parentStyle.flexDirection,
+            flexWrap:parentStyle.flexWrap,position:parentStyle.position,
+            justifyContent:parentStyle.justifyContent,
+            alignItems:parentStyle.alignItems,rect:rect(native),
+            ownsBoth:widgets.length===2&&widgets.every(widget=>native.contains(widget)),
+            distinctDirectChildren:childOwners.length===2&&childOwners.every(Boolean)&&
+              childOwners[0]!==childOwners[1]}:null,
+          widgets:boxes,geometry:{vertical,intersectionArea:intersection}};
+      });
+    return {phase,elapsedMs:Date.now()-startedAt,
+      browserViewport:page.viewportSize(),
+      iframeRectangle:await page.locator('#elementor-preview-iframe').boundingBox(),
+      mobileControlClass:(await page.locator('[aria-label="Switch Device"]')
+        .getByTestId('switch-device-to-mobile').getAttribute('class').catch(()=>null)),
+      columnControlClass:await column.getAttribute('class'),
+      ...state};
+  }
+  const signature=snapshot=>JSON.stringify({
+    canvas:snapshot.canvas,nativeParent:snapshot.nativeParent,
+    widgets:snapshot.widgets,geometry:snapshot.geometry,
+    iframeRectangle:snapshot.iframeRectangle});
+  const immediate=await observeMobile('IMMEDIATE');
+  await page.screenshot({path:path.join(dir,'p1c-mobile-immediate.png'),fullPage:true});
+  let previous=signature(immediate),settled=immediate,stableCount=0;
+  const samples=[{elapsedMs:immediate.elapsedMs,nativeParent:immediate.nativeParent,
+    widgets:immediate.widgets,canvas:immediate.canvas,geometry:immediate.geometry}];
+  do {
+    // This is a measured observation interval, not a fixed-delay success gate.
+    await page.waitForTimeout(samplePeriodMs);
+    settled=await observeMobile('STABILIZED_SAMPLE');
+    const current=signature(settled);
+    stableCount=current===previous?stableCount+1:0;
+    previous=current;
+    samples.push({elapsedMs:settled.elapsedMs,nativeParent:settled.nativeParent,
+      widgets:settled.widgets,canvas:settled.canvas,geometry:settled.geometry});
+  } while ((settled.elapsedMs<minimumObservationMs ||
+      stableCount<stabilitySamplesRequired) &&
+      settled.elapsedMs<maximumObservationMs);
+  await page.screenshot({path:path.join(dir,'p1c-mobile-stabilized.png'),fullPage:true});
+  mobileDiagnostics={head:env.GPP_WU21_REPOSITORY_SHA||null,
+    nativeStructureSelection:selectionEvidence,
+    samplePeriodMs,minimumObservationMs,maximumObservationMs,
+    stabilitySamplesRequired,stableSamplesObserved:stableCount,
+    stabilized:stableCount>=stabilitySamplesRequired,
+    elapsedMs:settled.elapsedMs,
+    immediate,final:settled,samples,
+    originalImmediateOracle:immediate.ancestry.some(x=>x.containsBoth&&x.layout==='column'),
+    originalSettledOracle:settled.ancestry.some(x=>x.containsBoth&&x.layout==='column'),
+    diagnosticErrors};
+  const layoutState=settled.ancestry;
   const mobileParent=layoutState.find(x=>x.containsBoth&&x.layout==='column');
   assert.ok(mobileParent,
-    'Native Elementor mobile Flexbox must contain both widgets vertically: '+JSON.stringify(layoutState));
+    'Native Elementor mobile Flexbox must contain both widgets vertically: '+
+    JSON.stringify({immediate:immediate.nativeParent,
+      settled:settled.nativeParent,geometry:settled.geometry,
+      ancestry:layoutState,elapsedMs:settled.elapsedMs,
+      stabilized:mobileDiagnostics.stabilized}));
   checks.push('REAL_ATOMIC_MOBILE_PARENT_FLEX_DIRECTION_COLUMN_VIA_EDITOR_UI');
 
   const [saved]=await Promise.all([
@@ -177,6 +285,9 @@ try {
   process.stderr.write(failed.slice(0,1600)+'\n');
   if(page) await page.screenshot({path:path.join(dir,'p1c-editor-failure.png'),fullPage:true}).catch(()=>{});
 } finally {
+  fs.writeFileSync(path.join(dir,'p1c-mobile-flexbox-diagnostic.json'),
+    JSON.stringify(mobileDiagnostics||{head:env.GPP_WU21_REPOSITORY_SHA||null,
+      status:'NOT_CAPTURED',reason:failed,diagnosticErrors},null,2));
   fs.writeFileSync(path.join(dir,'p1c-atomic-editor.json'),JSON.stringify({
     head:env.GPP_WU21_REPOSITORY_SHA||null,elementor:'4.4.0',
     checks,failed
