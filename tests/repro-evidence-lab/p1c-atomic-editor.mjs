@@ -193,15 +193,19 @@ try {
             directChildId:childOwners[i]?.getAttribute('data-id')??null,
             directChildDistinct:!!childOwners[i]&&
               childOwners.every((other,j)=>i===j||other!==childOwners[i]),
-            visible:style.visibility!=='hidden'&&style.display!=='none'&&
-              widget.getBoundingClientRect().width>0&&widget.getBoundingClientRect().height>0,
-            rect:rect(widget)};
+            wrapperDisplay:style.display,wrapperRect:rect(widget),
+            visible:getComputedStyle(hosts[i]).visibility!=='hidden'&&
+              getComputedStyle(hosts[i]).display!=='none'&&
+              hosts[i].getBoundingClientRect().width>0&&
+              hosts[i].getBoundingClientRect().height>0,
+            rect:rect(hosts[i])};
         });
         const first=boxes[0]?.rect,second=boxes[1]?.rect;
         const intersection=first&&second?Math.max(0,
           Math.min(first.right,second.right)-Math.max(first.left,second.left))*
           Math.max(0,Math.min(first.bottom,second.bottom)-Math.max(first.top,second.top)):null;
-        const vertical=!!(first&&second&&second.top>=first.bottom-2);
+        const vertical=!!(boxes.length===2&&boxes.every(x=>x.visible)&&
+          first&&second&&second.top>first.top&&second.top>=first.bottom-2);
         return {canvas:{innerWidth:innerWidth,innerHeight:innerHeight,
             clientWidth:document.documentElement.clientWidth,
             visualViewportWidth:visualViewport?.width??null,
@@ -258,15 +262,42 @@ try {
     originalImmediateOracle:immediate.ancestry.some(x=>x.containsBoth&&x.layout==='column'),
     originalSettledOracle:settled.ancestry.some(x=>x.containsBoth&&x.layout==='column'),
     diagnosticErrors};
-  const layoutState=settled.ancestry;
-  const mobileParent=layoutState.find(x=>x.containsBoth&&x.layout==='column');
-  assert.ok(mobileParent,
-    'Native Elementor mobile Flexbox must contain both widgets vertically: '+
-    JSON.stringify({immediate:immediate.nativeParent,
-      settled:settled.nativeParent,geometry:settled.geometry,
-      ancestry:layoutState,elapsedMs:settled.elapsedMs,
-      stabilized:mobileDiagnostics.stabilized}));
+  // A computed Column on an unrelated ancestor is not a layout oracle.
+  const acceptsColumn=s=>s.nativeParent?.type==='e-flexbox'&&
+    s.nativeParent.display==='flex'&&s.nativeParent.flexDirection==='column'&&
+    s.nativeParent.ownsBoth&&s.nativeParent.distinctDirectChildren&&
+    s.widgetCount===2&&s.widgets.every(x=>x.visible&&x.rect.width>0&&x.rect.height>0)&&
+    s.geometry.vertical&&s.geometry.intersectionArea===0&&
+    s.canvas.innerWidth>0&&s.canvas.innerWidth<s.browserViewport.width;
+  mobileDiagnostics.correctedImmediate=acceptsColumn(immediate);
+  mobileDiagnostics.correctedSettled=acceptsColumn(settled);
+  assert.ok(mobileDiagnostics.stabilized&&acceptsColumn(settled),
+    'Native mobile Flexbox must own two painted vertically ordered widgets: '+
+    JSON.stringify({parent:settled.nativeParent,widgets:settled.widgets,
+      geometry:settled.geometry,canvas:settled.canvas}));
   checks.push('REAL_ATOMIC_MOBILE_PARENT_FLEX_DIRECTION_COLUMN_VIA_EDITOR_UI');
+  // Rejection uses genuine Native responsive Row, then restores Column.
+  await direction.locator('button[value="row"]').click();
+  let realRow=null;
+  for(let i=0;i<25;i++){
+    realRow=await observeMobile('ROW_NEGATIVE');
+    if(realRow.nativeParent?.flexDirection==='row')break;
+    await page.waitForTimeout(150);
+  }
+  mobileDiagnostics.rowNegative=realRow;
+  assert.equal(realRow.nativeParent?.flexDirection,'row','Native Row state not established');
+  assert.equal(acceptsColumn(realRow),false,'Row must not satisfy Column oracle');
+  checks.push('REAL_NATIVE_ROW_REJECTED_BY_STRICT_ORACLE');
+  await column.click();
+  let restored=null;
+  for(let i=0;i<25;i++){
+    restored=await observeMobile('COLUMN_RESTORED');
+    if(acceptsColumn(restored))break;
+    await page.waitForTimeout(150);
+  }
+  mobileDiagnostics.restoredColumn=restored;
+  assert.ok(acceptsColumn(restored),'Native Column must be restored before save');
+  checks.push('REAL_NATIVE_COLUMN_RESTORED_BEFORE_SAVE');
 
   const [saved]=await Promise.all([
     page.waitForResponse(saveResponse,{timeout:60000}),
