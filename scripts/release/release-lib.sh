@@ -155,6 +155,8 @@ release_runtime_files() {
         cd "$root"
         printf '%s\n' "$GPP_ENTRYPOINT" 'LICENSE'
         find src -type f -name '*.php' -print
+        # Atomic_Widget_Base/Has_Template resolves these same Twig sources in PHP and Twing.
+        find templates -type f -name '*.html.twig' -print
         find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print
         find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print
         find help -type f -name '*.html' -print
@@ -169,8 +171,12 @@ gravity-presentation-profiles.php
 src/Autoloader.php
 src/Bootstrap.php
 src/SRWF/GravityFlow/Inbox2Shortcode.php
+src/Elementor/Inbox2AtomicIntegration.php
+src/Elementor/Inbox2AtomicWidget.php
+templates/inbox2-atomic.html.twig
 assets/css/gpp-inbox2.css
 assets/js/gpp-inbox2.js
+assets/js/gpp-inbox2-atomic.js
 src/GravityForms/AddOn.php
 src/GravityForms/InPluginHelp.php
 help/en_US.html

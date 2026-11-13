@@ -12,6 +12,8 @@ final class Inbox2Shortcode {
         if ( ! function_exists( 'add_shortcode' ) || ! function_exists( 'add_action' ) ) { return; }
         add_shortcode( self::TAG, array( __CLASS__, 'render' ) );
         add_action( 'wp_ajax_gpp_inbox2_read', array( __CLASS__, 'ajaxRead' ) );
+        add_action( 'wp_ajax_gpp_inbox2_atomic_bootstrap', array( __CLASS__, 'ajaxAtomicBootstrap' ) );
+        add_action( 'wp_ajax_nopriv_gpp_inbox2_atomic_bootstrap', array( __CLASS__, 'ajaxDenied' ) );
         add_action( 'wp_ajax_nopriv_gpp_inbox2_read', array( __CLASS__, 'ajaxDenied' ) );
         add_action( 'template_redirect', array( __CLASS__, 'noCachePage' ), 1 );
         add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueueOnPage' ), 5 );
@@ -42,7 +44,8 @@ final class Inbox2Shortcode {
     private static function nativePageAdmitted( $page_id, $form_id ) {
         $post = get_post( $page_id );
         if ( ! $post instanceof \WP_Post || 'publish' !== $post->post_status
-            || ! current_user_can( 'read_post', $page_id ) ) { return false; }
+            || ! current_user_can( 'read_post', $page_id )
+            || post_password_required( $post ) ) { return false; }
         if ( has_block( 'gravityflow/inbox', $post ) ) { return true; }
         $regex = get_shortcode_regex( array( 'gravityflow' ) );
         if ( ! preg_match_all( '/' . $regex . '/s', $post->post_content, $found, PREG_SET_ORDER ) ) { return false; }
@@ -56,8 +59,18 @@ final class Inbox2Shortcode {
         return false;
     }
 
-    private static function nonceAction( $page_id, $form_id, $native_page_id ) {
-        return 'gpp_inbox2_read|' . $page_id . '|' . $form_id . '|' . $native_page_id;
+    private static function nonceAction( $page_id, $form_id, $native_page_id, $element_id = '' ) {
+        return ( '' === $element_id ? 'gpp_inbox2_read|' : 'gpp_inbox2_atomic_read|' )
+            . $page_id . '|' . $form_id . '|' . $native_page_id
+            . ( '' === $element_id ? '' : '|' . $element_id );
+    }
+
+    private static function privateResponse() {
+        nocache_headers();
+        if ( ! headers_sent() ) {
+            header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0' );
+            header( 'Vary: Cookie', false );
+        }
     }
 
     public static function noCachePage() {
@@ -71,7 +84,10 @@ final class Inbox2Shortcode {
 
     public static function enqueueOnPage() {
         $post = get_queried_object();
-        if ( ! $post instanceof \WP_Post || ! has_shortcode( $post->post_content, self::TAG ) ) { return; }
+        if ( ! $post instanceof \WP_Post ) { return; }
+        $is_shortcode = has_shortcode( $post->post_content, self::TAG );
+        $is_atomic = \GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration::pageMayContainWidget( $post );
+        if ( ! $is_shortcode && ! $is_atomic ) { return; }
         $base = dirname( GPP_PLUGIN_FILE );
         $css = 'assets/css/gpp-inbox2.css';
         $js = 'assets/js/gpp-inbox2.js';
@@ -79,6 +95,14 @@ final class Inbox2Shortcode {
             substr( hash_file( 'sha256', $base . '/' . $css ), 0, 12 ) );
         wp_enqueue_script( 'gpp-inbox2', plugins_url( $js, GPP_PLUGIN_FILE ), array(),
             substr( hash_file( 'sha256', $base . '/' . $js ), 0, 12 ), true );
+        if ( $is_atomic ) {
+            $adapter = 'assets/js/gpp-inbox2-atomic.js';
+            wp_enqueue_script( 'gpp-inbox2-atomic', plugins_url( $adapter, GPP_PLUGIN_FILE ),
+                array( 'gpp-inbox2' ), substr( hash_file( 'sha256', $base . '/' . $adapter ), 0, 12 ), true );
+            wp_add_inline_script( 'gpp-inbox2-atomic', 'window.gppInbox2AtomicConfig = ' .
+                wp_json_encode( array( 'ajax' => admin_url( 'admin-ajax.php' ),
+                    'page' => (int) $post->ID ) ) . ';', 'before' );
+        }
     }
 
     public static function render( $attributes = array() ) {
@@ -102,12 +126,37 @@ final class Inbox2Shortcode {
     }
 
     public static function ajaxDenied() {
-        nocache_headers();
+        self::privateResponse();
         wp_send_json_error( array( 'reason' => 'authorization_required' ), 403 );
     }
 
+    public static function ajaxAtomicBootstrap() {
+        self::privateResponse();
+        $page = isset( $_POST['page_id'] ) && is_scalar( $_POST['page_id'] )
+            ? wp_unslash( $_POST['page_id'] ) : null;
+        $element = isset( $_POST['element_id'] ) && is_string( $_POST['element_id'] )
+            ? wp_unslash( $_POST['element_id'] ) : '';
+        if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' || ! self::validId( $page )
+            || ! \GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration::validElementId( $element ) ) {
+            self::ajaxDenied();
+        }
+        $page_id = (int) $page;
+        $instance = \GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration::resolvePublishedInstance( $page_id, $element );
+        if ( ! $instance ) { self::ajaxDenied(); }
+        $form_id = $instance['form_id'];
+        $native_page_id = $instance['native_page_id'];
+        if ( ! self::nativePageAdmitted( $native_page_id, $form_id )
+            || ! class_exists( 'GFAPI' ) || ! is_array( \GFAPI::get_form( $form_id ) ) ) {
+            self::ajaxDenied();
+        }
+        // This is intentionally PENDING: zero rows must NOT mean a verified empty task set.
+        // No native task enumeration occurs in the bootstrap endpoint.
+        wp_send_json_success( array( 'html' => self::renderMarkup( array(), $form_id,
+            $native_page_id, $page_id, $element, true ) ) );
+    }
+
     public static function ajaxRead() {
-        nocache_headers();
+        self::privateResponse();
         $params = array();
         foreach ( array( 'page_id', 'form_id', 'native_page_id' ) as $name ) {
             $value = isset( $_POST[$name] ) && is_scalar( $_POST[$name] ) ? wp_unslash( $_POST[$name] ) : null;
@@ -116,11 +165,19 @@ final class Inbox2Shortcode {
         }
         $page_id = $params['page_id']; $form_id = $params['form_id'];
         $native_page_id = $params['native_page_id'];
+        $element = isset( $_POST['element_id'] ) && is_string( $_POST['element_id'] )
+            ? wp_unslash( $_POST['element_id'] ) : '';
+        $atomic = null;
+        if ( '' !== $element ) {
+            $atomic = \GravityPresentationProfiles\Elementor\Inbox2AtomicIntegration::resolvePublishedInstance( $page_id, $element );
+            if ( ! $atomic || $atomic['form_id'] !== $form_id
+                || $atomic['native_page_id'] !== $native_page_id ) { self::ajaxDenied(); }
+        }
         $nonce = isset( $_POST['nonce'] ) && is_string( $_POST['nonce'] )
             ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
         if ( ! is_user_logged_in()
-            || ! wp_verify_nonce( $nonce, self::nonceAction( $page_id, $form_id, $native_page_id ) )
-            || ! self::matchingShortcode( get_post( $page_id ), $form_id, $native_page_id )
+            || ! wp_verify_nonce( $nonce, self::nonceAction( $page_id, $form_id, $native_page_id, $element ) )
+            || ( '' === $element && ! self::matchingShortcode( get_post( $page_id ), $form_id, $native_page_id ) )
             || ! current_user_can( 'read_post', $page_id )
             || ! self::nativePageAdmitted( $native_page_id, $form_id )
             || ! class_exists( 'GFAPI' ) || ! is_array( \GFAPI::get_form( $form_id ) ) ) {
@@ -131,7 +188,7 @@ final class Inbox2Shortcode {
             wp_send_json_error( array( 'reason' => 'incomplete_authorized_snapshot' ), 503 );
         }
         wp_send_json_success( array( 'count' => count( $rows ),
-            'html' => self::renderMarkup( $rows, $form_id, $native_page_id, $page_id ) ) );
+            'html' => self::renderMarkup( $rows, $form_id, $native_page_id, $page_id, $element ) ) );
     }
 
     /** Explicitly qualified private host version. */
@@ -426,22 +483,25 @@ private static function snapshotRows( $scope ) {
     }
     return $result;
 }
-    private static function renderMarkup( $rows, $form_id, $native_page_id, $page_id ) {
+    private static function renderMarkup( $rows, $form_id, $native_page_id, $page_id, $element_id = '', $pending = false ) {
         // Multiple shortcode instances cannot share DOM IDs.
         static $instance = 0;
-        $identity = 'gpp-inbox2-' . $page_id . '-' . $form_id . '-' . ++$instance;
+        $identity = '' === $element_id
+            ? 'gpp-inbox2-' . $page_id . '-' . $form_id . '-' . ++$instance
+            : 'gpp-inbox2-atomic-' . $page_id . '-' . $element_id;
         $url = get_permalink( $page_id );
         // Site-local time of this server-confirmed snapshot. This is not the
         // task creation date, whose canonical Gravity Forms value stays intact.
-        $verified_at = wp_date( 'H:i' );
+        $verified_at = $pending ? '' : wp_date( 'H:i' );
         ob_start();
         ?>
         <section class="ciq2" dir="rtl" lang="fa"
             aria-labelledby="<?php echo esc_attr( $identity . '-heading' ); ?>"
-            data-ciq2-root data-ciq2-state="current"
-            data-ciq2-verified-at="<?php echo esc_attr( $verified_at ); ?>"
+            data-ciq2-root data-ciq2-state="<?php echo $pending ? 'pending' : 'current'; ?>"
+            <?php if ( ! $pending ) : ?>data-ciq2-verified-at="<?php echo esc_attr( $verified_at ); ?>"<?php endif; ?>
+            <?php if ( '' !== $element_id ) : ?>data-ciq2-element="<?php echo esc_attr( $element_id ); ?>"<?php endif; ?>
             data-ciq2-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
-            data-ciq2-nonce="<?php echo esc_attr( wp_create_nonce( self::nonceAction( $page_id, $form_id, $native_page_id ) ) ); ?>"
+            data-ciq2-nonce="<?php echo esc_attr( wp_create_nonce( self::nonceAction( $page_id, $form_id, $native_page_id, $element_id ) ) ); ?>"
             data-ciq2-page="<?php echo esc_attr( $page_id ); ?>"
             data-ciq2-form="<?php echo esc_attr( $form_id ); ?>"
             data-ciq2-native-page="<?php echo esc_attr( $native_page_id ); ?>">
@@ -461,7 +521,7 @@ private static function snapshotRows( $scope ) {
                     autocomplete="off" aria-describedby="<?php echo esc_attr( $identity . '-status' ); ?>"/>
             </div>
             <p class="ciq2-status" id="<?php echo esc_attr( $identity . '-status' ); ?>"
-                data-ciq2-status><?php echo esc_html( sprintf( '%d پرونده', count( $rows ) ) ); ?></p>
+                data-ciq2-status><?php echo esc_html( $pending ? 'در حال تأیید دسترسی و دریافت فهرست…' : sprintf( '%d پرونده', count( $rows ) ) ); ?></p>
             <p class="ciq2-sr-only" data-ciq2-announcement aria-live="polite" aria-atomic="true"></p>
             <ul class="ciq2-list" data-ciq2-list>
                 <?php foreach ( $rows as $row ) :

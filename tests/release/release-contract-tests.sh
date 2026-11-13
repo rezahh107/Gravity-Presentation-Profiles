@@ -164,6 +164,11 @@ SHA_ABSOLUTE_B="$(sha256sum "$ZIP_ABSOLUTE_B" | awk '{print $1}')"
 
 unzip -Z1 "$ZIP_RELATIVE" > "$WORK/zip-files.txt"
 grep -Fxq 'gravity-presentation-profiles/LICENSE' "$WORK/zip-files.txt"
+# A missing Twig template breaks the *installed* Atomic widget even when
+# the repository's source checkout works; fail the canonical release gate.
+grep -Fxq 'gravity-presentation-profiles/templates/inbox2-atomic.html.twig' "$WORK/zip-files.txt"
+grep -Fxq 'gravity-presentation-profiles/src/Elementor/Inbox2AtomicWidget.php' "$WORK/zip-files.txt"
+grep -Fxq 'gravity-presentation-profiles/assets/js/gpp-inbox2-atomic.js' "$WORK/zip-files.txt"
 unzip -p "$ZIP_RELATIVE" gravity-presentation-profiles/LICENSE > "$WORK/packaged-license"
 cmp -s "$WORK/source/LICENSE" "$WORK/packaged-license"
 mkdir -p "$WORK/packaged-root"
@@ -197,6 +202,7 @@ mutate_zip() {
     case "$mutation" in
         forbidden) mkdir -p "$dir/gravity-presentation-profiles/tests"; echo '<?php' > "$dir/gravity-presentation-profiles/tests/forbidden.php" ;;
         missing) rm -f "$dir/gravity-presentation-profiles/src/Bootstrap.php" ;;
+        missing-atomic-template) rm -f "$dir/gravity-presentation-profiles/templates/inbox2-atomic.html.twig" ;;
         missing-help) rm -f "$dir/gravity-presentation-profiles/help/fa_IR.html" ;;
         missing-language) rm -f "$dir/gravity-presentation-profiles/languages/gravity-presentation-profiles-fa_IR.mo" ;;
         wrong-version) sed -i 's/Version: 9.8.7/Version: 9.8.6/' "$dir/gravity-presentation-profiles/gravity-presentation-profiles.php" ;;
@@ -213,6 +219,8 @@ mutate_zip "$ZIP_RELATIVE" "$WORK/forbidden.zip" forbidden
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/forbidden.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing.zip" missing
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing.zip" 9.8.7
+mutate_zip "$ZIP_RELATIVE" "$WORK/missing-atomic-template.zip" missing-atomic-template
+expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-atomic-template.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing-help.zip" missing-help
 expect_fail bash "$ROOT/scripts/release/validate-release.sh" "$WORK/source" "$WORK/missing-help.zip" 9.8.7
 mutate_zip "$ZIP_RELATIVE" "$WORK/missing-language.zip" missing-language
