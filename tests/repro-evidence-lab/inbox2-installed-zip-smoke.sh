@@ -88,6 +88,42 @@ if [[ -f "$MU" ]]; then
 fi
 php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/inbox2-installed-zip-setup.php
 test -s "$WU21_ARTIFACT_DIR/gpp-inbox2-installed-fixture.json"
+# A long-lived PHP HTTP process can retain the old checkout path after the
+# symlink is replaced by the installed ZIP (WU21 discriminator 45470009134).
+# Restart only at this boundary. The restored checkout passed both downstream
+# consumers with the same new listener; no teardown restart is justified.
+test "$WU21_BASE_URL" = http://127.0.0.1:8080
+old_listener="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
+old_wrapper="$(cat /tmp/wu21-wp-server.pid)"
+[[ "$old_listener" =~ ^[0-9]+$ && "$old_wrapper" =~ ^[0-9]+$ ]]
+test "$old_listener" != "$$" && test "$old_wrapper" != "$$"
+case "$(ps -p "$old_listener" -o comm= | tr -d ' ')" in
+  php|php[0-9]*) ;;
+  *) exit 1 ;;
+esac
+tr '\0' ' ' < "/proc/$old_listener/cmdline" | grep -Fq '127.0.0.1:8080'
+tr '\0' ' ' < "/proc/$old_wrapper/cmdline" | grep -Fq -- "$WU21_WP_CLI server --path=$WU21_WP_PATH --host=127.0.0.1 --port=8080"
+kill "$old_listener"
+if kill -0 "$old_wrapper" 2>/dev/null; then
+  kill "$old_wrapper" 2>/dev/null || ! kill -0 "$old_wrapper" 2>/dev/null
+fi
+for i in $(seq 1 30); do
+  if ! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null; then break; fi
+  sleep 1
+done
+! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null
+php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >>/tmp/wu21-wp-server.log 2>&1 &
+echo $! >/tmp/wu21-wp-server.pid
+ready=0
+for i in $(seq 1 30); do
+  if curl -fsS --max-time 3 "$WU21_BASE_URL/wp-login.php" >/dev/null; then ready=1; break; fi
+  sleep 1
+done
+test "$ready" = 1
+new_listener="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
+[[ "$new_listener" =~ ^[0-9]+$ ]]
+test "$new_listener" != "$old_listener"
+printf 'GPP_INBOX2_INSTALLED_HTTP_RESTART_PASS old=%s new=%s\n' "$old_listener" "$new_listener"
 node tests/repro-evidence-lab/inbox2-installed-zip-browser.mjs
 test -s "$WU21_ARTIFACT_DIR/gpp-inbox2-installed-browser.json"
 echo 'GPP_INBOX2_INSTALLED_ZIP_RUNTIME_SMOKE_PASS'
