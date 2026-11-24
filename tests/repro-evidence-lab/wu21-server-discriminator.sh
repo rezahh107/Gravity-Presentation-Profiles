@@ -54,24 +54,62 @@ for path in paths:
 json.dump(out,open(sys.argv[3],'w'),indent=2)
 PY
 }
+restart_http(){
+ local phase="$1" old wrapper new ready=0
+ old="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
+ test "$(echo "$old" | wc -l)" = 1
+ wrapper="$(cat /tmp/wu21-wp-server.pid)"
+ test "$old" != "$"
+ case "$(ps -p "$old" -o comm= | tr -d ' ')" in php|php[0-9]*) ;; *) return 1;; esac
+ tr '\0' ' ' < "/proc/$old/cmdline" | grep -Fq '127.0.0.1:8080'
+ kill "$old"
+ if kill -0 "$wrapper" 2>/dev/null; then kill "$wrapper" 2>/dev/null || :; fi
+ for i in $(seq 1 30); do if ! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null; then break; fi; sleep 1; done
+ ! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null
+ if [[ "$phase" = restored ]]; then
+  wp db import "$work/baseline.sql" >/dev/null
+  find "$WU21_ARTIFACT_DIR" -maxdepth 1 -type f -delete
+  cp "$work/artifacts/"* "$WU21_ARTIFACT_DIR/"
+  test -L "$plugin" && test "$(readlink -f "$plugin")" = "$GITHUB_WORKSPACE"
+ fi
+ php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >"/tmp/wu21-wp-server-$phase.log" 2>&1 &
+ echo $! >/tmp/wu21-wp-server.pid
+ for i in $(seq 1 30); do if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then ready=1; break; fi; sleep 1; done
+ test "$ready" = 1
+ new="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
+ test "$(echo "$new" | wc -l)" = 1
+ test "$new" != "$old"
+ printf '{"old_listener":%s,"new_listener":%s}\n' "$old" "$new" > "$out/process-transition-$phase.json"
+}
+
 capture before
 # Existing ZIP lifecycle is a setup precondition, not renewed SCQ/SLA or WU21.
 # Invoke unmodified smoke assertions, adding a read-only snapshot before teardown.
 script=tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
 cp "$script" "$work/smoke-original"
-export -f capture
-export out plugin
+export -f capture restart_http wp
+export out plugin work
 python3 - "$script" <<'PY'
 import sys,pathlib
 p=pathlib.Path(sys.argv[1]);s=p.read_text();old='  if [[ "$changed_plugin" == 1 ]]; then\n'
 assert s.count(old)==1
-p.write_text(s.replace(old,old+'    capture installed-before-teardown || rc=1\n',1))
+s=s.replace(old,old+'    capture installed-before-teardown || rc=1\n',1)
+needle='node tests/repro-evidence-lab/inbox2-installed-zip-browser.mjs\n'
+assert s.count(needle)==1
+# Original assertions are untouched. Isolate the installed HTTP identity
+# before the original smoke to avoid carrying its old checkout process.
+s=s.replace(needle,'capture installed-reused\nrestart_http installed\ncapture installed-fresh\n'+needle,1)
+p.write_text(s)
 PY
 export WU21_DIAG_NETWORK="$out/installed-browser-assets.jsonl"
-NODE_OPTIONS="--import=/tmp/wu21-server-discriminator.mjs" bash "$script"
+smoke_rc=0
+NODE_OPTIONS="--import=/tmp/wu21-server-discriminator.mjs" bash "$script" || smoke_rc=$?
+printf '{"smoke_exit":%s}\n' "$smoke_rc" > "$out/smoke-result.json"
 cp "$work/smoke-original" "$script"
 git diff --exit-code -- "$script"
 capture restored-reused
+# A failed smoke is retained, not treated as passed. Require authentic
+# restored filesystem before the paired experiment.
 test -L "$plugin" && test "$(readlink -f "$plugin")" = "$GITHUB_WORKSPACE"
 # Snapshot synthetic DB and fixture evidence to make the two trials comparable.
 wp db export "$work/baseline.sql" --skip-comments --single-transaction --skip-lock-tables >/dev/null
@@ -92,37 +130,15 @@ run_pair(){
  capture "$phase-after-tests"
 }
 run_pair reused
-# Preserve original server PID and make one clean process transition.
-old="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
-test "$(echo "$old" | wc -l)" = 1
-wrapper="$(cat /tmp/wu21-wp-server.pid)"
-test "$old" != "$$"
-case "$(ps -p "$old" -o comm= | tr -d ' ')" in php|php[0-9]*) ;; *) exit 1;; esac
-tr '\0' ' ' < "/proc/$old/cmdline" | grep -Fq '127.0.0.1:8080'
-kill "$old"
-if kill -0 "$wrapper" 2>/dev/null; then kill "$wrapper" 2>/dev/null || :; fi
-for i in $(seq 1 30); do if ! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null; then break; fi; sleep 1; done
-! lsof -tiTCP:8080 -sTCP:LISTEN >/dev/null
-wp db import "$work/baseline.sql" >/dev/null
-# Remove trial-produced top-level evidence only; preserve diagnostic folder.
-find "$WU21_ARTIFACT_DIR" -maxdepth 1 -type f -delete
-cp "$work/artifacts/"* "$WU21_ARTIFACT_DIR/"
-test -L "$plugin" && test "$(readlink -f "$plugin")" = "$GITHUB_WORKSPACE"
-php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/wu21-wp-server-fresh.log 2>&1 &
-echo $! >/tmp/wu21-wp-server.pid
-ready=0
-for i in $(seq 1 30); do if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then ready=1; break; fi; sleep 1; done
-test "$ready" = 1
-new="$(lsof -tiTCP:8080 -sTCP:LISTEN)"
-test "$(echo "$new" | wc -l)" = 1
-test "$new" != "$old"
-printf '{"old_listener":%s,"new_listener":%s}\n' "$old" "$new" > "$out/process-transition.json"
+restart_http restored
 capture restored-fresh
 run_pair fresh
 python3 - "$out" <<'PY'
 import json,pathlib,sys
 d=pathlib.Path(sys.argv[1])
 r={p:json.loads((d/p/'results.json').read_text()) for p in ['reused','fresh']}
+r['smoke']=json.loads((d/'smoke-result.json').read_text())
 print('WU21_DISCRIMINATOR_RESULTS',json.dumps(r))
 (d/'summary.json').write_text(json.dumps(r,indent=2))
+if r['smoke']['smoke_exit'] or any(r['fresh'].values()): sys.exit(1)
 PY
