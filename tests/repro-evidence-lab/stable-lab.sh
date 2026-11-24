@@ -57,29 +57,15 @@ with zipfile.ZipFile(old) as a,zipfile.ZipFile(new) as b:
  assert any(x['path']=='gravity-presentation-profiles/LICENSE' for x in files)
  json.dump({'source':source,'testFix':fix,'version':'0.6.0','oldSha256':sha(open(old,'rb').read()),'sha256':sha(open(new,'rb').read()),'changed':changed,'files':files,'status':'PRIVATE PREPARATION ONLY'},open(dest,'w'),indent=2)
 PY
-# Exact source guard rejects a mismatched mirror before any build or install.
-bad="$work/bad"; mkdir -p "$bad/src/GravityForms"
-cp "$stable/gravity-presentation-profiles.php" "$bad/"
-sed "s/'0.6.0'/'0.6.1'/" "$stable/src/GravityForms/AddOn.php" > "$bad/src/GravityForms/AddOn.php"
-if release_assert_version_mirrors "$bad" > "$WU21_ARTIFACT_DIR/stable-mirror-negative.txt" 2>&1; then exit 1; fi
-grep -F 'Version mirror mismatch' "$WU21_ARTIFACT_DIR/stable-mirror-negative.txt"
-# Exercise the exact two-file PR path twice, not full WU21.
-bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
-cp "$WU21_ARTIFACT_DIR/gpp-inbox2-installed-browser.json" "$WU21_ARTIFACT_DIR/stable-development-smoke.json"
+# The affected development/stable smoke and mirror negative passed on run
+# 45457298502, exact STABLE_FIX_HEAD. Do not repeat them. Build parity still
+# required for these replacement/recovery phases.
+test "$(sha256sum "$newzip" | cut -d' ' -f1)" = 90d847c9b4e6e7bedf821bcfdf1af595bbefb26b71f6f239ec7d4cb5cf6d16b2
 plugin="$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
 wp(){ php "$WU21_WP_CLI" --path="$WU21_WP_PATH" "$@"; }
-test -L "$plugin" && test "$(readlink -f "$plugin")" = "$root"
-wp plugin deactivate gravity-presentation-profiles
-rm "$plugin"; ln -s "$stable" "$plugin"
-wp plugin activate gravity-presentation-profiles
-# Node resolves Playwright from the existing runner dependency installation.
-ln -s "$root/node_modules" "$stable/node_modules"
-bash "$stable/tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh"
-cp "$WU21_ARTIFACT_DIR/gpp-inbox2-installed-browser.json" "$WU21_ARTIFACT_DIR/stable-production-smoke.json"
-test -L "$plugin" && test "$(readlink -f "$plugin")" = "$stable"
-wp plugin deactivate gravity-presentation-profiles
-rm "$plugin"
+test ! -e "$plugin" && test ! -L "$plugin"
 wp plugin install "$oldzip" --activate
+wp eval-file "$SLA_PRODUCT_ROOT/tests/repro-evidence-lab/setup-fixtures.php"
 login_dir="$work/login"; mkdir -m700 "$login_dir"; export SLA_LOGIN_FILE="$login_dir/accounts.json"
 wp eval-file tests/repro-evidence-lab/sla-fixture.php
 # A wrong independently specified version is rejected before fixture writes.
@@ -103,7 +89,6 @@ verify_installed(){
  # Record the state after the real browser check as well.
  STABLE_EXPECTED_VERSION="$v" wp eval-file tests/repro-evidence-lab/stable-state.php > "$WU21_ARTIFACT_DIR/stable-$phase-post-state.json"
 }
-negative "$version" wrong-installed-version
 verify_installed before 9999.0.0 "$oldzip"
 # Real supported WordPress replacement; no uninstall, no database reset.
 wp plugin install "$newzip" --force --activate

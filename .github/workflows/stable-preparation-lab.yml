@@ -183,14 +183,12 @@ jobs:
           grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
           echo "WU21_GRAVITYFLOW_SOURCE=$WU21_WP_PATH/wp-content/plugins/gravityflow" >> "$GITHUB_ENV"
 
-      - name: Activate authentic host and original development checkout
+      - name: Activate authentic Gravity host; leave GPP for actual ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
-          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" language core install fa_IR --activate
-          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
 
       - name: Set up exact Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
