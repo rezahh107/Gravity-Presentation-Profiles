@@ -64,7 +64,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$SLA_SOURCE_HEAD" HEAD
           test -n "$(git diff --name-only "$SLA_SOURCE_HEAD" HEAD)"
-          if git diff --name-only "$SLA_SOURCE_HEAD" HEAD | grep -Ev '^(\.github/workflows/stable-preparation-lab\.yml|tests/repro-evidence-lab/(sla-(fixture|native-read)\.php|stable-(state\.php|queue\.mjs|lab\.sh)|inbox2-installed-zip-(smoke\.sh|setup\.php)))
+          if git diff --name-only "$SLA_SOURCE_HEAD" HEAD | grep -Ev '^(\.github/workflows/stable-preparation-lab\.yml|tests/repro-evidence-lab/(sla-(fixture|native-read)\.php|stable-(state\.php|queue\.mjs|lab\.sh)|inbox2-installed-zip-(smoke\.sh|setup\.php)))$'; then exit 1; fi
+          git merge-base --is-ancestor "$STABLE_FIX_HEAD" HEAD
+          git diff --exit-code "$STABLE_FIX_HEAD" HEAD -- tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh tests/repro-evidence-lab/inbox2-installed-zip-setup.php
           git worktree add --detach "$SLA_PRODUCT_ROOT" "$SLA_SOURCE_HEAD"
           test "$(git -C "$SLA_PRODUCT_ROOT" rev-parse HEAD)" = "$SLA_SOURCE_HEAD"
           test -z "$(git -C "$SLA_PRODUCT_ROOT" status --porcelain)"
