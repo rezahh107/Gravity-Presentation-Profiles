@@ -27,8 +27,36 @@ try {
   const context = await browser.newContext({viewport: {width: 390, height: 844}});
   await context.addCookies(cookies(fixture.operator_id));
   const page = await context.newPage();
+  // Test-only observer starts before the real footer bundle is evaluated.
+  // It captures state transitions, not synthetic DOM events or replacement product logic.
+  await page.addInitScript(() => {
+    window.__ciq2InitTrace = [];
+    let last = '';
+    const trace = reason => {
+      const root = document.querySelector('[data-ciq2-root]');
+      if (!root || window.__ciq2InitTrace.length >= 65) return;
+      const nodes = [...root.querySelectorAll('[data-ciq2-entry]')];
+      const observation = {
+        reason, at_ms: Math.round(performance.now()),
+        state: root.dataset.ciq2State,
+        core_present: typeof window.GPPInbox2?.initAll === 'function',
+        cards: nodes.length, hidden: nodes.filter(n => n.hidden).length
+      };
+      const fingerprint = [observation.state, observation.core_present,
+        observation.cards, observation.hidden].join('/');
+      if (fingerprint !== last) { last = fingerprint; window.__ciq2InitTrace.push(observation); }
+    };
+    const observer = new MutationObserver(() => trace('dom_mutation'));
+    observer.observe(document, {subtree:true, childList:true, attributes:true,
+      attributeFilter:['hidden','data-ciq2-state']});
+    document.addEventListener('DOMContentLoaded', () => trace('dom_content_loaded'), {once:true});
+  });
   const errors = [];
   const assets = [];
+  const failedRequests = [];
+  page.on('requestfailed', request => failedRequests.push({
+    url: request.url().replace(/\\?.*$/, ''), failure: request.failure()?.errorText ?? null
+  }));
   page.on('pageerror', error => errors.push(error.message));
   page.on('response', response => {
     if (response.url().includes('/gpp-inbox2.')) assets.push({url: response.url(), status: response.status()});
@@ -42,6 +70,29 @@ try {
   const expected = fixture.expected_native_ids;
   assert.deepEqual([...received].sort((a,b)=>a-b), expected);
   assert.equal(new Set(received).size, received.length);
+  // Persist the exact observed boundary BEFORE the 20/5 rejecting assertion.
+  // Server-rendered "current" is not accepted as evidence of JS draw().
+  report.initial_observation = await page.evaluate(() => {
+    const root = document.querySelector('[data-ciq2-root]');
+    const cards = [...root.querySelectorAll('[data-ciq2-entry]')];
+    return {
+      ready_state: document.readyState, root_state: root.dataset.ciq2State,
+      core_present: typeof window.GPPInbox2?.initAll === 'function',
+      scripts: [...document.scripts].map(s => s.src).filter(s => /gpp-inbox2/.test(s)),
+      cards: cards.length, hidden_ids: cards.filter(n => n.hidden).map(n => n.dataset.ciq2Entry),
+      shown_ids: cards.filter(n => !n.hidden).map(n => n.dataset.ciq2Entry),
+      computed_visible: cards.filter(n => getComputedStyle(n).display !== 'none').length,
+      init_trace: window.__ciq2InitTrace ?? []
+    };
+  });
+  report.asset_responses = assets;
+  report.failed_requests = failedRequests;
+  report.page_errors = errors;
+  console.log('GPP_INBOX2_PREASSERT_DIAGNOSTICS ' + JSON.stringify({
+    head: env.GPP_WU21_REPOSITORY_SHA || null,
+    version: fixture.version, observation: report.initial_observation,
+    asset_responses: assets, failed_requests: failedRequests, page_errors: errors
+  }));
   assert.equal((await visible(page)).length, Math.min(20, received.length));
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.js') && x.status === 200));
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.css') && x.status === 200));
@@ -488,6 +539,11 @@ try {
   report.status = 'PASS';
 } catch (error) {
   report.error = String(error?.stack || error);
+  console.error('GPP_INBOX2_FAILURE_DIAGNOSTICS ' + JSON.stringify({
+    head: env.GPP_WU21_REPOSITORY_SHA || null,
+    version: fixture.version, initial: report.initial_observation ?? null,
+    asset_responses: assets, failed_requests: failedRequests, page_errors: errors
+  }));
   throw error;
 } finally {
   fs.writeFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-browser.json'), JSON.stringify(report, null, 2));

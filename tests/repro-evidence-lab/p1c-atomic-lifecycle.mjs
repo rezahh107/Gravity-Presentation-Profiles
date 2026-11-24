@@ -47,14 +47,35 @@ async function releaseFocusEmulation(context,page){
   const session=await context.newCDPSession(page);
   await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});
 }
+// In a background tab, Playwright waitForFunction is coupled to throttled
+// animation-frame scheduling. Poll via Node/CDP evaluation instead, while
+// requiring actual visibilityState and browser-generated visibilitychange events.
+async function observeNativeVisibility(page, expected, timeoutMs) {
+  const start = Date.now();
+  const samples = [];
+  do {
+    const observed = await page.evaluate(() => ({
+      state:document.visibilityState,
+      events:(window.__p1cLifecycleEvents || []).filter(e => e.type === 'visibilitychange')
+    }));
+    samples.push({elapsed_ms:Date.now()-start, state:observed.state,
+      native_event_count:observed.events.length});
+    if (observed.state === expected && observed.events.some(e => e.visibility === expected))
+      return {state:observed.state, samples:samples.slice(-20)};
+    await new Promise(resolve => setTimeout(resolve, 150));
+  } while (Date.now()-start < timeoutMs);
+  throw new Error('NATIVE_VISIBILITY_NOT_OBSERVED '+JSON.stringify({
+    expected, samples:samples.slice(-20)
+  }));
+}
 // First attempt a native tab activation. When the automation backend does
 // not expose that transition, minimize the actual Chrome window through CDP.
 // Neither route injects a visibility event or changes document.hidden directly.
 async function nativeBackground(context,page,alternate){
   await alternate.bringToFront();
   try{
-    await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:2500});
-    return {method:'native_tab_activation'};
+    const observation = await observeNativeVisibility(page,'hidden',2500);
+    return {method:'native_tab_activation',observation};
   }catch(_){
     const cdp=await context.newCDPSession(page);
     const window=await cdp.send('Browser.getWindowForTarget');
@@ -62,8 +83,8 @@ async function nativeBackground(context,page,alternate){
       windowId:window.windowId,bounds:{windowState:'minimized'}
     });
     try{
-      await page.waitForFunction(()=>document.visibilityState==='hidden',null,{timeout:7000});
-      return {method:'native_window_minimize',cdp,windowId:window.windowId};
+      const observation = await observeNativeVisibility(page,'hidden',7000);
+      return {method:'native_window_minimize',cdp,windowId:window.windowId,observation};
     }catch(error){
       await cdp.send('Browser.setWindowBounds',{
         windowId:window.windowId,bounds:{windowState:'normal'}
@@ -79,7 +100,7 @@ async function nativeForeground(page,control){
     });
   }
   await page.bringToFront();
-  await page.waitForFunction(()=>document.visibilityState==='visible',null,{timeout:10000});
+  await observeNativeVisibility(page,'visible',10000);
 }
 async function current(page){
   await page.waitForFunction(()=>{
@@ -160,16 +181,24 @@ try {
     sameItems(await identities(backPage),fixture.native_oracle.a.a,'BFCache initial membership');
     await backPage.goto(origin+'/',{waitUntil:'domcontentloaded',timeout:60000});
     await backPage.goBack({waitUntil:'domcontentloaded',timeout:60000});
-    const events=await backPage.evaluate(()=>window.__p1cLifecycleEvents);
+    const bfDiagnostics=await backPage.evaluate(()=>({
+      events:window.__p1cLifecycleEvents,
+      navigation:performance.getEntriesByType('navigation').map(item=>({
+        type:item.type, activationStart:item.activationStart ?? null,
+        notRestoredReasons:item.notRestoredReasons ?? null
+      })),
+      visibility:document.visibilityState
+    }));
+    const events=bfDiagnostics.events;
     if(events.some(x=>x.type==='pageshow'&&x.persisted===true)){
       await current(backPage);
       sameItems(await identities(backPage),fixture.native_oracle.a.a,
         'BFCache must renew Native membership');
-      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','PASS',{events});
+      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','PASS',bfDiagnostics);
     }else{
       record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
         reason:'Actual browser navigation did not return with pageshow.persisted=true',
-        events});
+        ...bfDiagnostics});
     }
   }catch(error){
     record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
