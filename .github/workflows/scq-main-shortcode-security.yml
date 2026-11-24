@@ -1,0 +1,280 @@
+name: SCQ exact-main Shortcode security qualification
+
+on:
+  push:
+    branches: [test/inbox2-shortcode-security-34fe6da2]
+    paths:
+      - '.github/workflows/scq-main-shortcode-security.yml'
+      - 'tests/repro-evidence-lab/scq-*'
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-lab:
+    name: Exact main installed Shortcode — three security scenarios
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    services:
+      database:
+        image: mariadb:11.4.8@sha256:bc474f00629f0123c10f9e1bca193a45d18af15a274cf0656acda64f1086c3b6
+        env:
+          MARIADB_ROOT_PASSWORD: gpp-wu21-root
+          MARIADB_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pgpp-wu21-root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      WU21_WP_PATH: /tmp/wu21-wordpress
+      WU21_ARTIFACT_DIR: /tmp/scq-artifacts
+      WU21_PACKAGE_DIR: /tmp/wu21-packages
+      WU21_PACKAGE_FIXTURE_DIR: tests/fixtures/wu21-packages
+      WU21_GF_ZIP: /tmp/wu21-packages/gravityforms-3.1.1.1-owner-supplied-source-package.zip
+      WU21_FLOW_ZIP: /tmp/wu21-packages/gravityflow-3.1.0-owner-supplied-source-package.zip
+      WU21_GF_SHA256: 542f56ae0747f3661d1474996527298027db3fb8ed3e6469a6391aaabf61069b
+      WU21_FLOW_SHA256: ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404
+      WU21_GF_SIZE: '5300290'
+      WU21_FLOW_SIZE: '2603034'
+      WU21_WP_CLI: /tmp/wp-cli.phar
+      WU21_BASE_URL: http://127.0.0.1:8080
+      WU21_PERMALINK_STRUCTURE: '/%postname%/'
+
+      SCQ_PRODUCT_ROOT: /tmp/scq-product
+      SCQ_SOURCE_HEAD: 34fe6da2bde580869d357ddab82b13fbec6bb846
+      SCQ_DISPOSABLE: '1'
+
+    steps:
+      - name: Checkout harness, isolate immutable main source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove exact source and test-only harness delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Gravity-Presentation-Profiles"
+          test "$GITHUB_REF" = "refs/heads/test/inbox2-shortcode-security-34fe6da2"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$SCQ_SOURCE_HEAD" HEAD
+          test -n "$(git diff --name-only "$SCQ_SOURCE_HEAD" HEAD)"
+          if git diff --name-only "$SCQ_SOURCE_HEAD" HEAD | grep -Ev '^(\.github/workflows/scq-main-shortcode-security\.yml|tests/repro-evidence-lab/scq-[a-z-]+\.(mjs|php))$'; then exit 1; fi
+          git worktree add --detach "$SCQ_PRODUCT_ROOT" "$SCQ_SOURCE_HEAD"
+          test "$(git -C "$SCQ_PRODUCT_ROOT" rev-parse HEAD)" = "$SCQ_SOURCE_HEAD"
+          test -z "$(git -C "$SCQ_PRODUCT_ROOT" status --porcelain)"
+          mkdir -p "$WU21_ARTIFACT_DIR" "$WU21_PACKAGE_DIR"
+          printf '{"sourceHead":"%s","harnessHead":"%s","sourceTree":"%s"}\n' "$SCQ_SOURCE_HEAD" "$GITHUB_SHA" "$(git -C "$SCQ_PRODUCT_ROOT" rev-parse HEAD^{tree})" > "$WU21_ARTIFACT_DIR/scq-source.json"
+
+      - name: Set up exact PHP runtime
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: mysqli
+          tools: composer:2.8.12
+
+      - name: Install exact WP-CLI and WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o "$WU21_WP_CLI" https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar
+          echo "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c  $WU21_WP_CLI" | sha256sum -c -
+          php "$WU21_WP_CLI" --info
+          mkdir -p "$WU21_WP_PATH"
+          php "$WU21_WP_CLI" core download --path="$WU21_WP_PATH" --version=6.8.3 --force
+          php "$WU21_WP_CLI" config create --path="$WU21_WP_PATH" --dbname=wordpress --dbuser=root --dbpass=gpp-wu21-root --dbhost=127.0.0.1:3306 --skip-check
+          php "$WU21_WP_CLI" core install --path="$WU21_WP_PATH" --url="$WU21_BASE_URL" --title='WU21 Synthetic Lab' --admin_user=bootstrap_admin --admin_password="$(openssl rand -hex 24)" --admin_email='bootstrap@example.invalid' --skip-email
+          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass="$(openssl rand -hex 24)"
+          test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
+          template="$(php "$WU21_WP_CLI" option get template --path="$WU21_WP_PATH")"
+          stylesheet="$(php "$WU21_WP_CLI" option get stylesheet --path="$WU21_WP_PATH")"
+          test -n "$template"
+          test -n "$stylesheet"
+          test -d "$WU21_WP_PATH/wp-content/themes/$template"
+          test -d "$WU21_WP_PATH/wp-content/themes/$stylesheet"
+
+      - name: Normalize and assert native WordPress URL state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          php "$WU21_WP_CLI" option update home "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" option update siteurl "$WU21_BASE_URL" --path="$WU21_WP_PATH"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" rewrite structure "$WU21_PERMALINK_STRUCTURE"
+
+          stored_home="$(php "$WU21_WP_CLI" option get home --path="$WU21_WP_PATH")"
+          stored_siteurl="$(php "$WU21_WP_CLI" option get siteurl --path="$WU21_WP_PATH")"
+          stored_permalink="$(php "$WU21_WP_CLI" option get permalink_structure --path="$WU21_WP_PATH")"
+          test "$stored_home" = "$WU21_BASE_URL"
+          test "$stored_siteurl" = "$WU21_BASE_URL"
+          test "$stored_permalink" = "$WU21_PERMALINK_STRUCTURE"
+
+          if grep -Eq "^[[:space:]]*define[[:space:]]*\([[:space:]]*['\"]WP_(HOME|SITEURL)['\"]" "$WU21_WP_PATH/wp-config.php"; then
+            echo "Rejected parallel WP_HOME/WP_SITEURL URL authority in wp-config.php." >&2
+            exit 1
+          fi
+
+          test "$WU21_WP_PATH" = "/tmp/wu21-wordpress"
+          test "$WU21_BASE_URL" = "http://127.0.0.1:8080"
+          grep -Fq 'php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080' "$GITHUB_WORKSPACE/.github/workflows/wu21-repro-evidence-lab.yml"
+          if grep -Fq '/wu21-wordpress' "$GITHUB_WORKSPACE/tests/repro-evidence-lab/browser-tests.mjs"; then
+            echo "Rejected hardcoded /wu21-wordpress browser workaround." >&2
+            exit 1
+          fi
+
+          WU21_EXPECTED_URL="$WU21_BASE_URL" php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+          $expected = getenv("WU21_EXPECTED_URL");
+          $urls = [
+              "home_url" => home_url(),
+              "site_url" => site_url(),
+              "wp_login_url" => wp_login_url(),
+              "rest_url" => rest_url(),
+              "gravityflow_inbox_admin_url" => admin_url("admin.php?page=gravityflow-inbox"),
+          ];
+
+          $fail = static function ($message) use ($urls) {
+              fwrite(STDERR, $message . PHP_EOL);
+              fwrite(STDERR, wp_json_encode($urls, JSON_UNESCAPED_SLASHES) . PHP_EOL);
+              exit(1);
+          };
+
+          if ($urls["home_url"] !== $expected) {
+              $fail("home_url() does not equal WU21_BASE_URL.");
+          }
+          if ($urls["site_url"] !== $expected) {
+              $fail("site_url() does not equal WU21_BASE_URL.");
+          }
+          if (! str_starts_with($urls["wp_login_url"], $expected . "/") || str_contains($urls["wp_login_url"], "/wu21-wordpress")) {
+              $fail("wp_login_url() escaped the root URL contract.");
+          }
+          if (! str_starts_with($urls["rest_url"], $expected . "/wp-json/")) {
+              $fail("rest_url() does not expose the rewrite-backed wp-json route required by Gravity Flow 3.1.0.");
+          }
+          if (! str_starts_with($urls["gravityflow_inbox_admin_url"], $expected . "/wp-admin/") || str_contains($urls["gravityflow_inbox_admin_url"], "/wu21-wordpress")) {
+              $fail("Gravity Flow Inbox admin_url() escaped the root URL contract.");
+          }
+
+          echo wp_json_encode($urls, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+          '
+
+      - name: Verify and install repository-owned Gravity packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="$SCQ_PRODUCT_ROOT/$WU21_PACKAGE_FIXTURE_DIR"
+          php "$SCQ_PRODUCT_ROOT/tests/repro-evidence-lab/verify-wu21-package-fixtures.php" "$fixture_root"
+          cp "$fixture_root/gravityforms-3.1.1.1-owner-supplied-source-package.zip" "$WU21_GF_ZIP"
+          cp "$fixture_root/gravityflow-3.1.0-owner-supplied-source-package.zip" "$WU21_FLOW_ZIP"
+          test "$(stat -c '%s' "$WU21_GF_ZIP")" = "$WU21_GF_SIZE"
+          test "$(stat -c '%s' "$WU21_FLOW_ZIP")" = "$WU21_FLOW_SIZE"
+          echo "$WU21_GF_SHA256  $WU21_GF_ZIP" | sha256sum -c -
+          echo "$WU21_FLOW_SHA256  $WU21_FLOW_ZIP" | sha256sum -c -
+          unzip -q "$WU21_GF_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          unzip -q "$WU21_FLOW_ZIP" -d "$WU21_WP_PATH/wp-content/plugins"
+          grep -q '^Version: 3\.1\.1\.1$' "$WU21_WP_PATH/wp-content/plugins/gravityforms/gravityforms.php"
+          grep -q '^Version: 3\.1\.0$' "$WU21_WP_PATH/wp-content/plugins/gravityflow/gravityflow.php"
+          echo "WU21_GRAVITYFLOW_SOURCE=$WU21_WP_PATH/wp-content/plugins/gravityflow" >> "$GITHUB_ENV"
+
+      - name: Build validate and install canonical exact-main ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$SCQ_PRODUCT_ROOT/scripts/release/release-lib.sh"
+          stage="$(mktemp -d)"
+          trap 'rm -rf "$stage"' EXIT
+          mkdir -p "$stage/source" "$stage/out"
+          while IFS= read -r file; do
+            mkdir -p "$stage/source/$(dirname "$file")"
+            cp "$SCQ_PRODUCT_ROOT/$file" "$stage/source/$file"
+          done < <(release_runtime_files "$SCQ_PRODUCT_ROOT")
+          version="$(release_plugin_version "$stage/source")"
+          if [[ "$version" == '0.0.0-dev' ]]; then
+            version=9999.0.0
+            sed -i "s/Version: 0.0.0-dev/Version: $version/" "$stage/source/gravity-presentation-profiles.php"
+            sed -i "s/'0.0.0-dev'/'$version'/" "$stage/source/src/GravityForms/AddOn.php"
+          fi
+          release_assert_version_mirrors "$stage/source"
+          bash "$SCQ_PRODUCT_ROOT/scripts/release/build-release.sh" "$stage/source" "$version" "$stage/out"
+          zip="$stage/out/gravity-presentation-profiles-$version.zip"
+          digest="$(sha256sum "$zip" | awk '{print $1}')"
+          bash "$SCQ_PRODUCT_ROOT/scripts/release/validate-release.sh" "$stage/source" "$zip" "$version" "$digest"
+          plugin="$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          test ! -e "$plugin" && test ! -L "$plugin"
+          php "$WU21_WP_CLI" plugin install "$zip" --path="$WU21_WP_PATH"
+          test -d "$plugin" && test ! -L "$plugin"
+          while IFS= read -r file; do
+            test ! -L "$plugin/$file"
+            cmp "$stage/source/$file" "$plugin/$file"
+            case "$file" in gravity-presentation-profiles.php|src/GravityForms/AddOn.php) ;; *) cmp "$SCQ_PRODUCT_ROOT/$file" "$plugin/$file";; esac
+          done < <(release_runtime_files "$stage/source")
+          test "$(php "$WU21_WP_CLI" plugin get gravity-presentation-profiles --field=version --path="$WU21_WP_PATH")" = "$version"
+          php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
+          test ! -e "$WU21_WP_PATH/wp-content/plugins/elementor"
+          test ! -e "$WU21_WP_PATH/wp-content/plugins/elementor-pro"
+          printf '{"sourceHead":"%s","harnessHead":"%s","version":"%s","sha256":"%s","install":"canonical WP-CLI ZIP; installed byte parity; source only version mirror overlay","loadedPath":"%s","elementor":"absent"}\n' "$SCQ_SOURCE_HEAD" "$GITHUB_SHA" "$version" "$digest" "$plugin" > "$WU21_ARTIFACT_DIR/scq-installed-zip.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
+            $class=new ReflectionClass(\GravityPresentationProfiles\SRWF\GravityFlow\Inbox2Shortcode::class);
+            if (!shortcode_exists("gpp_inbox_2") || $class->getFileName() !== WP_PLUGIN_DIR."/gravity-presentation-profiles/src/SRWF/GravityFlow/Inbox2Shortcode.php" || is_link(WP_PLUGIN_DIR."/gravity-presentation-profiles") || class_exists("Elementor\\Plugin") || !defined("GRAVITY_FLOW_VERSION") || GRAVITY_FLOW_VERSION!=="3.1.0" || GFForms::$version!=="3.1.1.1") throw new RuntimeException("SCQ_ACTUAL_HOST_IDENTITY_FAILED");
+            echo wp_json_encode(["wordpress"=>get_bloginfo("version"),"gravityforms"=>GFForms::$version,"gravityflow"=>GRAVITY_FLOW_VERSION,"loaded"=>$class->getFileName(),"elementor"=>"absent","php"=>PHP_VERSION]);' > "$WU21_ARTIFACT_DIR/scq-host.json"
+          echo "SCQ_EXACT_MAIN_ZIP_PASS $digest"
+
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+      - name: Install the previously qualified independent Chromium runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v22.19.0"
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openbox
+          node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1)"
+          for file in tests/repro-evidence-lab/scq-*.mjs; do node --check "$file"; done
+          for file in tests/repro-evidence-lab/scq-*.php; do php -l "$file"; done
+
+      - name: Start ephemeral WordPress HTTP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 >/tmp/wu21-wp-server.log 2>&1 &
+          echo $! >/tmp/wu21-wp-server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "$WU21_BASE_URL/wp-login.php" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wu21-wp-server.log >&2
+          exit 1
+
+      - name: Execute exactly three installed-main Shortcode security scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          login_dir="$(mktemp -d)"
+          chmod 700 "$login_dir"
+          observer="$WU21_WP_PATH/wp-content/mu-plugins/scq-principal-observer.php"
+          trap 'rm -rf "$login_dir"; rm -f "$observer"' EXIT
+          export SCQ_LOGIN_FILE="$login_dir/synthetic-users.json"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file "$SCQ_PRODUCT_ROOT/tests/repro-evidence-lab/setup-fixtures.php"
+          php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/scq-fixture.php
+          test -s "$SCQ_LOGIN_FILE"
+          test "$(stat -c '%a' "$SCQ_LOGIN_FILE")" = 600
+          test ! -f "$WU21_WP_PATH/wp-content/mu-plugins/wu21-lab-plugin.php"
+          mkdir -p "$(dirname "$observer")"
+          cp tests/repro-evidence-lab/scq-principal-observer.php "$observer"
+          xvfb-run -a bash -euc 'openbox >/tmp/scq-openbox.log 2>&1 & sleep 2; exec node tests/repro-evidence-lab/scq-three-scenarios.mjs'
+
+      - name: Upload only sanitized synthetic security evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scq-main-shortcode-security-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/scq-artifacts/scq-*.json
+          if-no-files-found: error
+          retention-days: 30
