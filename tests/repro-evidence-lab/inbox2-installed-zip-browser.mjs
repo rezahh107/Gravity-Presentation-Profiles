@@ -23,6 +23,7 @@ const visible = async page => page.locator('[data-ciq2-entry]').evaluateAll(node
   nodes.filter(node => !node.hidden).map(node => Number(node.dataset.ciq2Entry)));
 const browser = await chromium.launch({headless: true});
 const report = {status: 'FAIL', installedVersion: fixture.version, checks};
+const errors = [], assets = [], failedRequests = [];
 try {
   const context = await browser.newContext({viewport: {width: 390, height: 844}});
   await context.addCookies(cookies(fixture.operator_id));
@@ -51,11 +52,8 @@ try {
       attributeFilter:['hidden','data-ciq2-state']});
     document.addEventListener('DOMContentLoaded', () => trace('dom_content_loaded'), {once:true});
   });
-  const errors = [];
-  const assets = [];
-  const failedRequests = [];
   page.on('requestfailed', request => failedRequests.push({
-    url: request.url().replace(/\\?.*$/, ''), failure: request.failure()?.errorText ?? null
+    url: request.url().replace(/\?.*$/, ''), failure: request.failure()?.errorText ?? null
   }));
   page.on('pageerror', error => errors.push(error.message));
   page.on('response', response => {
