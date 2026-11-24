@@ -5,7 +5,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$ROOT"
 source scripts/release/release-lib.sh
 : "${WU21_WP_PATH:?}" "${WU21_WP_CLI:?}" "${WU21_ARTIFACT_DIR:?}"
-VERSION=9999.0.0
+# Expected identity comes from the selected source, never the installed copy.
+release_assert_version_mirrors "$ROOT"
+SOURCE_VERSION="$(release_plugin_version "$ROOT")"
+VERSION="$SOURCE_VERSION"
+if [[ "$SOURCE_VERSION" == '0.0.0-dev' ]]; then
+  VERSION=9999.0.0
+else
+  release_is_production_version "$VERSION" || release_fail "Unsupported installed-ZIP source version: $VERSION"
+fi
+export GPP_INBOX2_EXPECTED_VERSION="$VERSION"
 STAGE="$(mktemp -d)"
 PLUGIN_DIR="$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
 changed_plugin=0
@@ -36,8 +45,10 @@ while IFS= read -r file; do
   mkdir -p "$SRC/$(dirname "$file")"
   cp "$file" "$SRC/$file"
 done < <(release_runtime_files "$ROOT")
-sed -i "s/Version: 0.0.0-dev/Version: ${VERSION}/" "$SRC/gravity-presentation-profiles.php"
-sed -i "s/'0.0.0-dev'/'${VERSION}'/" "$SRC/src/GravityForms/AddOn.php"
+if [[ "$SOURCE_VERSION" == '0.0.0-dev' ]]; then
+  sed -i "s/Version: 0.0.0-dev/Version: ${VERSION}/" "$SRC/gravity-presentation-profiles.php"
+  sed -i "s/'0.0.0-dev'/'${VERSION}'/" "$SRC/src/GravityForms/AddOn.php"
+fi
 release_assert_version_mirrors "$SRC"
 bash scripts/release/build-release.sh "$SRC" "$VERSION" "$STAGE/out"
 ZIP="$STAGE/out/gravity-presentation-profiles-${VERSION}.zip"
@@ -63,6 +74,13 @@ php "$WU21_WP_CLI" plugin install "$ZIP" --activate --path="$WU21_WP_PATH"
 test -d "$PLUGIN_DIR" && test ! -L "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/src/SRWF/GravityFlow/Inbox2Shortcode.php"
 test ! -e "$PLUGIN_DIR/tests/qualification-custom-inbox/usability-mu.php"
+release_assert_version_mirrors "$PLUGIN_DIR"
+test "$(release_plugin_version "$PLUGIN_DIR")" = "$VERSION"
+test "$(php "$WU21_WP_CLI" plugin get gravity-presentation-profiles --field=version --path="$WU21_WP_PATH")" = "$VERSION"
+while IFS= read -r file; do
+  cmp "$SRC/$file" "$PLUGIN_DIR/$file"
+done < <(release_runtime_files "$SRC")
+printf 'GPP_INBOX2_VERSION_IDENTITY_PASS source=%s expected=%s installed=%s\n' "$SOURCE_VERSION" "$VERSION" "$(release_plugin_version "$PLUGIN_DIR")"
 # Run without WU21 MU-plugin bootstrap. This is a disposable WordPress host.
 if [[ -f "$MU" ]]; then
   mv "$MU" "$STAGE/wu21-lab-plugin.php"
