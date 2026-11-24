@@ -13,10 +13,13 @@ $assert = static function ($ok, $why) {
     if (!$ok) { throw new RuntimeException('P1C_' . $why); }
 };
 $users = array(); $forms = array(); $entry_ids = array();
+$synthetic_login = array();
 foreach (array('a', 'b') as $key) {
     $login = 'p1c_native_' . $key;
     $assert(!username_exists($login), 'DUPLICATE_ACTOR');
-    $uid = wp_create_user($login, wp_generate_password(36), $login . '@example.invalid');
+    $password = wp_generate_password(36);
+    $uid = wp_create_user($login, $password, $login . '@example.invalid');
+    $synthetic_login[$key] = array('username'=>$login, 'password'=>$password);
     $assert(!is_wp_error($uid) && $uid > 0, 'USER_CREATE');
     $user = new WP_User($uid); $user->set_role('subscriber');
     $assert(!$user->has_cap('manage_options'), 'NOT_LOW_PRIVILEGE');
@@ -98,4 +101,23 @@ $m=array('data_class'=>'SYNTHETIC_NON_PII','post_id'=>(int)$page,
     'forms'=>$forms,'users'=>$users,'entry_ids'=>$entry_ids,'native_oracle'=>$oracle);
 update_option('gpp_p1c_fixture_manifest',$m,false);
 file_put_contents(getenv('WU21_ARTIFACT_DIR').'/p1c-atomic-fixture.json',wp_json_encode($m,JSON_PRETTY_PRINT));
+// For the independently launched browser, use real WordPress form login.
+// The test-only file is outside the artifact directory, inside a private
+// runner temporary directory; its parent is removed by the workflow trap.
+$login_file = getenv('P1C_LOGIN_FILE');
+if ($login_file) {
+    if (file_exists($login_file) || is_link($login_file) ||
+        (fileperms(dirname($login_file)) & 0077) !== 0) {
+        throw new RuntimeException('P1C_LOGIN_FIXTURE_PATH_NOT_PRIVATE');
+    }
+    $previous_umask = umask(0077);
+    try {
+        if (file_put_contents($login_file, wp_json_encode($synthetic_login), LOCK_EX) === false) {
+            throw new RuntimeException('P1C_LOGIN_FIXTURE_WRITE_FAILED');
+        }
+    } finally {
+        umask($previous_umask);
+    }
+}
+unset($synthetic_login, $password);
 echo "P1C_SYNTHETIC_NATIVE_SETUP_PASS\n";

@@ -134,7 +134,38 @@ jobs:
           echo "ac0573b75831380417a21a455176e25eb746d718bbbd0bb70d6da6f48cba5404  $flow" | sha256sum -c -
           unzip -q "$gf" -d "$WU21_WP_PATH/wp-content/plugins"
           unzip -q "$flow" -d "$WU21_WP_PATH/wp-content/plugins"
-          ln -s "$GITHUB_WORKSPACE" "$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          # Use the canonical build/validation path; never qualify a symlink.
+          source scripts/release/release-lib.sh
+          stage="$(mktemp -d)"
+          trap 'rm -rf "$stage"' EXIT
+          mkdir -p "$stage/source" "$stage/out"
+          while IFS= read -r file; do
+            mkdir -p "$stage/source/$(dirname "$file")"
+            cp "$file" "$stage/source/$file"
+          done < <(release_runtime_files "$GITHUB_WORKSPACE")
+          version="$(release_plugin_version "$stage/source")"
+          if [[ "$version" == '0.0.0-dev' ]]; then
+            version=9999.0.0
+            sed -i "s/Version: 0.0.0-dev/Version: $version/" "$stage/source/gravity-presentation-profiles.php"
+            sed -i "s/'0.0.0-dev'/'$version'/" "$stage/source/src/GravityForms/AddOn.php"
+          fi
+          release_assert_version_mirrors "$stage/source"
+          bash scripts/release/build-release.sh "$stage/source" "$version" "$stage/out"
+          candidate="$stage/out/gravity-presentation-profiles-$version.zip"
+          digest="$(sha256sum "$candidate" | awk '{print $1}')"
+          bash scripts/release/validate-release.sh "$stage/source" "$candidate" "$version" "$digest"
+          plugin="$WU21_WP_PATH/wp-content/plugins/gravity-presentation-profiles"
+          test ! -e "$plugin" && test ! -L "$plugin"
+          php "$WU21_WP_CLI" plugin install "$candidate" --path="$WU21_WP_PATH"
+          test -d "$plugin" && test ! -L "$plugin"
+          while IFS= read -r file; do
+            test ! -L "$plugin/$file"
+            cmp "$stage/source/$file" "$plugin/$file"
+          done < <(release_runtime_files "$stage/source")
+          test "$(php "$WU21_WP_CLI" plugin get gravity-presentation-profiles --field=version --path="$WU21_WP_PATH")" = "$version"
+          printf '{"head":"%s","version":"%s","sha256":"%s","installation":"canonical ZIP via WP-CLI; installed file byte parity; no symlink"}\n' \
+            "$GPP_WU21_REPOSITORY_SHA" "$version" "$digest" > "$WU21_ARTIFACT_DIR/p1c-installed-zip.json"
+          echo "P1C_INSTALLED_ZIP_IDENTITY version=$version sha256=$digest"
           php "$WU21_WP_CLI" plugin activate gravityforms gravityflow gravity-presentation-profiles --path="$WU21_WP_PATH"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval '
             if (!defined("GRAVITY_FLOW_VERSION") || GRAVITY_FLOW_VERSION!=="3.1.0" ||
@@ -164,7 +195,9 @@ jobs:
                 !$core->experiments->is_feature_active("e_atomic_elements") ||
                 !$core->experiments->is_feature_active("e_opt_in_v4") ||
                 !is_object($w) || !($w instanceof $base) ||
-                !($w->get_initial_config()["atomic"] ?? false)) {
+                !($w->get_initial_config()["atomic"] ?? false) ||
+                !str_starts_with((new ReflectionClass($w))->getFileName(), WP_PLUGIN_DIR . "/gravity-presentation-profiles/") ||
+                is_link(WP_PLUGIN_DIR . "/gravity-presentation-profiles")) {
               throw new RuntimeException("P1C_NOT_GENUINE_ATOMIC_WIDGET");
             }
             echo "P1C_GENUINE_ATOMIC_REGISTRATION_PASS\n";
@@ -185,9 +218,10 @@ jobs:
           # Native X11 window manager: no DOM event synthesis or focus mocking.
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openbox
           node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1)"
-          for file in assets/js/gpp-inbox2-atomic.js tests/repro-evidence-lab/p1c-atomic-{editor,styling,runtime,lifecycle}.mjs; do
+          for file in assets/js/gpp-inbox2-atomic.js tests/repro-evidence-lab/p1c-*.mjs; do
             node --check "$file"
           done
+          node --test tests/repro-evidence-lab/p1c-lifecycle-oracle.test.mjs
 
       - name: Start disposable localhost WordPress
         shell: bash
@@ -206,8 +240,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          login_dir="$(mktemp -d)"
+          chmod 700 "$login_dir"
+          trap 'rm -rf "$login_dir"' EXIT
+          export P1C_LOGIN_FILE="$login_dir/synthetic-users.json"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/p1c-atomic-setup.php
+          test -s "$P1C_LOGIN_FILE"
+          test "$(stat -c '%a' "$P1C_LOGIN_FILE")" = 600
           test -s "$WU21_ARTIFACT_DIR/p1c-atomic-fixture.json"
           node tests/repro-evidence-lab/p1c-atomic-editor.mjs
           node tests/repro-evidence-lab/p1c-atomic-styling.mjs

@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {independentBrowser} from './p1c-native-browser.mjs';
+import {nativeConsumer} from './p1c-native-consumer.mjs';
 
 const env=process.env;
 const origin=env.WU21_BASE_URL;
@@ -15,7 +17,7 @@ const artifact=env.WU21_ARTIFACT_DIR;
 const fixture=JSON.parse(fs.readFileSync(path.join(artifact,'p1c-atomic-fixture.json'),'utf8'));
 const url=origin+'/?page_id='+fixture.post_id;
 const results={head:env.GPP_WU21_REPOSITORY_SHA||null,host:'WordPress 6.8.3 + Elementor 4.4.0',
-  browser:'headed Chromium through Xvfb',synthetic:true,results:[],failure:null};
+  browser:'independent Chromium/CDP pipe for lifecycle; Playwright for unaffected controls',synthetic:true,results:[],failure:null};
 const record=(name,status,details={})=>results.results.push({name,status,...details});
 function wp(code){
   const r=spawnSync('php',[env.WU21_WP_CLI,'--path='+env.WU21_WP_PATH,'eval',code],
@@ -41,67 +43,6 @@ async function createContext(browser,id=null){
   });
   return context;
 }
-// Playwright forces page focus in Chromium. Remove that focus emulation
-// *before* a real browser tab switch; never emulate visibility or dispatch events.
-async function releaseFocusEmulation(context,page){
-  const session=await context.newCDPSession(page);
-  await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});
-}
-// In a background tab, Playwright waitForFunction is coupled to throttled
-// animation-frame scheduling. Poll via Node/CDP evaluation instead, while
-// requiring actual visibilityState and browser-generated visibilitychange events.
-async function observeNativeVisibility(page, expected, timeoutMs) {
-  const start = Date.now();
-  const samples = [];
-  do {
-    const observed = await page.evaluate(() => ({
-      state:document.visibilityState,
-      events:(window.__p1cLifecycleEvents || []).filter(e => e.type === 'visibilitychange')
-    }));
-    samples.push({elapsed_ms:Date.now()-start, state:observed.state,
-      native_event_count:observed.events.length});
-    if (observed.state === expected && observed.events.some(e => e.visibility === expected))
-      return {state:observed.state, samples:samples.slice(-20)};
-    await new Promise(resolve => setTimeout(resolve, 150));
-  } while (Date.now()-start < timeoutMs);
-  throw new Error('NATIVE_VISIBILITY_NOT_OBSERVED '+JSON.stringify({
-    expected, samples:samples.slice(-20)
-  }));
-}
-// First attempt a native tab activation. When the automation backend does
-// not expose that transition, minimize the actual Chrome window through CDP.
-// Neither route injects a visibility event or changes document.hidden directly.
-async function nativeBackground(context,page,alternate){
-  await alternate.bringToFront();
-  try{
-    const observation = await observeNativeVisibility(page,'hidden',2500);
-    return {method:'native_tab_activation',observation};
-  }catch(_){
-    const cdp=await context.newCDPSession(page);
-    const window=await cdp.send('Browser.getWindowForTarget');
-    await cdp.send('Browser.setWindowBounds',{
-      windowId:window.windowId,bounds:{windowState:'minimized'}
-    });
-    try{
-      const observation = await observeNativeVisibility(page,'hidden',7000);
-      return {method:'native_window_minimize',cdp,windowId:window.windowId,observation};
-    }catch(error){
-      await cdp.send('Browser.setWindowBounds',{
-        windowId:window.windowId,bounds:{windowState:'normal'}
-      }).catch(()=>{});
-      throw new Error('ENVIRONMENT_NOT_QUALIFIED: tabs and native window minimize failed: '+error);
-    }
-  }
-}
-async function nativeForeground(page,control){
-  if(control.method==='native_window_minimize'){
-    await control.cdp.send('Browser.setWindowBounds',{
-      windowId:control.windowId,bounds:{windowState:'normal'}
-    });
-  }
-  await page.bringToFront();
-  await observeNativeVisibility(page,'visible',10000);
-}
 async function current(page){
   await page.waitForFunction(()=>{
     const roots=[...document.querySelectorAll('[data-ciq2-root]')];
@@ -117,95 +58,17 @@ function sameItems(actual,expected,message){
 }
 let browser=null;
 try {
+  try {
+    await independentBrowser(record,async control=>{
+      await nativeConsumer({...control,fixture,wp,record,origin});
+    });
+  } catch(error) {
+    record('INDEPENDENT_NATIVE_LIFECYCLE_EXECUTION','NOT_PROVEN',{
+      reason:String(error?.message||error).slice(0,1600)});
+  }
+  // Keep the existing unaffected real-response race and independent Shortcode
+  // path in the original browser harness; never use it for lifecycle proof.
   browser=await chromium.launch({headless:false,args:['--no-sandbox']});
-  try{
-  const probe=await createContext(browser);
-  const one=await probe.newPage();
-  await one.goto('about:blank');
-  await releaseFocusEmulation(probe,one);
-  const two=await probe.newPage();
-  await two.goto('about:blank');
-  await releaseFocusEmulation(probe,two);
-  await one.bringToFront();
-  await releaseFocusEmulation(probe,one);
-  assert.equal(await one.evaluate(()=>document.visibilityState),'visible',
-    'CONTROL_VISIBLE_NOT_ESTABLISHED');
-  const probeControl=await nativeBackground(probe,one,two);
-  await nativeForeground(one,probeControl);
-  const probeEvents=await one.evaluate(()=>window.__p1cLifecycleEvents);
-  assert.ok(probeEvents.some(x=>x.type==='visibilitychange'&&x.visibility==='hidden') &&
-    probeEvents.some(x=>x.type==='visibilitychange'&&x.visibility==='visible'),
-    'ENVIRONMENT_NOT_QUALIFIED: control tabs did not produce native transitions');
-  record('HEADED_BROWSER_NATIVE_VISIBILITY_CONTROL','PASS',{
-    method:probeControl.method,events:probeEvents});
-  await probe.close();
-
-  const ctx=await createContext(browser,fixture.users.a);
-  const page=await ctx.newPage();
-  await page.bringToFront();
-  const loaded=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-  assert.ok(loaded?.ok(),'Authentic P1-C frontend did not load');
-  await current(page);
-  await releaseFocusEmulation(ctx,page);
-  sameItems(await identities(page),fixture.native_oracle.a.a,'Initial A task membership');
-  const alternate=await ctx.newPage();
-  await alternate.goto('about:blank');
-  await releaseFocusEmulation(ctx,alternate);
-  const productControl=await nativeBackground(ctx,page,alternate);
-  await page.waitForFunction(()=>[...document.querySelectorAll('[data-ciq2-root]')]
-    .every(r=>r.dataset.ciq2State==='stale'&&r.querySelectorAll('[data-ciq2-entry]').length===0),
-    null,{timeout:10000});
-  record('PRODUCT_NATIVE_HIDDEN_INVALIDATES_PRIVATE_CARDS','PASS',{
-    hiddenEntries:await page.locator('[data-ciq2-entry]').count()});
-  await nativeForeground(page,productControl);
-  await current(page);
-  sameItems(await identities(page),fixture.native_oracle.a.a,'Re-entered A membership');
-  record('PRODUCT_NATIVE_VISIBLE_REVALIDATES_A_MEMBERSHIP','PASS',{
-    entries:(await identities(page)).length,
-    events:await page.evaluate(()=>window.__p1cLifecycleEvents)});
-
-  await ctx.close();
-  }catch(visibilityError){
-    record('GENUINE_VISIBILITY_BFCACHE_QUALIFICATION','NOT_PROVEN',{
-      reason:String(visibilityError?.stack||visibilityError).slice(0,1300)});
-  }
-
-  // BFCache is independent of tab visibility; test it even if the window
-  // manager does not deliver native visibility transitions under automation.
-  const backCtx=await createContext(browser,fixture.users.a);
-  try{
-    const backPage=await backCtx.newPage();
-    const first=await backPage.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-    assert.ok(first?.ok(),'BFCache source product page did not load');
-    await current(backPage);
-    sameItems(await identities(backPage),fixture.native_oracle.a.a,'BFCache initial membership');
-    await backPage.goto(origin+'/',{waitUntil:'domcontentloaded',timeout:60000});
-    await backPage.goBack({waitUntil:'domcontentloaded',timeout:60000});
-    const bfDiagnostics=await backPage.evaluate(()=>({
-      events:window.__p1cLifecycleEvents,
-      navigation:performance.getEntriesByType('navigation').map(item=>({
-        type:item.type, activationStart:item.activationStart ?? null,
-        notRestoredReasons:item.notRestoredReasons ?? null
-      })),
-      visibility:document.visibilityState
-    }));
-    const events=bfDiagnostics.events;
-    if(events.some(x=>x.type==='pageshow'&&x.persisted===true)){
-      await current(backPage);
-      sameItems(await identities(backPage),fixture.native_oracle.a.a,
-        'BFCache must renew Native membership');
-      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','PASS',bfDiagnostics);
-    }else{
-      record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
-        reason:'Actual browser navigation did not return with pageshow.persisted=true',
-        ...bfDiagnostics});
-    }
-  }catch(error){
-    record('PRODUCT_GENUINE_BFCACHE_PERSISTED_RETURN','NOT_PROVEN',{
-      reason:String(error?.stack||error).slice(0,1000)});
-  }finally{
-    await backCtx.close();
-  }
 
   // Hold a real server bootstrap response, detach an in-flight native Atomic
   // shell, then reinsert it. Never fabricate the underlying response.
@@ -309,9 +172,9 @@ if(results.failure||results.results.some(x=>x.status==='FAIL')){
     results.failure||'An observed failing control is recorded in JSON');
   process.exit(1);
 }
-if(results.results.some(x=>x.status==='NOT_PROVEN')){
+if(results.results.some(x=>x.status==='NOT_PROVEN'||x.status==='NOT_REACHED')){
   console.warn('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_INCOMPLETE',
-    JSON.stringify(results.results.filter(x=>x.status==='NOT_PROVEN')));
+    JSON.stringify(results.results.filter(x=>x.status==='NOT_PROVEN'||x.status==='NOT_REACHED')));
   process.exit(2);
 }
 console.log('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_COMPLETE',JSON.stringify(
