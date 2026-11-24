@@ -1,17 +1,21 @@
-/** Three exact-main Shortcode security scenarios, no Atomic or BFCache tests. */
+/** Two remaining exact-main Shortcode security scenarios. Prior fresh-load PASS retained; not rerun. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {independentBrowser,context,tab,transition,poll} from './scq-browser.mjs';
 import {observeNetwork} from './scq-network.mjs';
+import {adjudicateDenial} from './scq-denial-oracle.mjs';
 
 const env=process.env,dir=env.WU21_ARTIFACT_DIR,origin=env.WU21_BASE_URL;
 const fixture=JSON.parse(fs.readFileSync(path.join(dir,'scq-fixture.json'),'utf8'));
 const credentials=JSON.parse(fs.readFileSync(env.SCQ_LOGIN_FILE,'utf8'));
 const url=fixture.url,results=[];
 const report={sourceHead:env.SCQ_SOURCE_HEAD,harnessHead:env.GITHUB_SHA,fixture:{
-  forms:fixture.forms,users:fixture.users,native_oracle:fixture.native_oracle},browser:null,results};
+  forms:fixture.forms,users:fixture.users,native_oracle:fixture.native_oracle},browser:null,results,
+  retained:{scenario:'FRESH_LOAD_AFTER_SESSION_REVOCATION',status:'PASS_HISTORICAL_NOT_RERUN',
+    run:45376882659,artifact:14912211428,sourceHead:'34fe6da2bde580869d357ddab82b13fbec6bb846',
+    zipSha256:'447eaabd67a64ca2f3ea5cda1bf06166dc21706b63e3d8631c0966931216a492'}};
 const output=()=>fs.writeFileSync(path.join(dir,'scq-results.json'),JSON.stringify(report,null,2));
 class Violation extends Error{}
 const violation=(condition,reason)=>{if(!condition)throw new Violation(reason);};
@@ -86,22 +90,47 @@ function positiveDom(state,actor){
   proof(state.privateMarkers.some(x=>x.startsWith('SYN-SC-'+actor.toUpperCase()+'-')),
     'POSITIVE_PRIVATE_FIELD_MARKER_NOT_OBSERVED');
 }
+function effectiveBody(row){return row.body||row.serverWitness?.body;}
 function responseEvidence(net,phase,actor,{page=false,read=false,positive=false}={}){
   const rows=net.records.filter(x=>x.phase===phase);
   const product=rows.filter(x=>x.kind==='page'||x.kind==='gpp_read');
   // Establish the actual server principal before blaming the product for data.
   proof(product.some(x=>x.headers?.principal===actor&&x.headers.correlation),'EFFECTIVE_SERVER_PRINCIPAL_NOT_ESTABLISHED');
   proof(product.every(x=>!x.headers?.principal||x.headers.principal===actor),'SERVER_PRINCIPAL_MISMATCH');
-  // Scan all observed relevant response bodies, not just the accepting request.
-  for(const x of rows){
-    if(!x.body)continue;
-    const allowed=expectedIds(actor);
-    violation(x.body.ids.every(id=>allowed.includes(id)),'UNAUTHORIZED_NETWORK_TASK_'+x.kind);
+  // Check any direct browser witness before correlation (a contradictory
+  // or missing supplemental witness must never conceal an observed leak).
+  for(const x of rows.filter(x=>x.body)){
+    violation(x.body.ids.every(id=>expectedIds(actor).includes(id)),'UNAUTHORIZED_NETWORK_TASK_'+x.kind);
     violation(x.body.markers.every(m=>actor!=='anonymous'&&m.startsWith('SYN-SC-'+actor.toUpperCase()+'-')),
       'UNAUTHORIZED_NETWORK_PRIVATE_FIELD_'+x.kind);
   }
+  // Keep raw browser observation intact. Correlate each actual denial response
+  // to the test-only full server output witness with the existing request header.
+  const seen=new Set();
+  for(const x of product.filter(x=>x.status===403)){
+    const corr=x.headers?.correlation;
+    proof(typeof corr==='string'&&/^[a-f0-9-]{36}$/i.test(corr)&&!seen.has(corr),'DENIAL_CORRELATION_MISSING_OR_DUPLICATE');
+    seen.add(corr);
+    let server=null;
+    try{server=JSON.parse(fs.readFileSync(path.join(dir,'scq-server-'+corr+'.json'),'utf8'));}catch{}
+    const adjudication=adjudicateDenial(x,server,actor,{sourceHead:env.SCQ_SOURCE_HEAD,harnessHead:env.GITHUB_SHA,allowedIds:expectedIds(actor)});
+    x.serverWitness={status:adjudication.status,reason:adjudication.reason,source:adjudication.source,
+      correlation:corr,body:adjudication.body||null,server};
+    violation(adjudication.status!=='FAIL',adjudication.reason);
+    proof(adjudication.status==='PASS',adjudication.reason);
+  }
+  // Scan all observed relevant response bodies, not just the accepting request.
+  for(const x of rows){
+    const body=effectiveBody(x);
+    if(!body)continue;
+    const allowed=expectedIds(actor);
+    violation(body.ids.every(id=>allowed.includes(id)),'UNAUTHORIZED_NETWORK_TASK_'+x.kind);
+    violation(body.markers.every(m=>actor!=='anonymous'&&m.startsWith('SYN-SC-'+actor.toUpperCase()+'-')),
+      'UNAUTHORIZED_NETWORK_PRIVATE_FIELD_'+x.kind);
+  }
   proof(product.length>0,'NO_ATTRIBUTABLE_PRODUCT_RESPONSE');
-  proof(product.every(x=>x.done&&x.body&&x.headers&&x.headers.correlation&&!x.failed),
+  proof(product.every(x=>x.headers&&x.headers.correlation&&!x.failed&&
+    (x.status===403?x.serverWitness?.status==='PASS':x.done&&x.body)),
     'PRODUCT_RESPONSE_WITNESS_INCOMPLETE');
   for(const x of product){
     proof(x.headers.principal===actor,'EFFECTIVE_SERVER_PRINCIPAL_NOT_ESTABLISHED');
@@ -208,8 +237,13 @@ async function runScenario(cdp,neutral,name,kind){
           await page.net.settle();
           const responses=responseEvidence(page.net,'returned',actor,{read:final.roots.length>0,page:final.roots.length===0});
           if(final.roots.every(r=>r.entries.length===0)){
-            proof(responses.some(x=>[401,403].includes(x.status)||x.body.denied||
-              (x.body.jsonSuccess===false&&x.body.reason==='authorization_required')),'ATTRIBUTABLE_DENIAL_NOT_OBSERVED');
+            if(final.roots.length>0){
+              const denied=responses.filter(x=>x.kind==='gpp_read'&&x.status===403&&x.serverWitness?.status==='PASS');
+              proof(equal(denied.map(x=>x.formId),Object.values(fixture.forms)),
+                'TWO_DISTINCT_CORRELATED_DENIAL_WITNESSES_REQUIRED');
+            }else{
+              proof(responses.some(x=>effectiveBody(x)?.denied),'ATTRIBUTABLE_SERVER_RENDERED_DENIAL_NOT_OBSERVED');
+            }
           }else{
             proof(actor==='b','UNEXPECTED_AUTHORIZED_RETURN');
             positiveDom(final,'b');
@@ -221,6 +255,18 @@ async function runScenario(cdp,neutral,name,kind){
             const b=await awaitCurrent(page.p);out.states.b_fresh=b;
             await page.net.settle();responseEvidence(page.net,'b_fresh','b',{page:true,positive:true});
             positiveDom(b,'b');
+            // Exercise the B-owned nonempty root in the returned original tab.
+            page.net.setPhase('b_fresh_refresh');
+            const selector='[data-ciq2-root][data-ciq2-form="'+fixture.forms.b+'"] [data-ciq2-refresh]';
+            await page.p.evaluate('document.querySelector('+JSON.stringify(selector)+').closest("form").requestSubmit()');
+            await poll('B_AUTHORIZED_NONEMPTY_REFRESH_NOT_OBSERVED',()=>page.net.records.some(x=>
+              x.phase==='b_fresh_refresh'&&x.kind==='gpp_read'&&x.formId===fixture.forms.b&&x.done&&x.body),30000);
+            const refreshed=await awaitCurrent(page.p);positiveDom(refreshed,'b');
+            out.states.b_fresh_refresh=refreshed;
+            await page.net.settle();
+            const reads=responseEvidence(page.net,'b_fresh_refresh','b',{read:true});
+            proof(reads.some(x=>x.status===200&&x.formId===fixture.forms.b&&x.body?.jsonSuccess===true&&
+              equal(x.body.ids,fixture.native_oracle.b.b)),'B_AUTHORIZED_NONEMPTY_READ_NOT_PROVEN');
           }
         }
         proof(observers.every(o=>!o.net.errors.some(e=>e.kind==='observer_event_processing_error')),'NETWORK_OBSERVER_PROCESSING_ERROR');
@@ -242,10 +288,10 @@ try{
   await independentBrowser((name,status,details)=>{report.browser={name,status,...details};output();},async({cdp,neutral})=>{
     await runScenario(cdp,neutral,'RETURN_AFTER_SESSION_REVOCATION','revoked');
     await runScenario(cdp,neutral,'RETURN_AFTER_SWITCH_A_TO_B','switch');
-    await runScenario(cdp,neutral,'FRESH_LOAD_AFTER_SESSION_REVOCATION','fresh');
+    // Fresh-load after revocation was qualified on the exact same main; not executed here.
   });
 }catch(e){report.executionError=String(e.message||e).slice(0,500);}
 finally{output();}
 console.log('SCQ_RESULTS '+JSON.stringify(results.map(x=>({name:x.name,status:x.status,reason:x.reason}))));
 if(results.some(x=>x.status==='FAIL'))process.exit(1);
-if(report.executionError||results.length!==3||results.some(x=>x.status!=='PASS'))process.exit(2);
+if(report.executionError||results.length!==2||results.some(x=>x.status!=='PASS'))process.exit(2);

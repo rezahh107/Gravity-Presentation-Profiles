@@ -24,11 +24,14 @@ export async function observeNetwork(cdp,page,productUrl){
         const isFetch=['XHR','Fetch'].includes(p.type);
         if(!isPage&&!isFetch)return;
         const isAjax=u.pathname==='/wp-admin/admin-ajax.php';
-        const action=isAjax?new URLSearchParams(p.request.postData||'').get('action'):null;
+        const params=isAjax?new URLSearchParams(p.request.postData||''):null;
+        const action=params?.get('action')||null;
+        const rawForm=params?.get('form_id');
+        const formId=typeof rawForm==='string'&&/^[1-9][0-9]*$/.test(rawForm)&&Number.isSafeInteger(Number(rawForm))?Number(rawForm):null;
         const prior=active.get(p.requestId);
         if(prior&&p.redirectResponse){prior.redirect=true;prior.status=p.redirectResponse.status;prior.done=true;active.delete(p.requestId);}
         const row={seq:++sequence,phase,kind:isPage?'page':action==='gpp_inbox2_read'?'gpp_read':isAjax?'other_ajax':'other_fetch',
-          method:p.request.method,at:p.timestamp,status:null,headers:null,body:null,done:false,failed:null};
+          method:p.request.method,formId,at:p.timestamp,status:null,headers:null,body:null,done:false,failed:null};
         records.push(row);active.set(p.requestId,row);
       }else if(method==='Network.responseReceived'){
         const row=active.get(p.requestId);if(!row)return;

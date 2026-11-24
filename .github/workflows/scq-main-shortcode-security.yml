@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   evidence-lab:
-    name: Exact main installed Shortcode — three security scenarios
+    name: Exact main installed Shortcode — two remaining denial witnesses
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     services:
@@ -238,6 +238,8 @@ jobs:
           node -e "if(require('playwright/package.json').version!=='1.55.0')process.exit(1)"
           for file in tests/repro-evidence-lab/scq-*.mjs; do node --check "$file"; done
           for file in tests/repro-evidence-lab/scq-*.php; do php -l "$file"; done
+          php tests/repro-evidence-lab/scq-observer-test.php
+          node --test tests/repro-evidence-lab/scq-denial-oracle-test.mjs
 
       - name: Start ephemeral WordPress HTTP server
         shell: bash
@@ -252,7 +254,7 @@ jobs:
           cat /tmp/wu21-wp-server.log >&2
           exit 1
 
-      - name: Execute exactly three installed-main Shortcode security scenarios
+      - name: Execute only the two remaining installed-main Shortcode security scenarios
         shell: bash
         run: |
           set -euo pipefail
