@@ -44,11 +44,30 @@ $detail=\GravityPresentationProfiles\GravityForms\EntryDetailSetupService::forWo
 sla_require(($ops->initialize(['form_id'=>$fid])['status']??null)==='COMPLETED','SLA_OPERATIONS_SETUP');
 foreach (['student.photo'=>3,'student.first_name'=>1,'student.last_name'=>2,'student.national_id'=>4,'education.grade_group'=>5,'school.name'=>6] as $slot=>$field)
     wu21_map_field_through_product($repair,$ops,$fid,$slot,$field);
-sla_require(($inbox->initialize(['form_id'=>$fid])['status']??null)==='COMPLETED','SLA_INBOX_SETUP');
+// Inbox availability proofs are scoped to the exact active binding version.
+$initial_inbox=$inbox->initialize(['form_id'=>$fid]);
+sla_require(($initial_inbox['status']??null)==='COMPLETED','SLA_INBOX_SETUP');
+function sla_geometry($fid) {
+    \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::resetRuntimeCache();
+    return \GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::initialGeometryContract(['form_id'=>$fid]);
+}
+$before_detail=sla_geometry($fid);
+sla_require(is_array($before_detail)&&count($before_detail['column_ids']??[])===5,'SLA_INITIAL_INBOX_GEOMETRY');
 $detail_result=$detail->initialize(['form_id'=>$fid]);
 sla_require(($detail_result['status']??null)==='COMPLETED','SLA_DETAIL_SETUP');
-\GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::resetRuntimeCache();
-$contract=\GravityPresentationProfiles\SRWF\GravityFlow\InboxTableHeaderPresentation::initialGeometryContract(['form_id'=>$fid]);
+$after_detail=sla_geometry($fid);
+// Detail setup can advance the shared binding version. Re-run the existing
+// supported Inbox setup service to qualify availability for the new version;
+// never copy proofs or bypass the consumer's fail-closed check.
+$requalified=$inbox->initialize(['form_id'=>$fid]);
+$contract=sla_geometry($fid);
+$setup_trace=['before_detail'=>$before_detail,'after_detail'=>$after_detail,'after_inbox_requalification'=>$contract,
+    'initial_inbox_readiness'=>$initial_inbox['steps']['runtime_readiness']??null,
+    'detail_readiness'=>$detail_result['steps']['runtime_readiness']??null,
+    'final_inbox_readiness'=>$requalified['steps']['runtime_readiness']??null,
+    'final_inbox_status'=>$requalified['status']??null];
+file_put_contents(getenv('WU21_ARTIFACT_DIR').'/sla-binding-requalification.json',wp_json_encode($setup_trace,JSON_PRETTY_PRINT));
+sla_require(($requalified['status']??null)==='COMPLETED','SLA_INBOX_REQUALIFICATION');
 sla_require(is_array($contract) && count($contract['column_ids']??[])===5,'SLA_NATIVE_COLUMN_SETUP');
 $native_page=wp_insert_post(['post_type'=>'page','post_status'=>'publish','post_title'=>'فهرست بومی آزمایشی',
     'post_content'=>'[gravityflow page="inbox" form="'.$fid.'"]'],true);
