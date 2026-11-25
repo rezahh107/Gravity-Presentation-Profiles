@@ -1,39 +1,6 @@
 #!/usr/bin/env bash
 # WU21-only process and HTTP observation helpers; never included in GPP ZIP.
 # No listener is considered owned merely because its port responds.
-# Diagnostic only: retain the exact failed observation before taking later samples.
-# This never changes the ownership predicate or its failure result.
-wu21_observe_pid_unavailable() {
-  local port="$1" failed_rows="$2" grep_rc="$3" sample observation observe_rc known_pid
-  {
-    printf 'WU21_PID_DISCRIMINATOR endpoint=127.0.0.1:%s phase=%s grep_exit=%s\n' "$port" "${FUNCNAME[*]}" "$grep_rc"
-    printf 'original_ss_rows=%s\n' "$failed_rows"
-    printf 'expected_old_wrapper=%s expected_old_listener=%s current_wrapper=%s previous=%s wrapper=%s\n' "${old_wrapper:-}" "${old_listener:-}" "${current_wrapper:-}" "${previous:-}" "${wrapper:-}"
-    for sample in 0 1 2 3 4 5; do
-      printf 'sample=%s time=%s\n' "$sample" "$(date -u +%FT%T.%NZ)"
-      observe_rc=0
-      observation="$(ss -H -ltnpe "sport = :$port" 2>&1)" || observe_rc=$?
-      printf 'ss_extended_exit=%s rows=%s\n' "$observe_rc" "$observation"
-      observe_rc=0
-      observation="$(ss -H -ltn "sport = :$port" 2>&1)" || observe_rc=$?
-      printf 'ss_socket_exit=%s rows=%s\n' "$observe_rc" "$observation"
-      if command -v lsof >/dev/null; then
-        observe_rc=0
-        observation="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>&1)" || observe_rc=$?
-        printf 'lsof_exit=%s rows=%s\n' "$observe_rc" "$observation"
-      fi
-      for known_pid in "${old_wrapper:-}" "${old_listener:-}" "${current_wrapper:-}" "${wrapper:-}" "${previous:-}"; do
-        [[ "$known_pid" =~ ^[1-9][0-9]*$ ]] || continue
-        observe_rc=0
-        observation="$(ps -p "$known_pid" -o pid=,ppid=,stat=,comm= 2>&1)" || observe_rc=$?
-        printf 'known_pid=%s ps_exit=%s state=%s\n' "$known_pid" "$observe_rc" "$observation"
-      done
-      if [[ "$sample" != 5 ]]; then sleep 0.2; fi
-    done
-    printf 'WU21_PID_DISCRIMINATOR_END original_predicate=FAIL\n'
-  } >> "$WU21_ARTIFACT_DIR/gpp-inbox2-pid-discriminator.txt" 2>&1
-}
-
 wu21_listener_pid() {
   local port="$1" rows state recv send address peer owners pid
   rows="$(ss -H -ltnp "sport = :$port")" || { release_fail 'Listener inventory failed.'; return 1; }
@@ -41,13 +8,14 @@ wu21_listener_pid() {
   if [[ "$rows" == *$'\n'* ]]; then release_fail 'Multiple listeners on the intended port.'; return 1; fi
   read -r state recv send address peer owners <<< "$rows"
   [[ "$state" == LISTEN && "$address" == "127.0.0.1:$port" ]] || { release_fail 'Unexpected listening endpoint.'; return 1; }
-  pid="$(grep -oE 'pid=[0-9]+' <<< "$owners")" || {
-    local grep_rc=$?
-    if ! wu21_observe_pid_unavailable "$port" "$rows" "$grep_rc"; then
-      printf 'WU21_PID_DISCRIMINATOR_CAPTURE_FAILED\n' >&2
-    fi
-    release_fail 'Listener PID unavailable.'; return 1;
-  }
+  local pid_rc=0
+  pid="$(grep -oE 'pid=[0-9]+' <<< "$owners")" || pid_rc=$?
+  if [[ "$pid_rc" == 1 ]]; then
+    # A LISTEN row without a PID is occupied/unresolved, not a free port.
+    printf 'WU21_LISTENER_PID_UNAVAILABLE port=%s: Listener PID unavailable.\n' "$port" >&2
+    return 2
+  fi
+  [[ "$pid_rc" == 0 ]] || { release_fail 'Listener PID extraction failed.'; return 1; }
   [[ "$pid" =~ ^pid=([0-9]+)$ ]] || { release_fail 'Listener ownership is ambiguous.'; return 1; }
   printf '%s\n' "${BASH_REMATCH[1]}"
 }
@@ -99,14 +67,25 @@ wu21_assert_owned_listener() {
 }
 
 wu21_wait_for_free_endpoint() {
-  local port="$1" previous="$2" observed i
+  local port="$1" previous="$2" observed i observation_rc
   for ((i=0;i<30;i++)); do
-    observed="$(wu21_listener_pid "$port")" || return 1
-    [[ -n "$observed" ]] || return 0
-    if [[ "$observed" != "$previous" ]]; then release_fail 'Port occupied by a different listener.'; return 1; fi
+    if observed="$(wu21_listener_pid "$port")"; then
+      if [[ -z "$observed" ]]; then
+        printf 'WU21_SHUTDOWN_ENDPOINT_CONFIRMED_FREE port=%s attempt=%s\n' "$port" "$((i+1))" >&2
+        return 0
+      fi
+      if [[ "$observed" != "$previous" ]]; then release_fail 'Port occupied by a different listener.'; return 1; fi
+    else
+      observation_rc=$?
+      # The authentic WU21 discriminator observed an ownerless LISTEN row
+      # during shutdown. Only this observation may wait; it never permits
+      # termination, replacement or acceptance. A later empty socket
+      # inventory is required. All other observers and ownership guards fail.
+      [[ "$observation_rc" == 2 ]] || return 1
+    fi
     sleep 1
   done
-  release_fail 'Owned prior listener did not release the endpoint.'
+  release_fail 'Endpoint was not confirmed free after owned prior listener shutdown.'
 }
 
 wu21_wait_for_owned_http() {
