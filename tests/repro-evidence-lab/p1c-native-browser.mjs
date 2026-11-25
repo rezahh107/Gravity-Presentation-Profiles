@@ -22,7 +22,7 @@ export async function poll(label,read,timeout=20000){
 }
 function pipeClient(child){
   let sequence=0,buffer='';
-  const pending=new Map(),notRestored=[];
+  const pending=new Map(),notRestored=[],networkListeners=new Map();
   const abort=()=>{
     for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('CHROMIUM_CDP_CLOSED'));}
     pending.clear();
@@ -42,13 +42,15 @@ function pipeClient(child){
         pending.delete(msg.id);clearTimeout(p.timer);
         if(msg.error)p.reject(Error(p.method+' CDP error '+msg.error.code));
         else p.resolve(msg.result);
+      }else if(msg.method?.startsWith('Network.')){
+        networkListeners.get(msg.sessionId)?.(msg.method,msg.params);
       }else if(msg.method==='Page.backForwardCacheNotUsed'){
         notRestored.push({session:msg.sessionId,
           reasons:(msg.params?.notRestoredExplanations||[]).map(x=>({type:x.type,reason:x.reason}))});
       }
     }
   });
-  return {notRestored,send(method,params={},sessionId){
+  return {notRestored,networkListeners,send(method,params={},sessionId){
     return new Promise((resolve,reject)=>{
       const id=++sequence;
       const timer=setTimeout(()=>{pending.delete(id);reject(Error(method+' timeout'));},10000);
@@ -60,11 +62,30 @@ function pipeClient(child){
   }};
 }
 function installObserver(){
-  const trace={doc:Math.random().toString(36).slice(2),events:[],pagehideRoots:null};
+  const trace={doc:Math.random().toString(36).slice(2),events:[],pagehideRoots:null,cardEvents:[]};
   window.__p1cNativeTrace=trace;
   const save=e=>trace.events.push({type:e.type,trusted:e.isTrusted,state:document.visibilityState,
     persisted:e.persisted===true,at:performance.now()});
-  document.addEventListener('visibilitychange',save);
+  document.addEventListener('visibilitychange',e=>{
+    if(document.hidden) trace.cardEvents=[];
+    save(e);
+  });
+  // Observe real additions, including cards removed before the next poll.
+  // Only synthetic numeric identities are retained; never text or HTML.
+  const remember=node=>{
+    if(node.nodeType!==1)return;
+    const cards=[...(node.matches('[data-ciq2-entry]')?[node]:[]),...node.querySelectorAll('[data-ciq2-entry]')];
+    for(const card of cards){
+      const id=Number(card.dataset.ciq2Entry);
+      if(Number.isSafeInteger(id)&&id>0&&!trace.cardEvents.includes(id))trace.cardEvents.push(id);
+    }
+  };
+  new MutationObserver(records=>{
+    for(const r of records){
+      if(r.type==='attributes')remember(r.target);
+      else for(const node of r.addedNodes)remember(node);
+    }
+  }).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:['data-ciq2-entry']});
   window.addEventListener('pagehide',save);
   window.addEventListener('pageshow',save);
 }
@@ -73,6 +94,18 @@ export function readState(){
   if(!trace)return null;
   return {doc:trace.doc,events:trace.events,state:document.visibilityState,
     pagehideRoots:trace.pagehideRoots,url:location.href,ready:document.readyState,
+    cardEvents:trace.cardEvents,
+    documentCards:document.querySelectorAll('[data-ciq2-entry]').length,
+    privateMarker:document.documentElement?.innerHTML.includes('SYN-P1C-')===true,
+    widgetStates:[...document.querySelectorAll('[data-gpp-atomic-element-id]')].map(n=>({
+      element:n.dataset.gppAtomicElementId,
+      shellState:n.dataset.gppAtomicInbox2,
+      denied:n.textContent.includes('فهرست در دسترس نیست'),
+      roots:[...n.querySelectorAll('[data-ciq2-root]')].map(r=>({
+        element:r.dataset.ciq2Element,form:r.dataset.ciq2Form,state:r.dataset.ciq2State,
+        entries:[...r.querySelectorAll('[data-ciq2-entry]')].map(c=>Number(c.dataset.ciq2Entry)).sort((a,b)=>a-b)
+      }))
+    })),
     roots:[...document.querySelectorAll('[data-ciq2-root]')].map(r=>({
       element:r.dataset.ciq2Element,form:r.dataset.ciq2Form,state:r.dataset.ciq2State,
       entries:[...r.querySelectorAll('[data-ciq2-entry]')].map(n=>Number(n.dataset.ciq2Entry)).sort((a,b)=>a-b)
@@ -82,6 +115,80 @@ export function readState(){
     navigation:performance.getEntriesByType('navigation').map(n=>({
       type:n.type,notRestoredReasons:n.notRestoredReasons?.reasons?.map(r=>r.reason)||null
     }))};
+}
+// Per-tab CDP observation. No raw request/body/header values are persisted.
+async function observeNetwork(cdp,sessionId,send,origin,caseName){
+  const rows=[],documents=[],byId=new Map();
+  let last=Date.now();
+  const phases=[{name:'baseline',from:last/1000}];
+  const phaseAt=wall=>Number.isFinite(wall)?phases.findLast(p=>wall>=p.from)?.name||'unattributed':'unattributed';
+  const documentPhases=new Map();
+  const endpoint=new URL('/wp-admin/admin-ajax.php',origin).href;
+  const header=(headers,name)=>Object.entries(headers||{}).find(([k])=>k.toLowerCase()===name)?.[1];
+  const safeId=x=>typeof x==='string'&&/^[a-zA-Z0-9]{1,32}$/.test(x)?x:null;
+  cdp.networkListeners.set(sessionId,(method,p)=>{
+    if(method==='Network.requestWillBeSent'){
+      const phase=phaseAt(p.wallTime);
+      if(p.type==='Document')documentPhases.set(p.requestId,phase);
+      if(p.request.url!==endpoint||p.request.method!=='POST')return;
+      const data=typeof p.request.postData==='string'?new URLSearchParams(p.request.postData):null;
+      const action=data?.get('action');
+      if(data&&!['gpp_inbox2_atomic_bootstrap','gpp_inbox2_read'].includes(action))return;
+      const row={case:caseName,tab:sessionId,phase,action:action||null,
+        element:safeId(data?.get('element_id')),form:safeId(data?.get('form_id')),
+        direct:header(p.request.headers,'x-p1c-control')==='direct',
+        requestWallTime:Number.isFinite(p.wallTime)?p.wallTime:null,
+        status:null,bodyObserved:false,privateData:null,success:null,rejection:null,noStore:null,
+        complete:false,problem:phase==='unattributed'?'REQUEST_TIME_UNAVAILABLE':data?null:'POST_DATA_UNAVAILABLE'};
+      rows.push(row);byId.set(p.requestId,row);last=Date.now();
+    }
+    if(method==='Network.responseReceived'&&p.type==='Document'){
+      try{
+        const u=new URL(p.response.url);
+        if(u.origin===origin)documents.push({phase:documentPhases.get(p.requestId)||'unattributed',status:p.response.status,login:u.pathname==='/wp-login.php',
+          productPage:u.searchParams.has('page_id')});
+      }catch{}
+    }
+    const row=byId.get(p.requestId);
+    if(!row)return;
+    if(method==='Network.responseReceived'){
+      row.status=p.response.status;
+      row.noStore=/\bno-store\b/i.test(header(p.response.headers,'cache-control')||'');
+      if(p.response.url!==endpoint)row.problem='RESPONSE_ENDPOINT_MISMATCH';
+      last=Date.now();
+    }else if(method==='Network.loadingFailed'){
+      row.complete=true;row.problem='NETWORK_LOADING_FAILED';last=Date.now();
+    }else if(method==='Network.loadingFinished'){
+      void (async()=>{
+        try{
+          const r=await send('Network.getResponseBody',{requestId:p.requestId});
+          const raw=r.base64Encoded?Buffer.from(r.body,'base64').toString('utf8'):r.body;
+          // Detect recognizable private markers even in malformed JSON.
+          if(/SYN-P1C-|data-ciq2-entry/i.test(raw))row.privateData=true;
+          const json=JSON.parse(raw);
+          const html=typeof json?.data?.html==='string'?json.data.html:'';
+          const markers=/SYN-P1C-|data-ciq2-entry/i.test(raw)||/SYN-P1C-|data-ciq2-entry/i.test(html);
+          row.privateData=markers||(typeof json?.data?.count==='number'&&json.data.count>0);
+          row.success=typeof json?.success==='boolean'?json.success:null;
+          row.rejection=json?.data?.reason==='authorization_required'?'authorization_required':null;
+          // Only recognize the documented rejection shape as evidence of absence.
+          if(row.success===false&&(row.rejection!== 'authorization_required'||
+              Object.keys(json.data||{}).some(k=>k!=='reason')||Object.keys(json).some(k=>!['success','data'].includes(k)))){
+            if(!row.privateData)row.privateData=null;
+          }
+          row.bodyObserved=true;
+        }catch{row.problem='RESPONSE_BODY_UNAVAILABLE_OR_UNRECOGNIZED';}
+        finally{row.complete=true;last=Date.now();}
+      })();
+    }
+  });
+  await send('Network.enable',{maxPostDataSize:65536});
+  return {phase(value){last=Date.now();phases.push({name:value,from:last/1000});},
+    snapshot(){return rows.map(r=>({...r}));},
+    documentSnapshot(){return documents.map(r=>({...r}));},
+    async settled(){await poll('CDP_NETWORK_NOT_SETTLED',()=>rows.every(r=>r.complete)&&Date.now()-last>=750,12000);},
+    close(){cdp.networkListeners.delete(sessionId);}
+  };
 }
 export async function tab(cdp,context){
   const {targetId}=await cdp.send('Target.createTarget',{url:'about:blank',browserContextId:context});
@@ -107,7 +214,7 @@ export async function tab(cdp,context){
         s.ready==='complete'&&s.events.some(e=>e.type==='pageshow'&&e.trusted)?s:null;
     },35000);
   };
-  return {sessionId,send,evaluate,read,activate,navigate};
+  return {sessionId,send,evaluate,read,activate,navigate,observeNetwork:(origin,caseName)=>observeNetwork(cdp,sessionId,send,origin,caseName)};
 }
 export async function context(cdp,run){
   const {browserContextId:id}=await cdp.send('Target.createBrowserContext');

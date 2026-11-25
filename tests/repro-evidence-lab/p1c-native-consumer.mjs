@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {context,tab,transition,historyReturn,poll,readState} from './p1c-native-browser.mjs';
-import {qualifyThenCheck,requireInvalidated} from './p1c-lifecycle-oracle.mjs';
+import {qualifyThenCheck,requireInvalidated,securityVerdict} from './p1c-lifecycle-oracle.mjs';
 
 function nativeMembership(wp,actor){
   assert.ok(['a','b'].includes(actor));
@@ -21,6 +21,7 @@ function revoke(wp,uid){
   assert.equal(result.status,0,'DISPOSABLE_WORDPRESS_SESSION_REVOCATION_FAILED');
   assert.equal(wp('echo count(WP_Session_Tokens::get_instance('+uid+')->get_all());'),'0',
     'DISPOSABLE_SESSION_REVOCATION_NOT_OBSERVED');
+  return {user:uid,commandExit:result.status,remaining:0};
 }
 async function login(page,origin,credentials,productUrl){
   await page.activate();
@@ -57,7 +58,7 @@ async function current(page,fixture,expected){
   }
   return s;
 }
-async function denied(page,fixture,after){
+async function deferredBfcacheDenied(page,fixture,after){
   // A stale marker alone is not enough: observe a genuine, subsequent denied
   // same-origin fetch and ensure no private cards remain in either widget.
   return poll('FRESH_DENIAL_WITH_NO_PRIVATE_CARDS_NOT_OBSERVED',async()=>{
@@ -73,6 +74,62 @@ async function denied(page,fixture,after){
       'e.startTime>='+Number(after)+'&&e.responseStatus===403).map(e=>({status:e.responseStatus,start:e.startTime}))');
     return response.length?{roots:s.roots,shells:s.shells,denials:response}:null;
   },30000);
+}
+// Read old synthetic credentials only in memory. Never put a nonce in evidence.
+async function oldReadRequests(page,fixture){
+  const rows=await page.evaluate('Array.from(document.querySelectorAll("[data-ciq2-root]"),r=>({action:"gpp_inbox2_read",nonce:r.dataset.ciq2Nonce,page_id:r.dataset.ciq2Page,form_id:r.dataset.ciq2Form,native_page_id:r.dataset.ciq2NativePage,element_id:r.dataset.ciq2Element}))');
+  assert.equal(rows.length,2,'TWO_OLD_READ_IDENTITIES_REQUIRED');
+  for(const key of ['a','b']){
+    const id=fixture.element_ids_by_form[String(fixture.forms[key])];
+    assert.ok(rows.some(r=>r.element_id===id&&r.form_id===String(fixture.forms[key])&&
+      r.page_id===String(fixture.post_id)&&r.native_page_id===String(fixture.native_page_id)&&r.nonce),
+      'OLD_READ_IDENTITY_MISSING');
+  }
+  return rows;
+}
+const domEvidence=s=>s?{doc:s.doc,state:s.state,ready:s.ready,roots:s.roots,
+  widgetStates:s.widgetStates,documentCards:s.documentCards,cardEvents:s.cardEvents,
+  privateMarker:s.privateMarker}:null;
+async function directControls(page,network,origin,requests,e){
+  network.phase('direct');
+  for(const values of requests){
+    try{
+      // A genuine same-origin browser request with the current cookies and the
+      // old captured nonce. The fixed header labels only this independent control.
+      await page.evaluate('(async()=>{const r=await fetch('+JSON.stringify(origin+'/wp-admin/admin-ajax.php')+
+        ',{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8","X-P1C-Control":"direct"},body:new URLSearchParams('+
+        JSON.stringify(values)+'),signal:AbortSignal.timeout(12000)});await r.text();return true})()');
+    }catch{e.observationProblems.push('DIRECT_REQUEST_EXECUTION_INCOMPLETE');}
+  }
+}
+async function collectSecurity(page,network,origin,fixture,old,e,{crossUser=false,fresh=false}={}){
+  try{
+    await poll('TERMINAL_CONSUMER_STATE_NOT_OBSERVED',async()=>{
+      const s=await page.read();
+      if(!s)return null;
+      const terminal=s.widgetStates?.length===2&&s.widgetStates.every(w=>w.denied&&w.roots.length===0||
+        w.roots.length===1&&w.roots[0].state==='stale'&&w.roots[0].entries.length===0);
+      const doc=network.documentSnapshot().filter(d=>d.phase==='consumer').at(-1);
+      const admission=doc&&(doc.login&&new URL(s.url).pathname==='/wp-login.php'||
+        doc.productPage&&[401,403].includes(doc.status));
+      const loginDenied=fresh&&new URL(s.url).origin===origin&&admission&&s.widgetStates?.length===0;
+      return terminal||loginDenied?s:null;
+    },20000);
+  }catch{e.observationProblems.push('TERMINAL_CONSUMER_STATE_NOT_OBSERVED');}
+  try{await network.settled();}catch{e.observationProblems.push('CONSUMER_NETWORK_NOT_SETTLED');}
+  const requests=[...old];
+  if(!crossUser)for(const r of old)requests.push({action:'gpp_inbox2_atomic_bootstrap',page_id:r.page_id,element_id:r.element_id});
+  try{await directControls(page,network,origin,requests,e);}
+  finally{
+    try{await network.settled();}catch{e.observationProblems.push('DIRECT_NETWORK_NOT_SETTLED');}
+    const s=await page.read().catch(()=>null);
+    e.finalDom=domEvidence(s);
+    e.documents=network.documentSnapshot();
+    const doc=e.documents.filter(d=>d.phase==='consumer').at(-1);
+    e.admissionDenied=Boolean(fresh&&s&&new URL(s.url).origin===origin&&s.widgetStates?.length===0&&doc&&
+      (doc.login&&new URL(s.url).pathname==='/wp-login.php'||doc.productPage&&[401,403].includes(doc.status)));
+    e.network=network.snapshot();
+  }
 }
 export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,record,origin}){
   const credentials=JSON.parse(fs.readFileSync(process.env.P1C_LOGIN_FILE,'utf8'));
@@ -97,43 +154,97 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
   if(!visibility){
     record('PRODUCT_NATIVE_VISIBILITY','NOT_PROVEN',{reason:'Neutral genuine visibility was not qualified'});
     record('PRODUCT_NATIVE_VISIBILITY_CONSUMER','NOT_REACHED');
-  }else for(const kind of ['membership','revocation','cross_user']){
+  }else{
     let changed=false;
     try{
       await context(cdp,async id=>{
         const other=await tab(cdp,id);await other.activate();await other.navigate(neutral+'/away');
-        const p=await prepare(id);if(!p){record('PRODUCT_HIDDEN_'+kind,'NOT_REACHED');return;}
-        const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_'+kind,
+        const p=await prepare(id);if(!p){record('PRODUCT_HIDDEN_membership','NOT_REACHED');return;}
+        const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_membership',
           ()=>transition(p,other.activate,'hidden'),async()=>{
             const s=await p.read();requireRoots(s,fixture);requireInvalidated(s.roots,ids);
             return {roots:s.roots};
           });
-        if(!hidden){record('PRODUCT_VISIBLE_'+kind,'NOT_REACHED');return;}
-        let expected;
-        if(kind==='membership'){changed=true;entryStatus(wp,mutation,'trash');expected=expectedChanged();}
-        else{
-          revoke(wp,fixture.users.a);
-          if(kind==='cross_user'){
-            await login(other,origin,credentials.b,url);
-            await current(other,fixture,fixture.native_oracle.b);
+        if(!hidden){record('PRODUCT_VISIBLE_membership','NOT_REACHED');return;}
+        changed=true;entryStatus(wp,mutation,'trash');const expected=expectedChanged();
+        await qualifyThenCheck(record,'PRODUCT_VISIBLE_membership',()=>transition(p,p.activate,'visible'),async()=>{
+          const s=await current(p,fixture,expected);return {roots:s.roots};
+        });
+      });
+    }catch(e){record('PRODUCT_VISIBILITY_FIXTURE_membership','NOT_PROVEN',{reason:String(e.message||e)});}
+    finally{if(changed){try{restore();}catch(e){record('SYNTHETIC_MEMBERSHIP_RESTORE','FAIL',{reason:String(e.message||e)});}}}
+  }
+  // Required fresh-load control does not depend on optional BFCache restoration.
+  for(const kind of ['revocation','cross_user','fresh_revocation']){
+    const fresh=kind==='fresh_revocation',crossUser=kind==='cross_user';
+    const name=fresh?'PRODUCT_SECURE_FRESH_LOAD_revocation':'PRODUCT_VISIBLE_'+kind;
+    const e={case:name,revocation:null,baselineVerified:false,transitionVerified:false,
+      freshNavigationVerified:false,finalDom:null,network:[],observationProblems:[],freshB:null,
+      expectedWidgets:Object.fromEntries(Object.entries(fixture.element_ids_by_form).map(([form,element])=>[element,form]))};
+    let network;
+    try{
+      await context(cdp,async id=>{
+        const other=await tab(cdp,id);
+        if(!fresh){await other.activate();await other.navigate(neutral+'/away');}
+        const p=await tab(cdp,id);
+        network=await p.observeNetwork(origin,name);
+        try{
+          await login(p,origin,credentials.a,url);
+          const aExpected=nativeMembership(wp,'a');
+          assert.ok(Object.values(aExpected).some(v=>v.length>0),'A_POSITIVE_CONTROL_EMPTY');
+          const a=await current(p,fixture,aExpected);
+          e.baselineVerified=true;e.baseline=domEvidence(a);e.baselineOracle=aExpected;
+          const old=await oldReadRequests(p,fixture);
+          await network.settled();
+          network.phase('pre_revocation');
+          if(!fresh){
+            if(!visibility){e.observationProblems.push('NATIVE_VISIBILITY_NOT_QUALIFIED');return;}
+            const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_'+kind,
+              ()=>transition(p,other.activate,'hidden'),async()=>{
+                const s=await p.read();requireRoots(s,fixture);requireInvalidated(s.roots,ids);
+                return {roots:s.roots};
+              });
+            if(!hidden){e.observationProblems.push('HIDDEN_INVALIDATION_NOT_QUALIFIED');return;}
           }
-        }
-        const returned=await qualifyThenCheck(record,'PRODUCT_VISIBLE_'+kind,
-          ()=>transition(p,p.activate,'visible'),async witness=>{
-            if(kind==='membership'){const s=await current(p,fixture,expected);return {roots:s.roots};}
-            const at=witness.events.find(e=>e.type==='visibilitychange'&&e.trusted&&e.state==='visible').at;
-            return denied(p,fixture,at);
-          });
-        if(kind==='cross_user'&&returned){
-          // A's old document has rejected B's current session; a fresh B
-          // document must still provide exactly the independent B task set.
-          await p.navigate(url,true);
-          try{const s=await current(p,fixture,fixture.native_oracle.b);record('PRODUCT_CROSS_USER_FRESH_B','PASS',{roots:s.roots});}
-          catch(e){record('PRODUCT_CROSS_USER_FRESH_B','FAIL',{reason:String(e.message||e)});}
+          e.revocation=revoke(wp,fixture.users.a);
+          network.phase('consumer');
+          if(crossUser){
+            await login(other,origin,credentials.b,url);
+            const expected=nativeMembership(wp,'b');
+            assert.ok(Object.values(expected).some(v=>v.length>0),'B_POSITIVE_CONTROL_EMPTY');
+            await current(other,fixture,expected);
+          }
+          if(fresh){
+            const s=await p.navigate(url,true);
+            e.freshNavigationVerified=s.doc!==a.doc;
+          }else{
+            try{e.witness=await transition(p,p.activate,'visible');e.transitionVerified=e.witness.qualified===true;}
+            catch{e.observationProblems.push('AUTHENTIC_RETURN_NOT_OBSERVED');}
+          }
+          try{await collectSecurity(p,network,origin,fixture,old,e,{crossUser,fresh});}
+          catch{e.observationProblems.push('SECURITY_OBSERVATION_INCOMPLETE');}
+          if(crossUser){
+            // Always check fresh B, even when the old A consumer fails.
+            try{
+              const expected=nativeMembership(wp,'b');
+              assert.ok(Object.values(expected).some(v=>v.length>0),'B_POSITIVE_CONTROL_EMPTY');
+              await other.navigate(url,true);
+              const s=await current(other,fixture,expected);
+              e.freshB={verified:true,oracle:expected,dom:domEvidence(s)};
+              record('PRODUCT_CROSS_USER_FRESH_B','PASS',e.freshB);
+            }catch(err){
+              e.freshB={verified:false,membershipMismatch:/NATIVE_MEMBERSHIP_MISMATCH/.test(String(err.message))};
+              record('PRODUCT_CROSS_USER_FRESH_B',e.freshB.membershipMismatch?'FAIL':'NOT_PROVEN',e.freshB);
+            }
+          }
+        }finally{
+          if(!e.finalDom)e.finalDom=domEvidence(await p.read().catch(()=>null));
+          e.network=network.snapshot();e.documents=network.documentSnapshot();network.close();
         }
       });
-    }catch(e){record('PRODUCT_VISIBILITY_FIXTURE_'+kind,'NOT_PROVEN',{reason:String(e.message||e)});}
-    finally{if(changed){try{restore();}catch(e){record('SYNTHETIC_MEMBERSHIP_RESTORE','FAIL',{reason:String(e.message||e)});}}}
+    }catch{e.observationProblems.push('SECURITY_FIXTURE_OR_CONTROL_INCOMPLETE');}
+    const verdict=securityVerdict(e,ids,{crossUser,fresh});
+    record(name,verdict.status,{...e,...verdict});
   }
   if(!bfcache){
     record('PRODUCT_GENUINE_BFCACHE','NOT_PROVEN',{reason:'Neutral genuine BFCache was not qualified'});
@@ -159,9 +270,10 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
         if(!witness.qualified){
           record('PRODUCT_BFCACHE_'+kind,'NOT_PROVEN',{witness,reasons:cdp.notRestored.filter(x=>x.session===p.sessionId)});
           record('PRODUCT_BFCACHE_CONSUMER_'+kind,'NOT_REACHED');
-          if(witness.beforeDoc===witness.afterDoc){record('PRODUCT_SECURE_FRESH_LOAD_'+kind,'NOT_PROVEN');return;}
+          if(witness.beforeDoc===witness.afterDoc){if(kind==='membership')record('PRODUCT_SECURE_FRESH_LOAD_'+kind,'NOT_PROVEN');return;}
           try{
-            const s=kind==='membership'?await current(p,fixture,expected):await denied(p,fixture,0);
+            if(kind==='revocation')return; // dedicated authentic fresh-navigation control above
+            const s=await current(p,fixture,expected);
             record('PRODUCT_SECURE_FRESH_LOAD_'+kind,'PASS',{roots:s.roots});
           }catch(e){record('PRODUCT_SECURE_FRESH_LOAD_'+kind,'FAIL',{reason:String(e.message||e)});}
           return;
@@ -170,7 +282,7 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
           requireInvalidated(witness.pagehideRoots||[],ids);
           const hide=witness.events.find(e=>e.type==='pagehide'&&e.trusted);
           assert.ok(hide,'BFCACHE_TRUSTED_PAGEHIDE_REQUIRED');
-          const s=kind==='membership'?await current(p,fixture,expected):await denied(p,fixture,hide.at);
+          const s=kind==='membership'?await current(p,fixture,expected):await deferredBfcacheDenied(p,fixture,hide.at);
           return {roots:s.roots};
         });
       });
