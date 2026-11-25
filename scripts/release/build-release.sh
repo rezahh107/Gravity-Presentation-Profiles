@@ -25,11 +25,13 @@ trap 'rm -rf "$STAGE"' EXIT
 PLUGIN_ROOT="$STAGE/$GPP_RELEASE_SLUG"
 mkdir -p "$PLUGIN_ROOT"
 
+INVENTORY="$STAGE/runtime-files.txt"
+release_runtime_files "$ROOT" > "$INVENTORY" || { release_fail 'Canonical runtime enumeration failed before build.'; exit 1; }
 while IFS= read -r path; do
     [[ -f "$ROOT/$path" ]] || release_fail "Runtime source file is missing: $path"
     mkdir -p "$PLUGIN_ROOT/$(dirname "$path")"
     cp "$ROOT/$path" "$PLUGIN_ROOT/$path"
-done < <(release_runtime_files "$ROOT")
+done < "$INVENTORY"
 
 # A deterministic ZIP is materially useful for checksum continuity and mutation tests.
 # ZIP timestamps cannot predate 1980; normalize every shipped file and use sorted input.

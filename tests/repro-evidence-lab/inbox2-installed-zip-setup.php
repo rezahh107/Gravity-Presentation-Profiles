@@ -12,7 +12,13 @@ $assert( is_dir( $plugin_root ) && ! is_link( $plugin_root )
     && is_file( $plugin_root . '/src/SRWF/GravityFlow/Inbox2Shortcode.php' )
     && ! file_exists( $plugin_root . '/tests/qualification-custom-inbox/usability-mu.php' ), 'NOT_REAL_ZIP_INSTALL' );
 $header = get_file_data( $plugin_root . '/gravity-presentation-profiles.php', array( 'version' => 'Version' ) );
-$assert( '9999.0.0' === $header['version'] && defined( 'GRAVITY_FLOW_VERSION' )
+$expected_version = getenv( 'GPP_INBOX2_EXPECTED_VERSION' );
+$assert( is_string( $expected_version ) && preg_match( '/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/', $expected_version )
+    && '0.0.0' !== $expected_version, 'EXPECTED_VERSION_INVALID' );
+$addon = \GravityPresentationProfiles\GravityForms\AddOn::get_instance();
+$version_property = new ReflectionProperty( $addon, '_version' );
+$assert( $expected_version === $header['version'] && $expected_version === $version_property->getValue( $addon ), 'VERSION_IDENTITY_MISMATCH' );
+$assert( defined( 'GRAVITY_FLOW_VERSION' )
     && '3.1.0' === GRAVITY_FLOW_VERSION && shortcode_exists( 'gpp_inbox_2' ), 'BOOTSTRAP_OR_HOST_UNSUPPORTED' );
 $assert( ! file_exists( WPMU_PLUGIN_DIR . '/wu21-lab-plugin.php' ), 'TEST_MU_PLUGIN_STILL_PRESENT' );
 $form_id = (int) $manifest['forms'][0]['form_id'];

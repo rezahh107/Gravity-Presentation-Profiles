@@ -22,9 +22,21 @@ const ids = async page => page.locator('[data-ciq2-entry]').evaluateAll(nodes =>
 const visible = async page => page.locator('[data-ciq2-entry]').evaluateAll(nodes =>
   nodes.filter(node => !node.hidden).map(node => Number(node.dataset.ciq2Entry)));
 const browser = await chromium.launch({headless: true});
-const report = {status: 'FAIL', installedVersion: fixture.version, checks};
+const report = {status: 'FAIL', fixtureVersion: fixture.version, installedVersion: null, checks};
 try {
   const context = await browser.newContext({viewport: {width: 390, height: 844}});
+  const probeUrl = new URL(env.GPP_INBOX2_HTTP_PROBE_URL);
+  assert.equal(probeUrl.origin, env.WU21_BASE_URL);
+  const probeResponse = await context.request.get(probeUrl.href, {maxRedirects: 0, timeout: 10000});
+  assert.equal(probeResponse.status(), 200);
+  const observedHttp = await probeResponse.json();
+  const validatedHttp = JSON.parse(fs.readFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-http-before-browser.json'), 'utf8'));
+  assert.deepEqual(observedHttp, validatedHttp, 'browser HTTP identity differs from independently validated listener');
+  assert.equal(observedHttp.pid, Number(env.GPP_INBOX2_HTTP_LISTENER_PID));
+  assert.equal(observedHttp.addon_version, env.GPP_INBOX2_EXPECTED_VERSION);
+  report.installedVersion = observedHttp.addon_version;
+  report.httpRuntime = observedHttp;
+  checks.push('independent_browser_context_http_runtime_identity');
   await context.addCookies(cookies(fixture.operator_id));
   const page = await context.newPage();
   const errors = [];
@@ -35,6 +47,7 @@ try {
   });
   const response = await page.goto(fixture.url, {waitUntil: 'networkidle'});
   assert.equal(response.status(), 200);
+  assert.equal(new URL(response.url()).origin, env.WU21_BASE_URL);
   assert.match(response.headers()['cache-control'] || '', /\bno-store\b/i);
   checks.push('personalized_shortcode_page_has_no_store_response_header');
   assert.equal(await page.locator('[data-ciq2-root][data-ciq2-state="current"]').count(), 1);
