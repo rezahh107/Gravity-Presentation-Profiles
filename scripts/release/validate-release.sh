@@ -23,8 +23,9 @@ fi
 LIST="$(mktemp)"
 EXPECTED="$(mktemp)"
 ACTUAL="$(mktemp)"
+INVENTORY="$(mktemp)"
 EXTRACT="$(mktemp -d)"
-trap 'rm -f "$LIST" "$EXPECTED" "$ACTUAL"; rm -rf "$EXTRACT"' EXIT
+trap 'rm -f "$LIST" "$EXPECTED" "$ACTUAL" "$INVENTORY"; rm -rf "$EXTRACT"' EXIT
 unzip -Z1 "$ZIP" > "$LIST"
 
 [[ -s "$LIST" ]] || release_fail 'ZIP is empty.'
@@ -40,9 +41,10 @@ if grep -E "$FORBIDDEN" "$LIST" >/dev/null; then
     release_fail 'ZIP contains repository/development-only material.'
 fi
 
+release_runtime_files "$ROOT" > "$INVENTORY" || { release_fail 'Canonical runtime enumeration failed before validation.'; exit 1; }
 while IFS= read -r path; do
     printf '%s/%s\n' "$GPP_RELEASE_SLUG" "$path"
-done < <(release_runtime_files "$ROOT") | LC_ALL=C sort -u > "$EXPECTED"
+done < "$INVENTORY" | LC_ALL=C sort -u > "$EXPECTED"
 grep -v '/$' "$LIST" | LC_ALL=C sort -u > "$ACTUAL"
 if ! diff -u "$EXPECTED" "$ACTUAL"; then
     release_fail 'ZIP file set differs from the canonical runtime allowlist.'
@@ -59,7 +61,7 @@ release_assert_version_mirrors "$PACKAGED_ROOT"
 
 while IFS= read -r path; do
     cmp -s "$ROOT/$path" "$PACKAGED_ROOT/$path" || release_fail "Packaged bytes do not match prepared source: $path"
-done < <(release_runtime_files "$ROOT")
+done < "$INVENTORY"
 
 if grep -R -I -E --exclude='*.png' --exclude='*.jpg' --exclude='*.jpeg' --exclude='*.webp' \
     '(-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' \
