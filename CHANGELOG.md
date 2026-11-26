@@ -6,6 +6,14 @@ The project follows Semantic Versioning for production releases.
 
 ## [Unreleased]
 
+### Added
+
+- Added the opt-in Native Atomic Inbox 2 widget for Elementor 4.4.0, with native Classes, Variables and responsive styling. The widget uses a data-free Twig/Twing shell and the existing Gravity Forms and Gravity Flow Inbox 2 pipeline.
+
+### Changed
+
+- Added exact-Head installed-ZIP qualification for the Native Atomic widget, including synthetic session-revocation and cross-user evidence checks.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added

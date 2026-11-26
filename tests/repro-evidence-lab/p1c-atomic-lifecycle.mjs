@@ -10,6 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
 import {independentBrowser} from './p1c-native-browser.mjs';
 import {nativeConsumer} from './p1c-native-consumer.mjs';
+import {lifecycleCompletion} from './p1c-lifecycle-oracle.mjs';
 
 const env=process.env;
 const origin=env.WU21_BASE_URL;
@@ -57,6 +58,7 @@ function sameItems(actual,expected,message){
   assert.deepEqual(actual,[...expected].sort((a,b)=>a-b),message);
 }
 let browser=null;
+let completion;
 try {
   try {
     await independentBrowser(record,async control=>{
@@ -163,19 +165,22 @@ try {
   results.failure=String(error?.stack||error).slice(0,3000);
   record('QUALIFICATION_EXECUTION','FAIL',{reason:String(error).slice(0,500)});
 } finally{
+  completion=lifecycleCompletion(results.results);
+  results.results=completion.records;
   fs.writeFileSync(path.join(artifact,'p1c-atomic-lifecycle.json'),
     JSON.stringify(results,null,2));
   if(browser)await browser.close().catch(()=>{});
 }
-if(results.failure||results.results.some(x=>x.status==='FAIL')){
+if(results.failure||completion.failed){
   console.error('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_FAILED',
     results.failure||'An observed failing control is recorded in JSON');
   process.exit(1);
 }
-if(results.results.some(x=>x.status==='NOT_PROVEN'||x.status==='NOT_REACHED')){
+if(completion.blocking.length){
   console.warn('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_INCOMPLETE',
-    JSON.stringify(results.results.filter(x=>x.status==='NOT_PROVEN'||x.status==='NOT_REACHED')));
+    JSON.stringify(completion.blocking));
   process.exit(2);
 }
 console.log('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_COMPLETE',JSON.stringify(
-  results.results.map(({name,status})=>({name,status}))));
+  results.results.map(({name,status,qualificationImpact,nonblockingReason})=>
+    ({name,status,qualificationImpact,nonblockingReason}))));

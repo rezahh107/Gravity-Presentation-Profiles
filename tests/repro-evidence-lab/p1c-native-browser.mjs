@@ -7,8 +7,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import {createHmac,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {chromium} from 'playwright'; // only the existing pinned executable path
+import {reconcileResponseWitnesses} from './p1c-lifecycle-oracle.mjs';
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export async function poll(label,read,timeout=20000){
@@ -119,6 +121,15 @@ export function readState(){
 // Per-tab CDP observation. No raw request/body/header values are persisted.
 async function observeNetwork(cdp,sessionId,send,origin,caseName){
   const rows=[],documents=[],byId=new Map();
+  const witnessFile=process.env.P1C_RESPONSE_EVIDENCE_FILE;
+  const snapshot=()=>{
+    let witnesses=[];
+    if(witnessFile){
+      try{witnesses=fs.readFileSync(witnessFile,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));}
+      catch{ /* Missing or partial evidence leaves the CDP result unchanged. */ }
+    }
+    return reconcileResponseWitnesses(rows,witnesses);
+  };
   let last=Date.now();
   const phases=[{name:'baseline',from:last/1000}];
   const phaseAt=wall=>Number.isFinite(wall)?phases.findLast(p=>wall>=p.from)?.name||'unattributed':'unattributed';
@@ -134,8 +145,12 @@ async function observeNetwork(cdp,sessionId,send,origin,caseName){
       const data=typeof p.request.postData==='string'?new URLSearchParams(p.request.postData):null;
       const action=data?.get('action');
       if(data&&!['gpp_inbox2_atomic_bootstrap','gpp_inbox2_read'].includes(action))return;
+      const scope=header(p.request.headers,'x-p1c-response-scope');
+      const witnessKey=data&&typeof scope==='string'&&/^[a-f0-9]{32}$/.test(scope)
+        ?createHmac('sha256',scope).update(p.request.postData).digest('hex'):null;
       const row={case:caseName,tab:sessionId,phase,action:action||null,
         element:safeId(data?.get('element_id')),form:safeId(data?.get('form_id')),
+        witnessKey,
         direct:header(p.request.headers,'x-p1c-control')==='direct',
         requestWallTime:Number.isFinite(p.wallTime)?p.wallTime:null,
         status:null,bodyObserved:false,privateData:null,success:null,rejection:null,noStore:null,
@@ -177,16 +192,24 @@ async function observeNetwork(cdp,sessionId,send,origin,caseName){
             if(!row.privateData)row.privateData=null;
           }
           row.bodyObserved=true;
+          row.bodySource='cdp';
         }catch{row.problem='RESPONSE_BODY_UNAVAILABLE_OR_UNRECOGNIZED';}
         finally{row.complete=true;last=Date.now();}
       })();
     }
   });
   await send('Network.enable',{maxPostDataSize:65536});
-  return {phase(value){last=Date.now();phases.push({name:value,from:last/1000});},
-    snapshot(){return rows.map(r=>({...r}));},
+  return {async phase(value){
+      last=Date.now();phases.push({name:value,from:last/1000});
+      // A diagnostic tag scopes the real request only. It carries no session,
+      // nonce or product information and is ignored by product code.
+      if(witnessFile&&['consumer','direct'].includes(value)){
+        await send('Network.setExtraHTTPHeaders',{headers:{'X-P1C-Response-Scope':randomBytes(16).toString('hex')}});
+      }
+    },
+    snapshot,
     documentSnapshot(){return documents.map(r=>({...r}));},
-    async settled(){await poll('CDP_NETWORK_NOT_SETTLED',()=>rows.every(r=>r.complete)&&Date.now()-last>=750,12000);},
+    async settled(){await poll('CDP_NETWORK_NOT_SETTLED',()=>snapshot().every(r=>r.complete)&&Date.now()-last>=750,12000);},
     close(){cdp.networkListeners.delete(sessionId);}
   };
 }
@@ -273,7 +296,7 @@ export async function independentBrowser(record,run){
     });
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
     const neutral='http://127.0.0.1:'+server.address().port;
-    let visibility=false,bfcache=false;
+    let visibility=false,bfcache=false,neutralBfcacheDeferral=null;
     try{
       await context(cdp,async id=>{
         const one=await tab(cdp,id),two=await tab(cdp,id);
@@ -296,11 +319,18 @@ export async function independentBrowser(record,run){
         await p.navigate(neutral+'/second');
         const witness=await historyReturn(p,entry,first);
         bfcache=witness.qualified;
+        if(!bfcache)neutralBfcacheDeferral='Neutral BFCache restoration was not observed';
         record('NEUTRAL_NATIVE_BFCACHE',bfcache?'PASS':'NOT_PROVEN',
-          {witness,reasons:cdp.notRestored.filter(e=>e.session===p.sessionId)});
+          {witness,reasons:cdp.notRestored.filter(e=>e.session===p.sessionId),
+            ...(neutralBfcacheDeferral?{bfcacheDeferralReason:neutralBfcacheDeferral}:{})});
       });
-    }catch(e){record('NEUTRAL_NATIVE_BFCACHE','NOT_PROVEN',{reason:String(e.message||e)});}
-    await run({cdp,neutral,visibility,bfcache});
+    }catch(e){
+      const reason=String(e.message||e);
+      if(reason.startsWith('HISTORY_RETURN_NOT_OBSERVED'))neutralBfcacheDeferral='Neutral BFCache history return was not observed';
+      record('NEUTRAL_NATIVE_BFCACHE','NOT_PROVEN',{reason,
+        ...(neutralBfcacheDeferral?{bfcacheDeferralReason:neutralBfcacheDeferral}:{})});
+    }
+    await run({cdp,neutral,visibility,bfcache,neutralBfcacheDeferral});
   }finally{
     if(server){server.closeAllConnections();await new Promise(r=>server.close(r));}
     if(cdp)await cdp.send('Browser.close').catch(()=>{});

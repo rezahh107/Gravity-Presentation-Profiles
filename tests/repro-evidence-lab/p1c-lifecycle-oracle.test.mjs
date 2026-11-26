@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {qualifyThenCheck,requireInvalidated,securityVerdict} from './p1c-lifecycle-oracle.mjs';
+import {lifecycleCompletion,qualifyThenCheck,reconcileResponseWitnesses,requireInvalidated,securityVerdict} from './p1c-lifecycle-oracle.mjs';
 const roots=[{element:'a',state:'stale',entries:[]},{element:'b',state:'stale',entries:[]}];
 for (const name of ['HIDDEN','VISIBLE','BFCACHE']) {
   test(name+' unqualified transition never reaches consumer', async () => {
@@ -37,12 +37,18 @@ test('security verdict separates direct rejection, DOM, and positive controls',(
   const ids=['a','b'];
   const row={phase:'direct',direct:true,action:'gpp_inbox2_read',complete:true,problem:null,
     status:403,bodyObserved:true,privateData:false,success:false,rejection:'authorization_required',noStore:true};
+  const direct=ids.map(element=>({...row,element,form:element==='a'?'3':'4'}));
+  const consumers=direct.map(r=>({...r,phase:'consumer',direct:false}));
   const evidence={revocation:{remaining:0,commandExit:0},baselineVerified:true,transitionVerified:true,
     baselineOracle:{a:[7],b:[]},expectedWidgets:{a:'3',b:'4'},
     finalDom:{documentCards:0,privateMarker:false,cardEvents:[],roots,widgetStates:roots.map(r=>({element:r.element,roots:[{...r,form:r.element==='a'?'3':'4'}]}))},
-    freshB:{verified:true},network:ids.map(element=>({...row,element,form:element==='a'?'3':'4'}))};
+    freshB:{verified:true},network:[...direct,...consumers]};
   assert.equal(securityVerdict(evidence,ids,{crossUser:true}).status,'PASS');
-  assert.equal(securityVerdict(evidence,ids,{crossUser:true}).consumerRequestObserved,false);
+  assert.equal(securityVerdict(evidence,ids,{crossUser:true}).consumerRequestObserved,true);
+  assert.equal(securityVerdict({...evidence,network:direct},ids,{crossUser:true}).status,'NOT_PROVEN');
+  const missingBody={...consumers[0],witnessKey:'scoped-request',bodyObserved:false,complete:false,privateData:null};
+  const [witnessedLeak]=reconcileResponseWitnesses([missingBody],[{...row,key:'scoped-request',privateData:true}]);
+  assert.equal(securityVerdict({...evidence,network:[...direct,...consumers.slice(1),witnessedLeak]},ids,{crossUser:true}).status,'FAIL');
   for(const patch of [{network:[]},{revocation:null},{freshB:null},{finalDom:null},
     {network:[evidence.network[0], {...evidence.network[1],bodyObserved:false}]},
     {network:[evidence.network[0], {...evidence.network[0]}]}]){
@@ -64,11 +70,57 @@ test('security verdict separates direct rejection, DOM, and positive controls',(
   assert.equal(securityVerdict({...evidence,network:evidence.network.map(r=>({...r,form:'wrong'}))},ids,{crossUser:true}).status,'NOT_PROVEN');
   assert.equal(securityVerdict({...evidence,finalDom:{...evidence.finalDom,cardEvents:[99]}},ids,{crossUser:true}).status,'NOT_PROVEN');
   assert.equal(securityVerdict({...evidence,network:[...evidence.network,{...pre,phase:'unattributed'}]},ids,{crossUser:true}).status,'NOT_PROVEN');
-  const bootstraps=evidence.network.map(r=>({...r,action:'gpp_inbox2_atomic_bootstrap',form:null}));
+  const bootstraps=direct.map(r=>({...r,action:'gpp_inbox2_atomic_bootstrap',form:null}));
   const revoked={...evidence,network:[...evidence.network,...bootstraps]};
   assert.equal(securityVerdict(revoked,ids).status,'PASS');
-  const fresh={...revoked,freshNavigationVerified:true,transitionVerified:false};
+  const fresh={...revoked,freshNavigationVerified:true,transitionVerified:false,
+    network:[...direct,...bootstraps,...bootstraps.map(r=>({...r,phase:'consumer',direct:false}))]};
   assert.equal(securityVerdict(fresh,ids,{fresh:true}).status,'PASS');
   assert.equal(securityVerdict({...fresh,network:evidence.network},ids,{fresh:true}).status,'NOT_PROVEN');
   assert.equal(securityVerdict({...fresh,finalDom:{...fresh.finalDom,documentCards:1}},ids,{fresh:true}).status,'FAIL');
+  const deniedPage={...fresh,admissionDenied:true,network:[...direct,...bootstraps],
+    finalDom:{...fresh.finalDom,widgetStates:[],roots:[]}};
+  assert.equal(securityVerdict(deniedPage,ids,{fresh:true}).status,'PASS');
+  assert.equal(securityVerdict(deniedPage,ids,{fresh:true}).consumerRequestObserved,false);
+});
+
+test('host observation needs an exact unique request and matching HTTP evidence',()=>{
+  const browser={witnessKey:'key',phase:'consumer',direct:false,status:403,noStore:true,
+    bodyObserved:false,privateData:null,complete:false};
+  const host={key:'key',status:403,noStore:true,bodyObserved:true,privateData:false,
+    success:false,rejection:'authorization_required'};
+  const [matched]=reconcileResponseWitnesses([browser],[host]);
+  assert.deepEqual(matched,{phase:'consumer',direct:false,status:403,noStore:true,bodyObserved:true,
+    privateData:false,complete:true,problem:null,success:false,rejection:'authorization_required',bodySource:'host_boundary'});
+  for (const unmatched of [[],[{...host,key:'unrelated'}],[host,host],
+    [{...host,status:200}],[{...host,noStore:false}],[{...host,bodyObserved:false}]]) {
+    const [row]=reconcileResponseWitnesses([browser],unmatched);
+    assert.equal(row.bodyObserved,false);
+    assert.equal(row.privateData,null);
+  }
+  assert.equal(reconcileResponseWitnesses([browser,browser],[host]).every(row=>!row.bodyObserved),true);
+  assert.equal(reconcileResponseWitnesses([{...browser,direct:true}],[host])[0].bodyObserved,false);
+  const [conflict]=reconcileResponseWitnesses([{...browser,...matched,witnessKey:'key'}],[{...host,privateData:true}]);
+  assert.equal(conflict.privateData,true);
+  assert.equal(conflict.problem,'RESPONSE_WITNESS_BODY_MISMATCH');
+});
+
+test('only defined deferred BFCache observations and their dependents are nonblocking',()=>{
+  const mandatory=['PRODUCT_VISIBLE_revocation','PRODUCT_VISIBLE_cross_user','PRODUCT_SECURE_FRESH_LOAD_revocation']
+    .map(name=>({name,status:'PASS'}));
+  const gap={name:'PRODUCT_BFCACHE_revocation',status:'NOT_PROVEN',bfcacheDeferralReason:'No genuine restoration'};
+  const dependent={name:'PRODUCT_BFCACHE_CONSUMER_revocation',status:'NOT_REACHED'};
+  const unrelated={name:'PRODUCT_SECURE_FRESH_LOAD_membership',status:'NOT_PROVEN',bfcacheDeferralReason:'Wrong scope'};
+  const c=lifecycleCompletion([...mandatory,gap,dependent]);
+  assert.equal(c.failed,false);
+  assert.deepEqual(c.blocking,[]);
+  assert.deepEqual(c.records.slice(-2).map(r=>[r.status,r.qualificationImpact,r.nonblockingReason]),[
+    ['NOT_PROVEN','NONBLOCKING_WITH_REASON',gap.bfcacheDeferralReason],
+    ['NOT_REACHED','NONBLOCKING_WITH_REASON',gap.bfcacheDeferralReason],
+  ]);
+  assert.deepEqual(lifecycleCompletion([...mandatory,dependent]).blocking,[dependent]);
+  assert.deepEqual(lifecycleCompletion([...mandatory,gap,unrelated]).blocking,[unrelated]);
+  assert.equal(lifecycleCompletion([...mandatory,gap,{...dependent,status:'FAIL'}]).failed,true);
+  assert.equal(lifecycleCompletion([...mandatory,{...gap,status:'FAIL'}]).failed,true);
+  assert.equal(lifecycleCompletion([...mandatory.slice(1),gap]).blocking[0].name,mandatory[0].name);
 });

@@ -91,7 +91,7 @@ const domEvidence=s=>s?{doc:s.doc,state:s.state,ready:s.ready,roots:s.roots,
   widgetStates:s.widgetStates,documentCards:s.documentCards,cardEvents:s.cardEvents,
   privateMarker:s.privateMarker}:null;
 async function directControls(page,network,origin,requests,e){
-  network.phase('direct');
+  await network.phase('direct');
   for(const values of requests){
     try{
       // A genuine same-origin browser request with the current cookies and the
@@ -131,7 +131,7 @@ async function collectSecurity(page,network,origin,fixture,old,e,{crossUser=fals
     e.network=network.snapshot();
   }
 }
-export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,record,origin}){
+export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfcacheDeferral,fixture,wp,record,origin}){
   const credentials=JSON.parse(fs.readFileSync(process.env.P1C_LOGIN_FILE,'utf8'));
   const url=origin+'/?page_id='+fixture.post_id;
   const ids=Object.values(fixture.element_ids_by_form);
@@ -196,7 +196,7 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
           e.baselineVerified=true;e.baseline=domEvidence(a);e.baselineOracle=aExpected;
           const old=await oldReadRequests(p,fixture);
           await network.settled();
-          network.phase('pre_revocation');
+          await network.phase('pre_revocation');
           if(!fresh){
             if(!visibility){e.observationProblems.push('NATIVE_VISIBILITY_NOT_QUALIFIED');return;}
             const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_'+kind,
@@ -207,7 +207,7 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
             if(!hidden){e.observationProblems.push('HIDDEN_INVALIDATION_NOT_QUALIFIED');return;}
           }
           e.revocation=revoke(wp,fixture.users.a);
-          network.phase('consumer');
+          await network.phase('consumer');
           if(crossUser){
             await login(other,origin,credentials.b,url);
             const expected=nativeMembership(wp,'b');
@@ -225,15 +225,29 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
           catch{e.observationProblems.push('SECURITY_OBSERVATION_INCOMPLETE');}
           if(crossUser){
             // Always check fresh B, even when the old A consumer fails.
+            network.close(); // The old document's observation window ended in collectSecurity.
+            let stage='visibility';
             try{
+              const before=await other.read();
+              const activation=before?.state==='hidden'
+                ? await transition(other,other.activate,'visible') : null;
+              if(!activation)await other.activate();
+              const visible=await other.read();
+              assert.equal(visible?.state,'visible','FRESH_B_TAB_NOT_VISIBLE');
               const expected=nativeMembership(wp,'b');
               assert.ok(Object.values(expected).some(v=>v.length>0),'B_POSITIVE_CONTROL_EMPTY');
-              await other.navigate(url,true);
+              stage='fresh_navigation';
+              const freshB=await other.navigate(url,true);
+              assert.equal(freshB.state,'visible','FRESH_B_DOCUMENT_NOT_VISIBLE');
+              stage='membership';
               const s=await current(other,fixture,expected);
-              e.freshB={verified:true,oracle:expected,dom:domEvidence(s)};
+              e.freshB={verified:true,activation,previousDocument:visible.doc,
+                newDocument:freshB.doc,oracle:expected,dom:domEvidence(s)};
               record('PRODUCT_CROSS_USER_FRESH_B','PASS',e.freshB);
             }catch(err){
-              e.freshB={verified:false,membershipMismatch:/NATIVE_MEMBERSHIP_MISMATCH/.test(String(err.message))};
+              const predicate=String(err.message).match(/^(?:FRESH_B_\w+|NATIVE_MEMBERSHIP_MISMATCH_\w+|ATOMIC_ROOT_IDENTITY_MISMATCH_\w+|TWO_\w+_REQUIRED|TWO_CURRENT_ROOTS_NOT_OBSERVED|NATIVE_VISIBLE_NOT_OBSERVED|NAVIGATION_NOT_OBSERVED|B_POSITIVE_CONTROL_EMPTY)/)?.[0]||'FRESH_B_CONTROL_INCOMPLETE';
+              e.freshB={verified:false,stage,predicate,membershipMismatch:predicate.startsWith('NATIVE_MEMBERSHIP_MISMATCH_'),
+                dom:domEvidence(await other.read().catch(()=>null))};
               record('PRODUCT_CROSS_USER_FRESH_B',e.freshB.membershipMismatch?'FAIL':'NOT_PROVEN',e.freshB);
             }
           }
@@ -247,7 +261,8 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
     record(name,verdict.status,{...e,...verdict});
   }
   if(!bfcache){
-    record('PRODUCT_GENUINE_BFCACHE','NOT_PROVEN',{reason:'Neutral genuine BFCache was not qualified'});
+    record('PRODUCT_GENUINE_BFCACHE','NOT_PROVEN',{reason:'Neutral genuine BFCache was not qualified',
+      ...(neutralBfcacheDeferral?{bfcacheDeferralReason:neutralBfcacheDeferral}:{})});
     record('PRODUCT_GENUINE_BFCACHE_CONSUMER','NOT_REACHED');
   }else for(const kind of ['membership','revocation']){
     let changed=false;
@@ -265,10 +280,17 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,fixture,wp,
         else revoke(wp,fixture.users.a);
         let witness;
         try{witness=await historyReturn(p,entry,initial);}
-        catch(e){record('PRODUCT_BFCACHE_'+kind,'NOT_PROVEN',{reason:String(e.message||e),
-          reasons:cdp.notRestored.filter(x=>x.session===p.sessionId)});record('PRODUCT_BFCACHE_CONSUMER_'+kind,'NOT_REACHED');return;}
+        catch(e){
+          const reason=String(e.message||e);
+          record('PRODUCT_BFCACHE_'+kind,'NOT_PROVEN',{reason,reasons:cdp.notRestored.filter(x=>x.session===p.sessionId),
+            ...(reason.startsWith('HISTORY_RETURN_NOT_OBSERVED')?
+              {bfcacheDeferralReason:'Genuine product BFCache history return was not observed'}:{})});
+          record('PRODUCT_BFCACHE_CONSUMER_'+kind,'NOT_REACHED');
+          return;
+        }
         if(!witness.qualified){
-          record('PRODUCT_BFCACHE_'+kind,'NOT_PROVEN',{witness,reasons:cdp.notRestored.filter(x=>x.session===p.sessionId)});
+          record('PRODUCT_BFCACHE_'+kind,'NOT_PROVEN',{witness,reasons:cdp.notRestored.filter(x=>x.session===p.sessionId),
+            bfcacheDeferralReason:'Browser history return did not restore the original product document through BFCache'});
           record('PRODUCT_BFCACHE_CONSUMER_'+kind,'NOT_REACHED');
           if(witness.beforeDoc===witness.afterDoc){if(kind==='membership')record('PRODUCT_SECURE_FRESH_LOAD_'+kind,'NOT_PROVEN');return;}
           try{

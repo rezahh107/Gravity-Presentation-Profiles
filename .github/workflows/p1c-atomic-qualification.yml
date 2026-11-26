@@ -119,7 +119,7 @@ jobs:
           }
           echo "P1C_WORDPRESS_ROOT_URL_CONTRACT_PASS\n";
           '
-          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='p1c-disposable-viewer'
+          php "$WU21_WP_CLI" user create wu21_viewer wu21.viewer@example.invalid --path="$WU21_WP_PATH" --role=subscriber --user_pass='p1c-disposable-viewer' --porcelain
           test "$(php "$WU21_WP_CLI" core version --path="$WU21_WP_PATH")" = "6.8.3"
 
       - name: Verify and activate exact licensed synthetic-host GF and Flow
@@ -139,10 +139,11 @@ jobs:
           stage="$(mktemp -d)"
           trap 'rm -rf "$stage"' EXIT
           mkdir -p "$stage/source" "$stage/out"
+          release_runtime_files "$GITHUB_WORKSPACE" > "$stage/runtime-files.txt"
           while IFS= read -r file; do
             mkdir -p "$stage/source/$(dirname "$file")"
             cp "$file" "$stage/source/$file"
-          done < <(release_runtime_files "$GITHUB_WORKSPACE")
+          done < "$stage/runtime-files.txt"
           version="$(release_plugin_version "$stage/source")"
           if [[ "$version" == '0.0.0-dev' ]]; then
             version=9999.0.0
@@ -158,10 +159,8 @@ jobs:
           test ! -e "$plugin" && test ! -L "$plugin"
           php "$WU21_WP_CLI" plugin install "$candidate" --path="$WU21_WP_PATH"
           test -d "$plugin" && test ! -L "$plugin"
-          while IFS= read -r file; do
-            test ! -L "$plugin/$file"
-            cmp "$stage/source/$file" "$plugin/$file"
-          done < <(release_runtime_files "$stage/source")
+          release_assert_installed_runtime_identity "$stage/source" "$plugin" "$stage/runtime-files.txt" \
+            "$WU21_ARTIFACT_DIR/p1c-installed-files.txt" "$WU21_ARTIFACT_DIR/p1c-installed-byte-parity.tsv"
           test "$(php "$WU21_WP_CLI" plugin get gravity-presentation-profiles --field=version --path="$WU21_WP_PATH")" = "$version"
           printf '{"head":"%s","version":"%s","sha256":"%s","installation":"canonical ZIP via WP-CLI; installed file byte parity; no symlink"}\n' \
             "$GPP_WU21_REPOSITORY_SHA" "$version" "$digest" > "$WU21_ARTIFACT_DIR/p1c-installed-zip.json"
@@ -227,6 +226,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          witness_dir="$(mktemp -d)"
+          chmod 700 "$witness_dir"
+          export P1C_RESPONSE_EVIDENCE_FILE="$witness_dir/responses.jsonl"
+          install -m 0600 /dev/null "$P1C_RESPONSE_EVIDENCE_FILE"
+          install -D -m 0600 tests/repro-evidence-lab/p1c-response-witness.php "$WU21_WP_PATH/wp-content/mu-plugins/p1c-response-witness.php"
+          printf 'P1C_RESPONSE_EVIDENCE_FILE=%s\n' "$P1C_RESPONSE_EVIDENCE_FILE" >> "$GITHUB_ENV"
           php "$WU21_WP_CLI" server --path="$WU21_WP_PATH" --host=127.0.0.1 --port=8080 > /tmp/p1c-wp-server.log 2>&1 &
           echo $! > /tmp/p1c-wp-server.pid
           for i in $(seq 1 30); do
@@ -242,7 +247,7 @@ jobs:
           set -euo pipefail
           login_dir="$(mktemp -d)"
           chmod 700 "$login_dir"
-          trap 'rm -rf "$login_dir"' EXIT
+          trap 'rm -rf "$login_dir"; rm -f "$P1C_RESPONSE_EVIDENCE_FILE" "$WU21_WP_PATH/wp-content/mu-plugins/p1c-response-witness.php"' EXIT
           export P1C_LOGIN_FILE="$login_dir/synthetic-users.json"
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/setup-fixtures.php
           php "$WU21_WP_CLI" --path="$WU21_WP_PATH" eval-file tests/repro-evidence-lab/p1c-atomic-setup.php

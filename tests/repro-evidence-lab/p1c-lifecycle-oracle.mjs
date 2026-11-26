@@ -28,6 +28,67 @@ export function requireInvalidated(roots, expectedIds) {
   }
 }
 
+// The host sees the complete body even when the browser consumer rejects on headers.
+// An exact fingerprint, unique observations on both sides and matching HTTP metadata
+// are required. Fingerprints and any raw response bytes stay out of the report.
+export function reconcileResponseWitnesses(rows, witnesses) {
+  return rows.map(({witnessKey, ...row}) => {
+    if (!witnessKey || row.direct || row.status === null ||
+        rows.filter(candidate => candidate.witnessKey === witnessKey).length !== 1) return row;
+    const matches = witnesses.filter(candidate => candidate.key === witnessKey);
+    if (matches.length !== 1) return row;
+    const witness = matches[0];
+    if (row.status !== witness.status || row.noStore !== witness.noStore) {
+      return {...row, problem:'RESPONSE_WITNESS_HTTP_MISMATCH'};
+    }
+    if (row.bodyObserved) {
+      if (witness.bodyObserved && (row.success !== witness.success ||
+          row.rejection !== witness.rejection ||
+          (witness.privateData !== null && row.privateData !== witness.privateData))) {
+        return {...row, privateData:row.privateData === true || witness.privateData === true ? true : null,
+          problem:'RESPONSE_WITNESS_BODY_MISMATCH'};
+      }
+      return row;
+    }
+    if (row.problem && row.problem !== 'RESPONSE_BODY_UNAVAILABLE_OR_UNRECOGNIZED') return row;
+    if (witness.bodyObserved !== true) {
+      return witness.privateData === true ? {...row, privateData:true} : row;
+    }
+    return {...row, bodyObserved:true, complete:true, problem:null,
+      privateData:row.privateData === true ? true : witness.privateData,
+      success:witness.success, rejection:witness.rejection, bodySource:'host_boundary'};
+  });
+}
+
+const bfcacheGaps = new Set([
+  'NEUTRAL_NATIVE_BFCACHE', 'PRODUCT_GENUINE_BFCACHE',
+  'PRODUCT_BFCACHE_membership', 'PRODUCT_BFCACHE_revocation'
+]);
+const bfcacheDependents = new Map([
+  ['PRODUCT_GENUINE_BFCACHE_CONSUMER', 'PRODUCT_GENUINE_BFCACHE'],
+  ['PRODUCT_BFCACHE_CONSUMER_membership', 'PRODUCT_BFCACHE_membership'],
+  ['PRODUCT_BFCACHE_CONSUMER_revocation', 'PRODUCT_BFCACHE_revocation']
+]);
+const mandatoryClaims = ['PRODUCT_VISIBLE_revocation', 'PRODUCT_VISIBLE_cross_user',
+  'PRODUCT_SECURE_FRESH_LOAD_revocation'];
+
+export function lifecycleCompletion(records) {
+  const result = records.map(record => {
+    const gap = record.status === 'NOT_PROVEN' && bfcacheGaps.has(record.name) ? record
+      : record.status === 'NOT_REACHED' ? records.find(candidate =>
+        candidate.name === bfcacheDependents.get(record.name) && candidate.status === 'NOT_PROVEN') : null;
+    return gap?.bfcacheDeferralReason ? {...record, qualificationImpact:'NONBLOCKING_WITH_REASON',
+      nonblockingReason:gap.bfcacheDeferralReason} : record;
+  });
+  const blocking = result.filter(record => ['NOT_PROVEN','NOT_REACHED'].includes(record.status) &&
+    record.qualificationImpact !== 'NONBLOCKING_WITH_REASON');
+  for (const name of mandatoryClaims) {
+    if (result.filter(record => record.name === name).length !== 1) {
+      blocking.push({name,status:'NOT_PROVEN',reason:'Mandatory case result absent or ambiguous'});
+    }
+  }
+  return {records:result,blocking,failed:result.some(record => record.status === 'FAIL')};
+}
 
 // Classify independent observations, never an absent request as server denial.
 // Test inputs contain only sanitized evidence and synthetic identities.
@@ -45,6 +106,11 @@ export function securityVerdict(e,ids,{crossUser=false,fresh=false}={}){
   if(ids.length!==2||new Set(ids).size!==2||ids.some(id=>!e.expectedWidgets?.[id]))problems.push('EXPECTED_WIDGET_IDENTITIES_UNPROVEN');
   if(!fresh&&!e.transitionVerified)problems.push('NATIVE_RETURN_UNPROVEN');
   if(fresh&&!e.freshNavigationVerified)problems.push('FRESH_NAVIGATION_UNPROVEN');
+  for(const element of ids){
+    const action=fresh?'gpp_inbox2_atomic_bootstrap':'gpp_inbox2_read';
+    if(!(fresh&&e.admissionDenied===true)&&!observed.some(r=>r.element===element&&r.action===action&&
+      (fresh||r.form===e.expectedWidgets?.[element])))problems.push('CONSUMER_REQUEST_UNPROVEN_'+element);
+  }
   for(const element of ids)for(const action of expectedActions){
     const matches=direct.filter(r=>r.element===element&&r.action===action&&
       (action!=='gpp_inbox2_read'||r.form===e.expectedWidgets?.[element]));
