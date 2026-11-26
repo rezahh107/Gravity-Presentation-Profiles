@@ -292,7 +292,59 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export GPP_INBOX2_TESTED_HEAD="$(git rev-parse HEAD)"
           bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
+
+      - name: Qualify prepared stable-version installed ZIP on the same disposable lab
+        # A development checkout's normal smoke exercises the 9999.0.0 overlay.
+        # Prepare a separate, non-public stable test source via the canonical tool.
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/release/release-lib.sh
+          if [[ "$(release_plugin_version .)" != 0.0.0-dev ]]; then
+            echo 'Stable source was already exercised by the preceding installed-ZIP smoke.'
+            exit 0
+          fi
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          stable="$work/source"
+          mkdir -p "$stable"
+          release_runtime_files "$GITHUB_WORKSPACE" > "$work/inventory" || exit 1
+          while IFS= read -r file; do
+            mkdir -p "$stable/$(dirname "$file")"
+            cp "$GITHUB_WORKSPACE/$file" "$stable/$file"
+          done < "$work/inventory"
+          cp CHANGELOG.md "$stable/CHANGELOG.md"
+          # Derive a test-only stable version, not a publication decision. The
+          # current 0.5.0 release heading produces the selected 0.6.0 test path.
+          latest="$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | sed -n '1p')"
+          stable_version="$(release_next_version "$latest" minor)"
+          test "$stable_version" != 9999.0.0
+          php scripts/release/prepare-candidate.php --root="$stable" --version="$stable_version" --date=2099-01-01
+          export GPP_INBOX2_TESTED_HEAD="$(git rev-parse HEAD)"
+          export GPP_INBOX2_PREPARED_SOURCE="$stable"
+          export WU21_ARTIFACT_DIR="$WU21_ARTIFACT_DIR/inbox2-stable"
+          mkdir -p "$WU21_ARTIFACT_DIR"
+          # One bounded PR187 comparison against the original builder, on the
+          # same prepared source and runner. It is not a new publication gate.
+          if [[ "$(jq -r '.pull_request.number // 0' "$GITHUB_EVENT_PATH")" == 187 ]]; then
+            reference=7918eb61298347b0446d4ee06304de912741c3da
+            mkdir -p "$work/reference-tools" "$work/reference-out"
+            for tool in release-lib.sh build-release.sh validate-release.sh; do
+              git show "$reference:scripts/release/$tool" > "$work/reference-tools/$tool"
+            done
+            export LC_ALL=C TZ=UTC
+            bash "$work/reference-tools/build-release.sh" "$stable" "$stable_version" "$work/reference-out"
+            reference_zip="$work/reference-out/gravity-presentation-profiles-$stable_version.zip"
+            bash "$work/reference-tools/validate-release.sh" "$stable" "$reference_zip" "$stable_version"
+            reference_sha="$(sha256sum "$reference_zip")"
+            export GPP_INBOX2_EXPECTED_PARITY_SHA256="${reference_sha%% *}"
+            printf 'reference_head=%s\numask=%s\nLC_ALL=%s\nTZ=%s\n' "$reference" "$(umask)" "$LC_ALL" "$TZ" > "$WU21_ARTIFACT_DIR/gpp-inbox2-reference-build.txt"
+            zip -v >> "$WU21_ARTIFACT_DIR/gpp-inbox2-reference-build.txt"
+          fi
+          bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
+          test "$(release_plugin_version .)" = 0.0.0-dev
 
       - name: Assert native Gravity Flow REST route over HTTP
         shell: bash
@@ -612,6 +664,19 @@ jobs:
             /tmp/wu21-artifacts/${{ steps.evidence.outputs.evidence_file }}
             /tmp/wu21-artifacts/runtime.json
             /tmp/wu21-artifacts/fixture-manifest.json
+            /tmp/wu21-artifacts/gpp-inbox2-installed-fixture.json
+            /tmp/wu21-artifacts/gpp-inbox2-installed-browser.json
+            /tmp/wu21-artifacts/gpp-inbox2-http-before-browser.json
+            /tmp/wu21-artifacts/gpp-inbox2-http-after-browser.json
+            /tmp/wu21-artifacts/gpp-inbox2-expected-files.txt
+            /tmp/wu21-artifacts/gpp-inbox2-actual-files.txt
+            /tmp/wu21-artifacts/gpp-inbox2-file-comparisons.txt
+            /tmp/wu21-artifacts/gpp-inbox2-package-identity.txt
+            /tmp/wu21-artifacts/gpp-inbox2-http-process.txt
+            /tmp/wu21-artifacts/gpp-inbox2-http-assets.txt
+            /tmp/wu21-artifacts/gpp-inbox2-http-recovery.txt
+            /tmp/wu21-artifacts/inbox2-stable/gpp-inbox2-*.json
+            /tmp/wu21-artifacts/inbox2-stable/gpp-inbox2-*.txt
             /tmp/wu21-artifacts/inbox-mixed-readiness-php.json
             /tmp/wu21-artifacts/inbox-mixed-readiness-browser.json
             /tmp/wu21-artifacts/php-results.json

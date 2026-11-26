@@ -152,16 +152,41 @@ release_next_version() {
 release_runtime_files() {
     local root="${1:-.}"
     (
-        cd "$root"
-        printf '%s\n' "$GPP_ENTRYPOINT" 'LICENSE'
-        find src -type f -name '*.php' -print
+        cd "$root" || exit 1
+        printf '%s\n' "$GPP_ENTRYPOINT" 'LICENSE' || exit 1
+        find src -type f -name '*.php' -print || exit 1
         # Atomic_Widget_Base/Has_Template resolves these same Twig sources in PHP and Twing.
-        find templates -type f -name '*.html.twig' -print
-        find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print
-        find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print
-        find help -type f -name '*.html' -print
-        find languages -type f \( -name '*.mo' -o -name '*.po' \) -print
+        find templates -type f -name '*.html.twig' -print || exit 1
+        find assets -type f \( -name '*.css' -o -name '*.js' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.svg' -o -name '*.webp' \) -print || exit 1
+        find profiles -type f \( -name '*.php' -o -name '*.css' -o -name '*.json' \) -print || exit 1
+        find help -type f -name '*.html' -print || exit 1
+        find languages -type f \( -name '*.mo' -o -name '*.po' \) -print || exit 1
     ) | LC_ALL=C sort -u
+}
+
+# The inventory is supplied by the intended source, not the installation.
+# Include non-allowlisted files and non-directory special entries in the
+# actual inventory, so an additional file or symlink cannot be ignored.
+release_assert_installed_runtime_identity() {
+    local source="$1" installed="$2" expected="$3" actual="$4" comparisons="$5"
+    local path
+    : > "$comparisons" || return 1
+    if ! (cd "$installed" && find . ! -type d -printf '%P\n') | LC_ALL=C sort > "$actual"; then
+        release_fail 'Installed runtime enumeration failed.'
+        return 1
+    fi
+    if ! diff -u "$expected" "$actual"; then
+        release_fail 'Installed runtime file set differs from canonical source inventory.'
+        return 1
+    fi
+    while IFS= read -r path; do
+        if [[ ! -f "$installed/$path" || -L "$installed/$path" ]] || ! cmp -s "$source/$path" "$installed/$path"; then
+            printf 'FAIL\t%s\n' "$path" >> "$comparisons" || return 1
+            release_fail "Installed runtime bytes or file type differ: $path"
+            return 1
+        fi
+        printf 'PASS\t%s\n' "$path" >> "$comparisons" || return 1
+    done < "$expected"
 }
 
 release_required_runtime_files() {
