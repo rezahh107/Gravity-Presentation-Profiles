@@ -15,10 +15,11 @@ WORKFLOWS=(
   'srwf-journey-host-qualification.yml'
   'wu18-entry-detail-runtime.yml'
   'wu19-a4-print-runtime.yml'
+  'p1c-atomic-qualification.yml'
 )
 
 # Read-only discovery can tolerate only short-lived GitHub API 5xx responses.
-# Retries here NEVER re-dispatch: the six canonical dispatches remain below.
+# Retries here NEVER re-dispatch: the seven canonical dispatches remain below.
 discover_run_id() {
     local workflow="$1" attempt response err selected
     for (( attempt=1; attempt<=6; attempt++ )); do

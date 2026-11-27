@@ -87,17 +87,19 @@ This proves that production files excluded from the source checkout are not requ
 
 ## Qualification
 
-A production candidate must pass exact-source runs of:
+A production candidate must pass exact-source runs of all seven required workflows:
 
-- Repository CI;
-- WU21 Reproducible Evidence Lab;
-- SRWF Registration Authentic Runtime;
-- WU18 Entry Detail Runtime;
-- WU19 A4 Print Runtime.
+- Repository CI (`ci.yml`);
+- WU21 Reproducible Evidence Lab (`wu21-repro-evidence-lab.yml`);
+- SRWF Registration Authentic Runtime (`srwf-registration-runtime.yml`);
+- SRWF Journey Host Qualification (`srwf-journey-host-qualification.yml`);
+- WU18 Entry Detail Runtime (`wu18-entry-detail-runtime.yml`);
+- WU19 A4 Print Runtime (`wu19-a4-print-runtime.yml`);
+- P1-C Genuine Elementor 4.4 Atomic Inbox 2 (`p1c-atomic-qualification.yml`).
 
-`Repository CI` supports `workflow_dispatch` so the release workflow can qualify an exact release-candidate branch, including its DB advisory-lock jobs. The other four existing pinned workflows already support explicit dispatch.
+All seven support `workflow_dispatch` on the exact candidate branch; Repository CI includes its DB advisory-lock jobs. The release waiter dispatches each workflow once, discovers exact-source run IDs, and requires matching candidate SHA, branch, dispatch event and run identity with completed success. Discovery/polling retries are bounded and read-only; a missing, skipped, incomplete or unsuccessful result blocks publication. The existing qualification evidence shape is unchanged.
 
-The release workflow starts all five, captures exact run IDs, verifies their `headSha` equals the candidate SHA, and requires `success` before building/publishing.
+P1-C uses the canonical ZIP build, validation, WordPress installation and installed-runtime byte-parity checks with its existing Atomic assurance. A PR result, release dry-run or synthetic candidate rehearsal does not replace successful qualification of the future production candidate.
 
 ## Resolved repository compatibility authority
 
