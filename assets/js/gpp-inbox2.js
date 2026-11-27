@@ -30,7 +30,9 @@
 
   function mount(root, initial = false) {
     if (!root.isConnected || instances.has(root)) return;
-    if (!initial) discardCopiedCards(root);
+    const trustedSnapshot = initial && !document.hidden &&
+      root.dataset.ciq2State === 'current' && Boolean(root.dataset.ciq2VerifiedAt);
+    if (!trustedSnapshot) discardCopiedCards(root);
     const find = name => root.querySelector('[data-ciq2-' + name + ']');
     const list = find('list'), input = find('search'), status = find('status');
     const empty = find('empty'), noResults = find('no-results');
@@ -46,7 +48,8 @@
     }
 
     let page = 1, generation = 0, busy = false, controller = null, watchdog = null, announcementTimer = null;
-    let verifiedAt = root.dataset.ciq2VerifiedAt || '';
+    let verifiedAt = trustedSnapshot ? root.dataset.ciq2VerifiedAt : '';
+    let hasSnapshot = trustedSnapshot;
     function announce(message) {
       if (announcement.textContent !== message) announcement.textContent = message;
     }
@@ -62,6 +65,7 @@
       (item?.querySelector('[data-ciq2-detail]') || heading).focus({preventScroll:true});
     }
     function draw(live = false) {
+      if (!hasSnapshot) return;
       const nodes = [...list.querySelectorAll('[data-ciq2-entry]')];
       const query = normalize(input.value);
       // Do not index school, hidden fields, or unapproved data.
@@ -84,10 +88,10 @@
       pager.hidden = filtered.length <= 20;
       previous.disabled = page <= 1; next.disabled = page >= pages;
       pageLabel.textContent = 'صفحه ' + formatNumber(page) + ' از ' + formatNumber(pages);
+      if (root.dataset.ciq2State !== 'current') return;
       status.textContent = (query ? formatNumber(filtered.length) + ' مورد مطابق جست‌وجو از ' +
         formatNumber(nodes.length) : formatNumber(nodes.length) + ' پرونده در صف') +
         (verifiedAt ? ' · آخرین تأیید ' + verifiedAt : '');
-      root.dataset.ciq2State = 'current';
       if (live) announce(status.textContent);
     }
     function cancel() {
@@ -101,6 +105,7 @@
     function stale(code = 503, message = '') {
       const focus = focusedEntry();
       list.replaceChildren();
+      hasSnapshot = false;
       root.dataset.ciq2State = 'stale';
       empty.hidden = true; noResults.hidden = true; pager.hidden = true;
       status.textContent = message || (code === 403
@@ -111,6 +116,7 @@
     }
     async function refresh(force = false, quiet = false) {
       if (!root.isConnected) { destroy(root); return; }
+      if (document.hidden) return;
       if (busy && !force) return;
       cancel();
       const serial = ++generation;
@@ -137,13 +143,14 @@
           }),
           signal:pending.signal
         });
-        if (serial !== generation || !root.isConnected) return;
+        if (serial !== generation || !root.isConnected || document.hidden) return;
         if (!response.ok) {
           const error = new Error('read_failed');
           error.status = response.status;
           throw error;
         }
         const data = await response.json();
+        if (serial !== generation || !root.isConnected || document.hidden) return;
         if (!data.success || !data.data || !Number.isSafeInteger(data.data.count) ||
             data.data.count < 0 || typeof data.data.html !== 'string') throw new Error('invalid_response');
         const doc = new DOMParser().parseFromString(data.data.html, 'text/html');
@@ -156,11 +163,12 @@
         const ids = incoming.map(node => Number(node.dataset.ciq2Entry));
         if (ids.length !== data.data.count || ids.some(id => !Number.isSafeInteger(id) || id < 1) ||
             new Set(ids).size !== ids.length) throw new Error('incomplete_or_duplicate_identity');
-        if (serial !== generation || !root.isConnected) return;
         const focus = focusedEntry();
         list.replaceChildren(...incoming.map(node => document.importNode(node, true)));
         verifiedAt = returned.dataset.ciq2VerifiedAt;
         root.dataset.ciq2VerifiedAt = verifiedAt;
+        hasSnapshot = true;
+        root.dataset.ciq2State = 'current';
         draw(!quiet);
         restoreFocus(focus);
       } catch (error) {
@@ -174,8 +182,8 @@
     const onInput = event => {
       if (event.target !== input) return;
       page = 1;
+      draw();
       if (root.dataset.ciq2State === 'current') {
-        draw();
         if (announcementTimer) clearTimeout(announcementTimer);
         announcementTimer = setTimeout(() => {
           announcementTimer = null;
@@ -212,7 +220,7 @@
         root.removeEventListener('submit', onSubmit);
       }
     });
-    if (initial) {
+    if (trustedSnapshot) {
       draw();
     } else {
       // Every public mount must get its own server-confirmed snapshot.

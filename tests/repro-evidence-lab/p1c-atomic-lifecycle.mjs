@@ -165,7 +165,7 @@ try {
   results.failure=String(error?.stack||error).slice(0,3000);
   record('QUALIFICATION_EXECUTION','FAIL',{reason:String(error).slice(0,500)});
 } finally{
-  completion=lifecycleCompletion(results.results);
+  completion=lifecycleCompletion(results.results,fixture);
   results.results=completion.records;
   fs.writeFileSync(path.join(artifact,'p1c-atomic-lifecycle.json'),
     JSON.stringify(results,null,2));

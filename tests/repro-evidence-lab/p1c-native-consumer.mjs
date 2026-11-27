@@ -163,7 +163,20 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
         const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_membership',
           ()=>transition(p,other.activate,'hidden'),async()=>{
             const s=await p.read();requireRoots(s,fixture);requireInvalidated(s.roots,ids);
-            return {roots:s.roots};
+            // The same real hidden document must stay scrubbed if an Atomic
+            // shell is detached and mounted again before genuine visible return.
+            const remount=await p.observeNetwork(origin,'PRODUCT_HIDDEN_membership');
+            try{
+              await p.evaluate('(()=>{window.__p1cRemount=document.querySelector("[data-gpp-atomic-inbox2=ready]");'+
+                'window.__p1cRemount.remove()})()');
+              await p.evaluate('document.body.append(window.__p1cRemount);delete window.__p1cRemount;true');
+              await remount.settled();
+              assert.equal(remount.snapshot().length,0,'HIDDEN_REMOUNT_PRIVATE_REQUEST_OBSERVED');
+              const after=await p.read();
+              assert.equal(after.state,'hidden','HIDDEN_REMOUNT_STATE_LOST');
+              requireRoots(after,fixture);requireInvalidated(after.roots,ids);
+              return {roots:s.roots,hiddenRemount:{state:after.state,roots:after.roots,requests:0}};
+            }finally{remount.close();}
           });
         if(!hidden){record('PRODUCT_VISIBLE_membership','NOT_REACHED');return;}
         changed=true;entryStatus(wp,mutation,'trash');const expected=expectedChanged();
@@ -257,7 +270,7 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
         }
       });
     }catch{e.observationProblems.push('SECURITY_FIXTURE_OR_CONTROL_INCOMPLETE');}
-    const verdict=securityVerdict(e,ids,{crossUser,fresh});
+    const verdict=securityVerdict(e,ids,{crossUser,fresh,forms:fixture.forms});
     record(name,verdict.status,{...e,...verdict});
   }
   if(!bfcache){
@@ -305,7 +318,7 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
           const hide=witness.events.find(e=>e.type==='pagehide'&&e.trusted);
           assert.ok(hide,'BFCACHE_TRUSTED_PAGEHIDE_REQUIRED');
           const s=kind==='membership'?await current(p,fixture,expected):await deferredBfcacheDenied(p,fixture,hide.at);
-          return {roots:s.roots};
+          return kind==='membership'?{roots:s.roots}:s;
         });
       });
     }catch(e){record('PRODUCT_BFCACHE_FIXTURE_'+kind,'NOT_PROVEN',{reason:String(e.message||e)});}

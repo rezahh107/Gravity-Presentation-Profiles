@@ -136,10 +136,20 @@ try {
   // 25 Native-authorized tasks -> 20/5 pagination, search reset, detail
   // and an independently verified read round trip.
   const aRoot=aLoaded.page.locator('[data-ciq2-root][data-ciq2-form="'+m.forms.a+'"]');
-  assert.equal(await aRoot.locator('[data-ciq2-entry]').count(),25);
-  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),20);
+  const cards=aRoot.locator('[data-ciq2-entry]');
+  const visibleIds=()=>aRoot.locator('[data-ciq2-entry]:visible').evaluateAll(nodes=>
+    nodes.map(node=>Number(node.dataset.ciq2Entry)));
+  assert.deepEqual(await cards.evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.ciq2Entry))),m.native_fifo_a);
+  assert.deepEqual(await visibleIds(),m.native_fifo_a.slice(0,20));
+  const cells=await cards.evaluateAll(nodes=>Object.fromEntries(nodes.map(node=>[
+    node.dataset.ciq2Entry,Object.fromEntries(['name','national-id','school-grade'].map(cell=>
+      [cell,node.querySelector('[data-ciq2-'+cell+']').textContent.trim()]))
+  ])));
+  const expectedCells=Object.fromEntries(Object.entries(m.native_cells_a).map(([id,row])=>
+    [id,Object.fromEntries(Object.entries(row).map(([cell,value])=>[cell,value.trim()]))]));
+  assert.deepEqual(cells,expectedCells,'Atomic final permitted text must match Native Task Model cells');
   await aRoot.locator('[data-ciq2-next]').click();
-  assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),5);
+  assert.deepEqual(await visibleIds(),m.native_fifo_a.slice(20));
   assert.match(await aRoot.locator('[data-ciq2-pager] [data-ciq2-page]').textContent(),/۲ از ۲/);
   await aRoot.locator('[data-ciq2-search]').fill('SYN-P1C-A-0024');
   assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),1);
@@ -153,16 +163,42 @@ try {
   assert.equal(await aRoot.locator('[data-ciq2-no-results]').isVisible(),true);
   await aRoot.locator('[data-ciq2-search]').fill('');
   assert.equal(await aRoot.locator('[data-ciq2-entry]:visible').count(),20);
-  let fresh;
+  const isAtomicRead=request=>{
+    const data=new URLSearchParams(request.postData()||'');
+    return request.url().includes('admin-ajax.php') && data.get('action')==='gpp_inbox2_read' &&
+      data.get('form_id')===String(m.forms.a);
+  };
+  let releaseRead;
+  const holdRead=new Promise(resolve=>{releaseRead=resolve;});
+  const holdAtomicRead=async route=>{
+    if(isAtomicRead(route.request()))await holdRead;
+    await route.continue();
+  };
+  const routes='**/wp-admin/admin-ajax.php';
+  await aLoaded.page.route(routes,holdAtomicRead);
   try {
-    // The existing installed-ZIP Inbox 2 regression also uses requestSubmit:
-    // this is the native form submission event, not a synthetic event dispatch.
-    [fresh]=await Promise.all([
-      aLoaded.page.waitForResponse(resp=>resp.url().includes('admin-ajax.php') &&
-        (resp.request().postData()||'').includes('action=gpp_inbox2_read') &&
-        (resp.request().postData()||'').includes('form_id='+m.forms.a),{timeout:30000}),
+    const verifiedAt=await aRoot.getAttribute('data-ciq2-verified-at');
+    await Promise.all([
+      aLoaded.page.waitForRequest(isAtomicRead,{timeout:15000}),
       aRoot.locator('form').evaluate(form=>form.requestSubmit())
     ]);
+    const status=aRoot.locator('[data-ciq2-status]');
+    const announcement=aRoot.locator('[data-ciq2-announcement]');
+    const syncing=await status.textContent(), live=await announcement.textContent();
+    assert.equal(await aRoot.getAttribute('data-ciq2-state'),'syncing');
+    assert.equal(await cards.count(),25,'Ordinary refresh retains the last validated snapshot');
+    await aRoot.locator('[data-ciq2-next]').click();
+    assert.deepEqual(await visibleIds(),m.native_fifo_a.slice(20));
+    await aRoot.locator('[data-ciq2-search]').fill('SYN-P1C-A-0024');
+    assert.deepEqual(await visibleIds(),[m.entry_ids.a[23]]);
+    assert.equal(await aRoot.getAttribute('data-ciq2-state'),'syncing');
+    assert.equal(await aRoot.getAttribute('data-ciq2-verified-at'),verifiedAt);
+    assert.equal(await status.textContent(),syncing);
+    assert.equal(await announcement.textContent(),live);
+    await aRoot.locator('[data-ciq2-search]').fill('');
+    const response=aLoaded.page.waitForResponse(resp=>isAtomicRead(resp.request()),{timeout:30000});
+    releaseRead();
+    assert.equal((await response).status(),200,'Real existing Inbox2 read/refresh path failed');
   } catch(error) {
     const state=await aRoot.evaluate(node=>({
       state:node.dataset.ciq2State,
@@ -172,13 +208,16 @@ try {
     throw new Error('ATOMIC_REFRESH_FAILURE '+JSON.stringify({
       state,requests,resources,pageErrors,url:aLoaded.page.url()
     })+' '+String(error));
+  } finally {
+    releaseRead();
+    await aLoaded.page.unroute(routes,holdAtomicRead);
   }
-  assert.equal(fresh.status(),200,'Real existing Inbox2 read/refresh path failed');
   await aLoaded.page.waitForFunction(form=>{
     const root=document.querySelector('[data-ciq2-root][data-ciq2-form="'+form+'"]');
     return root?.dataset.ciq2State==='current' && root.querySelectorAll('[data-ciq2-entry]').length===25;
   },String(m.forms.a),{timeout:30000});
   checks.push('ATOMIC_REAL_25_TASK_FIFO_SEARCH_PAGINATION_DETAIL_REFRESH');
+  checks.push('ATOMIC_FINAL_NATIVE_TEXT_CELLS_AND_PENDING_REFRESH_STATE');
 
   const b=await context(m.users.b);
   const bLoaded=await load(b,'b');

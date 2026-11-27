@@ -21,10 +21,14 @@
     message.textContent = 'فهرست در دسترس نیست. صفحه را دوباره بارگذاری کنید.';
     node.appendChild(message);
   }
-  function halt(state) {
-    state.controller.abort();
+  function release(state) {
+    clearTimeout(state.timer);
     active.delete(state);
-    states.delete(state.node);
+    if (states.get(state.node) === state) states.delete(state.node);
+  }
+  function halt(state) {
+    release(state);
+    state.controller.abort();
   }
   async function start(node) {
     if (!node.isConnected || states.has(node) || inEditor() || document.hidden) return;
@@ -40,10 +44,19 @@
       safeMessage(node);
       return;
     }
-    const state = {node, controller: new AbortController()};
+    const state = {node, controller: new AbortController(), timer: null};
     states.set(node, state);
     active.add(state);
     const serial = state.controller.signal;
+    const deadline = performance.now() + 30000;
+    const ownsShell = () => states.get(node) === state && node.isConnected &&
+      node.matches(selector) && !document.hidden && !inEditor() &&
+      host.getAttribute('data-gpp-atomic-element-id') === element &&
+      host.getAttribute('data-gpp-atomic-widget-type') === 'e-gpp-inbox-2';
+    state.timer = setTimeout(() => {
+      if (ownsShell()) safeMessage(node);
+      halt(state);
+    }, 30000);
     try {
       const response = await fetch(config.ajax, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -52,8 +65,10 @@
           action: 'gpp_inbox2_atomic_bootstrap', page_id: String(config.page), element_id: element
         }), signal: serial
       });
+      if (!ownsShell()) return;
       if (!response.ok) throw new Error('bootstrap_denied');
       const result = await response.json();
+      if (!ownsShell()) return;
       if (!result?.success || typeof result.data?.html !== 'string') throw new Error('bootstrap_shape');
       const parsed = new DOMParser().parseFromString(result.data.html, 'text/html');
       const root = parsed.querySelector('[data-ciq2-root]');
@@ -64,9 +79,7 @@
           !root.dataset.ciq2Nonce || root.dataset.ciq2VerifiedAt ||
           root.querySelectorAll('[data-ciq2-entry]').length ||
           root.querySelectorAll('[data-ciq2-list]').length !== 1) throw new Error('unsafe_bootstrap');
-      if (serial.aborted || !node.isConnected || document.hidden || inEditor() ||
-          !host.isConnected || host.getAttribute('data-gpp-atomic-element-id') !== element ||
-          host.getAttribute('data-gpp-atomic-widget-type') !== 'e-gpp-inbox-2') return;
+      if (performance.now() >= deadline) throw new Error('bootstrap_timeout');
       const inserted = document.importNode(root, true);
       // Keep the original Atomic/Twig class-bearing element: Elementor native
       // Classes, Variables and breakpoint styles target this wrapper.
@@ -74,10 +87,9 @@
       node.dataset.gppAtomicInbox2 = 'ready';
       window.GPPInbox2?.initAll(inserted);
     } catch (error) {
-      if (!serial.aborted) safeMessage(node);
+      if (ownsShell()) safeMessage(node);
     } finally {
-      active.delete(state);
-      states.delete(node);
+      release(state);
     }
   }
   function scan(container) {
