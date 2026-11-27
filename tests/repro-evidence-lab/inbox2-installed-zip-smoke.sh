@@ -164,7 +164,7 @@ jq -e --arg base "$WU21_BASE_URL/" '(.url | startswith($base)) and (.multi_url |
 printf 'GPP_INBOX2_INSTALLED_HTTP_RESTART_PASS old=%s new=%s\n' "$old_listener" "$new_listener"
 export GPP_INBOX2_HTTP_PROBE_URL="$probe_url"
 export GPP_INBOX2_HTTP_LISTENER_PID="$new_listener"
-node tests/repro-evidence-lab/inbox2-installed-zip-browser.mjs
+xvfb-run -a bash -euc 'openbox >/tmp/wu21-inbox2-openbox.log 2>&1 & sleep 2; exec node tests/repro-evidence-lab/inbox2-installed-zip-browser.mjs'
 test -s "$WU21_ARTIFACT_DIR/gpp-inbox2-installed-browser.json"
 test "$(wu21_assert_owned_listener "$current_wrapper" 8080 "$WU21_WP_CLI" "$WU21_WP_PATH")" = "$new_listener"
 wu21_assert_http_identity "$probe_url" "$new_listener" "$VERSION" "$PLUGIN_DIR" "$WU21_ARTIFACT_DIR/gpp-inbox2-http-after-browser.json" || exit 1

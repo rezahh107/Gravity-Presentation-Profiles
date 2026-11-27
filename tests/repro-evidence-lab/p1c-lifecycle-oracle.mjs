@@ -30,6 +30,17 @@ export function requireInvalidated(roots, expectedIds) {
   }
 }
 
+export function retainedWhilePending(before,pending,responses,form) {
+  return before?.state==='current'&&pending?.state==='syncing'&&pending.visibility==='visible'&&
+    isIdentity(before.verifiedAt)&&pending.verifiedAt===before.verifiedAt&&pending.showsChecking===true&&
+    pending.showsVerifiedTime===true&&isIdentity(before.query)&&before.query===pending.query&&
+    before.page===pending.page&&isIdentity(before.focus)&&before.focus===pending.focus&&
+    Array.isArray(before.visible)&&before.visible.length>0&&isDeepStrictEqual(before.visible,pending.visible)&&
+    isDeepStrictEqual(before.entries,pending.entries)&&pending.insertedCards===0&&Number.isFinite(pending.observedAt)&&
+    Array.isArray(responses)&&responses.some(response=>response.status===200&&response.form===form&&
+      Number.isFinite(response.pausedAt)&&response.pausedAt<=pending.observedAt+1);
+}
+
 // The host sees the complete body even when the browser consumer rejects on headers.
 // An exact fingerprint, unique observations on both sides and matching HTTP metadata
 // are required. Fingerprints and any raw response bytes stay out of the report.
@@ -133,14 +144,21 @@ export function lifecycleCompletion(records, fixture) {
     visibilityWitness(r.hidden,'hidden') && visibilityWitness(r.visible,'visible') && r.hidden.doc === r.visible.doc);
   for (const kind of ['membership','revocation','cross_user']) {
     requirePass('PRODUCT_HIDDEN_'+kind, r => {
-      if (!visibilityWitness(r.witness,'hidden')) return false;
-      try { requireInvalidated(r.roots,ids); return true; } catch { return false; }
+      if (!visibilityWitness(r.witness,'hidden')||
+          !rootsMatchMembership(r.roots,fixture.element_ids_by_form,fixture.forms,fixture.native_oracle.a,['current','syncing'])) return false;
+      if(kind!=='membership')return true;
+      return isDeepStrictEqual(r.hiddenRemount,{visibility:'hidden',state:'stale',cards:0,requests:0})&&
+        r.hiddenView?.visibility==='hidden'&&Array.isArray(r.hiddenView.entries)&&
+        isDeepStrictEqual([...r.hiddenView.entries].sort((a,b)=>a-b),fixture.native_oracle.a.a);
     });
   }
   const changedMembership = r => rootsMatchMembership(r.roots, fixture.element_ids_by_form,
     fixture.forms, {...fixture.native_oracle.a,a:fixture.native_oracle.a.a.slice(0,-1)});
   requirePass('PRODUCT_VISIBLE_membership', r => visibilityWitness(r.witness,'visible') &&
-    r.witness.doc === one('PRODUCT_HIDDEN_membership')?.witness?.doc && changedMembership(r));
+    r.witness.doc === one('PRODUCT_HIDDEN_membership')?.witness?.doc && changedMembership(r)&&
+    retainedWhilePending(r.before,r.pending,r.responses,String(fixture.forms.a))&&
+    r.responses.length===ids.length&&ids.every(id=>r.responses.some(response=>response.element===id&&response.status===200))&&
+    r.after?.state==='current'&&r.after.query===r.before.query&&r.after.page===r.before.page&&r.after.focus===r.before.focus);
   for (const [name,options] of securityCases) {
     requirePass(name, r => {
       const verdict = securityVerdict(r,ids,{...options,forms:fixture.forms});
@@ -220,11 +238,11 @@ export function lifecycleCompletion(records, fixture) {
 
 const validEntries = entries => Array.isArray(entries) &&
   entries.every(id => Number.isSafeInteger(id) && id > 0) && new Set(entries).size === entries.length;
-function rootsMatchMembership(roots, elementByForm, forms, oracle) {
+function rootsMatchMembership(roots, elementByForm, forms, oracle, states=['current']) {
   return Array.isArray(roots) && roots.length === 2 && ['a','b'].every(key => {
     const form = String(forms[key]);
     const matching = roots.filter(r => r?.form === form && r.element === elementByForm[form]);
-    return matching.length === 1 && matching[0].state === 'current' &&
+    return matching.length === 1 && states.includes(matching[0].state) &&
       validEntries(oracle?.[key]) && isDeepStrictEqual(matching[0].entries,oracle[key]);
   });
 }
@@ -280,6 +298,33 @@ export function securityVerdict(e,ids,{crossUser=false,fresh=false,forms}={}){
   const admission=e.documents?.filter(d=>d.phase==='consumer').at(-1);
   const admissionDenied=fresh&&e.admissionDenied===true&&admission&&
     (admission.login&&admission.status===200||admission.productPage&&[401,403].includes(admission.status));
+  if(!fresh&&returnVerified&&revoked){
+    const pending=e.pending?.dom, responses=e.pending?.responses;
+    if(!consistentDom(pending)||pending.doc!==state.doc||pending.state!=='visible'||
+        !Number.isFinite(pending.observedAt)||!Array.isArray(responses)||responses.length!==ids.length||
+        !ids.every(id=>responses.filter(response=>response.element===id&&response.form===e.expectedWidgets?.[id]&&
+          response.status===403&&Number.isFinite(response.pausedAt)&&response.pausedAt<=pending.observedAt+1).length===1)){
+      problems.push('HELD_DENIAL_UNPROVEN');
+    }else if(!forms||pending.cardEvents.length!==0||
+        !rootsMatchMembership(pending.roots,elementByForm,forms,e.baselineOracle,['syncing'])){
+      violations.push('VERIFIED_SNAPSHOT_CHANGED_DURING_HELD_DENIAL');
+    }
+    for(const element of ids){
+      const receipts=Array.isArray(state.denials)?state.denials.filter(d=>d.element===element&&
+        d.form===e.expectedWidgets?.[element]):[];
+      const denials=observed.filter(r=>r.element===element&&r.action==='gpp_inbox2_read'&&
+        r.form===e.expectedWidgets?.[element]&&rejected(r)&&afterBaseline(r));
+      if(denials.length!==1||receipts.length!==1||!Number.isFinite(receipts[0].receivedAt)||
+          !Number.isFinite(receipts[0].checkedAt)||receipts[0].receivedAt<denials[0].requestWallTime*1000-1||
+          receipts[0].checkedAt<receipts[0].receivedAt){
+        problems.push('DENIAL_CHECKPOINT_UNPROVEN_'+element);
+        continue;
+      }
+      const check=receipts[0];
+      if(check.cards>0)violations.push('PRIVATE_CARD_RETAINED_PAST_DENIAL_'+element);
+      if(check.cards!==0||check.state!=='stale')problems.push('DENIAL_CHECKPOINT_INCOMPLETE_'+element);
+    }
+  }
   for(const element of ids){
     const action=fresh?'gpp_inbox2_atomic_bootstrap':'gpp_inbox2_read';
     if(!admissionDenied&&!observed.some(r=>r.element===element&&r.action===action&&

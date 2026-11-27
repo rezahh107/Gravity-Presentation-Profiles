@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {lifecycleCompletion,qualifyThenCheck,reconcileResponseWitnesses,requireInvalidated,securityVerdict} from './p1c-lifecycle-oracle.mjs';
+import {lifecycleCompletion,qualifyThenCheck,reconcileResponseWitnesses,requireInvalidated,retainedWhilePending,securityVerdict} from './p1c-lifecycle-oracle.mjs';
 const roots=[{element:'a',form:'3',state:'stale',entries:[]},{element:'b',form:'4',state:'stale',entries:[]}];
 const fixture={forms:{a:3,b:4},element_ids_by_form:{3:'a',4:'b'},native_oracle:{a:{a:[7,8],b:[]},b:{a:[],b:[9]}}};
 const visible=(doc,to='visible')=>({doc,qualified:true,from:to==='visible'?'hidden':'visible',
@@ -19,10 +19,14 @@ function securityEvidence(name){
   const direct=roots.map(r=>({...row,element:r.element,form:r.form}));
   const bootstraps=direct.map(r=>({...r,action:'gpp_inbox2_atomic_bootstrap',form:null}));
   const consumers=(fresh?bootstraps:direct).map(r=>({...r,phase:'consumer',direct:false,requestWallTime:2}));
+  const finalDom=dom(fresh?'fresh-a':name,roots);
+  finalDom.denials=fresh?[]:roots.map(r=>({element:r.element,form:r.form,receivedAt:2001,checkedAt:2002,state:'stale',cards:0}));
+  const pending=fresh?null:{dom:{...dom(name,current(fixture.native_oracle.a).map(r=>({...r,state:'syncing'}))),observedAt:2001},
+    responses:roots.map(r=>({element:r.element,form:r.form,status:403,pausedAt:2000}))};
   return {case:name,revocation:{remaining:0,commandExit:0},baselineVerified:true,
     transitionVerified:!fresh,freshNavigationVerified:fresh,witness:fresh?null:visible(name),
     baselineOracle:fixture.native_oracle.a,baseline:dom(name,current(fixture.native_oracle.a)),
-    expectedWidgets:{a:'3',b:'4'},finalDom:dom(fresh?'fresh-a':name,roots),
+    expectedWidgets:{a:'3',b:'4'},pending,finalDom,
     freshB:crossUser?{verified:true,previousDocument:'old-b',newDocument:'new-b',
       oracle:fixture.native_oracle.b,dom:dom('new-b',current(fixture.native_oracle.b))}:null,
     network:[{...row,phase:'baseline',direct:false,requestWallTime:1},...direct,...(crossUser?[]:bootstraps),...consumers]};
@@ -104,6 +108,11 @@ test('security verdict separates direct rejection, DOM, and positive controls',(
   assert.equal(check(deniedPage,{fresh:true}).status,'PASS');
   assert.equal(check(deniedPage,{fresh:true}).consumerRequestObserved,false);
   assert.equal(check({...deniedPage,documents:[]},{fresh:true}).status,'NOT_PROVEN');
+  const lateClear=structuredClone(evidence);
+  lateClear.finalDom.denials[0].cards=1;
+  assert.equal(check(lateClear).status,'FAIL');
+  lateClear.finalDom.denials=[];
+  assert.equal(check(lateClear).status,'NOT_PROVEN');
 });
 
 test('contradictory DOM, case, tab and fresh-B records cannot establish a security pass',()=>{
@@ -153,12 +162,28 @@ test('host observation needs an exact unique request and matching HTTP evidence'
 
 const pass=(name,details={})=>({name,status:'PASS',...details});
 const membership=current({a:[7],b:[]});
+const baselineRoots=current(fixture.native_oracle.a);
+const before={state:'current',visibility:'visible',verifiedAt:'01:02',query:'SYN-',page:'۲ از ۲',
+  focus:'7',entries:[7,8],visible:[7]};
+const pending={...before,state:'syncing',showsChecking:true,showsVerifiedTime:true,observedAt:100,insertedCards:0};
+const responses=[{element:'a',form:'3',status:200,pausedAt:90},{element:'b',form:'4',status:200,pausedAt:91}];
+const remount={visibility:'hidden',state:'stale',cards:0,requests:0};
+
+test('ordinary return rejects clear-and-reload, false current and changed context while held',()=>{
+  assert.ok(retainedWhilePending(before,pending,responses,'3'));
+  for(const bad of [{entries:[],visible:[]},{state:'current'},{showsChecking:false},
+    {verifiedAt:'01:03'},{query:''},{page:'۱ از ۲'},{focus:'8'},{insertedCards:1}]){
+    assert.equal(retainedWhilePending(before,{...pending,...bad},responses,'3'),false);
+  }
+  assert.equal(retainedWhilePending(before,pending,[],'3'),false);
+});
 const required=[
   pass('INDEPENDENT_BROWSER_IDENTITY',{executable:'chromium',version:'Chrome/140',args:['--remote-debugging-pipe']}),
   pass('NEUTRAL_NATIVE_VISIBILITY',{initial:'visible',hidden:visible('neutral','hidden'),visible:visible('neutral')}),
-  pass('PRODUCT_HIDDEN_membership',{roots,witness:visible('membership','hidden')}),
-  pass('PRODUCT_VISIBLE_membership',{roots:membership,witness:visible('membership')}),
-  ...[revokedName,cross].map(name=>pass(name.replace('_VISIBLE_','_HIDDEN_'),{roots,witness:visible(name,'hidden')})),
+  pass('PRODUCT_HIDDEN_membership',{roots:baselineRoots,witness:visible('membership','hidden'),
+    hiddenRemount:remount,hiddenView:{...before,visibility:'hidden'}}),
+  pass('PRODUCT_VISIBLE_membership',{roots:membership,witness:visible('membership'),before,pending,responses,after:before}),
+  ...[revokedName,cross].map(name=>pass(name.replace('_VISIBLE_','_HIDDEN_'),{roots:baselineRoots,witness:visible(name,'hidden')})),
   ...[revokedName,cross,freshName].map(name=>pass(name,securityEvidence(name))),
   pass('PRODUCT_CROSS_USER_FRESH_B',securityEvidence(cross).freshB),
   pass('ATOMIC_INFLIGHT_DETACH_REINSERT_GENUINE_RESPONSE',{bootstrapRequests:2}),

@@ -24,7 +24,7 @@ export async function poll(label,read,timeout=20000){
 }
 function pipeClient(child){
   let sequence=0,buffer='';
-  const pending=new Map(),notRestored=[],networkListeners=new Map();
+  const pending=new Map(),notRestored=[],networkListeners=new Map(),fetchListeners=new Map();
   const abort=()=>{
     for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('CHROMIUM_CDP_CLOSED'));}
     pending.clear();
@@ -46,13 +46,15 @@ function pipeClient(child){
         else p.resolve(msg.result);
       }else if(msg.method?.startsWith('Network.')){
         networkListeners.get(msg.sessionId)?.(msg.method,msg.params);
+      }else if(msg.method==='Fetch.requestPaused'){
+        fetchListeners.get(msg.sessionId)?.(msg.params);
       }else if(msg.method==='Page.backForwardCacheNotUsed'){
         notRestored.push({session:msg.sessionId,
           reasons:(msg.params?.notRestoredExplanations||[]).map(x=>({type:x.type,reason:x.reason}))});
       }
     }
   });
-  return {notRestored,networkListeners,send(method,params={},sessionId){
+  return {notRestored,networkListeners,fetchListeners,send(method,params={},sessionId){
     return new Promise((resolve,reject)=>{
       const id=++sequence;
       const timer=setTimeout(()=>{pending.delete(id);reject(Error(method+' timeout'));},10000);
@@ -64,7 +66,7 @@ function pipeClient(child){
   }};
 }
 function installObserver(){
-  const trace={doc:Math.random().toString(36).slice(2),events:[],pagehideRoots:null,cardEvents:[]};
+  const trace={doc:Math.random().toString(36).slice(2),events:[],pagehideRoots:null,cardEvents:[],denials:[]};
   window.__p1cNativeTrace=trace;
   const save=e=>trace.events.push({type:e.type,trusted:e.isTrusted,state:document.visibilityState,
     persisted:e.persisted===true,at:performance.now()});
@@ -90,13 +92,35 @@ function installObserver(){
   }).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:['data-ciq2-entry']});
   window.addEventListener('pagehide',save);
   window.addEventListener('pageshow',save);
+  // Observe the real response as it reaches fetch's consumer. At the first
+  // task following promise handling, the affected root must already be empty.
+  const originalFetch=window.fetch;
+  window.fetch=function(resource,options){
+    return originalFetch.call(this,resource,options).then(response=>{
+      if(response.status===403 && options?.body instanceof URLSearchParams &&
+          options.body.get('action')==='gpp_inbox2_read' &&
+          new URL(response.url).origin===location.origin &&
+          new URL(response.url).pathname==='/wp-admin/admin-ajax.php' &&
+          !new Headers(options.headers).has('X-P1C-Control')){
+        const element=options.body.get('element_id'), form=options.body.get('form_id');
+        const receivedAt=performance.timeOrigin+performance.now();
+        setTimeout(()=>{
+          const root=[...document.querySelectorAll('[data-ciq2-root]')].find(n=>
+            n.dataset.ciq2Element===element&&n.dataset.ciq2Form===form);
+          trace.denials.push({element,form,receivedAt,checkedAt:performance.timeOrigin+performance.now(),
+            state:root?.dataset.ciq2State??null,cards:root?.querySelectorAll('[data-ciq2-entry]').length??null});
+        },0);
+      }
+      return response;
+    });
+  };
 }
 export function readState(){
   const trace=window.__p1cNativeTrace;
   if(!trace)return null;
-  return {doc:trace.doc,events:trace.events,state:document.visibilityState,
+  return {doc:trace.doc,events:trace.events,state:document.visibilityState,observedAt:performance.timeOrigin+performance.now(),
     pagehideRoots:trace.pagehideRoots,url:location.href,ready:document.readyState,
-    cardEvents:trace.cardEvents,
+    cardEvents:trace.cardEvents,denials:trace.denials,
     documentCards:document.querySelectorAll('[data-ciq2-entry]').length,
     privateMarker:document.documentElement?.innerHTML.includes('SYN-P1C-')===true,
     widgetStates:[...document.querySelectorAll('[data-gpp-atomic-element-id]')].map(n=>({
@@ -117,6 +141,69 @@ export function readState(){
     navigation:performance.getEntriesByType('navigation').map(n=>({
       type:n.type,notRestoredReasons:n.notRestoredReasons?.reasons?.map(r=>r.reason)||null
     }))};
+}
+export async function holdReadResponses(cdp,page,origin){
+  const endpoint=new URL('/wp-admin/admin-ajax.php',origin).href;
+  const held=new Map();
+  let failure=null, releasing=false;
+  const resume=requestId=>page.send('Fetch.continueResponse',{requestId});
+  cdp.fetchListeners.set(page.sessionId, event=>{
+    const body=new URLSearchParams(event.request.postData||'');
+    if(!releasing&&event.request.method==='POST'&&body.get('action')==='gpp_inbox2_read'){
+      held.set(event.requestId,{element:body.get('element_id'),form:body.get('form_id'),
+        status:event.responseStatusCode,pausedAt:Date.now()});
+    }else void resume(event.requestId).catch(error=>{failure=error;});
+  });
+  try {await page.send('Fetch.enable',{patterns:[{urlPattern:endpoint,requestStage:'Response'}]});}
+  catch(error){cdp.fetchListeners.delete(page.sessionId);throw error;}
+  return {
+    async responses(count){
+      return poll('REAL_INBOX_READ_RESPONSE_NOT_HELD',()=>{
+        if(failure)throw failure;
+        return held.size===count?[...held.values()]:null;
+      },8000);
+    },
+    async release(){
+      releasing=true;
+      try{await Promise.all([...held.keys()].map(resume));}
+      finally{
+        try{await page.send('Fetch.disable');}
+        finally{cdp.fetchListeners.delete(page.sessionId);}
+      }
+    }
+  };
+}
+
+export async function inboxView(page,form){
+  return page.evaluate(`(()=>{
+    const root=[...document.querySelectorAll('[data-ciq2-root]')].find(r=>r.dataset.ciq2Form===${JSON.stringify(String(form))});
+    if(!root)return null;
+    const entries=[...root.querySelectorAll('[data-ciq2-entry]')];
+    return {state:root.dataset.ciq2State,visibility:document.visibilityState,
+      observedAt:performance.timeOrigin+performance.now(),
+      insertedCards:window.__p1cNativeTrace.cardEvents.length,
+      verifiedAt:root.dataset.ciq2VerifiedAt??null,
+      showsChecking:/در حال بررسی فهرست/.test(root.querySelector('[data-ciq2-status]').textContent),
+      showsVerifiedTime:Boolean(root.dataset.ciq2VerifiedAt)&&root.querySelector('[data-ciq2-status]').textContent.includes(root.dataset.ciq2VerifiedAt),
+      query:root.querySelector('[data-ciq2-search]').value,
+      page:root.querySelector('[data-ciq2-page]').textContent,
+      focus:document.activeElement?.closest('[data-ciq2-entry]')?.dataset.ciq2Entry??null,
+      entries:entries.map(n=>Number(n.dataset.ciq2Entry)),
+      visible:entries.filter(n=>!n.hidden&&n.getClientRects().length>0).map(n=>Number(n.dataset.ciq2Entry))};
+  })()`);
+}
+
+export async function selectSecondPage(page,form,query){
+  await page.evaluate(`(()=>{
+    const root=[...document.querySelectorAll('[data-ciq2-root]')].find(r=>r.dataset.ciq2Form===${JSON.stringify(String(form))});
+    const search=root.querySelector('[data-ciq2-search]');
+    search.value=${JSON.stringify(query)};search.dispatchEvent(new Event('input',{bubbles:true}));
+    const next=root.querySelector('[data-ciq2-next]');
+    if(next.disabled)throw Error('SECOND_PAGE_NOT_AVAILABLE');
+    next.click();
+    [...root.querySelectorAll('[data-ciq2-entry]:not([hidden]) [data-ciq2-detail]')].at(-1).focus();
+    return true;
+  })()`);
 }
 // Per-tab CDP observation. No raw request/body/header values are persisted.
 async function observeNetwork(cdp,sessionId,send,origin,caseName){

@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {independentBrowser,context as nativeContext,tab,transition,holdReadResponses,
+  inboxView,selectSecondPage,poll} from './p1c-native-browser.mjs';
+import {retainedWhilePending} from './p1c-lifecycle-oracle.mjs';
 
 const env = process.env;
 const fixture = JSON.parse(fs.readFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-fixture.json'), 'utf8'));
@@ -122,6 +125,73 @@ try {
   await page.locator('[data-ciq2-search]').fill('');
   assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
   checks.push('installed_zip_25_authorized_single_form_fifo_pagination_and_search_reset');
+
+  const visibilityRecords=[];
+  const recordVisibility=(name,status,details)=>visibilityRecords.push({name,status,...details});
+  await independentBrowser(recordVisibility,async({cdp,neutral,visibility})=>{
+    assert.ok(visibility,'NATIVE_SHORTCODE_VISIBILITY_UNPROVEN');
+    await nativeContext(cdp,async id=>{
+      const other=await tab(cdp,id);await other.activate();await other.navigate(neutral+'/away');
+      const shortcode=await tab(cdp,id);await shortcode.activate();
+      for(const cookie of cookies(fixture.operator_id)){
+        assert.equal((await shortcode.send('Network.setCookie',cookie)).success,true);
+      }
+      await shortcode.navigate(fixture.url);
+      await selectSecondPage(shortcode,fixture.form_id,'SYN-');
+      const before=await inboxView(shortcode,fixture.form_id);
+      assert.deepEqual(before.entries,fixture.expected_fifo_ids);
+      const hidden=await transition(shortcode,other.activate,'hidden');
+      const hiddenView=await inboxView(shortcode,fixture.form_id);
+      assert.deepEqual(hiddenView.entries,before.entries,'SHORTCODE_HIDDEN_VERIFIED_VIEW_LOST');
+
+      const changed=before.entries[0];
+      assert.ok(Number.isSafeInteger(changed)&&changed>0);
+      const setStatus=status=>wp('if (!GFAPI::update_entry_property('+changed+',"status","'+status+'") || '+
+        'GFAPI::get_entry('+changed+')["status"]!=="'+status+'") throw new RuntimeException("SHORTCODE_FIXTURE_STATUS");');
+      assert.ok(Number.isSafeInteger(fixture.operator_id)&&Number.isSafeInteger(fixture.form_id));
+      try{
+        setStatus('trash');
+        const native=JSON.parse(wp('wp_set_current_user('+fixture.operator_id+');'+
+          '$args=apply_filters("gravityflow_inbox_args",array_merge(Gravity_Flow_Inbox::get_defaults(),'+
+          '["form_id"=>'+fixture.form_id+',"paging"=>["offset"=>0,"page_size"=>2001]]));'+
+          '$total=0;$entries=Gravity_Flow_API::get_inbox_entries($args,$total);'+
+          'if(!is_array($entries)||$total!==count($entries))throw new RuntimeException("SHORTCODE_NATIVE_ORACLE");'+
+          '$ids=array_map("intval",array_column($entries,"id"));sort($ids,SORT_NUMERIC);echo wp_json_encode($ids);'));
+        assert.deepEqual(native,fixture.expected_native_ids.filter(entry=>entry!==changed));
+        const hold=await holdReadResponses(cdp,shortcode,env.WU21_BASE_URL);
+        let shown,pending,responses;
+        try{
+          shown=await transition(shortcode,shortcode.activate,'visible');
+          assert.equal(shown.doc,hidden.doc);
+          responses=await hold.responses(1);
+          pending=await inboxView(shortcode,fixture.form_id);
+          assert.ok(retainedWhilePending(before,pending,responses,String(fixture.form_id)),
+            'SHORTCODE_PENDING_VERIFIED_VIEW_LOST');
+        }finally{await hold.release();}
+        const after=await poll('SHORTCODE_RECONCILIATION_UNPROVEN',async()=>{
+          const view=await inboxView(shortcode,fixture.form_id);
+          return view?.state==='current'?view:null;
+        });
+        assert.deepEqual([...after.entries].sort((a,b)=>a-b),native);
+        assert.equal(after.query,before.query);assert.equal(after.page,before.page);assert.equal(after.focus,before.focus);
+        // Observe the actual departure handler after GPP's capture has run.
+        await shortcode.evaluate(`window.addEventListener('pagehide',event=>{
+          const root=document.querySelector('[data-ciq2-root]');
+          sessionStorage.setItem('gpp-wu21-pagehide',JSON.stringify({trusted:event.isTrusted,
+            state:root.dataset.ciq2State,cards:root.querySelectorAll('[data-ciq2-entry]').length}));
+        })`);
+        await shortcode.navigate(env.WU21_BASE_URL+'/wp-login.php',true);
+        const departure=await shortcode.evaluate(`(()=>{
+          const result=JSON.parse(sessionStorage.getItem('gpp-wu21-pagehide'));
+          sessionStorage.removeItem('gpp-wu21-pagehide');return result;
+        })()`);
+        assert.deepEqual(departure,{trusted:true,state:'stale',cards:0});
+        report.ordinary_visibility={hidden,shown,before,pending,responses,after,departure};
+      }finally{setStatus('active');}
+    });
+  });
+  report.ordinary_visibility.browser=visibilityRecords.find(record=>record.name==='INDEPENDENT_BROWSER_IDENTITY');
+  checks.push('genuine_shortcode_tab_return_retains_verified_view_and_reconciles_native_change');
 
   // Independently read the pinned Native Task Model at setup; compare every
   // final permitted text cell against the actual installed shortcode DOM.

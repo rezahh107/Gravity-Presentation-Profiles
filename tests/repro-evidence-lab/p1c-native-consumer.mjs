@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
-import {context,tab,transition,historyReturn,poll,readState} from './p1c-native-browser.mjs';
-import {qualifyThenCheck,requireInvalidated,securityVerdict} from './p1c-lifecycle-oracle.mjs';
+import {context,tab,transition,historyReturn,poll,readState,holdReadResponses,inboxView,selectSecondPage} from './p1c-native-browser.mjs';
+import {qualifyThenCheck,requireInvalidated,retainedWhilePending,securityVerdict} from './p1c-lifecycle-oracle.mjs';
 
 function nativeMembership(wp,actor){
   assert.ok(['a','b'].includes(actor));
@@ -89,7 +89,7 @@ async function oldReadRequests(page,fixture){
 }
 const domEvidence=s=>s?{doc:s.doc,state:s.state,ready:s.ready,roots:s.roots,
   widgetStates:s.widgetStates,documentCards:s.documentCards,cardEvents:s.cardEvents,
-  privateMarker:s.privateMarker}:null;
+  privateMarker:s.privateMarker,denials:s.denials,observedAt:s.observedAt}:null;
 async function directControls(page,network,origin,requests,e){
   await network.phase('direct');
   for(const values of requests){
@@ -160,29 +160,56 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
       await context(cdp,async id=>{
         const other=await tab(cdp,id);await other.activate();await other.navigate(neutral+'/away');
         const p=await prepare(id);if(!p){record('PRODUCT_HIDDEN_membership','NOT_REACHED');return;}
+        await selectSecondPage(p,fixture.forms.a,'SYN-');
+        const before=await inboxView(p,fixture.forms.a);
         const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_membership',
           ()=>transition(p,other.activate,'hidden'),async()=>{
-            const s=await p.read();requireRoots(s,fixture);requireInvalidated(s.roots,ids);
-            // The same real hidden document must stay scrubbed if an Atomic
-            // shell is detached and mounted again before genuine visible return.
+            const s=await p.read();requireRoots(s,fixture);
+            const hiddenView=await inboxView(p,fixture.forms.a);
+            assert.deepEqual(hiddenView.entries,before.entries,'HIDDEN_VERIFIED_CARDS_CLEARED');
+            // Mount a copy of a populated shell while hidden. The original
+            // instance must retain its own cards while the new root is scrubbed.
             const remount=await p.observeNetwork(origin,'PRODUCT_HIDDEN_membership');
             try{
-              await p.evaluate('(()=>{window.__p1cRemount=document.querySelector("[data-gpp-atomic-inbox2=ready]");'+
-                'window.__p1cRemount.remove()})()');
-              await p.evaluate('document.body.append(window.__p1cRemount);delete window.__p1cRemount;true');
+              await p.evaluate(`(()=>{
+                const host=document.querySelector('[data-gpp-atomic-element-id="${fixture.element_ids_by_form[String(fixture.forms.a)]}"]');
+                window.__p1cRemount=host.cloneNode(true);document.body.append(window.__p1cRemount);
+              })()`);
               await remount.settled();
               assert.equal(remount.snapshot().length,0,'HIDDEN_REMOUNT_PRIVATE_REQUEST_OBSERVED');
-              const after=await p.read();
-              assert.equal(after.state,'hidden','HIDDEN_REMOUNT_STATE_LOST');
-              requireRoots(after,fixture);requireInvalidated(after.roots,ids);
-              return {roots:s.roots,hiddenRemount:{state:after.state,roots:after.roots,requests:0}};
-            }finally{remount.close();}
+              const copy=await p.evaluate(`(()=>{
+                const root=window.__p1cRemount.querySelector('[data-ciq2-root]');
+                return {visibility:document.visibilityState,state:root.dataset.ciq2State,
+                  cards:root.querySelectorAll('[data-ciq2-entry]').length};
+              })()`);
+              assert.deepEqual(copy,{visibility:'hidden',state:'stale',cards:0});
+              return {roots:s.roots,hiddenView,hiddenRemount:{...copy,requests:0}};
+            }finally{
+              await p.evaluate('window.__p1cRemount?.remove();delete window.__p1cRemount');
+              remount.close();
+            }
           });
         if(!hidden){record('PRODUCT_VISIBLE_membership','NOT_REACHED');return;}
         changed=true;entryStatus(wp,mutation,'trash');const expected=expectedChanged();
-        await qualifyThenCheck(record,'PRODUCT_VISIBLE_membership',()=>transition(p,p.activate,'visible'),async()=>{
-          const s=await current(p,fixture,expected);return {roots:s.roots};
-        });
+        await p.evaluate('window.__p1cNativeTrace.cardEvents=[];true');
+        const hold=await holdReadResponses(cdp,p,origin);
+        let released=false;
+        try{
+          let responses;
+          await qualifyThenCheck(record,'PRODUCT_VISIBLE_membership',async()=>{
+            const witness=await transition(p,p.activate,'visible');
+            responses=await hold.responses(2);
+            return witness;
+          },async()=>{
+            const pending=await inboxView(p,fixture.forms.a);
+            assert.ok(retainedWhilePending(before,pending,responses,String(fixture.forms.a)),'PENDING_VERIFIED_VIEW_LOST');
+            released=true;await hold.release();
+            const s=await current(p,fixture,expected);
+            const after=await inboxView(p,fixture.forms.a);
+            assert.equal(after.query,before.query);assert.equal(after.page,before.page);assert.equal(after.focus,before.focus);
+            return {roots:s.roots,before,pending,responses,after};
+          });
+        }finally{if(!released)await hold.release();}
       });
     }catch(e){record('PRODUCT_VISIBILITY_FIXTURE_membership','NOT_PROVEN',{reason:String(e.message||e)});}
     finally{if(changed){try{restore();}catch(e){record('SYNTHETIC_MEMBERSHIP_RESTORE','FAIL',{reason:String(e.message||e)});}}}
@@ -214,7 +241,8 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
             if(!visibility){e.observationProblems.push('NATIVE_VISIBILITY_NOT_QUALIFIED');return;}
             const hidden=await qualifyThenCheck(record,'PRODUCT_HIDDEN_'+kind,
               ()=>transition(p,other.activate,'hidden'),async()=>{
-                const s=await p.read();requireRoots(s,fixture);requireInvalidated(s.roots,ids);
+                const s=await p.read();requireRoots(s,fixture);
+                assert.deepEqual(s.roots.map(root=>root.entries),a.roots.map(root=>root.entries));
                 return {roots:s.roots};
               });
             if(!hidden){e.observationProblems.push('HIDDEN_INVALIDATION_NOT_QUALIFIED');return;}
@@ -231,8 +259,14 @@ export async function nativeConsumer({cdp,neutral,visibility,bfcache,neutralBfca
             const s=await p.navigate(url,true);
             e.freshNavigationVerified=s.doc!==a.doc;
           }else{
-            try{e.witness=await transition(p,p.activate,'visible');e.transitionVerified=e.witness.qualified===true;}
-            catch{e.observationProblems.push('AUTHENTIC_RETURN_NOT_OBSERVED');}
+            const hold=await holdReadResponses(cdp,p,origin);
+            try{
+              e.witness=await transition(p,p.activate,'visible');
+              e.transitionVerified=e.witness.qualified===true;
+              const responses=await hold.responses(2);
+              e.pending={responses,dom:domEvidence(await p.read())};
+            }catch{e.observationProblems.push('AUTHENTIC_RETURN_OR_HELD_DENIAL_UNPROVEN');}
+            finally{await hold.release();}
           }
           try{await collectSecurity(p,network,origin,fixture,old,e,{crossUser,fresh});}
           catch{e.observationProblems.push('SECURITY_OBSERVATION_INCOMPLETE');}

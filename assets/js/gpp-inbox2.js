@@ -50,6 +50,7 @@
     let page = 1, generation = 0, busy = false, controller = null, watchdog = null, announcementTimer = null;
     let verifiedAt = trustedSnapshot ? root.dataset.ciq2VerifiedAt : '';
     let hasSnapshot = trustedSnapshot;
+    let returnDeadline = null;
     function announce(message) {
       if (announcement.textContent !== message) announcement.textContent = message;
     }
@@ -106,6 +107,7 @@
       const focus = focusedEntry();
       list.replaceChildren();
       hasSnapshot = false;
+      returnDeadline = null;
       root.dataset.ciq2State = 'stale';
       empty.hidden = true; noResults.hidden = true; pager.hidden = true;
       status.textContent = message || (code === 403
@@ -119,6 +121,11 @@
       if (document.hidden) return;
       if (busy && !force) return;
       cancel();
+      const remaining = returnDeadline === null ? 30000 : returnDeadline - performance.now();
+      if (remaining <= 0) {
+        stale();
+        return;
+      }
       const serial = ++generation;
       const pending = new AbortController();
       controller = pending; busy = true;
@@ -129,7 +136,7 @@
       const timer = setTimeout(() => {
         if (serial !== generation) return;
         cancel(); stale(503);
-      }, 30000);
+      }, remaining);
       watchdog = timer;
       try {
         const response = await fetch(root.dataset.ciq2Ajax, {
@@ -163,11 +170,13 @@
         const ids = incoming.map(node => Number(node.dataset.ciq2Entry));
         if (ids.length !== data.data.count || ids.some(id => !Number.isSafeInteger(id) || id < 1) ||
             new Set(ids).size !== ids.length) throw new Error('incomplete_or_duplicate_identity');
+        if (returnDeadline !== null && performance.now() >= returnDeadline) throw new Error('return_deadline');
         const focus = focusedEntry();
         list.replaceChildren(...incoming.map(node => document.importNode(node, true)));
         verifiedAt = returned.dataset.ciq2VerifiedAt;
         root.dataset.ciq2VerifiedAt = verifiedAt;
         hasSnapshot = true;
+        returnDeadline = null;
         root.dataset.ciq2State = 'current';
         draw(!quiet);
         restoreFocus(focus);
@@ -208,6 +217,13 @@
     }, 30000);
     instances.set(root, {
       invalidate(message = '') { cancel(); stale(503, message); },
+      pause() { cancel(); },
+      returnToTab() {
+        // A second hide/return or a manual refresh cannot renew an outstanding
+        // visibility grace period for this instance's existing snapshot.
+        if (hasSnapshot && returnDeadline === null) returnDeadline = performance.now() + 30000;
+        refresh(true, true);
+      },
       reenter() {
         input.value = ''; page = 1;
         cancel(); stale(503, 'در حال تأیید دوبارهٔ فهرست…');
@@ -250,8 +266,8 @@
   });
   document.addEventListener('visibilitychange', () => {
     instances.forEach(instance => {
-      if (document.hidden) instance.invalidate();
-      else instance.reenter();
+      if (document.hidden) instance.pause();
+      else instance.returnToTab();
     });
   });
   const observer = new MutationObserver(mutations => {
