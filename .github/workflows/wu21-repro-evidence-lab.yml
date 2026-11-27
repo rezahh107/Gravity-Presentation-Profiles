@@ -292,6 +292,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openbox
           export GPP_INBOX2_TESTED_HEAD="$(git rev-parse HEAD)"
           bash tests/repro-evidence-lab/inbox2-installed-zip-smoke.sh
 

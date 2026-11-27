@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {independentBrowser,context as nativeContext,tab,transition,holdReadResponses,
+  inboxView,selectSecondPage,poll} from './p1c-native-browser.mjs';
+import {retainedWhilePending} from './p1c-lifecycle-oracle.mjs';
 
 const env = process.env;
 const fixture = JSON.parse(fs.readFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-fixture.json'), 'utf8'));
@@ -23,6 +26,7 @@ const visible = async page => page.locator('[data-ciq2-entry]').evaluateAll(node
   nodes.filter(node => !node.hidden).map(node => Number(node.dataset.ciq2Entry)));
 const browser = await chromium.launch({headless: true});
 const report = {status: 'FAIL', fixtureVersion: fixture.version, installedVersion: null, checks};
+const errors = [], assets = [], failedRequests = [];
 try {
   const context = await browser.newContext({viewport: {width: 390, height: 844}});
   const probeUrl = new URL(env.GPP_INBOX2_HTTP_PROBE_URL);
@@ -39,8 +43,33 @@ try {
   checks.push('independent_browser_context_http_runtime_identity');
   await context.addCookies(cookies(fixture.operator_id));
   const page = await context.newPage();
-  const errors = [];
-  const assets = [];
+  // Test-only observer starts before the real footer bundle is evaluated.
+  // It captures state transitions, not synthetic DOM events or replacement product logic.
+  await page.addInitScript(() => {
+    window.__ciq2InitTrace = [];
+    let last = '';
+    const trace = reason => {
+      const root = document.querySelector('[data-ciq2-root]');
+      if (!root || window.__ciq2InitTrace.length >= 65) return;
+      const nodes = [...root.querySelectorAll('[data-ciq2-entry]')];
+      const observation = {
+        reason, at_ms: Math.round(performance.now()),
+        state: root.dataset.ciq2State,
+        core_present: typeof window.GPPInbox2?.initAll === 'function',
+        cards: nodes.length, hidden: nodes.filter(n => n.hidden).length
+      };
+      const fingerprint = [observation.state, observation.core_present,
+        observation.cards, observation.hidden].join('/');
+      if (fingerprint !== last) { last = fingerprint; window.__ciq2InitTrace.push(observation); }
+    };
+    const observer = new MutationObserver(() => trace('dom_mutation'));
+    observer.observe(document, {subtree:true, childList:true, attributes:true,
+      attributeFilter:['hidden','data-ciq2-state']});
+    document.addEventListener('DOMContentLoaded', () => trace('dom_content_loaded'), {once:true});
+  });
+  page.on('requestfailed', request => failedRequests.push({
+    url: request.url().replace(/\?.*$/, ''), failure: request.failure()?.errorText ?? null
+  }));
   page.on('pageerror', error => errors.push(error.message));
   page.on('response', response => {
     if (response.url().includes('/gpp-inbox2.')) assets.push({url: response.url(), status: response.status()});
@@ -55,6 +84,29 @@ try {
   const expected = fixture.expected_native_ids;
   assert.deepEqual([...received].sort((a,b)=>a-b), expected);
   assert.equal(new Set(received).size, received.length);
+  // Persist the exact observed boundary BEFORE the 20/5 rejecting assertion.
+  // Server-rendered "current" is not accepted as evidence of JS draw().
+  report.initial_observation = await page.evaluate(() => {
+    const root = document.querySelector('[data-ciq2-root]');
+    const cards = [...root.querySelectorAll('[data-ciq2-entry]')];
+    return {
+      ready_state: document.readyState, root_state: root.dataset.ciq2State,
+      core_present: typeof window.GPPInbox2?.initAll === 'function',
+      scripts: [...document.scripts].map(s => s.src).filter(s => /gpp-inbox2/.test(s)),
+      cards: cards.length, hidden_ids: cards.filter(n => n.hidden).map(n => n.dataset.ciq2Entry),
+      shown_ids: cards.filter(n => !n.hidden).map(n => n.dataset.ciq2Entry),
+      computed_visible: cards.filter(n => getComputedStyle(n).display !== 'none').length,
+      init_trace: window.__ciq2InitTrace ?? []
+    };
+  });
+  report.asset_responses = assets;
+  report.failed_requests = failedRequests;
+  report.page_errors = errors;
+  console.log('GPP_INBOX2_PREASSERT_DIAGNOSTICS ' + JSON.stringify({
+    head: env.GPP_WU21_REPOSITORY_SHA || null,
+    version: fixture.version, observation: report.initial_observation,
+    asset_responses: assets, failed_requests: failedRequests, page_errors: errors
+  }));
   assert.equal((await visible(page)).length, Math.min(20, received.length));
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.js') && x.status === 200));
   assert.ok(assets.some(x => x.url.includes('gpp-inbox2.css') && x.status === 200));
@@ -73,6 +125,73 @@ try {
   await page.locator('[data-ciq2-search]').fill('');
   assert.deepEqual(await visible(page), fixture.expected_fifo_ids.slice(0, 20));
   checks.push('installed_zip_25_authorized_single_form_fifo_pagination_and_search_reset');
+
+  const visibilityRecords=[];
+  const recordVisibility=(name,status,details)=>visibilityRecords.push({name,status,...details});
+  await independentBrowser(recordVisibility,async({cdp,neutral,visibility})=>{
+    assert.ok(visibility,'NATIVE_SHORTCODE_VISIBILITY_UNPROVEN');
+    await nativeContext(cdp,async id=>{
+      const other=await tab(cdp,id);await other.activate();await other.navigate(neutral+'/away');
+      const shortcode=await tab(cdp,id);await shortcode.activate();
+      for(const cookie of cookies(fixture.operator_id)){
+        assert.equal((await shortcode.send('Network.setCookie',cookie)).success,true);
+      }
+      await shortcode.navigate(fixture.url);
+      await selectSecondPage(shortcode,fixture.form_id,'SYN-');
+      const before=await inboxView(shortcode,fixture.form_id);
+      assert.deepEqual(before.entries,fixture.expected_fifo_ids);
+      const hidden=await transition(shortcode,other.activate,'hidden');
+      const hiddenView=await inboxView(shortcode,fixture.form_id);
+      assert.deepEqual(hiddenView.entries,before.entries,'SHORTCODE_HIDDEN_VERIFIED_VIEW_LOST');
+
+      const changed=before.entries[0];
+      assert.ok(Number.isSafeInteger(changed)&&changed>0);
+      const setStatus=status=>wp('if (!GFAPI::update_entry_property('+changed+',"status","'+status+'") || '+
+        'GFAPI::get_entry('+changed+')["status"]!=="'+status+'") throw new RuntimeException("SHORTCODE_FIXTURE_STATUS");');
+      assert.ok(Number.isSafeInteger(fixture.operator_id)&&Number.isSafeInteger(fixture.form_id));
+      try{
+        setStatus('trash');
+        const native=JSON.parse(wp('wp_set_current_user('+fixture.operator_id+');'+
+          '$args=apply_filters("gravityflow_inbox_args",array_merge(Gravity_Flow_Inbox::get_defaults(),'+
+          '["form_id"=>'+fixture.form_id+',"paging"=>["offset"=>0,"page_size"=>2001]]));'+
+          '$total=0;$entries=Gravity_Flow_API::get_inbox_entries($args,$total);'+
+          'if(!is_array($entries)||$total!==count($entries))throw new RuntimeException("SHORTCODE_NATIVE_ORACLE");'+
+          '$ids=array_map("intval",array_column($entries,"id"));sort($ids,SORT_NUMERIC);echo wp_json_encode($ids);'));
+        assert.deepEqual(native,fixture.expected_native_ids.filter(entry=>entry!==changed));
+        const hold=await holdReadResponses(cdp,shortcode,env.WU21_BASE_URL);
+        let shown,pending,responses;
+        try{
+          shown=await transition(shortcode,shortcode.activate,'visible');
+          assert.equal(shown.doc,hidden.doc);
+          responses=await hold.responses(1);
+          pending=await inboxView(shortcode,fixture.form_id);
+          assert.ok(retainedWhilePending(before,pending,responses,String(fixture.form_id)),
+            'SHORTCODE_PENDING_VERIFIED_VIEW_LOST');
+        }finally{await hold.release();}
+        const after=await poll('SHORTCODE_RECONCILIATION_UNPROVEN',async()=>{
+          const view=await inboxView(shortcode,fixture.form_id);
+          return view?.state==='current'?view:null;
+        });
+        assert.deepEqual([...after.entries].sort((a,b)=>a-b),native);
+        assert.equal(after.query,before.query);assert.equal(after.page,before.page);assert.equal(after.focus,before.focus);
+        // Observe the actual departure handler after GPP's capture has run.
+        await shortcode.evaluate(`window.addEventListener('pagehide',event=>{
+          const root=document.querySelector('[data-ciq2-root]');
+          sessionStorage.setItem('gpp-wu21-pagehide',JSON.stringify({trusted:event.isTrusted,
+            state:root.dataset.ciq2State,cards:root.querySelectorAll('[data-ciq2-entry]').length}));
+        })`);
+        await shortcode.navigate(env.WU21_BASE_URL+'/wp-login.php',true);
+        const departure=await shortcode.evaluate(`(()=>{
+          const result=JSON.parse(sessionStorage.getItem('gpp-wu21-pagehide'));
+          sessionStorage.removeItem('gpp-wu21-pagehide');return result;
+        })()`);
+        assert.deepEqual(departure,{trusted:true,state:'stale',cards:0});
+        report.ordinary_visibility={hidden,shown,before,pending,responses,after,departure};
+      }finally{setStatus('active');}
+    });
+  });
+  report.ordinary_visibility.browser=visibilityRecords.find(record=>record.name==='INDEPENDENT_BROWSER_IDENTITY');
+  checks.push('genuine_shortcode_tab_return_retains_verified_view_and_reconciles_native_change');
 
   // Independently read the pinned Native Task Model at setup; compare every
   // final permitted text cell against the actual installed shortcode DOM.
@@ -501,6 +620,11 @@ try {
   report.status = 'PASS';
 } catch (error) {
   report.error = String(error?.stack || error);
+  console.error('GPP_INBOX2_FAILURE_DIAGNOSTICS ' + JSON.stringify({
+    head: env.GPP_WU21_REPOSITORY_SHA || null,
+    version: fixture.version, initial: report.initial_observation ?? null,
+    asset_responses: assets, failed_requests: failedRequests, page_errors: errors
+  }));
   throw error;
 } finally {
   fs.writeFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-browser.json'), JSON.stringify(report, null, 2));

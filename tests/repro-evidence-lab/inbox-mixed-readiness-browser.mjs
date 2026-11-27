@@ -447,6 +447,37 @@ try {
           headers: [...grid.querySelectorAll('.ag-header-cell[col-id]')].map(el => el.getAttribute('col-id')),
           native_rows: grid.querySelectorAll('.ag-row[row-id]').length,
           rtl_header: getComputedStyle(surface?.querySelector('.gpp-inbox-surface__header')).direction,
+          rtl_header_diagnostics: (() => {
+            const header = surface?.querySelector('.gpp-inbox-surface__header');
+            if (!header) return {header_found:false};
+            const rules = [];
+            const sheets = [];
+            for (const sheet of document.styleSheets) {
+              const href = sheet.href || '(inline)';
+              let cssRules;
+              try { cssRules = sheet.cssRules; } catch (_) {
+                sheets.push({href, css_accessible:false}); continue;
+              }
+              sheets.push({href, css_accessible:true});
+              for (const rule of cssRules) {
+                if (!rule.selectorText || !rule.style?.direction) continue;
+                let matched = false;
+                try { matched = header.matches(rule.selectorText); } catch (_) {}
+                if (matched && rules.length < 30)
+                  rules.push({sheet:href, selector:rule.selectorText,
+                    direction:rule.style.direction, priority:rule.style.getPropertyPriority('direction')});
+              }
+            }
+            return {
+              header_found:true, dir_attribute:header.getAttribute('dir'),
+              class_name:header.className, computed:getComputedStyle(header).direction,
+              inline_direction:header.style.direction,
+              parent_direction:getComputedStyle(header.parentElement).direction,
+              document_direction:getComputedStyle(document.documentElement).direction,
+              locale:document.documentElement.lang, matched_direction_rules:rules,
+              stylesheets:sheets.filter(s => /inbox|gflow|theme|style|inline/i.test(s.href)).slice(-35)
+            };
+          })(),
           native_root_direction: getComputedStyle(root).direction,
           physical,
           gpp_heading: surface?.querySelector('h1')?.textContent?.trim(),
@@ -456,6 +487,13 @@ try {
           host_dom_preserved: !!surface?.querySelector('[data-js="gflow-inbox"] .ag-root-wrapper'),
         };
       }, selector);
+      // Save the failed consumer observation before asserting, including CSS provenance.
+      record.viewports.push({ width, ...facts });
+      if (facts.rtl_header !== 'rtl') {
+        console.error('WU21_RTL_HEADER_DIAGNOSTICS ' + JSON.stringify({
+          route:route.name, width, facts
+        }));
+      }
       assert.equal(facts.gpp_heading, 'کارهای من');
       assert.equal(facts.rtl_header, 'rtl');
       assert.ok(facts.host_dom_preserved && facts.native_pager);
@@ -490,7 +528,6 @@ try {
       assert.equal(facts.physical.length, 4, 'Owner-authorized four-node physical axis is absent.');
       for (const node of facts.physical) assert.equal(node.direction, 'ltr', 'Owner physical LTR exception drifted.');
       assert.ok(facts.scroll_width <= facts.client_width + 3, 'Document-wide overflow at ' + width);
-      record.viewports.push({ width, ...facts });
     }
     await openInbox(route);
     tracker.setPhase(route.name + ':native-pagination');
