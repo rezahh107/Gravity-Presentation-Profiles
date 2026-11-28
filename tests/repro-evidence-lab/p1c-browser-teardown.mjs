@@ -25,12 +25,15 @@ export function preserveFailures(primary, secondary = []) {
 
 export function failureEvidence(error) {
   if (!error) return null;
-  const describe = item => ({phase:item?.phase || 'SUBJECT_OR_ASSERTION',
-    stack:String(item?.stack || item)});
-  if (error instanceof AggregateError) return {
-    primary: error.primaryError ? describe(error.primaryError) : null,
-    secondary: error.secondaryErrors?.map(describe) || error.errors.map(describe)
+  const describe = item => {
+    if (item instanceof AggregateError) return {
+      phase:'COMBINED_FAILURES',message:item.message,
+      primary:item.primaryError ? describe(item.primaryError) : null,
+      secondary:(item.secondaryErrors || item.errors).map(describe)
+    };
+    return {phase:item?.phase || 'SUBJECT_OR_ASSERTION',stack:String(item?.stack || item)};
   };
+  if (error instanceof AggregateError) return describe(error);
   return {primary:describe(error),secondary:[]};
 }
 

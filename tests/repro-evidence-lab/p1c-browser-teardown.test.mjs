@@ -89,5 +89,9 @@ await test('G_nested_primary_and_secondary_chain_not_masked',async()=>{
   assert.equal(final.errors[0].primaryError,subject);
   assert.equal(final.errors[0].errors[1],fixture);
   assert.equal(final.errors[1],cleanup);
+  const evidence=failureEvidence(final);
+  assert.match(evidence.primary.primary.stack,/SUBJECT/);
+  assert.match(evidence.primary.secondary[0].stack,/FIXTURE_RESTORATION/);
+  assert.match(evidence.secondary[0].stack,/BROWSER_CLEANUP/);
 });
 console.log('P1C_CLEANUP_FALSIFICATION_TOTAL_PASS',reports.length);
