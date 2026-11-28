@@ -35,6 +35,7 @@ if [[ "$1" == 'run' && "$2" == 'list' ]]; then
         srwf-journey-host-qualification.yml) id=994 ;;
         wu18-entry-detail-runtime.yml) id=995 ;;
         wu19-a4-print-runtime.yml) id=996 ;;
+        p1c-atomic-qualification.yml) id=997 ;;
         *) exit 91 ;;
     esac
     nfile="$MOCK_STATE/list_$id"
@@ -83,7 +84,14 @@ if [[ "$1" == 'run' && "$2" == 'list' ]]; then
                     parentMalformed) echo '[{not-json]'; exit 0 ;;
                 esac
             fi ;;
-        stable|temporary|parent503|parentFailed|parentPending|persistent503|auth403|pending|failed|cancelled|premature|malformed|wrongSha|wrongBranch|wrongId|wrongEvent) ;;
+        atomicMissing|atomicWrongSha)
+            if [[ "$wf" == 'p1c-atomic-qualification.yml' ]]; then
+                case "$MOCK_CASE" in
+                    atomicMissing) echo '[]'; exit 0 ;;
+                    atomicWrongSha) sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+                esac
+            fi ;;
+        stable|temporary|parent503|parentFailed|parentPending|persistent503|auth403|pending|failed|cancelled|premature|malformed|wrongSha|wrongBranch|wrongId|wrongEvent|atomicFailed|atomicCancelled|atomicPending|atomicWrongViewSha|atomicWrongBranch|atomicWrongEvent|atomicWrongId) ;;
         *) echo "Unknown mocked discovery scenario $MOCK_CASE" >&2; exit 99 ;;
     esac
     printf '[{"databaseId":%s,"headSha":"%s","headBranch":"%s","event":"%s","status":"queued","conclusion":null}]\n' "$id" "$sha" "$branch" "$event"
@@ -114,6 +122,18 @@ case "$MOCK_CASE" in
         if [[ "$id" == '992' ]]; then conclusion='"failure"'; fi ;;
     parentPending)
         if [[ "$id" == '992' ]]; then status=in_progress; conclusion=null; fi ;;
+    atomicFailed|atomicCancelled|atomicPending|atomicWrongViewSha|atomicWrongBranch|atomicWrongEvent|atomicWrongId)
+        if [[ "$id" == '997' ]]; then
+            case "$MOCK_CASE" in
+                atomicFailed) conclusion='"failure"' ;;
+                atomicCancelled) conclusion='"cancelled"' ;;
+                atomicPending) status=in_progress; conclusion=null ;;
+                atomicWrongViewSha) sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+                atomicWrongBranch) branch=wrong-branch ;;
+                atomicWrongEvent) event=push ;;
+                atomicWrongId) output_id=999 ;;
+            esac
+        fi ;;
     persistent503) echo 'HTTP 503: Service Unavailable' >&2; exit 1 ;;
     auth403) echo 'HTTP 403: Forbidden' >&2; exit 1 ;;
     pending) status=in_progress; conclusion=null ;;
@@ -125,14 +145,63 @@ case "$MOCK_CASE" in
     wrongBranch) branch='wrong-branch' ;;
     wrongId) output_id=999 ;;
     wrongEvent) event=push ;;
-    stable|listTemporary|listEmptyThenValid|listPersistent|list403|list401|list400|listMixedErrors|listMalformed|listWrongRoot|listMultiDoc|listWrongSha|listWrongBranch|listWrongEvent|listBadId|listDuplicateId|listPickNewest|parentList503|parentListPersistent|parentList403|parentMalformed) ;;
+    stable|listTemporary|listEmptyThenValid|listPersistent|list403|list401|list400|listMixedErrors|listMalformed|listWrongRoot|listMultiDoc|listWrongSha|listWrongBranch|listWrongEvent|listBadId|listDuplicateId|listPickNewest|parentList503|parentListPersistent|parentList403|parentMalformed|atomicMissing|atomicWrongSha) ;;
     *) exit 99 ;;
 esac
-printf '{"databaseId":%s,"headSha":"%s","headBranch":"%s","event":"%s","status":"%s","conclusion":%s,"workflowName":"Repository CI"}\n' "$output_id" "$sha" "$branch" "$event" "$status" "$conclusion"
+case "$id" in
+    991|1091) name='Repository CI' ;;
+    992) name='WU21 Reproducible Evidence Lab' ;;
+    993) name='SRWF Registration Authentic Runtime' ;;
+    994) name='SRWF Journey Host Qualification' ;;
+    995) name='WU18 Entry Detail Runtime' ;;
+    996) name='WU19 A4 Print Runtime' ;;
+    997) name='P1-C Genuine Elementor 4.4 Atomic Inbox 2' ;;
+    *) exit 98 ;;
+esac
+printf '{"databaseId":%s,"headSha":"%s","headBranch":"%s","event":"%s","status":"%s","conclusion":%s,"workflowName":"%s"}\n' "$output_id" "$sha" "$branch" "$event" "$status" "$conclusion" "$name"
 MOCK
 chmod +x "$TMP/bin/gh"
 POLL="$ROOT/scripts/release/poll-qualification-run.sh"
 PARENT="$ROOT/scripts/release/wait-qualifications.sh"
+
+# Independent contract: never derive these identities from the waiter.
+cat > "$TMP/expected-dispatches" <<'EXPECTED'
+ci.yml
+wu21-repro-evidence-lab.yml
+srwf-registration-runtime.yml
+srwf-journey-host-qualification.yml
+wu18-entry-detail-runtime.yml
+wu19-a4-print-runtime.yml
+p1c-atomic-qualification.yml
+EXPECTED
+sort "$TMP/expected-dispatches" > "$TMP/expected-dispatches.sorted"
+cat > "$TMP/expected-runs.json" <<'EXPECTED'
+[
+  {"databaseId":991,"workflowName":"Repository CI"},
+  {"databaseId":992,"workflowName":"WU21 Reproducible Evidence Lab"},
+  {"databaseId":993,"workflowName":"SRWF Registration Authentic Runtime"},
+  {"databaseId":994,"workflowName":"SRWF Journey Host Qualification"},
+  {"databaseId":995,"workflowName":"WU18 Entry Detail Runtime"},
+  {"databaseId":996,"workflowName":"WU19 A4 Print Runtime"},
+  {"databaseId":997,"workflowName":"P1-C Genuine Elementor 4.4 Atomic Inbox 2"}
+]
+EXPECTED
+assert_dispatches() {
+    sort "$MOCK_STATE/dispatches" > "$TMP/actual-dispatches.sorted" || return 1
+    diff -u "$TMP/expected-dispatches.sorted" "$TMP/actual-dispatches.sorted"
+}
+assert_records() {
+    local count="$1" ci_id="$2"
+    jq -e --arg sha "$MOCK_SHA" --argjson count "$count" --argjson ci_id "$ci_id" \
+        --slurpfile expected "$TMP/expected-runs.json" '
+        type=="array" and length==$count and
+        ([.[].databaseId]|unique|length)==$count and
+        all(.[]; .headSha==$sha and .conclusion=="success" and
+            (keys|sort)==(["conclusion","databaseId","headSha","workflowName"]|sort)) and
+        ((map({databaseId,workflowName})|sort_by(.databaseId)) ==
+          ($expected[0][0:$count] | .[0].databaseId=$ci_id | sort_by(.databaseId)))
+        ' "$TMP/qualification.json" >/dev/null
+}
 
 reset_state() {
     rm -f "$MOCK_STATE"/view_* "$MOCK_STATE"/list_* "$MOCK_STATE/dispatches"
@@ -161,29 +230,30 @@ done
 run_good_parent() {
     reset_state
     export MOCK_CASE="$1"
+    local ci_id=991
+    [[ "$1" != listPickNewest ]] || ci_id=1091
+    rm -f "$TMP/qualification.json"
     bash "$PARENT" "$MOCK_BRANCH" "$MOCK_SHA" "$TMP/qualification.json" > "$TMP/parent.out" 2>"$TMP/parent.err"
-    jq -e --arg sha "$MOCK_SHA" '
-      length==6 and ([.[].databaseId]|unique|length)==6 and
-      all(.[]; .headSha==$sha and .conclusion=="success" and
-        (keys|sort)==(["conclusion","databaseId","headSha","workflowName"]|sort))
-    ' "$TMP/qualification.json" >/dev/null
-    [[ "$(wc -l < "$MOCK_STATE/dispatches")" == 6 ]]
-    grep -Fq 'GPP_RELEASE_REQUIRED_QUALIFICATION_PASS' "$TMP/parent.out"
+    assert_dispatches
+    assert_records 7 "$ci_id"
+    grep -Fxq "GPP_RELEASE_REQUIRED_QUALIFICATION_PASS source=$MOCK_SHA" "$TMP/parent.out"
 }
 run_bad_parent() {
     reset_state
     export MOCK_CASE="$1"
+    rm -f "$TMP/qualification.json"
     if bash "$PARENT" "$MOCK_BRANCH" "$MOCK_SHA" "$TMP/qualification.json" > "$TMP/parent.out" 2>"$TMP/parent.err"; then
         echo "Rejected parent case admitted: $1" >&2; exit 1
     fi
-    [[ "$(wc -l < "$MOCK_STATE/dispatches")" == 6 ]]
+    assert_dispatches
     if grep -Fq 'GPP_RELEASE_REQUIRED_QUALIFICATION_PASS' "$TMP/parent.out"; then
         echo "Rejected parent emitted full success marker: $1" >&2; exit 1
     fi
     # Earlier successes may be recorded, but an unresolved/failing result may
-    # never produce six valid success records or reach the publication gate.
-    jq -e 'type=="array" and length<6' "$TMP/qualification.json" >/dev/null
+    # never produce seven valid success records or reach the publication gate.
+    jq -e 'type=="array" and length<7' "$TMP/qualification.json" >/dev/null
 }
+run_good_parent stable
 run_good_parent parent503
 [[ "$(cat "$MOCK_STATE/view_992")" == 2 ]]
 run_good_parent listTemporary
@@ -195,8 +265,43 @@ jq -e '.[0].databaseId==1091' "$TMP/qualification.json" >/dev/null
 run_good_parent parentMixed
 [[ "$(cat "$MOCK_STATE/list_992")" == 2 ]]
 [[ "$(cat "$MOCK_STATE/view_992")" == 2 ]]
-[[ "$(wc -l < "$MOCK_STATE/dispatches")" == 6 ]]
+assert_dispatches
 for scenario in listPersistent list403 list401 list400 listMixedErrors listMalformed listWrongRoot listMultiDoc listWrongSha listWrongBranch listWrongEvent listBadId listDuplicateId parentListPersistent parentList403 parentMalformed parentFailed parentPending; do
     run_bad_parent "$scenario"
 done
-echo 'GPP_TRANSIENT_GITHUB_503_WAITER_TESTS_PASS view_positive=2 view_negative=11 list_recovery=PASS six_run_mixed=PASS latest_id=PASS fail_closed=PASS dispatches=6'
+# All six existing workflows must succeed before the isolated Atomic rejection.
+for scenario in atomicFailed atomicCancelled atomicMissing atomicPending atomicWrongSha atomicWrongViewSha atomicWrongBranch atomicWrongEvent atomicWrongId; do
+    run_bad_parent "$scenario"
+    assert_records 6 991
+    case "$scenario" in
+        atomicFailed) diagnostic='Qualification failed: p1c-atomic-qualification.yml run=997 conclusion=failure' ;;
+        atomicCancelled) diagnostic='Qualification failed: p1c-atomic-qualification.yml run=997 conclusion=cancelled' ;;
+        atomicMissing) diagnostic='No exact-source workflow run appeared for p1c-atomic-qualification.yml' ;;
+        atomicPending) diagnostic='Qualification poll limit reached without verified success: p1c-atomic-qualification.yml run=997' ;;
+        atomicWrongSha) diagnostic='Malformed or mismatched exact-candidate run discovery: p1c-atomic-qualification.yml' ;;
+        *) diagnostic='Qualification identity/response invalid: p1c-atomic-qualification.yml run=997' ;;
+    esac
+    grep -Fq "$diagnostic" "$TMP/parent.err"
+    echo "GPP_ATOMIC_REJECTION_PASS scenario=$scenario previous_successes=6"
+done
+
+# Falsify the independent membership assertion with a disposable waiter copy.
+# The checkout's production waiter and poller are never modified.
+mkdir "$TMP/omission"
+cp "$POLL" "$TMP/omission/poll-qualification-run.sh"
+sed "/^[[:space:]]*'p1c-atomic-qualification.yml'[[:space:]]*$/d" "$PARENT" > "$TMP/omission/wait-qualifications.sh"
+diff -q "$PARENT" "$TMP/omission/wait-qualifications.sh" >/dev/null && { echo 'Omission mutation did not change waiter' >&2; exit 1; }
+reset_state
+export MOCK_CASE=stable
+rm -f "$TMP/qualification.json"
+bash "$TMP/omission/wait-qualifications.sh" "$MOCK_BRANCH" "$MOCK_SHA" "$TMP/qualification.json" > "$TMP/parent.out" 2>"$TMP/parent.err"
+assert_records 6 991
+grep -Fxq "GPP_RELEASE_REQUIRED_QUALIFICATION_PASS source=$MOCK_SHA" "$TMP/parent.out"
+if assert_dispatches > "$TMP/omission.diff"; then
+    echo 'Omitted Atomic workflow passed independent membership contract' >&2; exit 1
+fi
+grep -Fxq -- '-p1c-atomic-qualification.yml' "$TMP/omission.diff"
+rm -rf "$TMP/omission"
+run_good_parent stable
+echo 'GPP_ATOMIC_OMISSION_FALSIFICATION_PASS omitted=P1-C restored=PASS'
+echo 'GPP_TRANSIENT_GITHUB_503_WAITER_TESTS_PASS view_positive=2 view_negative=11 list_recovery=PASS seven_run_mixed=PASS latest_id=PASS fail_closed=PASS dispatches=7'

@@ -35,6 +35,7 @@ function gpp_release_qualification_contract_errors( $wait, $release, $journey ) 
         'srwf-journey-host-qualification.yml',
         'wu18-entry-detail-runtime.yml',
         'wu19-a4-print-runtime.yml',
+        'p1c-atomic-qualification.yml',
     );
 
     $journey_cardinality = 0;
