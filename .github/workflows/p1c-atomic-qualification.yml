@@ -221,6 +221,7 @@ jobs:
             node --check "$file"
           done
           node --test tests/repro-evidence-lab/p1c-lifecycle-oracle.test.mjs
+          node --test tests/repro-evidence-lab/p1c-browser-teardown.test.mjs
 
       - name: Start disposable localhost WordPress
         shell: bash

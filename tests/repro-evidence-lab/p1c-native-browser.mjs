@@ -9,6 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import {createHmac,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
+import {withPreservedCleanup,finalizeOwnedBrowser} from './p1c-browser-teardown.mjs';
 import {chromium} from 'playwright'; // only the existing pinned executable path
 import {reconcileResponseWitnesses} from './p1c-lifecycle-oracle.mjs';
 
@@ -366,13 +367,13 @@ export async function historyReturn(page,entry,previous){
 export async function independentBrowser(record,run){
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'p1c-chromium-'));
   let browser,server,cdp;
-  try{
+  return withPreservedCleanup(async()=>{
     // Match the previous disposable-runner sandbox setting. No product
     // cache/privacy/security headers or browser BFCache options are changed.
     const executable=chromium.executablePath();
     const args=['--no-sandbox','--no-first-run','--no-default-browser-check',
       '--remote-debugging-pipe','--user-data-dir='+profile,'about:blank'];
-    browser=spawn(executable,args,{stdio:['ignore','ignore','ignore','pipe','pipe']});
+    browser=spawn(executable,args,{stdio:['ignore','ignore','ignore','pipe','pipe'],detached:true});
     cdp=pipeClient(browser);
     const version=await cdp.send('Browser.getVersion');
     record('INDEPENDENT_BROWSER_IDENTITY','PASS',{executable,args,version:version.product,
@@ -418,14 +419,7 @@ export async function independentBrowser(record,run){
         ...(neutralBfcacheDeferral?{bfcacheDeferralReason:neutralBfcacheDeferral}:{})});
     }
     await run({cdp,neutral,visibility,bfcache,neutralBfcacheDeferral});
-  }finally{
-    if(server){server.closeAllConnections();await new Promise(r=>server.close(r));}
-    if(cdp)await cdp.send('Browser.close').catch(()=>{});
-    if(browser&&browser.exitCode===null&&browser.signalCode===null){
-      browser.kill('SIGTERM');
-      await Promise.race([new Promise(r=>browser.once('exit',r)),sleep(3000)]);
-      if(browser.exitCode===null&&browser.signalCode===null){browser.kill('SIGKILL');await Promise.race([new Promise(r=>browser.once('exit',r)),sleep(1000)]);}
-    }
-    fs.rmSync(profile,{recursive:true,force:true,maxRetries:3,retryDelay:100});
-  }
+  },async()=>{
+    await finalizeOwnedBrowser({server,browser,cdp,profile});
+  });
 }
