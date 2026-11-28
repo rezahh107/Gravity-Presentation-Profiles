@@ -6,6 +6,7 @@ import {chromium} from 'playwright';
 import {independentBrowser,context as nativeContext,tab,transition,holdReadResponses,
   inboxView,selectSecondPage,poll} from './p1c-native-browser.mjs';
 import {retainedWhilePending} from './p1c-lifecycle-oracle.mjs';
+import {failureEvidence,preserveFailures,stagedFailure} from './p1c-browser-teardown.mjs';
 
 const env = process.env;
 const fixture = JSON.parse(fs.readFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-fixture.json'), 'utf8'));
@@ -27,6 +28,7 @@ const visible = async page => page.locator('[data-ciq2-entry]').evaluateAll(node
 const browser = await chromium.launch({headless: true});
 const report = {status: 'FAIL', fixtureVersion: fixture.version, installedVersion: null, checks};
 const errors = [], assets = [], failedRequests = [];
+let primaryExecutionError;
 try {
   const context = await browser.newContext({viewport: {width: 390, height: 844}});
   const probeUrl = new URL(env.GPP_INBOX2_HTTP_PROBE_URL);
@@ -149,6 +151,7 @@ try {
       const setStatus=status=>wp('if (!GFAPI::update_entry_property('+changed+',"status","'+status+'") || '+
         'GFAPI::get_entry('+changed+')["status"]!=="'+status+'") throw new RuntimeException("SHORTCODE_FIXTURE_STATUS");');
       assert.ok(Number.isSafeInteger(fixture.operator_id)&&Number.isSafeInteger(fixture.form_id));
+      let subjectError;
       try{
         setStatus('trash');
         const native=JSON.parse(wp('wp_set_current_user('+fixture.operator_id+');'+
@@ -187,7 +190,13 @@ try {
         })()`);
         assert.deepEqual(departure,{trusted:true,state:'stale',cards:0});
         report.ordinary_visibility={hidden,shown,before,pending,responses,after,departure};
-      }finally{setStatus('active');}
+      }catch(error){
+        subjectError=error;
+        throw error;
+      }finally{
+        try{setStatus('active');}
+        catch(error){throw preserveFailures(subjectError,[stagedFailure('FIXTURE_RESTORATION',error)]);}
+      }
     });
   });
   report.ordinary_visibility.browser=visibilityRecords.find(record=>record.name==='INDEPENDENT_BROWSER_IDENTITY');
@@ -619,14 +628,26 @@ try {
   checks.push('no_page_javascript_exceptions');
   report.status = 'PASS';
 } catch (error) {
+  primaryExecutionError=error;
   report.error = String(error?.stack || error);
+  report.failure_evidence = failureEvidence(error);
   console.error('GPP_INBOX2_FAILURE_DIAGNOSTICS ' + JSON.stringify({
     head: env.GPP_WU21_REPOSITORY_SHA || null,
     version: fixture.version, initial: report.initial_observation ?? null,
-    asset_responses: assets, failed_requests: failedRequests, page_errors: errors
+    asset_responses: assets, failed_requests: failedRequests, page_errors: errors,
+    failures:report.failure_evidence
   }));
-  throw error;
 } finally {
-  fs.writeFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-browser.json'), JSON.stringify(report, null, 2));
-  await browser.close();
+  let closeError,reportError;
+  try{await browser.close();}
+  catch(error){closeError=stagedFailure('PLAYWRIGHT_BROWSER_SHUTDOWN',error);}
+  if(closeError){
+    report.status='FAIL';
+    report.browser_shutdown_failure=failureEvidence(closeError);
+  }
+  try{
+    fs.writeFileSync(path.join(env.WU21_ARTIFACT_DIR, 'gpp-inbox2-installed-browser.json'), JSON.stringify(report, null, 2));
+  }catch(error){reportError=stagedFailure('REPORT_FINALIZATION',error);}
+  const failure=preserveFailures(primaryExecutionError,[closeError,reportError]);
+  if(failure)throw failure;
 }

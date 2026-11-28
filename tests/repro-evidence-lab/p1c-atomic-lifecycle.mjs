@@ -11,6 +11,7 @@ import {chromium} from 'playwright';
 import {independentBrowser} from './p1c-native-browser.mjs';
 import {nativeConsumer} from './p1c-native-consumer.mjs';
 import {lifecycleCompletion} from './p1c-lifecycle-oracle.mjs';
+import {failureEvidence,stagedFailure} from './p1c-browser-teardown.mjs';
 
 const env=process.env;
 const origin=env.WU21_BASE_URL;
@@ -66,7 +67,8 @@ try {
     });
   } catch(error) {
     record('INDEPENDENT_NATIVE_LIFECYCLE_EXECUTION','NOT_PROVEN',{
-      reason:String(error?.message||error).slice(0,1600)});
+      reason:String(error?.message||error).slice(0,1600),
+      failures:failureEvidence(error)});
   }
   // Keep the existing unaffected real-response race and independent Shortcode
   // path in the original browser harness; never use it for lifecycle proof.
@@ -165,11 +167,19 @@ try {
   results.failure=String(error?.stack||error).slice(0,3000);
   record('QUALIFICATION_EXECUTION','FAIL',{reason:String(error).slice(0,500)});
 } finally{
+  if(browser){
+    try{await browser.close();}
+    catch(error){
+      const closeError=stagedFailure('PLAYWRIGHT_BROWSER_SHUTDOWN',error);
+      results.browser_shutdown_failure=failureEvidence(closeError);
+      if(!results.failure)results.failure=String(closeError?.stack||closeError).slice(0,3000);
+      record('PLAYWRIGHT_BROWSER_SHUTDOWN','FAIL',{reason:String(closeError)});
+    }
+  }
   completion=lifecycleCompletion(results.results,fixture);
   results.results=completion.records;
   fs.writeFileSync(path.join(artifact,'p1c-atomic-lifecycle.json'),
     JSON.stringify(results,null,2));
-  if(browser)await browser.close().catch(()=>{});
 }
 if(results.failure||completion.failed){
   console.error('P1C_ATOMIC_LIFECYCLE_QUALIFICATION_FAILED',
